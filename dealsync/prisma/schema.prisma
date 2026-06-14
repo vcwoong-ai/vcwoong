@@ -1,0 +1,150 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  company       String?
+  role          String    @default("analyst")
+  createdAt     DateTime  @default(now())
+  accounts      Account[]
+  sessions      Session[]
+  deals         Deal[]
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Deal {
+  id              String    @id @default(cuid())
+  userId          String
+  status          String    @default("draft")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Company Information
+  companyName     String
+  companyNameKo   String?
+  founded         String?
+  sector          String
+  subSector       String?
+  stage           String
+  location        String?
+  website         String?
+  employeeCount   Int?
+
+  // Deal Terms
+  investmentAmount    Float?
+  investmentCurrency  String    @default("KRW")
+  equityStake         Float?
+  preMoneyValuation   Float?
+  roundType           String?
+  totalRoundSize      Float?
+  leadInvestor        String?
+
+  // Business Description
+  businessDescription   String?
+  productService        String?
+  revenueModel          String?
+  competitiveAdvantage  String?
+  targetMarket          String?
+  marketSize            String?
+
+  // Team
+  ceoName         String?
+  ceoBackground   String?
+  teamDescription String?
+  advisors        String?
+
+  // Financials
+  revenueLastYear     Float?
+  revenueThisYear     Float?
+  revenueProjection   Float?
+  burnRate            Float?
+  runway              Int?
+  customers           String?
+  keyMetrics          String?
+
+  // Additional
+  keyRisks        String?
+  exitStrategy    String?
+  useOfFunds      String?
+  analystNotes    String?
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  report    Report?
+  documents Document[]
+
+  @@index([userId])
+  @@index([status])
+}
+
+model Report {
+  id          String   @id @default(cuid())
+  dealId      String   @unique
+  content     String
+  summary     String?
+  rating      String?
+  recommendation String?
+  keyStrengths    String?
+  keyRisks        String?
+  generatedAt DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deal        Deal     @relation(fields: [dealId], references: [id], onDelete: Cascade)
+}
+
+model Document {
+  id            String   @id @default(cuid())
+  dealId        String
+  fileName      String
+  originalName  String
+  fileType      String
+  fileSize      Int
+  filePath      String
+  extractedText String?
+  uploadedAt    DateTime @default(now())
+  deal          Deal     @relation(fields: [dealId], references: [id], onDelete: Cascade)
+
+  @@index([dealId])
+}
