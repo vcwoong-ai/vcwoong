@@ -4,10 +4,11 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import Anthropic from "@anthropic-ai/sdk";
 import {
-  REPORT_SECTIONS,
+  getSectionsForSector,
   detectSector,
   buildPrompt,
 } from "@/lib/report-sections";
+import { DR_CELL_AGENT_NAME } from "@/lib/bio-agent";
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -48,9 +49,10 @@ export async function POST(req: NextRequest) {
 
   const sector = detectSector(combinedText);
 
+  const allSections = getSectionsForSector(sector);
   const sectionsToGenerate = regenerateSection
-    ? REPORT_SECTIONS.filter((s) => s.key === regenerateSection)
-    : REPORT_SECTIONS;
+    ? allSections.filter((s) => s.key === regenerateSection)
+    : allSections;
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
@@ -87,7 +89,11 @@ export async function POST(req: NextRequest) {
           type: "start",
           total: sectionsToGenerate.length,
           sector,
-          message: `${sector === "BIO" ? "바이오/헬스케어" : "일반"} 섹터로 감지됨. 보고서 생성을 시작합니다.`,
+          agent: sector === "BIO" ? DR_CELL_AGENT_NAME : null,
+          message:
+            sector === "BIO"
+              ? `바이오/헬스케어 섹터로 감지됨. ${DR_CELL_AGENT_NAME} 에이전트가 보고서를 생성합니다.`
+              : "일반 섹터로 감지됨. 보고서 생성을 시작합니다.",
         });
 
         for (let i = 0; i < sectionsToGenerate.length; i++) {

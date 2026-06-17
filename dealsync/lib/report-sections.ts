@@ -1,3 +1,9 @@
+import {
+  BIO_PIPELINE_SECTION,
+  buildDrCellSystemPrompt,
+  buildPipelineUserPrompt,
+} from "./bio-agent";
+
 export interface ReportSection {
   key: string;
   title: string;
@@ -84,18 +90,47 @@ export function detectSector(text: string): string {
   return "GENERAL";
 }
 
+/**
+ * Returns the ordered list of sections to generate for a given sector.
+ * For BIO/healthcare the Dr. Cell pipeline section is inserted after
+ * 'technology' and before 'team', so pipeline analysis flows naturally
+ * in the report structure.
+ */
+export function getSectionsForSector(sector: string): ReportSection[] {
+  if (sector !== "BIO") return REPORT_SECTIONS;
+
+  const sections = [...REPORT_SECTIONS];
+  const techIdx = sections.findIndex((s) => s.key === "technology");
+  const insertAt = techIdx >= 0 ? techIdx + 1 : sections.length;
+  sections.splice(insertAt, 0, BIO_PIPELINE_SECTION);
+  return sections;
+}
+
 export function buildPrompt(
   section: ReportSection,
   extractedText: string,
   sector: string
 ): { system: string; user: string } {
-  const sectorNote =
-    sector === "BIO"
-      ? "이 기업은 바이오/헬스케어 분야입니다. rNPV, 임상 단계, 파이프라인 가치 등 바이오 특화 지표를 포함하세요."
-      : "";
+  const isBio = sector === "BIO";
 
-  return {
-    system: `당신은 한국 벤처캐피탈 심사역 보조 AI입니다. 투자심의보고서의 '${section.title}' 섹션을 작성합니다. 한글 1자=1.0, 영문=0.5로 계산하여 ${section.charLimit}자 이내로 작성하세요. ${sectorNote} 전문적이고 객관적인 한국어로 작성하세요.`,
-    user: `다음 자료를 바탕으로 투자심의보고서의 '${section.title}' 섹션을 작성하세요.\n\n작성 지침: ${section.description}\n\n--- 자료 시작 ---\n${extractedText.slice(0, 8000)}\n--- 자료 끝 ---\n\n출력 형식(JSON만 출력):\n{"title": "${section.title}", "content": "섹션 내용 (${section.charLimit}자 이내)", "keyPoints": ["핵심 포인트 1", "핵심 포인트 2", "핵심 포인트 3"]}`,
-  };
+  // Pipeline section uses a dedicated Dr. Cell prompt
+  if (isBio && section.key === "bio_pipeline") {
+    return {
+      system: buildDrCellSystemPrompt(section.title, section.charLimit),
+      user: buildPipelineUserPrompt(extractedText),
+    };
+  }
+
+  const system = isBio
+    ? buildDrCellSystemPrompt(section.title, section.charLimit)
+    : `당신은 한국 벤처캐피탈 심사역 보조 AI입니다. 투자심의보고서의 '${section.title}' 섹션을 작성합니다. 한글 1자=1.0, 영문=0.5로 계산하여 ${section.charLimit}자 이내로 작성하세요. 전문적이고 객관적인 한국어로 작성하세요.`;
+
+  const user =
+    `다음 자료를 바탕으로 투자심의보고서의 '${section.title}' 섹션을 작성하세요.\n\n` +
+    `작성 지침: ${section.description}\n\n` +
+    `--- 자료 시작 ---\n${extractedText.slice(0, 8000)}\n--- 자료 끝 ---\n\n` +
+    `출력 형식(JSON만 출력):\n` +
+    `{"title": "${section.title}", "content": "섹션 내용 (${section.charLimit}자 이내)", "keyPoints": ["핵심 포인트 1", "핵심 포인트 2", "핵심 포인트 3"]}`;
+
+  return { system, user };
 }
