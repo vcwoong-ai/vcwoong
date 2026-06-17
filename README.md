@@ -2,6 +2,16 @@
 
 한국 벤처캐피탈을 위한 AI 기반 투자심의보고서(IC Report) 자동화 SaaS
 
+## 링크
+
+| 항목 | 주소 |
+|------|------|
+| GitHub | https://github.com/vcwoong-ai/vcwoong |
+| Vercel (배포) | https://dealsync-vcwoong.vercel.app |
+| 현재 브랜치 | `main` |
+| 에이전트 가이드 | [`docs/phases/`](docs/phases/) |
+| 브랜치·PR 통합 현황 | [`docs/PROJECT.md`](docs/PROJECT.md) |
+
 ## 주요 기능
 
 - **AI 보고서 생성**: Claude Sonnet 4.6을 활용한 10개 섹션 자동 작성
