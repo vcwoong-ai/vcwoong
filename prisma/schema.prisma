@@ -1,0 +1,227 @@
+// DealSync - Investment Review Report Automation Platform
+// Prisma schema for PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ───────────────────────────────────────────────
+// Auth models (NextAuth.js)
+// ───────────────────────────────────────────────
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ───────────────────────────────────────────────
+// Core models
+// ───────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  passwordHash  String?
+  role          UserRole  @default(ANALYST)
+  teamId        String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts Account[]
+  sessions Session[]
+  team     Team?     @relation(fields: [teamId], references: [id])
+  deals    Deal[]
+}
+
+model Team {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users User[]
+  deals Deal[]
+}
+
+model Deal {
+  id           String     @id @default(cuid())
+  name         String
+  companyName  String
+  sector       DealSector
+  stage        DealStage  @default(SCREENING)
+  status       DealStatus @default(ACTIVE)
+  description  String?    @db.Text
+  investAmount Float?
+  investRound  String?
+  valuation    Float?
+  userId       String
+  teamId       String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  user      User       @relation(fields: [userId], references: [id])
+  team      Team?      @relation(fields: [teamId], references: [id])
+  documents Document[]
+  reports   Report[]
+}
+
+model Document {
+  id         String       @id @default(cuid())
+  dealId     String
+  name       String
+  type       DocumentType
+  url        String
+  size       Int
+  mimeType   String
+  parsedText String?      @db.Text
+  metadata   Json?
+  createdAt  DateTime     @default(now())
+
+  deal Deal @relation(fields: [dealId], references: [id], onDelete: Cascade)
+}
+
+model Report {
+  id          String       @id @default(cuid())
+  dealId      String
+  title       String
+  agentType   AgentType
+  status      ReportStatus @default(PENDING)
+  exportUrl   String?
+  generatedAt DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  deal     Deal            @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  sections ReportSection[]
+}
+
+model ReportSection {
+  id        String        @id @default(cuid())
+  reportId  String
+  sectionKey SectionKey
+  title     String
+  content   String        @db.Text
+  order     Int
+  status    SectionStatus @default(DRAFT)
+  feedback  String?       @db.Text
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+}
+
+// ───────────────────────────────────────────────
+// Enumerations
+// ───────────────────────────────────────────────
+
+enum UserRole {
+  ADMIN
+  PARTNER
+  ANALYST
+}
+
+enum DealSector {
+  BIO
+  IT
+  GENERAL
+  FINTECH
+  CONSUMER
+  DEEPTECH
+  CLIMATE
+}
+
+enum DealStage {
+  SCREENING
+  DEEP_DIVE
+  IC_PREP
+  IC_REVIEW
+  CLOSED
+  REJECTED
+}
+
+enum DealStatus {
+  ACTIVE
+  ARCHIVED
+  ON_HOLD
+}
+
+enum DocumentType {
+  IR_DECK
+  FINANCIAL
+  PATENT
+  CONTRACT
+  RESEARCH
+  OTHER
+}
+
+enum AgentType {
+  GENERAL
+  BIO
+  IT
+}
+
+enum ReportStatus {
+  PENDING
+  GENERATING
+  DRAFT
+  REVIEW
+  FINAL
+  EXPORTED
+}
+
+enum SectionStatus {
+  DRAFT
+  REVIEWED
+  APPROVED
+}
+
+enum SectionKey {
+  INVESTMENT_OVERVIEW       // 투자개요
+  COMPANY_OVERVIEW          // 회사개요
+  PRODUCT_TECHNOLOGY        // 제품/기술
+  MARKET_ANALYSIS           // 시장분석
+  FINANCIAL_STATUS          // 재무현황
+  VALUATION                 // 밸류에이션
+  RISK_ANALYSIS             // 리스크
+  INVESTMENT_TERMS          // 투자조건
+  OPINION_SUMMARY           // 의견종합
+  APPENDIX                  // 별첨
+}
