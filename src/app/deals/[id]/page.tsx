@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import { redirect, notFound } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { isAIConfigured } from "@/lib/claude";
 import { AppLayout } from "@/components/layout/app-layout";
 import { DealDetailClient } from "./deal-detail-client";
 
@@ -28,7 +29,10 @@ export default async function DealDetailPage({
 
   return (
     <AppLayout title={deal.companyName}>
-      <DealDetailClient deal={JSON.parse(JSON.stringify(deal))} />
+      <DealDetailClient
+        deal={JSON.parse(JSON.stringify(deal))}
+        demoMode={!isAIConfigured()}
+      />
     </AppLayout>
   );
 }

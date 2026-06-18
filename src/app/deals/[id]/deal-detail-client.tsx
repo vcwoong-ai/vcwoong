@@ -91,7 +91,13 @@ const STATUS_LABEL: Record<string, string> = {
   EXPORTED: "내보내기",
 };
 
-export function DealDetailClient({ deal }: { deal: DealWithRelations }) {
+export function DealDetailClient({
+  deal,
+  demoMode = false,
+}: {
+  deal: DealWithRelations;
+  demoMode?: boolean;
+}) {
   const router = useRouter();
   const [generating, setGenerating] = useState(false);
   const [uploadKey, setUploadKey] = useState(0);
@@ -113,6 +119,24 @@ export function DealDetailClient({ deal }: { deal: DealWithRelations }) {
         throw new Error(err.error ?? "보고서 생성 실패");
       }
 
+      const { data: created } = await response.json();
+      const reportId: string | undefined = created?.id;
+
+      // Generation runs asynchronously on the server. Poll until the report
+      // leaves the GENERATING state (DRAFT on success, PENDING on failure).
+      if (reportId) {
+        for (let i = 0; i < 40; i++) {
+          await new Promise((r) => setTimeout(r, 1500));
+          const res = await fetch(`/api/deals/${deal.id}/reports`);
+          if (!res.ok) continue;
+          const { data: reports } = await res.json();
+          const current = reports?.find(
+            (rep: { id: string }) => rep.id === reportId
+          );
+          if (current && current.status !== "GENERATING") break;
+        }
+      }
+
       router.refresh();
     } catch (error) {
       alert(
@@ -130,6 +154,18 @@ export function DealDetailClient({ deal }: { deal: DealWithRelations }) {
 
   return (
     <div className="space-y-6">
+      {demoMode && (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <Zap className="w-4 h-4 mt-0.5 flex-shrink-0" />
+          <span>
+            <strong>데모 모드</strong> — Anthropic API 키가 설정되지 않아 AI
+            보고서가 샘플 콘텐츠로 생성됩니다. 전체 흐름(생성·편집·내보내기)은
+            그대로 동작하며, <code>.env.local</code>에 실제 키를 입력하면 자동으로
+            실제 AI 생성으로 전환됩니다.
+          </span>
+        </div>
+      )}
+
       {/* Deal header */}
       <div className="flex items-start justify-between gap-4">
         <div>
