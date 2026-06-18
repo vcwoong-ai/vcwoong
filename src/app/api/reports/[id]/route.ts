@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { ReportStatus } from "@prisma/client";
+import { ReportStatus, SectionStatus } from "@prisma/client";
 
 export async function GET(
   request: NextRequest,
@@ -58,12 +58,23 @@ export async function PATCH(
   }
 
   const body = await request.json();
-  const { status } = body as { status?: ReportStatus };
+  const { status, approveAllSections } = body as {
+    status?: ReportStatus;
+    approveAllSections?: boolean;
+  };
+
+  if (approveAllSections) {
+    await prisma.reportSection.updateMany({
+      where: { reportId: params.id },
+      data: { status: SectionStatus.APPROVED },
+    });
+  }
 
   const updated = await prisma.report.update({
     where: { id: params.id },
     data: {
       ...(status ? { status } : {}),
+      ...(status === ReportStatus.FINAL ? { generatedAt: report.generatedAt ?? new Date() } : {}),
     },
     include: {
       sections: { orderBy: { order: "asc" } },

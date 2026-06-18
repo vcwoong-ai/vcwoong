@@ -10,6 +10,8 @@ import {
   Save,
   Download,
   Loader2,
+  CheckCheck,
+  BadgeCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SECTION_META, getKoreanVisualWidth } from "@/types";
@@ -31,6 +33,9 @@ interface ReportEditorProps {
   dealName: string;
   onExport?: () => void;
   isExporting?: boolean;
+  reportStatus?: string;
+  onFinalize?: () => void;
+  isFinalizing?: boolean;
 }
 
 export function ReportEditor({
@@ -39,10 +44,14 @@ export function ReportEditor({
   dealName,
   onExport,
   isExporting,
+  reportStatus,
+  onFinalize,
+  isFinalizing,
 }: ReportEditorProps) {
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState("");
   const [saving, setSaving] = useState<string | null>(null);
+  const [approvingAll, setApprovingAll] = useState(false);
   const [localSections, setLocalSections] = useState<Section[]>(sections);
 
   const sortedSections = [...localSections].sort((a, b) => a.order - b.order);
@@ -111,10 +120,32 @@ export function ReportEditor({
     }
   };
 
+  const approveAll = async () => {
+    setApprovingAll(true);
+    try {
+      const response = await fetch(`/api/reports/${reportId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ approveAllSections: true }),
+      });
+      if (!response.ok) throw new Error("전체 승인 실패");
+      setLocalSections((prev) =>
+        prev.map((s) => ({ ...s, status: SectionStatus.APPROVED }))
+      );
+    } catch (error) {
+      console.error(error);
+      alert("전체 승인 중 오류가 발생했습니다");
+    } finally {
+      setApprovingAll(false);
+    }
+  };
+
   const approvedCount = localSections.filter(
     (s) => s.status === SectionStatus.APPROVED
   ).length;
   const totalCount = localSections.length;
+  const allApproved = totalCount > 0 && approvedCount === totalCount;
+  const isFinal = reportStatus === "FINAL" || reportStatus === "EXPORTED";
 
   return (
     <div className="space-y-4">
@@ -124,20 +155,57 @@ export function ReportEditor({
           <h2 className="text-xl font-bold text-gray-900">{dealName}</h2>
           <p className="text-sm text-gray-500">
             승인 완료: {approvedCount}/{totalCount} 섹션
+            {isFinal && (
+              <span className="ml-2 inline-flex items-center gap-1 text-green-600 font-medium">
+                <BadgeCheck className="w-3.5 h-3.5" />
+                완성본
+              </span>
+            )}
           </p>
         </div>
-        <Button
-          onClick={onExport}
-          disabled={isExporting}
-          className="bg-blue-600 hover:bg-blue-700"
-        >
-          {isExporting ? (
-            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-          ) : (
-            <Download className="w-4 h-4 mr-2" />
+        <div className="flex items-center gap-2">
+          {!isFinal && !allApproved && (
+            <Button
+              variant="outline"
+              onClick={approveAll}
+              disabled={approvingAll}
+              className="border-green-300 text-green-700 hover:bg-green-50"
+            >
+              {approvingAll ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <CheckCheck className="w-4 h-4 mr-2" />
+              )}
+              전체 승인
+            </Button>
           )}
-          DOCX 내보내기
-        </Button>
+          {!isFinal && onFinalize && (
+            <Button
+              onClick={onFinalize}
+              disabled={isFinalizing}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              {isFinalizing ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <BadgeCheck className="w-4 h-4 mr-2" />
+              )}
+              보고서 완성
+            </Button>
+          )}
+          <Button
+            onClick={onExport}
+            disabled={isExporting}
+            className="bg-blue-600 hover:bg-blue-700"
+          >
+            {isExporting ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <Download className="w-4 h-4 mr-2" />
+            )}
+            DOCX 내보내기
+          </Button>
+        </div>
       </div>
 
       {/* Sections */}

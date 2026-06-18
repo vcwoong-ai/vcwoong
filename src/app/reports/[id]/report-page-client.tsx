@@ -46,6 +46,26 @@ const STATUS_DISPLAY: Record<
 export function ReportPageClient({ report }: { report: Report }) {
   const [isExporting, setIsExporting] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isFinalizing, setIsFinalizing] = useState(false);
+
+  const handleFinalize = async () => {
+    setIsFinalizing(true);
+    try {
+      const response = await fetch(`/api/reports/${report.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "FINAL", approveAllSections: true }),
+      });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error ?? "완성 처리 실패");
+      }
+      window.location.reload();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "완성 처리 중 오류가 발생했습니다");
+      setIsFinalizing(false);
+    }
+  };
 
   const statusDisplay = STATUS_DISPLAY[report.status] ?? {
     label: report.status,
@@ -199,6 +219,9 @@ export function ReportPageClient({ report }: { report: Report }) {
         dealName={`${report.deal.companyName} 투자심의보고서`}
         onExport={handleExport}
         isExporting={isExporting}
+        reportStatus={report.status}
+        onFinalize={handleFinalize}
+        isFinalizing={isFinalizing}
       />
     </div>
   );
