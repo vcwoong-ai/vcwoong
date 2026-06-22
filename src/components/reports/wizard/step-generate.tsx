@@ -40,47 +40,51 @@ function buildSections(
 ): SectionInput[] {
   const sections: SectionInput[] = [];
 
-  // 1. 투자개요
-  const investmentOverview = String(analysis.investmentOverview || "").trim();
+  // 1. 투자개요 (투자조건 상세 포함)
+  const investmentOverviewParts = [
+    String(analysis.investmentOverview || "").trim(),
+    analysis.investmentTermsDetail
+      ? `\n\n## 투자조건 상세\n${analysis.investmentTermsDetail}`
+      : "",
+  ].filter(Boolean).join("\n\n");
+
   sections.push({
     sectionKey: "INVESTMENT_OVERVIEW",
     title: "투자개요",
-    content: investmentOverview || `회사명: ${companyName}\n\n자료를 기반으로 투자개요를 작성하였습니다.`,
+    content: investmentOverviewParts || `회사명: ${companyName}\n\n자료를 기반으로 투자개요를 작성하였습니다.`,
     order: 1,
   });
 
-  // 2. 회사개요
+  // 2. 회사개요 (연혁 + 팀 포함)
   const businessSummary = String(analysis.businessSummary || "").trim();
-  const companyOverview = [
+  const companyOverviewParts = [
     businessSummary,
+    analysis.companyHistory ? `\n\n## 회사 연혁\n${analysis.companyHistory}` : "",
     analysis.teamAssessment ? `\n\n## 팀 평가\n${analysis.teamAssessment}` : "",
     !businessSummary ? `회사명: ${companyName}\n\n${documentContext.slice(0, 600)}` : "",
-  ]
-    .filter(Boolean)
-    .join("\n\n")
-    .trim();
+  ].filter(Boolean).join("\n\n").trim();
 
   sections.push({
     sectionKey: "COMPANY_OVERVIEW",
     title: "회사개요",
-    content: companyOverview,
+    content: companyOverviewParts,
     order: 2,
   });
 
-  // 3. 제품/기술/비즈니스 모델
+  // 3. 제품/기술/비즈니스 모델 (IP/특허 + 주요 레퍼런스 포함)
   const productContent = [
     analysis.pipelineAssessment ? `## 파이프라인 평가\n${analysis.pipelineAssessment}` : "",
     analysis.scientificMerit ? `## 과학적 타당성\n${analysis.scientificMerit}` : "",
     analysis.regulatoryStrategy ? `## 규제 전략\n${analysis.regulatoryStrategy}` : "",
     analysis.businessModel ? `## 비즈니스 모델\n${analysis.businessModel}` : "",
-  ]
-    .filter(Boolean)
-    .join("\n\n");
+    analysis.keyCustomerReferences ? `## 주요 고객/파트너 레퍼런스\n${analysis.keyCustomerReferences}` : "",
+    analysis.ipPortfolio ? `## IP/특허 현황\n${analysis.ipPortfolio}` : "",
+  ].filter(Boolean).join("\n\n");
 
   if (productContent.trim()) {
     sections.push({
       sectionKey: "PRODUCT_TECHNOLOGY",
-      title: agentType === "bio" ? "파이프라인 및 기술" : "제품 및 비즈니스 모델",
+      title: agentType === "bio" ? "파이프라인 및 기술" : "제품, 비즈니스 모델 및 영업현황",
       content: productContent,
       order: 3,
     });
@@ -90,9 +94,7 @@ function buildSections(
   const marketContent = [
     analysis.marketAnalysis ? `## 시장 분석\n${analysis.marketAnalysis}` : "",
     analysis.competitiveLandscape ? `## 경쟁 환경\n${analysis.competitiveLandscape}` : "",
-  ]
-    .filter(Boolean)
-    .join("\n\n");
+  ].filter(Boolean).join("\n\n");
 
   if (marketContent.trim()) {
     sections.push({
@@ -115,9 +117,9 @@ function buildSections(
 
   // 6. 투자포인트
   const investmentPoints: string[] = [];
-  if (analysis.investmentPoint1) investmentPoints.push(`### 투자포인트 1\n${analysis.investmentPoint1}`);
-  if (analysis.investmentPoint2) investmentPoints.push(`### 투자포인트 2\n${analysis.investmentPoint2}`);
-  if (analysis.investmentPoint3) investmentPoints.push(`### 투자포인트 3\n${analysis.investmentPoint3}`);
+  if (analysis.investmentPoint1) investmentPoints.push(`### 투자포인트 (1)\n${analysis.investmentPoint1}`);
+  if (analysis.investmentPoint2) investmentPoints.push(`### 투자포인트 (2)\n${analysis.investmentPoint2}`);
+  if (analysis.investmentPoint3) investmentPoints.push(`### 투자포인트 (3)\n${analysis.investmentPoint3}`);
 
   if (investmentPoints.length > 0) {
     sections.push({
@@ -148,34 +150,48 @@ function buildSections(
     });
   }
 
-  // 8. Valuation & Exit
+  // 8. 매출 손익 추정 (회사 추정 + 심사역 추정)
+  const pnlContent = [
+    analysis.companyPnLProjection ? `## 회사 추정 손익계산서\n${analysis.companyPnLProjection}` : "",
+    analysis.reviewerPnLProjection ? `## 심사역 손익 추정\n${analysis.reviewerPnLProjection}` : "",
+  ].filter(Boolean).join("\n\n");
+
+  if (pnlContent.trim()) {
+    sections.push({
+      sectionKey: "FINANCIAL_STATUS",
+      title: "매출 및 손익 추정",
+      content: pnlContent,
+      order: 8,
+    });
+  }
+
+  // 9. Valuation & Exit (Peer Group 포함)
   const valuationContent = [
+    analysis.peerGroupAnalysis ? `## Peer Group 분석\n${analysis.peerGroupAnalysis}` : "",
     analysis.valuationOpinion ? `## 기업가치 평가\n${analysis.valuationOpinion}` : "",
-    analysis.exitStrategy ? `## Exit 전략\n${analysis.exitStrategy}` : "",
-  ]
-    .filter(Boolean)
-    .join("\n\n");
+    analysis.exitStrategy ? `## Exit 전략 및 투자수익성\n${analysis.exitStrategy}` : "",
+  ].filter(Boolean).join("\n\n");
 
   if (valuationContent.trim()) {
     sections.push({
       sectionKey: "VALUATION",
       title: "Valuation & Exit 전략",
       content: valuationContent,
-      order: 8,
-    });
-  }
-
-  // 9. 투자의견
-  if (analysis.investmentRecommendation && String(analysis.investmentRecommendation).trim()) {
-    sections.push({
-      sectionKey: "INVESTMENT_TERMS",
-      title: "투자의견",
-      content: String(analysis.investmentRecommendation),
       order: 9,
     });
   }
 
-  // 10. Appendix — 창업자 확인 사항
+  // 10. 종합 투자의견
+  if (analysis.investmentRecommendation && String(analysis.investmentRecommendation).trim()) {
+    sections.push({
+      sectionKey: "INVESTMENT_TERMS",
+      title: "종합 투자의견",
+      content: String(analysis.investmentRecommendation),
+      order: 10,
+    });
+  }
+
+  // 11. Appendix — 창업자 확인 사항
   const questions = Array.isArray(analysis.questionsForFounders)
     ? (analysis.questionsForFounders as string[])
     : [];
@@ -184,7 +200,7 @@ function buildSections(
       sectionKey: "APPENDIX",
       title: "창업자 확인 사항",
       content: questions.map((q, i) => `${i + 1}. ${q}`).join("\n"),
-      order: 10,
+      order: 11,
     });
   }
 
