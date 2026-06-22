@@ -25,13 +25,171 @@ interface StepGenerateProps {
   onBack: () => void;
 }
 
-const SECTION_MAP: Record<string, { key: string; title: string; order: number }> = {
-  pipelineAssessment:       { key: "PRODUCT_TECHNOLOGY", title: "파이프라인 종합 평가", order: 2 },
-  scientificMerit:          { key: "PRODUCT_TECHNOLOGY", title: "과학적 타당성", order: 3 },
-  regulatoryStrategy:       { key: "PRODUCT_TECHNOLOGY", title: "규제 전략", order: 4 },
-  competitiveLandscape:     { key: "MARKET_ANALYSIS",    title: "경쟁 환경 분석", order: 5 },
-  investmentRecommendation: { key: "OPINION_SUMMARY",    title: "투자의견", order: 8 },
+type SectionInput = {
+  sectionKey: string;
+  title: string;
+  content: string;
+  order: number;
 };
+
+function buildSections(
+  analysis: Record<string, unknown>,
+  companyName: string,
+  documentContext: string,
+  agentType: string
+): SectionInput[] {
+  const sections: SectionInput[] = [];
+
+  // 1. 투자개요
+  const investmentOverview = String(analysis.investmentOverview || "").trim();
+  sections.push({
+    sectionKey: "INVESTMENT_OVERVIEW",
+    title: "투자개요",
+    content: investmentOverview || `회사명: ${companyName}\n\n자료를 기반으로 투자개요를 작성하였습니다.`,
+    order: 1,
+  });
+
+  // 2. 회사개요
+  const businessSummary = String(analysis.businessSummary || "").trim();
+  const companyOverview = [
+    businessSummary,
+    analysis.teamAssessment ? `\n\n## 팀 평가\n${analysis.teamAssessment}` : "",
+    !businessSummary ? `회사명: ${companyName}\n\n${documentContext.slice(0, 600)}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n")
+    .trim();
+
+  sections.push({
+    sectionKey: "COMPANY_OVERVIEW",
+    title: "회사개요",
+    content: companyOverview,
+    order: 2,
+  });
+
+  // 3. 제품/기술/비즈니스 모델
+  const productContent = [
+    analysis.pipelineAssessment ? `## 파이프라인 평가\n${analysis.pipelineAssessment}` : "",
+    analysis.scientificMerit ? `## 과학적 타당성\n${analysis.scientificMerit}` : "",
+    analysis.regulatoryStrategy ? `## 규제 전략\n${analysis.regulatoryStrategy}` : "",
+    analysis.businessModel ? `## 비즈니스 모델\n${analysis.businessModel}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+  if (productContent.trim()) {
+    sections.push({
+      sectionKey: "PRODUCT_TECHNOLOGY",
+      title: agentType === "bio" ? "파이프라인 및 기술" : "제품 및 비즈니스 모델",
+      content: productContent,
+      order: 3,
+    });
+  }
+
+  // 4. 시장 분석
+  const marketContent = [
+    analysis.marketAnalysis ? `## 시장 분석\n${analysis.marketAnalysis}` : "",
+    analysis.competitiveLandscape ? `## 경쟁 환경\n${analysis.competitiveLandscape}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+  if (marketContent.trim()) {
+    sections.push({
+      sectionKey: "MARKET_ANALYSIS",
+      title: "시장 분석 및 경쟁환경",
+      content: marketContent,
+      order: 4,
+    });
+  }
+
+  // 5. 재무 현황
+  if (analysis.financialAnalysis && String(analysis.financialAnalysis).trim()) {
+    sections.push({
+      sectionKey: "FINANCIAL_STATUS",
+      title: "재무 현황",
+      content: String(analysis.financialAnalysis),
+      order: 5,
+    });
+  }
+
+  // 6. 투자포인트
+  const investmentPoints: string[] = [];
+  if (analysis.investmentPoint1) investmentPoints.push(`### 투자포인트 1\n${analysis.investmentPoint1}`);
+  if (analysis.investmentPoint2) investmentPoints.push(`### 투자포인트 2\n${analysis.investmentPoint2}`);
+  if (analysis.investmentPoint3) investmentPoints.push(`### 투자포인트 3\n${analysis.investmentPoint3}`);
+
+  if (investmentPoints.length > 0) {
+    sections.push({
+      sectionKey: "OPINION_SUMMARY",
+      title: "투자포인트",
+      content: investmentPoints.join("\n\n"),
+      order: 6,
+    });
+  }
+
+  // 7. 리스크
+  const risks: string[] = [];
+  if (analysis.risk1) risks.push(`### 리스크 1\n${analysis.risk1}`);
+  if (analysis.risk2) risks.push(`### 리스크 2\n${analysis.risk2}`);
+  if (analysis.risk3) risks.push(`### 리스크 3\n${analysis.risk3}`);
+  if (risks.length === 0 && Array.isArray(analysis.criticalRisks)) {
+    (analysis.criticalRisks as string[]).forEach((r, i) => {
+      risks.push(`### 리스크 ${i + 1}\n${r}`);
+    });
+  }
+
+  if (risks.length > 0) {
+    sections.push({
+      sectionKey: "RISK_ANALYSIS",
+      title: "리스크",
+      content: risks.join("\n\n"),
+      order: 7,
+    });
+  }
+
+  // 8. Valuation & Exit
+  const valuationContent = [
+    analysis.valuationOpinion ? `## 기업가치 평가\n${analysis.valuationOpinion}` : "",
+    analysis.exitStrategy ? `## Exit 전략\n${analysis.exitStrategy}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+  if (valuationContent.trim()) {
+    sections.push({
+      sectionKey: "VALUATION",
+      title: "Valuation & Exit 전략",
+      content: valuationContent,
+      order: 8,
+    });
+  }
+
+  // 9. 투자의견
+  if (analysis.investmentRecommendation && String(analysis.investmentRecommendation).trim()) {
+    sections.push({
+      sectionKey: "INVESTMENT_TERMS",
+      title: "투자의견",
+      content: String(analysis.investmentRecommendation),
+      order: 9,
+    });
+  }
+
+  // 10. Appendix — 창업자 확인 사항
+  const questions = Array.isArray(analysis.questionsForFounders)
+    ? (analysis.questionsForFounders as string[])
+    : [];
+  if (questions.length > 0) {
+    sections.push({
+      sectionKey: "APPENDIX",
+      title: "창업자 확인 사항",
+      content: questions.map((q, i) => `${i + 1}. ${q}`).join("\n"),
+      order: 10,
+    });
+  }
+
+  return sections;
+}
 
 export function StepGenerate({
   dealId,
@@ -106,7 +264,7 @@ export function StepGenerate({
 
       // Step 2: AI 에이전트 분석
       setStepStatus(2, "running");
-      const primaryAgent = selectedAgents[0] || "bio";
+      const primaryAgent = selectedAgents[0] || "general";
       let analysisResult: Record<string, unknown> = {};
 
       if (primaryAgent === "bio") {
@@ -122,57 +280,47 @@ export function StepGenerate({
         const data = await res.json();
         analysisResult = data.data?.analysis ?? {};
       } else {
-        analysisResult = {
-          pipelineAssessment: `${companyName}의 사업 내용을 분석했습니다.`,
-          investmentRecommendation: "추가 실사 후 투자 검토를 권장합니다.",
+        const sectorMap: Record<string, string> = {
+          "it-saas": "IT/SaaS",
+          "ai-deeptech": "AI/딥테크",
+          manufacturing: "제조/하드웨어",
+          content: "콘텐츠/엔터테인먼트",
+          fintech: "핀테크/금융",
+          general: "일반",
         };
+        const sectorName = sectorMap[primaryAgent] || primaryAgent;
+
+        const res = await fetch("/api/agents/general/analyze", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ documentContext, companyName, sector: sectorName }),
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || "AI 분석 실패");
+        }
+        const data = await res.json();
+        analysisResult = data.data?.analysis ?? {};
       }
       setStepStatus(2, "done");
 
       // Step 3: 섹션 구성
       setStepStatus(3, "running");
-      const sections: { sectionKey: string; title: string; content: string; order: number }[] = [];
-
-      sections.push({
-        sectionKey: "COMPANY_OVERVIEW",
-        title: "회사 개요",
-        content: `회사명: ${companyName}\n\n${documentContext.slice(0, 800)}`,
-        order: 1,
-      });
-
-      for (const [field, mapping] of Object.entries(SECTION_MAP)) {
-        const content = analysisResult[field];
-        if (content && String(content).trim()) {
-          sections.push({ ...mapping, sectionKey: mapping.key, content: String(content) });
-        }
-      }
-
-      if (analysisResult.criticalRisks) {
-        const risks = Array.isArray(analysisResult.criticalRisks)
-          ? (analysisResult.criticalRisks as string[]).join("\n\n")
-          : String(analysisResult.criticalRisks);
-        sections.push({ sectionKey: "RISK_ANALYSIS", title: "주요 리스크", content: risks, order: 7 });
-      }
-
-      if (analysisResult.questionsForFounders) {
-        const questions = Array.isArray(analysisResult.questionsForFounders)
-          ? (analysisResult.questionsForFounders as string[]).join("\n")
-          : String(analysisResult.questionsForFounders);
-        sections.push({ sectionKey: "APPENDIX", title: "창업자 확인 사항", content: questions, order: 10 });
-      }
-
+      const sections = buildSections(analysisResult, companyName, documentContext, primaryAgent);
       setStepStatus(3, "done");
 
       // Step 4: DB 저장
       setStepStatus(4, "running");
       if (!currentDealId) throw new Error("딜 ID가 없습니다. Step 1을 다시 진행해주세요.");
 
+      const agentTypeKey = primaryAgent.toUpperCase().replace(/-/g, "_");
+
       const reportRes = await fetch("/api/reports", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           dealId: currentDealId,
-          agentType: primaryAgent.toUpperCase(),
+          agentType: agentTypeKey,
           sections,
         }),
       });
