@@ -33,6 +33,10 @@ yarn-error.log*
 /prisma/dev.db
 /prisma/dev.db-journal
 
+# demo artifacts
+/screenshots/
+/scripts/
+
 # vercel
 .vercel
 
