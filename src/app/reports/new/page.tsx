@@ -90,6 +90,7 @@ function NewReportContent() {
                 dealId={dealId}
                 companyName={companyName}
                 selectedAgents={selectedAgents}
+                uploadedItems={uploadedItems}
                 onBack={() => setStep(2)}
               />
             )}
