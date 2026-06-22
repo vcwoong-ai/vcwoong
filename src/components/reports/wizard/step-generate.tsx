@@ -40,11 +40,14 @@ function buildSections(
 ): SectionInput[] {
   const sections: SectionInput[] = [];
 
-  // 1. 투자개요 (투자조건 상세 포함)
+  // 1. 투자개요 (투자조건 상세 + 투자 목적 포함)
   const investmentOverviewParts = [
     String(analysis.investmentOverview || "").trim(),
     analysis.investmentTermsDetail
       ? `\n\n## 투자조건 상세\n${analysis.investmentTermsDetail}`
+      : "",
+    analysis.investmentPurpose
+      ? `\n\n## 투자 목적 및 전략적 의의\n${analysis.investmentPurpose}`
       : "",
   ].filter(Boolean).join("\n\n");
 
@@ -165,10 +168,11 @@ function buildSections(
     });
   }
 
-  // 9. Valuation & Exit (Peer Group 포함)
+  // 9. Valuation & Exit (Peer Group + 시나리오 분석 포함)
   const valuationContent = [
     analysis.peerGroupAnalysis ? `## Peer Group 분석\n${analysis.peerGroupAnalysis}` : "",
     analysis.valuationOpinion ? `## 기업가치 평가\n${analysis.valuationOpinion}` : "",
+    analysis.investmentScenarios ? `## 시나리오별 투자수익 분석\n${analysis.investmentScenarios}` : "",
     analysis.exitStrategy ? `## Exit 전략 및 투자수익성\n${analysis.exitStrategy}` : "",
   ].filter(Boolean).join("\n\n");
 

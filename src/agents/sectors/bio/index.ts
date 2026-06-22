@@ -26,6 +26,7 @@ export const DR_CELL_SYSTEM_PROMPT = `당신은 Dr. Cell, 20년 경력의 한국
 export type BioAnalysisOutput = {
   investmentOverview: string;
   investmentTermsDetail: string;
+  investmentPurpose: string;
   businessSummary: string;
   companyHistory: string;
   pipelineAssessment: string;
@@ -47,6 +48,7 @@ export type BioAnalysisOutput = {
   reviewerPnLProjection: string;
   peerGroupAnalysis: string;
   valuationOpinion: string;
+  investmentScenarios: string;
   exitStrategy: string;
   keyOpinionLeaders: string[];
   criticalRisks: string[];
@@ -113,6 +115,7 @@ FDA 유사 승인 사례: ${JSON.stringify(fdaApprovals.slice(0, 3), null, 2)}
 {
   "investmentOverview": "투자개요 요약 (투자형태, 금액, 기업가치, 공동투자, 투자재원, 300자)",
   "investmentTermsDetail": "투자조건 상세 (존속기간, 상환조건/YTM, 전환조건, Refixing, 배당조건, 위약벌%, Tag Along, 300자)",
+  "investmentPurpose": "투자 목적 및 전략적 의의 (당사 투자 목적: 바이오 섹터 전문성 강화, House Track 확보, 포트폴리오 시너지 등. 200자)",
   "businessSummary": "회사 및 파이프라인 개요 (설립일, 대표자, 핵심 파이프라인, 적응증, 임상 단계, 500자)",
   "companyHistory": "회사 연혁 타임라인 (연도: 마일스톤 형식. 자료 기반만, 300자)",
   "pipelineAssessment": "파이프라인 종합 평가 (임상 단계, 핵심 데이터, Catalyst, Milestone, 600자)",
@@ -127,13 +130,14 @@ FDA 유사 승인 사례: ${JSON.stringify(fdaApprovals.slice(0, 3), null, 2)}
   "investmentPoint1": "투자포인트 (1) 제목: [파이프라인 경쟁력]\\n근거/수치/rNPV 결과 (400자)",
   "investmentPoint2": "투자포인트 (2) 제목: [시장 기회/글로벌 L/O]\\n근거/수치/Deal 사례 (400자)",
   "investmentPoint3": "투자포인트 (3) 제목: [팀/기술 차별성 또는 M&A 가능성]\\n근거 (400자)",
-  "risk1": "리스크 (1) [임상 위험]\\n상세 위험요인\\n→ 대응방안: [VC 대응 전략] (300자)",
-  "risk2": "리스크 (2) [규제/경쟁 위험]\\n상세 위험요인\\n→ 대응방안: [대응 전략] (300자)",
-  "risk3": "리스크 (3) [재무/Exit 위험]\\n상세 위험요인\\n→ 대응방안: [대응 전략] (300자)",
+  "risk1": "리스크 (1) [임상 위험]\\n◼ RISK: 상세 위험요인 서술\\n◼ RESOLUTION: VC 대응 전략 및 미티게이션 (300자)",
+  "risk2": "리스크 (2) [규제/경쟁 위험]\\n◼ RISK: 상세 위험요인 서술\\n◼ RESOLUTION: 대응 전략 및 미티게이션 (300자)",
+  "risk3": "리스크 (3) [재무/Exit 위험]\\n◼ RISK: 상세 위험요인 서술\\n◼ RESOLUTION: 대응 전략 및 미티게이션 (300자)",
   "companyPnLProjection": "회사 추정 매출/비용 전망 (연도별 표: 연도|매출|영업이익|영업이익률, 자료 기반, 300자)",
   "reviewerPnLProjection": "심사역 보수적 추정 (가정 명시: 매출 X%, 판관비 Y% 추가 등. 연도별 독립 산출, 300자)",
-  "peerGroupAnalysis": "Peer Group 분석 (비교 바이오 상장사/Deal 3~5개, EV/Sales 또는 rNPV Multiple, 비상장 할인, Valuation 범위, 300자)",
+  "peerGroupAnalysis": "Peer Group 분석 (비교 바이오 상장사/Deal 3~5개. 각 기업명과 EV/Sales 또는 rNPV Multiple 명시. 비상장 할인 30% 적용, Valuation 범위 산출, 400자)",
   "valuationOpinion": "기업가치 평가 의견 (rNPV, Peer Group 대비 적정성, 심사역 추정 기반 Multiple, 400자)",
+  "investmentScenarios": "시나리오별 투자수익 분석. 형식:\\n시나리오 | 보수적 | 중립적 | 공격적\\nPER/EV-Multiple | X.X | X.X | X.X\\n예상 기업가치(억원) | XXX | XXX | XXX\\nExpected IRR(%) | XX% | XX% | XX%\\nMultiple(x) | X.X | X.X | X.X\\n회수금액(백만원) | XXX | XXX | XXX\\n가정: 보수적(임상 실패 리스크 반영), 중립(예상 마일스톤 달성), 공격(L/O 또는 빅파마 M&A). 300자",
   "exitStrategy": "Exit 전략 (기술이전/L/O 시나리오, M&A 대상 빅파마, 코스닥/나스닥 상장, IRR/Multiple, 400자)",
   "keyOpinionLeaders": ["KOL 추천 3명 (분야/소속)"],
   "criticalRisks": ["핵심 리스크 단문 3가지"],
@@ -159,6 +163,7 @@ FDA 유사 승인 사례: ${JSON.stringify(fdaApprovals.slice(0, 3), null, 2)}
     analysis = {
       investmentOverview: "",
       investmentTermsDetail: "",
+      investmentPurpose: "",
       businessSummary: companyName,
       companyHistory: "",
       pipelineAssessment: analysisResult.content,
@@ -180,6 +185,7 @@ FDA 유사 승인 사례: ${JSON.stringify(fdaApprovals.slice(0, 3), null, 2)}
       reviewerPnLProjection: "",
       peerGroupAnalysis: "",
       valuationOpinion: "",
+      investmentScenarios: "",
       exitStrategy: "",
       keyOpinionLeaders: [],
       criticalRisks: [],
