@@ -152,57 +152,32 @@ export function ReportEditor({
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold text-gray-900">{dealName}</h2>
-          <p className="text-sm text-gray-500">
-            승인 완료: {approvedCount}/{totalCount} 섹션
+          <h2 className="text-lg font-bold text-gray-900">{dealName}</h2>
+          <p className="text-xs text-gray-400 mt-0.5">
+            {approvedCount}/{totalCount} 섹션 승인
             {isFinal && (
-              <span className="ml-2 inline-flex items-center gap-1 text-green-600 font-medium">
-                <BadgeCheck className="w-3.5 h-3.5" />
-                완성본
+              <span className="ml-2 inline-flex items-center gap-1 text-emerald-600 font-medium">
+                <BadgeCheck className="w-3 h-3" /> 완성본
               </span>
             )}
           </p>
         </div>
         <div className="flex items-center gap-2">
           {!isFinal && !allApproved && (
-            <Button
-              variant="outline"
-              onClick={approveAll}
-              disabled={approvingAll}
-              className="border-green-300 text-green-700 hover:bg-green-50"
-            >
-              {approvingAll ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <CheckCheck className="w-4 h-4 mr-2" />
-              )}
+            <Button variant="outline" size="sm" onClick={approveAll} disabled={approvingAll}
+              className="border-emerald-200 text-emerald-700 hover:bg-emerald-50">
+              {approvingAll ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <CheckCheck className="w-3.5 h-3.5 mr-1.5" />}
               전체 승인
             </Button>
           )}
           {!isFinal && onFinalize && (
-            <Button
-              onClick={onFinalize}
-              disabled={isFinalizing}
-              className="bg-green-600 hover:bg-green-700"
-            >
-              {isFinalizing ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <BadgeCheck className="w-4 h-4 mr-2" />
-              )}
-              보고서 완성
+            <Button size="sm" onClick={onFinalize} disabled={isFinalizing} className="bg-emerald-600 hover:bg-emerald-700">
+              {isFinalizing ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <BadgeCheck className="w-3.5 h-3.5 mr-1.5" />}
+              완성
             </Button>
           )}
-          <Button
-            onClick={onExport}
-            disabled={isExporting}
-            className="bg-blue-600 hover:bg-blue-700"
-          >
-            {isExporting ? (
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-            ) : (
-              <Download className="w-4 h-4 mr-2" />
-            )}
+          <Button size="sm" onClick={onExport} disabled={isExporting} className="bg-blue-600 hover:bg-blue-700">
+            {isExporting ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Download className="w-3.5 h-3.5 mr-1.5" />}
             DOCX 내보내기
           </Button>
         </div>
@@ -222,44 +197,31 @@ export function ReportEditor({
               key={section.id}
               className={cn(
                 "transition-all",
-                isApproved && "border-green-200 bg-green-50/30"
+                isApproved && "border-emerald-100 bg-emerald-50/20"
               )}
             >
-              <CardHeader className="pb-3">
+              <CardHeader className="pb-2 pt-4">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs font-mono text-gray-400 bg-gray-100 px-2 py-0.5 rounded">
-                      {meta?.order}
-                    </span>
-                    <CardTitle className="text-base">{section.title}</CardTitle>
-                    {isApproved && (
-                      <CheckCircle className="w-4 h-4 text-green-500" />
-                    )}
-                  </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-400">
-                      {charWidth.toLocaleString()}자
+                    <span className="text-[10px] font-mono text-gray-300 bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100">
+                      {String(meta?.order ?? section.order).padStart(2, "0")}
                     </span>
+                    <CardTitle className="text-sm font-semibold">{section.title}</CardTitle>
+                    {isApproved && <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />}
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] text-gray-300">{charWidth.toLocaleString()}자</span>
                     {!isEditing && (
                       <>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => startEdit(section)}
-                        >
-                          <Edit3 className="w-3 h-3 mr-1" />
-                          편집
+                        <Button variant="ghost" size="sm" onClick={() => startEdit(section)}
+                          className="h-7 px-2 text-xs text-gray-500">
+                          <Edit3 className="w-3 h-3 mr-1" /> 편집
                         </Button>
                         {!isApproved && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="border-green-300 text-green-700 hover:bg-green-50"
-                            onClick={() => approveSection(section)}
-                            disabled={isSaving}
-                          >
-                            <CheckCircle className="w-3 h-3 mr-1" />
-                            승인
+                          <Button variant="outline" size="sm"
+                            className="h-7 px-2 text-xs border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                            onClick={() => approveSection(section)} disabled={isSaving}>
+                            <CheckCircle className="w-3 h-3 mr-1" /> 승인
                           </Button>
                         )}
                       </>
