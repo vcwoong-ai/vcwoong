@@ -1,22 +1,33 @@
-import Anthropic from "@anthropic-ai/sdk";
-import type { MessageParam, TextBlock } from "@anthropic-ai/sdk/resources/messages";
 import { generateMockContent } from "./mock-generator";
+import type { MessageParam, TextBlock } from "@anthropic-ai/sdk/resources/messages";
 
-const client = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
+// ─── Provider 감지 ───────────────────────────────────────────────────────────
 
-export const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
+type Provider = "anthropic" | "openrouter" | "mock";
 
-/**
- * Returns true when a usable Anthropic API key is configured.
- * The placeholder value ("sk-ant-...") and empty strings are treated as unset,
- * so the platform falls back to demo-mode generation.
- */
-export function isAIConfigured(): boolean {
-  const key = process.env.ANTHROPIC_API_KEY?.trim() ?? "";
-  return key.startsWith("sk-ant-") && key.length > 20 && !key.includes("...");
+function detectProvider(): Provider {
+  const anthropicKey = process.env.ANTHROPIC_API_KEY?.trim() ?? "";
+  const openrouterKey = process.env.OPENROUTER_API_KEY?.trim() ?? "";
+
+  if (anthropicKey.startsWith("sk-ant-") && anthropicKey.length > 20 && !anthropicKey.includes("...")) {
+    return "anthropic";
+  }
+  if (openrouterKey.startsWith("sk-or-") && openrouterKey.length > 20) {
+    return "openrouter";
+  }
+  return "mock";
 }
+
+export function isAIConfigured(): boolean {
+  return detectProvider() !== "mock";
+}
+
+export const MODEL =
+  process.env.ANTHROPIC_MODEL ||
+  process.env.OPENROUTER_MODEL ||
+  "google/gemini-2.0-flash-exp:free";
+
+// ─── 공통 인터페이스 ──────────────────────────────────────────────────────────
 
 export interface ClaudeMessage {
   role: "user" | "assistant";
@@ -29,32 +40,72 @@ export interface ClaudeOptions {
   systemPrompt?: string;
 }
 
-export async function generateText(
-  messages: ClaudeMessage[],
-  options: ClaudeOptions = {}
-): Promise<{ content: string; inputTokens: number; outputTokens: number }> {
-  const { maxTokens = 4096, systemPrompt } = options;
+// ─── OpenRouter 호출 ──────────────────────────────────────────────────────────
 
-  if (!isAIConfigured()) {
-    const content = generateMockContent(messages);
-    // Small delay to emulate generation latency for a realistic demo UX.
-    await new Promise((resolve) => setTimeout(resolve, 400));
-    return { content, inputTokens: 0, outputTokens: 0 };
+async function callOpenRouter(
+  system: string,
+  messages: { role: string; content: string }[],
+  maxTokens: number,
+  temperature: number
+): Promise<{ content: string; inputTokens: number; outputTokens: number }> {
+  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+      "Content-Type": "application/json",
+      "HTTP-Referer": process.env.NEXTAUTH_URL ?? "http://localhost:3000",
+      "X-Title": "DealSync",
+    },
+    body: JSON.stringify({
+      model: process.env.OPENROUTER_MODEL ?? "google/gemini-2.0-flash-exp:free",
+      max_tokens: maxTokens,
+      temperature,
+      messages: [
+        { role: "system", content: system },
+        ...messages,
+      ],
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`OpenRouter error ${res.status}: ${err.slice(0, 200)}`);
   }
 
+  const data = await res.json() as {
+    choices: { message: { content: string } }[];
+    usage?: { prompt_tokens: number; completion_tokens: number };
+  };
+
+  return {
+    content: data.choices[0]?.message?.content ?? "",
+    inputTokens: data.usage?.prompt_tokens ?? 0,
+    outputTokens: data.usage?.completion_tokens ?? 0,
+  };
+}
+
+// ─── Anthropic 호출 ───────────────────────────────────────────────────────────
+
+async function callAnthropic(
+  system: string,
+  messages: { role: string; content: string }[],
+  maxTokens: number,
+  temperature: number
+): Promise<{ content: string; inputTokens: number; outputTokens: number }> {
+  const Anthropic = (await import("@anthropic-ai/sdk")).default;
+  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
   const response = await client.messages.create({
-    model: MODEL,
+    model: process.env.ANTHROPIC_MODEL ?? "claude-opus-4-8",
     max_tokens: maxTokens,
-    ...(systemPrompt ? { system: systemPrompt } : {}),
-    messages: messages.map((m) => ({
-      role: m.role,
-      content: m.content,
-    })),
+    temperature,
+    system,
+    messages: messages as MessageParam[],
   });
 
   const content = response.content
-    .filter((block) => block.type === "text")
-    .map((block) => (block as { type: "text"; text: string }).text)
+    .filter((b): b is TextBlock => b.type === "text")
+    .map((b) => b.text)
     .join("");
 
   return {
@@ -62,6 +113,40 @@ export async function generateText(
     inputTokens: response.usage.input_tokens,
     outputTokens: response.usage.output_tokens,
   };
+}
+
+// ─── 통합 호출 헬퍼 ──────────────────────────────────────────────────────────
+
+async function callAI(
+  system: string,
+  messages: { role: string; content: string }[],
+  maxTokens: number,
+  temperature: number
+): Promise<{ content: string; inputTokens: number; outputTokens: number }> {
+  const provider = detectProvider();
+
+  if (provider === "openrouter") {
+    return callOpenRouter(system, messages, maxTokens, temperature);
+  }
+  if (provider === "anthropic") {
+    return callAnthropic(system, messages, maxTokens, temperature);
+  }
+  // mock
+  const mockContent = generateMockContent(
+    messages.map((m) => ({ role: m.role as "user" | "assistant", content: m.content }))
+  );
+  await new Promise((r) => setTimeout(r, 400));
+  return { content: mockContent, inputTokens: 0, outputTokens: 0 };
+}
+
+// ─── Public API ──────────────────────────────────────────────────────────────
+
+export async function generateText(
+  messages: ClaudeMessage[],
+  options: ClaudeOptions = {}
+): Promise<{ content: string; inputTokens: number; outputTokens: number }> {
+  const { maxTokens = 4096, temperature = 0.7, systemPrompt = "" } = options;
+  return callAI(systemPrompt, messages, maxTokens, temperature);
 }
 
 export async function callClaudeJSON<T>(params: {
@@ -73,35 +158,28 @@ export async function callClaudeJSON<T>(params: {
 }): Promise<{ data: T; inputTokens: number; outputTokens: number }> {
   const { system, messages, maxTokens = 4096, temperature = 0.3, retries = 2 } = params;
 
-  if (!isAIConfigured()) {
+  if (detectProvider() === "mock") {
     return { data: {} as T, inputTokens: 0, outputTokens: 0 };
   }
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      const response = await client.messages.create({
-        model: MODEL,
-        max_tokens: maxTokens,
-        temperature,
+      const { content, inputTokens, outputTokens } = await callAI(
         system,
-        messages,
-      });
+        messages.map((m) => ({
+          role: m.role,
+          content: typeof m.content === "string" ? m.content : JSON.stringify(m.content),
+        })),
+        maxTokens,
+        temperature
+      );
 
-      const text = response.content
-        .filter((b): b is TextBlock => b.type === "text")
-        .map((b) => b.text)
-        .join("\n");
-
-      const cleaned = text
+      const cleaned = content
         .replace(/^```json\s*/m, "")
         .replace(/```\s*$/, "")
         .trim();
 
-      return {
-        data: JSON.parse(cleaned) as T,
-        inputTokens: response.usage.input_tokens,
-        outputTokens: response.usage.output_tokens,
-      };
+      return { data: JSON.parse(cleaned) as T, inputTokens, outputTokens };
     } catch (error) {
       if (attempt === retries) throw error;
       await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
@@ -115,39 +193,44 @@ export async function generateStream(
   options: ClaudeOptions = {},
   onChunk: (text: string) => void
 ): Promise<{ inputTokens: number; outputTokens: number }> {
-  const { maxTokens = 4096, systemPrompt } = options;
+  const { maxTokens = 4096, temperature = 0.7, systemPrompt = "" } = options;
+  const provider = detectProvider();
 
-  if (!isAIConfigured()) {
-    const content = generateMockContent(messages);
+  // OpenRouter / mock: 스트리밍 미지원 시 청크 분할 에뮬레이션
+  if (provider !== "anthropic") {
+    const { content, inputTokens, outputTokens } = await callAI(
+      systemPrompt,
+      messages,
+      maxTokens,
+      temperature
+    );
     for (const chunk of content.match(/[\s\S]{1,24}/g) ?? [content]) {
       onChunk(chunk);
-      await new Promise((resolve) => setTimeout(resolve, 15));
+      await new Promise((r) => setTimeout(r, 10));
     }
-    return { inputTokens: 0, outputTokens: 0 };
+    return { inputTokens, outputTokens };
   }
 
+  // Anthropic 스트리밍
+  const Anthropic = (await import("@anthropic-ai/sdk")).default;
+  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
   const stream = await client.messages.stream({
-    model: MODEL,
+    model: process.env.ANTHROPIC_MODEL ?? "claude-opus-4-8",
     max_tokens: maxTokens,
     ...(systemPrompt ? { system: systemPrompt } : {}),
-    messages: messages.map((m) => ({
-      role: m.role,
-      content: m.content,
-    })),
+    messages: messages.map((m) => ({ role: m.role, content: m.content })),
   });
 
   for await (const event of stream) {
-    if (
-      event.type === "content_block_delta" &&
-      event.delta.type === "text_delta"
-    ) {
+    if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
       onChunk(event.delta.text);
     }
   }
 
-  const finalMessage = await stream.finalMessage();
+  const final = await stream.finalMessage();
   return {
-    inputTokens: finalMessage.usage.input_tokens,
-    outputTokens: finalMessage.usage.output_tokens,
+    inputTokens: final.usage.input_tokens,
+    outputTokens: final.usage.output_tokens,
   };
 }
