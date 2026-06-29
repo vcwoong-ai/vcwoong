@@ -165,6 +165,8 @@ enum DealSector {
   CONSUMER
   DEEPTECH
   CLIMATE
+  MANUFACTURING
+  CONTENT
 }
 
 enum DealStage {
@@ -195,6 +197,10 @@ enum AgentType {
   GENERAL
   BIO
   IT
+  DEEPTECH
+  MANUFACTURING
+  CONTENT
+  FINTECH
 }
 
 enum ReportStatus {

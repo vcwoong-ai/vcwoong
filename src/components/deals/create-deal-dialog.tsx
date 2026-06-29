@@ -39,13 +39,15 @@ const formSchema = z.object({
 type FormData = z.infer<typeof formSchema>;
 
 const SECTOR_OPTIONS = [
-  { value: DealSector.BIO, label: "바이오/헬스케어" },
-  { value: DealSector.IT, label: "IT/소프트웨어" },
-  { value: DealSector.FINTECH, label: "핀테크" },
-  { value: DealSector.CONSUMER, label: "소비재" },
-  { value: DealSector.DEEPTECH, label: "딥테크" },
-  { value: DealSector.CLIMATE, label: "기후/에너지" },
-  { value: DealSector.GENERAL, label: "일반" },
+  { value: DealSector.BIO,           label: "🧬 바이오/헬스케어"  },
+  { value: DealSector.IT,            label: "💻 IT/SaaS"          },
+  { value: DealSector.DEEPTECH,      label: "🤖 AI/딥테크"        },
+  { value: DealSector.MANUFACTURING, label: "🏭 제조/하드웨어"    },
+  { value: DealSector.CONTENT,       label: "🎬 콘텐츠/엔터"      },
+  { value: DealSector.FINTECH,       label: "💳 핀테크/금융"      },
+  { value: DealSector.CONSUMER,      label: "🛍️ 소비재"           },
+  { value: DealSector.CLIMATE,       label: "🌿 기후/ESG"         },
+  { value: DealSector.GENERAL,       label: "📁 일반"             },
 ];
 
 export function CreateDealDialog() {

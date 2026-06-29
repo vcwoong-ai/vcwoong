@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import { FileUploader } from "@/components/upload/file-uploader";
 import {
   FileText,
@@ -16,6 +17,7 @@ import {
   ExternalLink,
   File,
   Calendar,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AgentType, DealSector, DealStage } from "@prisma/client";
@@ -57,26 +59,48 @@ interface DealWithRelations {
 const SECTOR_AGENT_MAP: Record<DealSector, AgentType> = {
   BIO: AgentType.BIO,
   IT: AgentType.IT,
-  FINTECH: AgentType.IT,
+  FINTECH: AgentType.FINTECH,
+  DEEPTECH: AgentType.DEEPTECH,
+  MANUFACTURING: AgentType.MANUFACTURING,
+  CONTENT: AgentType.CONTENT,
+  CONSUMER: AgentType.CONTENT,
   GENERAL: AgentType.GENERAL,
-  CONSUMER: AgentType.GENERAL,
-  DEEPTECH: AgentType.GENERAL,
   CLIMATE: AgentType.GENERAL,
 };
 
-const AGENT_INFO = {
+const AGENT_INFO: Record<AgentType, { name: string; desc: string; color: string }> = {
   [AgentType.BIO]: {
     name: "Dr. Cell",
     desc: "바이오/헬스케어 특화 — rNPV 모델링 포함",
     color: "text-purple-700 bg-purple-50 border-purple-200",
   },
   [AgentType.IT]: {
-    name: "IT Agent",
-    desc: "IT/SaaS 특화 — SaaS 지표 분석 포함",
+    name: "Code",
+    desc: "IT/SaaS 특화 — ARR, LTV/CAC 분석 포함",
     color: "text-blue-700 bg-blue-50 border-blue-200",
   },
+  [AgentType.DEEPTECH]: {
+    name: "Neuron",
+    desc: "AI/딥테크 특화 — TRL, GPU 유닛 이코노믹스",
+    color: "text-cyan-700 bg-cyan-50 border-cyan-200",
+  },
+  [AgentType.MANUFACTURING]: {
+    name: "Maker",
+    desc: "제조/하드웨어 특화 — BOM, Capex, 공급망",
+    color: "text-orange-700 bg-orange-50 border-orange-200",
+  },
+  [AgentType.CONTENT]: {
+    name: "Story",
+    desc: "콘텐츠/엔터 특화 — IP 가치, 팬덤 경제",
+    color: "text-pink-700 bg-pink-50 border-pink-200",
+  },
+  [AgentType.FINTECH]: {
+    name: "Vault",
+    desc: "핀테크/금융 특화 — TPV, 규제, 신용 리스크",
+    color: "text-emerald-700 bg-emerald-50 border-emerald-200",
+  },
   [AgentType.GENERAL]: {
-    name: "General Agent",
+    name: "General",
     desc: "범용 투자 분석 에이전트",
     color: "text-gray-700 bg-gray-50 border-gray-200",
   },
@@ -91,6 +115,13 @@ const STATUS_LABEL: Record<string, string> = {
   EXPORTED: "내보내기",
 };
 
+interface GenerationProgress {
+  completed: number;
+  total: number;
+  currentSection: string;
+  status: "generating" | "completed" | "error";
+}
+
 export function DealDetailClient({
   deal,
   demoMode = false,
@@ -100,13 +131,24 @@ export function DealDetailClient({
 }) {
   const router = useRouter();
   const [generating, setGenerating] = useState(false);
+  const [progress, setProgress] = useState<GenerationProgress | null>(null);
   const [uploadKey, setUploadKey] = useState(0);
+  const [detectingsector, setDetectingSector] = useState(false);
+  const [detectedSector, setDetectedSector] = useState<{ sector: string; reason: string } | null>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
+
+  useEffect(() => {
+    return () => {
+      eventSourceRef.current?.close();
+    };
+  }, []);
 
   const recommendedAgent = SECTOR_AGENT_MAP[deal.sector] ?? AgentType.GENERAL;
   const agentInfo = AGENT_INFO[recommendedAgent];
 
   const generateReport = async () => {
     setGenerating(true);
+    setProgress(null);
     try {
       const response = await fetch(`/api/deals/${deal.id}/reports`, {
         method: "POST",
@@ -122,19 +164,29 @@ export function DealDetailClient({
       const { data: created } = await response.json();
       const reportId: string | undefined = created?.id;
 
-      // Generation runs asynchronously on the server. Poll until the report
-      // leaves the GENERATING state (DRAFT on success, PENDING on failure).
       if (reportId) {
-        for (let i = 0; i < 40; i++) {
-          await new Promise((r) => setTimeout(r, 1500));
-          const res = await fetch(`/api/deals/${deal.id}/reports`);
-          if (!res.ok) continue;
-          const { data: reports } = await res.json();
-          const current = reports?.find(
-            (rep: { id: string }) => rep.id === reportId
-          );
-          if (current && current.status !== "GENERATING") break;
-        }
+        // Subscribe to SSE progress stream
+        const es = new EventSource(`/api/reports/${reportId}/progress`);
+        eventSourceRef.current = es;
+
+        await new Promise<void>((resolve) => {
+          es.onmessage = (event) => {
+            try {
+              const data: GenerationProgress = JSON.parse(event.data);
+              setProgress(data);
+              if (data.status === "completed" || data.status === "error") {
+                es.close();
+                resolve();
+              }
+            } catch {
+              // ignore parse errors
+            }
+          };
+          es.onerror = () => {
+            es.close();
+            resolve();
+          };
+        });
       }
 
       router.refresh();
@@ -144,6 +196,25 @@ export function DealDetailClient({
       );
     } finally {
       setGenerating(false);
+      setProgress(null);
+    }
+  };
+
+  const detectSector = async () => {
+    if (!deal.documents.length) return;
+    setDetectingSector(true);
+    setDetectedSector(null);
+    try {
+      const res = await fetch(`/api/deals/${deal.id}/detect-sector`, {
+        method: "POST",
+      });
+      if (!res.ok) throw new Error("섹터 감지 실패");
+      const data = await res.json();
+      setDetectedSector(data.data);
+    } catch {
+      // silently fail
+    } finally {
+      setDetectingSector(false);
     }
   };
 
@@ -181,21 +252,66 @@ export function DealDetailClient({
         </div>
         <div className="flex gap-2">
           {deal.documents.length > 0 && (
-            <Button
-              onClick={generateReport}
-              disabled={generating}
-              className="bg-blue-600 hover:bg-blue-700"
-            >
-              {generating ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <Zap className="w-4 h-4 mr-2" />
-              )}
-              {generating ? "AI 보고서 생성 중..." : "AI 보고서 생성"}
-            </Button>
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={detectSector}
+                disabled={detectingsector || generating}
+                title="업로드된 문서에서 섹터 자동 감지"
+              >
+                {detectingsector ? (
+                  <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                ) : (
+                  <Sparkles className="w-3.5 h-3.5 mr-1.5" />
+                )}
+                섹터 감지
+              </Button>
+              <Button
+                onClick={generateReport}
+                disabled={generating}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                {generating ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Zap className="w-4 h-4 mr-2" />
+                )}
+                {generating ? "생성 중..." : "AI 보고서 생성"}
+              </Button>
+            </>
           )}
         </div>
       </div>
+
+      {/* Sector detection result */}
+      {detectedSector && (
+        <div className="flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+          <Sparkles className="w-4 h-4 mt-0.5 flex-shrink-0" />
+          <span>
+            <strong>섹터 감지 결과: {detectedSector.sector}</strong>{" "}
+            — {detectedSector.reason}
+          </span>
+        </div>
+      )}
+
+      {/* Generation progress bar */}
+      {generating && progress && (
+        <div className="rounded-lg border bg-white p-4 space-y-2">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-gray-600 font-medium">
+              AI 보고서 생성 중: <span className="text-blue-600">{progress.currentSection}</span>
+            </span>
+            <span className="text-gray-400">
+              {progress.completed} / {progress.total}
+            </span>
+          </div>
+          <Progress
+            value={progress.total > 0 ? (progress.completed / progress.total) * 100 : 0}
+            className="h-2"
+          />
+        </div>
+      )}
 
       {/* Investment details */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">

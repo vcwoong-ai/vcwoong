@@ -39,6 +39,16 @@ export async function parseDocument(
     };
   }
 
+  if (
+    mimeType ===
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation" ||
+    mimeType === "application/vnd.ms-powerpoint" ||
+    ext === "pptx" ||
+    ext === "ppt"
+  ) {
+    return parsePPTX(buffer);
+  }
+
   throw new Error(`지원하지 않는 파일 형식입니다: ${mimeType}`);
 }
 
@@ -69,6 +79,45 @@ async function parsePDF(
       type: "pdf",
       numPages: data.numpages,
       info: data.info,
+    },
+  };
+}
+
+async function parsePPTX(
+  buffer: Buffer
+): Promise<{ text: string; metadata: Record<string, unknown> }> {
+  const JSZip = (await import("jszip")).default;
+  const zip = await JSZip.loadAsync(buffer);
+
+  const slideFiles = Object.keys(zip.files)
+    .filter((name) => /^ppt\/slides\/slide\d+\.xml$/.test(name))
+    .sort((a, b) => {
+      const numA = parseInt(a.match(/\d+/)?.[0] ?? "0");
+      const numB = parseInt(b.match(/\d+/)?.[0] ?? "0");
+      return numA - numB;
+    });
+
+  const slideTexts: string[] = [];
+
+  for (let i = 0; i < slideFiles.length; i++) {
+    const xmlContent = await zip.files[slideFiles[i]].async("text");
+    // Extract all <a:t> text nodes (PowerPoint text runs)
+    const textMatches = xmlContent.match(/<a:t[^>]*>([^<]*)<\/a:t>/g) ?? [];
+    const slideText = textMatches
+      .map((m) => m.replace(/<[^>]+>/g, "").trim())
+      .filter(Boolean)
+      .join(" ");
+
+    if (slideText) {
+      slideTexts.push(`[슬라이드 ${i + 1}]\n${slideText}`);
+    }
+  }
+
+  return {
+    text: slideTexts.join("\n\n"),
+    metadata: {
+      type: "pptx",
+      slideCount: slideFiles.length,
     },
   };
 }

@@ -91,18 +91,19 @@ export function Sidebar() {
           활성 에이전트
         </p>
         <div className="space-y-1.5">
-          <div className="flex items-center gap-2 text-xs text-slate-400">
-            <div className="w-1.5 h-1.5 rounded-full bg-green-400" />
-            <span>General Agent</span>
-          </div>
-          <div className="flex items-center gap-2 text-xs text-slate-400">
-            <div className="w-1.5 h-1.5 rounded-full bg-purple-400" />
-            <span>Dr. Cell (Bio)</span>
-          </div>
-          <div className="flex items-center gap-2 text-xs text-slate-400">
-            <div className="w-1.5 h-1.5 rounded-full bg-blue-400" />
-            <span>IT Agent</span>
-          </div>
+          {[
+            { dot: "bg-purple-400", name: "Dr. Cell" },
+            { dot: "bg-blue-400",   name: "Code" },
+            { dot: "bg-cyan-400",   name: "Neuron" },
+            { dot: "bg-orange-400", name: "Maker" },
+            { dot: "bg-pink-400",   name: "Story" },
+            { dot: "bg-emerald-400",name: "Vault" },
+          ].map((agent) => (
+            <div key={agent.name} className="flex items-center gap-2 text-xs text-slate-400">
+              <div className={`w-1.5 h-1.5 rounded-full ${agent.dot}`} />
+              <span>{agent.name}</span>
+            </div>
+          ))}
         </div>
       </div>
     </aside>

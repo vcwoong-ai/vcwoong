@@ -3,6 +3,7 @@ import { BaseAgent, AgentInput } from "./base-agent";
 import { generateText } from "@/lib/claude";
 import { getSystemPrompt } from "@/prompts/system-prompts";
 import { GenerationResult } from "@/types";
+import { calculateRNPV, formatRNPVTable, type PipelineAsset } from "@/lib/bio/rnpv";
 
 /**
  * Dr. Cell — Specialized biohealth investment agent.
@@ -37,11 +38,54 @@ export class BioAgent extends BaseAgent {
     return super.generateSection(input, sectionKey);
   }
 
+  /**
+   * Attempt to extract pipeline data from documents for rNPV seeding.
+   * Returns a best-effort list; falls back to empty if parsing fails.
+   */
+  private extractPipelineHints(
+    documentContext: string,
+    companyName: string
+  ): PipelineAsset[] {
+    const phasePatterns: Array<{ pattern: RegExp; phase: PipelineAsset["phase"] }> = [
+      { pattern: /phase\s*3|phase\s*III|임상\s*3상/i, phase: "PHASE3" },
+      { pattern: /phase\s*2|phase\s*II|임상\s*2상/i, phase: "PHASE2" },
+      { pattern: /phase\s*1|phase\s*I|임상\s*1상/i, phase: "PHASE1" },
+      { pattern: /전임상|preclinical/i, phase: "PRECLINICAL" },
+      { pattern: /NDA|BLA|허가\s*신청/i, phase: "NDA" },
+    ];
+
+    // Build a single placeholder asset from the best phase found in text
+    for (const { pattern, phase } of phasePatterns) {
+      if (pattern.test(documentContext)) {
+        return [
+          {
+            name: `${companyName} 주요 파이프라인`,
+            indication: "주요 적응증",
+            phase,
+            peakRevenueBillionKRW: 5000,
+            marketPenetration: 0.05,
+            royaltyRate: 0.10,
+          },
+        ];
+      }
+    }
+    return [];
+  }
+
   private async generateBioValuation(
     input: AgentInput
   ): Promise<GenerationResult> {
     const systemPrompt = getSystemPrompt(AgentType.BIO, DealSector.BIO);
     const documentContext = this.buildDocumentContext(input.documents);
+
+    // Build rNPV table from document hints
+    const pipelineHints = this.extractPipelineHints(documentContext, input.companyName);
+    const rnpvResult = calculateRNPV(pipelineHints);
+    const rnpvTable = pipelineHints.length > 0 ? formatRNPVTable(rnpvResult) : "";
+
+    const rnpvContext = rnpvTable
+      ? `\n\n## 사전 계산된 rNPV 참고 테이블 (문서 기반 추정)\n${rnpvTable}\n위 수치를 참고하되, 실제 자료의 구체적 수치로 보완/수정하세요.`
+      : "";
 
     const userPrompt = `## 투자 대상 기업 정보
 - 기업명: ${input.companyName}
@@ -51,7 +95,7 @@ ${input.investAmount ? `- 투자 금액: ${input.investAmount.toLocaleString()}�
 ${input.valuation ? `- 투자 후 기업가치: ${input.valuation.toLocaleString()}억원` : ""}
 
 ## 제공 자료
-${documentContext}
+${documentContext}${rnpvContext}
 
 ## 밸류에이션 섹션 작성 요청 (바이오 특화)
 

@@ -29,13 +29,15 @@ const SECTOR_CONFIG: Record<
   DealSector,
   { label: string; color: string; bg: string }
 > = {
-  BIO: { label: "바이오", color: "text-purple-700", bg: "bg-purple-50 border-purple-200" },
-  IT: { label: "IT", color: "text-blue-700", bg: "bg-blue-50 border-blue-200" },
-  FINTECH: { label: "핀테크", color: "text-emerald-700", bg: "bg-emerald-50 border-emerald-200" },
-  GENERAL: { label: "일반", color: "text-gray-700", bg: "bg-gray-50 border-gray-200" },
-  CONSUMER: { label: "소비재", color: "text-orange-700", bg: "bg-orange-50 border-orange-200" },
-  DEEPTECH: { label: "딥테크", color: "text-red-700", bg: "bg-red-50 border-red-200" },
-  CLIMATE: { label: "기후", color: "text-green-700", bg: "bg-green-50 border-green-200" },
+  BIO:           { label: "바이오",    color: "text-purple-700",  bg: "bg-purple-50 border-purple-200" },
+  IT:            { label: "IT/SaaS",  color: "text-blue-700",    bg: "bg-blue-50 border-blue-200" },
+  DEEPTECH:      { label: "AI/딥테크",color: "text-cyan-700",    bg: "bg-cyan-50 border-cyan-200" },
+  MANUFACTURING: { label: "제조",     color: "text-orange-700",  bg: "bg-orange-50 border-orange-200" },
+  CONTENT:       { label: "콘텐츠",   color: "text-pink-700",    bg: "bg-pink-50 border-pink-200" },
+  FINTECH:       { label: "핀테크",   color: "text-emerald-700", bg: "bg-emerald-50 border-emerald-200" },
+  CONSUMER:      { label: "소비재",   color: "text-amber-700",   bg: "bg-amber-50 border-amber-200" },
+  CLIMATE:       { label: "기후/ESG", color: "text-green-700",   bg: "bg-green-50 border-green-200" },
+  GENERAL:       { label: "일반",     color: "text-gray-700",    bg: "bg-gray-50 border-gray-200" },
 };
 
 const STAGE_CONFIG: Record<DealStage, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {

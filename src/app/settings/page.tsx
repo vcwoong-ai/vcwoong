@@ -5,6 +5,8 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Zap, Database, Shield } from "lucide-react";
+import { ProfileForm } from "@/components/settings/profile-form";
+import { AGENT_META } from "@/agents";
 
 export default async function SettingsPage() {
   const session = await getServerSession(authOptions);
@@ -27,12 +29,8 @@ export default async function SettingsPage() {
               계정 정보
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-xs text-gray-400">이름</p>
-                <p className="font-medium">{session.user.name ?? "-"}</p>
-              </div>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 gap-4 pb-4 border-b">
               <div>
                 <p className="text-xs text-gray-400">이메일</p>
                 <p className="font-medium">{session.user.email ?? "-"}</p>
@@ -44,6 +42,7 @@ export default async function SettingsPage() {
                 </Badge>
               </div>
             </div>
+            <ProfileForm currentName={session.user.name ?? ""} />
           </CardContent>
         </Card>
 
@@ -52,36 +51,14 @@ export default async function SettingsPage() {
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
               <Zap className="w-4 h-4" />
-              AI 에이전트
+              AI 에이전트 (6개)
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {[
-                {
-                  name: "General Agent",
-                  desc: "범용 투자 분석 — 일반/소비재/딥테크/기후",
-                  status: "활성",
-                  color: "bg-green-50 text-green-700",
-                  dot: "bg-green-400",
-                },
-                {
-                  name: "Dr. Cell (Bio Agent)",
-                  desc: "바이오/헬스케어 특화 — rNPV, 임상 분석",
-                  status: "활성",
-                  color: "bg-purple-50 text-purple-700",
-                  dot: "bg-purple-400",
-                },
-                {
-                  name: "IT Agent",
-                  desc: "IT/SaaS/핀테크 특화 — SaaS 지표, 플랫폼",
-                  status: "활성",
-                  color: "bg-blue-50 text-blue-700",
-                  dot: "bg-blue-400",
-                },
-              ].map((agent) => (
+            <div className="space-y-2.5">
+              {AGENT_META.map((agent) => (
                 <div
-                  key={agent.name}
+                  key={agent.id}
                   className="flex items-center justify-between p-3 rounded-lg bg-gray-50 border"
                 >
                   <div className="flex items-center gap-3">
@@ -91,8 +68,8 @@ export default async function SettingsPage() {
                       <p className="text-xs text-gray-500">{agent.desc}</p>
                     </div>
                   </div>
-                  <span className={`text-xs px-2 py-0.5 rounded ${agent.color} font-medium`}>
-                    {agent.status}
+                  <span className="text-xs px-2 py-0.5 rounded bg-green-50 text-green-700 font-medium">
+                    활성
                   </span>
                 </div>
               ))}
