@@ -1,47 +1,53 @@
 /**
- * AI provider abstraction — multi-provider (Gemini + OpenRouter).
+ * AI provider abstraction — multi-provider (OpenRouter free + Gemini paid).
  *
- * Routing logic:
- *   gemini-*  →  Google AI Studio endpoint (GEMINI_API_KEY)
- *   others    →  OpenRouter endpoint        (OPENROUTER_API_KEY)
+ * 호출 우선순위:
+ *   1. AI_MODEL (기본값: OpenRouter 무료 모델)
+ *      → 성공하면 그대로 사용 (비용 $0)
+ *   2. 429 레이트리밋 발생 시 → AI_FALLBACK_MODEL (Gemini 유료)로 즉시 전환
+ *      → 비용 발생하지만 빠르게 처리
  *
- * Model recommendations:
- *   Primary:   gemini-2.5-flash   (Google, best quality, ~$0.02/report)
- *   Fallback:  deepseek/deepseek-v4-flash  (OpenRouter, ~$0.001/report)
- *   Premium:   gemini-2.5-pro     (Google, best quality, ~$0.20/report)
- *              anthropic/claude-sonnet-4.5 (OpenRouter, ~$0.47/report)
+ * 라우팅:
+ *   gemini-*  →  Google AI Studio (GEMINI_API_KEY)
+ *   그 외      →  OpenRouter       (OPENROUTER_API_KEY)
  *
- * Configuration (.env.local):
+ * .env.local 설정:
  *   GEMINI_API_KEY=AIza...
  *   OPENROUTER_API_KEY=sk-or-...
- *   AI_MODEL=gemini-2.5-flash
- *   AI_FALLBACK_MODEL=deepseek/deepseek-v4-flash
+ *   AI_MODEL=meta-llama/llama-3.3-70b-instruct:free   ← 무료 기본
+ *   AI_FALLBACK_MODEL=gemini-2.5-flash                 ← 유료 폴백
  */
 
 import OpenAI from "openai";
 import { generateMockContent } from "./mock-generator";
 
 export const MODEL =
-  process.env.AI_MODEL ?? "gemini-2.5-flash";
+  process.env.AI_MODEL ?? "meta-llama/llama-3.3-70b-instruct:free";
 
 export const FALLBACK_MODEL =
-  process.env.AI_FALLBACK_MODEL ?? "deepseek/deepseek-v4-flash";
+  process.env.AI_FALLBACK_MODEL ?? "gemini-2.5-flash";
 
-// Gemini 2.5 uses thinking tokens internally, so needs a higher max_tokens budget
-const DEFAULT_MAX_TOKENS = MODEL.startsWith("gemini-2.5") ? 8192 : 4096;
+/** Gemini 2.5는 thinking 토큰을 내부 사용하므로 max_tokens를 더 높게 설정해야 함 */
+function getMaxTokens(model: string, requested?: number): number {
+  if (requested) return requested;
+  return model.startsWith("gemini-2.5") ? 8192 : 4096;
+}
 
 function isGeminiModel(model: string): boolean {
   return model.startsWith("gemini-") || model.startsWith("models/gemini-");
 }
 
-function getGeminiClient(): OpenAI {
-  return new OpenAI({
-    baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
-    apiKey: process.env.GEMINI_API_KEY ?? "",
-  });
+function isFreeModel(model: string): boolean {
+  return model.endsWith(":free");
 }
 
-function getOpenRouterClient(): OpenAI {
+function getClientForModel(model: string): OpenAI {
+  if (isGeminiModel(model)) {
+    return new OpenAI({
+      baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
+      apiKey: process.env.GEMINI_API_KEY ?? "",
+    });
+  }
   return new OpenAI({
     baseURL: "https://openrouter.ai/api/v1",
     apiKey: process.env.OPENROUTER_API_KEY ?? "",
@@ -50,10 +56,6 @@ function getOpenRouterClient(): OpenAI {
       "X-Title": "DealSync",
     },
   });
-}
-
-function getClientForModel(model: string): OpenAI {
-  return isGeminiModel(model) ? getGeminiClient() : getOpenRouterClient();
 }
 
 export function isAIConfigured(): boolean {
@@ -78,39 +80,61 @@ export interface ClaudeOptions {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-async function callModel(
+/**
+ * 단일 모델 호출. 실패 시 에러를 throw (폴백 결정은 호출부에서).
+ */
+async function callOnce(
   model: string,
   messages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
-  maxTokens: number,
-  attempt = 0
+  maxTokens: number
 ): Promise<OpenAI.Chat.Completions.ChatCompletion> {
   const client = getClientForModel(model);
+  const result = await client.chat.completions.create({
+    model,
+    max_tokens: maxTokens,
+    messages,
+    stream: false,
+  } as Parameters<OpenAI["chat"]["completions"]["create"]>[0]);
+  return result as OpenAI.Chat.Completions.ChatCompletion;
+}
+
+/**
+ * 메인 호출 함수:
+ * - 무료 모델: 429 → 즉시 Gemini 폴백 (대기 없음)
+ * - Gemini/유료: 429 → 최대 2회 재시도 후 에러
+ */
+async function callWithFallback(
+  model: string,
+  messages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
+  maxTokens: number
+): Promise<{ result: OpenAI.Chat.Completions.ChatCompletion; usedModel: string }> {
   try {
-    const result = await client.chat.completions.create({
-      model,
-      max_tokens: maxTokens,
-      messages,
-      stream: false,
-    } as Parameters<OpenAI["chat"]["completions"]["create"]>[0]);
-    return result as OpenAI.Chat.Completions.ChatCompletion;
+    const result = await callOnce(model, messages, maxTokens);
+    return { result, usedModel: model };
   } catch (err: unknown) {
     const status = (err as { status?: number })?.status;
+    const isRateLimit = status === 429;
 
-    // Rate limit — retry with backoff (up to 3 times)
-    if (status === 429 && attempt < 3) {
-      const retryAfter =
-        (err as { error?: { metadata?: { retry_after_seconds?: number } } })
-          ?.error?.metadata?.retry_after_seconds ?? 10;
-      const wait = Math.min(retryAfter * 1000, 35_000);
-      console.log(`[AI] ${model} rate-limited, retrying in ${wait / 1000}s...`);
-      await sleep(wait);
-      return callModel(model, messages, maxTokens, attempt + 1);
+    // 무료 모델 레이트리밋 → Gemini 즉시 전환
+    if (isRateLimit && isFreeModel(model) && model !== FALLBACK_MODEL) {
+      const fallbackTokens = getMaxTokens(FALLBACK_MODEL, maxTokens);
+      console.log(`[AI] 무료 모델 레이트리밋 → Gemini(${FALLBACK_MODEL})로 전환`);
+      const result = await callOnce(FALLBACK_MODEL, messages, fallbackTokens);
+      return { result, usedModel: FALLBACK_MODEL };
     }
 
-    // Primary model failed — try fallback if it's different
-    if (model !== FALLBACK_MODEL && !isGeminiModel(FALLBACK_MODEL) !== !isGeminiModel(model)) {
-      console.log(`[AI] ${model} failed (${status}), falling back to ${FALLBACK_MODEL}`);
-      return callModel(FALLBACK_MODEL, messages, maxTokens, 0);
+    // 유료 모델 레이트리밋 → 30초 대기 후 2회 재시도
+    if (isRateLimit && !isFreeModel(model)) {
+      for (let i = 0; i < 2; i++) {
+        console.log(`[AI] ${model} 레이트리밋, 30초 대기 (${i + 1}/2)...`);
+        await sleep(30_000);
+        try {
+          const result = await callOnce(model, messages, maxTokens);
+          return { result, usedModel: model };
+        } catch {
+          // 계속 재시도
+        }
+      }
     }
 
     throw err;
@@ -121,28 +145,29 @@ export async function generateText(
   messages: ClaudeMessage[],
   options: ClaudeOptions = {}
 ): Promise<{ content: string; inputTokens: number; outputTokens: number }> {
-  const maxTokens = options.maxTokens ?? DEFAULT_MAX_TOKENS;
-  const { systemPrompt } = options;
-
   if (!isAIConfigured()) {
     const content = generateMockContent(messages);
     await sleep(400);
     return { content, inputTokens: 0, outputTokens: 0 };
   }
 
+  const { systemPrompt } = options;
   const builtMessages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
     ...(systemPrompt ? [{ role: "system" as const, content: systemPrompt }] : []),
     ...messages.map((m) => ({ role: m.role, content: m.content })),
   ];
 
-  const response = await callModel(MODEL, builtMessages, maxTokens);
-  const content = response.choices[0]?.message?.content ?? "";
-  const usage = response.usage;
+  const maxTokens = getMaxTokens(MODEL, options.maxTokens);
+  const { result, usedModel } = await callWithFallback(MODEL, builtMessages, maxTokens);
+
+  if (usedModel !== MODEL) {
+    console.log(`[AI] 실제 사용 모델: ${usedModel}`);
+  }
 
   return {
-    content,
-    inputTokens: usage?.prompt_tokens ?? 0,
-    outputTokens: usage?.completion_tokens ?? 0,
+    content: result.choices[0]?.message?.content ?? "",
+    inputTokens: result.usage?.prompt_tokens ?? 0,
+    outputTokens: result.usage?.completion_tokens ?? 0,
   };
 }
 
@@ -151,9 +176,6 @@ export async function generateStream(
   options: ClaudeOptions = {},
   onChunk: (text: string) => void
 ): Promise<{ inputTokens: number; outputTokens: number }> {
-  const maxTokens = options.maxTokens ?? DEFAULT_MAX_TOKENS;
-  const { systemPrompt } = options;
-
   if (!isAIConfigured()) {
     const content = generateMockContent(messages);
     for (const chunk of content.match(/[\s\S]{1,24}/g) ?? [content]) {
@@ -163,44 +185,24 @@ export async function generateStream(
     return { inputTokens: 0, outputTokens: 0 };
   }
 
+  const { systemPrompt } = options;
   const builtMessages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
     ...(systemPrompt ? [{ role: "system" as const, content: systemPrompt }] : []),
     ...messages.map((m) => ({ role: m.role, content: m.content })),
   ];
 
-  // Gemini 2.5 thinking models: use non-streaming (more reliable) + simulate chunks
-  const useNonStreaming = isGeminiModel(MODEL) && MODEL.includes("2.5");
-  if (useNonStreaming) {
-    const result = await callModel(MODEL, builtMessages, maxTokens);
-    const content = result.choices[0]?.message?.content ?? "";
-    for (const chunk of content.match(/[\s\S]{1,40}/g) ?? [content]) {
-      onChunk(chunk);
-      await sleep(8);
-    }
-    return {
-      inputTokens: result.usage?.prompt_tokens ?? 0,
-      outputTokens: result.usage?.completion_tokens ?? 0,
-    };
+  // 비스트리밍 방식으로 받은 후 청크 시뮬레이션 (Gemini 2.5 thinking 모델 대응)
+  const maxTokens = getMaxTokens(MODEL, options.maxTokens);
+  const { result } = await callWithFallback(MODEL, builtMessages, maxTokens);
+  const content = result.choices[0]?.message?.content ?? "";
+
+  for (const chunk of content.match(/[\s\S]{1,40}/g) ?? [content]) {
+    onChunk(chunk);
+    await sleep(8);
   }
 
-  // Standard streaming for other models
-  const client = getClientForModel(MODEL);
-  const stream = await client.chat.completions.create({
-    model: MODEL,
-    max_tokens: maxTokens,
-    stream: true,
-    messages: builtMessages,
-  });
-
-  let inputTokens = 0;
-  let outputTokens = 0;
-  for await (const chunk of stream) {
-    const delta = chunk.choices[0]?.delta?.content;
-    if (delta) onChunk(delta);
-    if (chunk.usage) {
-      inputTokens = chunk.usage.prompt_tokens ?? 0;
-      outputTokens = chunk.usage.completion_tokens ?? 0;
-    }
-  }
-  return { inputTokens, outputTokens };
+  return {
+    inputTokens: result.usage?.prompt_tokens ?? 0,
+    outputTokens: result.usage?.completion_tokens ?? 0,
+  };
 }
