@@ -1,5 +1,7 @@
+import { parsePPTX } from "@/lib/parsers/pptx";
+
 /**
- * Document parsing utilities for DOCX, PDF, and XLSX files.
+ * Document parsing utilities for DOCX, PDF, XLSX, and PPTX files.
  * Extracts plain text for AI processing.
  */
 
@@ -30,6 +32,13 @@ export async function parseDocument(
     ext === "xls"
   ) {
     return parseXLSX(buffer);
+  }
+
+  if (
+    mimeType === "application/vnd.openxmlformats-officedocument.presentationml.presentation" ||
+    ext === "pptx"
+  ) {
+    return parsePPTX(buffer);
   }
 
   if (mimeType === "text/plain" || ext === "txt") {

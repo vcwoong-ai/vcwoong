@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import type { MessageParam, TextBlock } from "@anthropic-ai/sdk/resources/messages";
 import { generateMockContent } from "./mock-generator";
 
 const client = new Anthropic({
@@ -61,6 +62,52 @@ export async function generateText(
     inputTokens: response.usage.input_tokens,
     outputTokens: response.usage.output_tokens,
   };
+}
+
+export async function callClaudeJSON<T>(params: {
+  system: string;
+  messages: MessageParam[];
+  maxTokens?: number;
+  temperature?: number;
+  retries?: number;
+}): Promise<{ data: T; inputTokens: number; outputTokens: number }> {
+  const { system, messages, maxTokens = 4096, temperature = 0.3, retries = 2 } = params;
+
+  if (!isAIConfigured()) {
+    return { data: {} as T, inputTokens: 0, outputTokens: 0 };
+  }
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const response = await client.messages.create({
+        model: MODEL,
+        max_tokens: maxTokens,
+        temperature,
+        system,
+        messages,
+      });
+
+      const text = response.content
+        .filter((b): b is TextBlock => b.type === "text")
+        .map((b) => b.text)
+        .join("\n");
+
+      const cleaned = text
+        .replace(/^```json\s*/m, "")
+        .replace(/```\s*$/, "")
+        .trim();
+
+      return {
+        data: JSON.parse(cleaned) as T,
+        inputTokens: response.usage.input_tokens,
+        outputTokens: response.usage.output_tokens,
+      };
+    } catch (error) {
+      if (attempt === retries) throw error;
+      await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+    }
+  }
+  throw new Error("Unreachable");
 }
 
 export async function generateStream(
