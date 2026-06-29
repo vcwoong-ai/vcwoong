@@ -65,6 +65,7 @@ JSON:
         },
       ],
       maxTokens: 1024,
+      tier: "standard",
     });
     return result.metrics ?? {};
   } catch {

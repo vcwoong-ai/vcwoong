@@ -76,6 +76,7 @@ JSON 형식으로 추출:
         },
       ],
       maxTokens: 2048,
+      tier: "standard",
     });
     return { models: result.models ?? [], gpus: result.gpus ?? [] };
   } catch {

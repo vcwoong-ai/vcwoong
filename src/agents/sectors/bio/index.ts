@@ -41,6 +41,7 @@ async function extractPipelinesFromData(data: StructuredData): Promise<Pipeline[
         },
       ],
       maxTokens: 2048,
+      tier: "standard",
     });
     return result.pipelines ?? [];
   } catch {

@@ -61,6 +61,7 @@ JSON 형식으로 추출 (단위: ARR/MRR은 억원, CAC/LTV는 만원, 비율�
         },
       ],
       maxTokens: 1024,
+      tier: "standard",
     });
     return computeDerivedMetrics(result.metrics ?? {});
   } catch {
