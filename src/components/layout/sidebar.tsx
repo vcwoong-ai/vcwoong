@@ -11,6 +11,7 @@ import {
   Settings,
   ChevronRight,
   Zap,
+  LayoutTemplate,
 } from "lucide-react";
 
 const navItems = [
@@ -28,6 +29,11 @@ const navItems = [
     label: "보고서",
     href: "/reports",
     icon: FileText,
+  },
+  {
+    label: "양식 관리",
+    href: "/templates",
+    icon: LayoutTemplate,
   },
   {
     label: "파일 업로드",

@@ -64,10 +64,11 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  accounts Account[]
-  sessions Session[]
-  team     Team?     @relation(fields: [teamId], references: [id])
-  deals    Deal[]
+  accounts  Account[]
+  sessions  Session[]
+  team      Team?      @relation(fields: [teamId], references: [id])
+  deals     Deal[]
+  templates Template[]
 }
 
 model Team {
@@ -76,8 +77,9 @@ model Team {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users User[]
-  deals Deal[]
+  users     User[]
+  deals     Deal[]
+  templates Template[]
 }
 
 model Deal {
@@ -117,9 +119,31 @@ model Document {
   deal Deal @relation(fields: [dealId], references: [id], onDelete: Cascade)
 }
 
+model Template {
+  id           String         @id @default(cuid())
+  name         String
+  description  String?
+  fileType     TemplateFileType
+  originalName String
+  fileUrl      String
+  fileSize     Int
+  structure    Json?          // 추출된 섹션 구조
+  sectionMap   Json?          // AI 매핑 결과 (templateSection → SectionKey)
+  status       TemplateStatus @default(PENDING)
+  userId       String
+  teamId       String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  user    User     @relation(fields: [userId], references: [id])
+  team    Team?    @relation(fields: [teamId], references: [id])
+  reports Report[]
+}
+
 model Report {
   id          String       @id @default(cuid())
   dealId      String
+  templateId  String?
   title       String
   agentType   AgentType
   status      ReportStatus @default(PENDING)
@@ -129,6 +153,7 @@ model Report {
   updatedAt   DateTime     @updatedAt
 
   deal     Deal            @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  template Template?       @relation(fields: [templateId], references: [id])
   sections ReportSection[]
 }
 
@@ -216,6 +241,18 @@ enum SectionStatus {
   DRAFT
   REVIEWED
   APPROVED
+}
+
+enum TemplateFileType {
+  DOCX
+  PPTX
+}
+
+enum TemplateStatus {
+  PENDING
+  ANALYZING
+  READY
+  ERROR
 }
 
 enum SectionKey {

@@ -16,6 +16,7 @@ import {
 const createReportSchema = z.object({
   agentType: z.nativeEnum(AgentType).optional(),
   additionalContext: z.string().optional(),
+  templateId: z.string().optional(),
 });
 
 export async function GET(
@@ -79,6 +80,7 @@ export async function POST(
         title: `${deal.companyName} 투자심의보고서`,
         agentType,
         status: ReportStatus.GENERATING,
+        ...(validated.templateId ? { templateId: validated.templateId } : {}),
       },
     });
 

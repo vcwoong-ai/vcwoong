@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -18,7 +18,15 @@ import {
   File,
   Calendar,
   Sparkles,
+  LayoutTemplate,
 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { AgentType, DealSector, DealStage } from "@prisma/client";
 
@@ -122,6 +130,13 @@ interface GenerationProgress {
   status: "generating" | "completed" | "error";
 }
 
+interface TemplateOption {
+  id: string;
+  name: string;
+  status: string;
+  fileType: string;
+}
+
 export function DealDetailClient({
   deal,
   demoMode = false,
@@ -135,13 +150,26 @@ export function DealDetailClient({
   const [uploadKey, setUploadKey] = useState(0);
   const [detectingsector, setDetectingSector] = useState(false);
   const [detectedSector, setDetectedSector] = useState<{ sector: string; reason: string } | null>(null);
+  const [templates, setTemplates] = useState<TemplateOption[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
   const eventSourceRef = useRef<EventSource | null>(null);
 
+  // 사용 가능한 템플릿 로드
+  const loadTemplates = useCallback(async () => {
+    try {
+      const res = await fetch("/api/templates");
+      if (!res.ok) return;
+      const { data } = await res.json();
+      setTemplates((data as TemplateOption[]).filter((t: TemplateOption) => t.status === "READY"));
+    } catch { /* ignore */ }
+  }, []);
+
   useEffect(() => {
+    loadTemplates();
     return () => {
       eventSourceRef.current?.close();
     };
-  }, []);
+  }, [loadTemplates]);
 
   const recommendedAgent = SECTOR_AGENT_MAP[deal.sector] ?? AgentType.GENERAL;
   const agentInfo = AGENT_INFO[recommendedAgent];
@@ -153,7 +181,10 @@ export function DealDetailClient({
       const response = await fetch(`/api/deals/${deal.id}/reports`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ agentType: recommendedAgent }),
+        body: JSON.stringify({
+          agentType: recommendedAgent,
+          ...(selectedTemplateId ? { templateId: selectedTemplateId } : {}),
+        }),
       });
 
       if (!response.ok) {
@@ -250,9 +281,26 @@ export function DealDetailClient({
             <p className="text-sm text-gray-600 mt-2 max-w-2xl">{deal.description}</p>
           )}
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2 items-center">
           {deal.documents.length > 0 && (
             <>
+              {/* 템플릿 선택 */}
+              {templates.length > 0 && (
+                <Select value={selectedTemplateId} onValueChange={setSelectedTemplateId}>
+                  <SelectTrigger className="w-44 text-sm h-9">
+                    <LayoutTemplate className="w-3.5 h-3.5 mr-1.5 text-gray-500" />
+                    <SelectValue placeholder="양식 선택 (선택)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">기본 양식</SelectItem>
+                    {templates.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>
+                        {t.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
               <Button
                 variant="outline"
                 size="sm"
