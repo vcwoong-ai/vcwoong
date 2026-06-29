@@ -45,7 +45,7 @@ export default async function DealsPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-            {deals.map((deal) => (
+            {deals.map((deal: any) => (
               <DealCard key={deal.id} deal={deal} />
             ))}
           </div>

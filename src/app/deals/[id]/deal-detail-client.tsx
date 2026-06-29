@@ -103,7 +103,7 @@ export function DealDetailClient({
   const [uploadKey, setUploadKey] = useState(0);
 
   const recommendedAgent = SECTOR_AGENT_MAP[deal.sector] ?? AgentType.GENERAL;
-  const agentInfo = AGENT_INFO[recommendedAgent];
+  const agentInfo = AGENT_INFO[recommendedAgent as keyof typeof AGENT_INFO] ?? AGENT_INFO[AgentType.GENERAL];
 
   const generateReport = async () => {
     setGenerating(true);
