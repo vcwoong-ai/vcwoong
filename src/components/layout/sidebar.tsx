@@ -83,7 +83,11 @@ export function Sidebar() {
           </div>
           <div className="flex items-center gap-2 text-xs text-slate-400">
             <div className="w-1.5 h-1.5 rounded-full bg-blue-400" />
-            <span>IT Agent</span>
+            <span>Code (IT/SaaS)</span>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-slate-400">
+            <div className="w-1.5 h-1.5 rounded-full bg-yellow-400" />
+            <span>Neuron (AI/딥테크)</span>
           </div>
         </div>
       </div>
