@@ -100,45 +100,54 @@ async function callOnce(
 
 /**
  * 메인 호출 함수:
- * - 무료 모델: 429 → 즉시 Gemini 폴백 (대기 없음)
- * - Gemini/유료: 429 → 최대 2회 재시도 후 에러
+ * - 무료 모델: 429/503 → 즉시 Gemini 폴백
+ * - Gemini: 429/503 → 지수 백오프 재시도 (최대 4회)
+ * - 모든 실패 시 → 마지막 에러 throw
  */
 async function callWithFallback(
   model: string,
   messages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
   maxTokens: number
 ): Promise<{ result: OpenAI.Chat.Completions.ChatCompletion; usedModel: string }> {
+  const isRetryable = (err: unknown) => {
+    const s = (err as { status?: number })?.status;
+    return s === 429 || s === 503 || s === 502 || s === 500;
+  };
+
+  // 1. 기본 모델 시도
   try {
     const result = await callOnce(model, messages, maxTokens);
     return { result, usedModel: model };
-  } catch (err: unknown) {
-    const status = (err as { status?: number })?.status;
-    const isRateLimit = status === 429;
+  } catch (err) {
+    if (!isRetryable(err)) throw err;
 
-    // 무료 모델 레이트리밋 → Gemini 즉시 전환
-    if (isRateLimit && isFreeModel(model) && model !== FALLBACK_MODEL) {
-      const fallbackTokens = getMaxTokens(FALLBACK_MODEL, maxTokens);
+    // 무료 모델 에러 → Gemini 즉시 전환
+    if (isFreeModel(model) && model !== FALLBACK_MODEL) {
       console.log(`[AI] 무료 모델 레이트리밋 → Gemini(${FALLBACK_MODEL})로 전환`);
-      const result = await callOnce(FALLBACK_MODEL, messages, fallbackTokens);
-      return { result, usedModel: FALLBACK_MODEL };
     }
-
-    // 유료 모델 레이트리밋 → 30초 대기 후 2회 재시도
-    if (isRateLimit && !isFreeModel(model)) {
-      for (let i = 0; i < 2; i++) {
-        console.log(`[AI] ${model} 레이트리밋, 30초 대기 (${i + 1}/2)...`);
-        await sleep(30_000);
-        try {
-          const result = await callOnce(model, messages, maxTokens);
-          return { result, usedModel: model };
-        } catch {
-          // 계속 재시도
-        }
-      }
-    }
-
-    throw err;
   }
+
+  // 2. 폴백 모델 (Gemini) — 지수 백오프로 최대 4회
+  const fallbackTokens = getMaxTokens(FALLBACK_MODEL, maxTokens);
+  let lastErr: unknown;
+
+  for (let attempt = 0; attempt < 4; attempt++) {
+    if (attempt > 0) {
+      const waitMs = Math.min(15_000 * Math.pow(2, attempt - 1), 60_000);
+      console.log(`[AI] ${FALLBACK_MODEL} 재시도 ${attempt}/3, ${waitMs / 1000}초 대기...`);
+      await sleep(waitMs);
+    }
+    try {
+      const result = await callOnce(FALLBACK_MODEL, messages, fallbackTokens);
+      if (attempt > 0) console.log(`[AI] 실제 사용 모델: ${FALLBACK_MODEL}`);
+      return { result, usedModel: FALLBACK_MODEL };
+    } catch (err) {
+      lastErr = err;
+      if (!isRetryable(err)) break;
+    }
+  }
+
+  throw lastErr;
 }
 
 export async function generateText(

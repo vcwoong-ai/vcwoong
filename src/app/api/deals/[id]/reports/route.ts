@@ -143,6 +143,12 @@ async function generateSectionsAsync(
         sectionKey
       );
       results.push(result);
+
+      // 섹션 간 짧은 지연: Gemini 10 RPM 한도 초과 방지
+      // DeepSeek 등 유료 모델은 rate limit이 높아 지연 불필요하지만, 안전을 위해 유지
+      if (i < sectionKeys.length - 1) {
+        await new Promise((r) => setTimeout(r, 1500));
+      }
     }
 
     // Save all sections
