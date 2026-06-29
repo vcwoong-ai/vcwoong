@@ -7,6 +7,10 @@
     "src/app/api/agents/bio/analyze/route.ts": { "maxDuration": 300 },
     "src/app/api/agents/it-saas/analyze/route.ts": { "maxDuration": 300 },
     "src/app/api/agents/deeptech/analyze/route.ts": { "maxDuration": 300 },
+    "src/app/api/agents/manufacturing/analyze/route.ts": { "maxDuration": 300 },
+    "src/app/api/agents/content/analyze/route.ts": { "maxDuration": 300 },
+    "src/app/api/agents/fintech/analyze/route.ts": { "maxDuration": 300 },
+    "src/app/api/lp-report/generate/route.ts": { "maxDuration": 300 },
     "src/app/api/reports/generate/route.ts": { "maxDuration": 120 },
     "src/app/api/upload/route.ts": { "maxDuration": 60 },
     "src/app/api/detect-sector/route.ts": { "maxDuration": 60 }
