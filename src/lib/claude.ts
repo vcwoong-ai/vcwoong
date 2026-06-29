@@ -1,51 +1,68 @@
 /**
- * AI provider abstraction — backed by OpenRouter (OpenAI-compatible endpoint).
+ * AI provider abstraction — multi-provider (Gemini + OpenRouter).
  *
- * Model switching via AI_MODEL env var:
- *   Free:  meta-llama/llama-3.3-70b-instruct:free
- *          qwen/qwen3-next-80b-a3b-instruct:free
- *   Cheap: deepseek/deepseek-v3-0324          (~$0.03/report)
- *          google/gemini-2.5-flash             (~$0.05/report)
- *   Best:  anthropic/claude-sonnet-4-5         (~$0.47/report)
- *          openai/gpt-4o                       (~$0.50/report)
+ * Routing logic:
+ *   gemini-*  →  Google AI Studio endpoint (GEMINI_API_KEY)
+ *   others    →  OpenRouter endpoint        (OPENROUTER_API_KEY)
  *
- * Falls back to demo/mock mode when OPENROUTER_API_KEY is not set.
+ * Model recommendations:
+ *   Primary:   gemini-2.5-flash   (Google, best quality, ~$0.02/report)
+ *   Fallback:  deepseek/deepseek-v4-flash  (OpenRouter, ~$0.001/report)
+ *   Premium:   gemini-2.5-pro     (Google, best quality, ~$0.20/report)
+ *              anthropic/claude-sonnet-4.5 (OpenRouter, ~$0.47/report)
+ *
+ * Configuration (.env.local):
+ *   GEMINI_API_KEY=AIza...
+ *   OPENROUTER_API_KEY=sk-or-...
+ *   AI_MODEL=gemini-2.5-flash
+ *   AI_FALLBACK_MODEL=deepseek/deepseek-v4-flash
  */
 
 import OpenAI from "openai";
 import { generateMockContent } from "./mock-generator";
 
 export const MODEL =
-  process.env.AI_MODEL ?? "deepseek/deepseek-v4-flash";
+  process.env.AI_MODEL ?? "gemini-2.5-flash";
 
-/** Free-tier fallback chain (tried in order when primary model is rate-limited) */
-const FREE_FALLBACK_MODELS = [
-  "meta-llama/llama-3.3-70b-instruct:free",
-  "qwen/qwen3-next-80b-a3b-instruct:free",
-  "google/gemma-4-31b-it:free",
-  "openai/gpt-oss-120b:free",
-  "nousresearch/hermes-3-llama-3.1-405b:free",
-];
+export const FALLBACK_MODEL =
+  process.env.AI_FALLBACK_MODEL ?? "deepseek/deepseek-v4-flash";
 
-let _client: OpenAI | null = null;
+// Gemini 2.5 uses thinking tokens internally, so needs a higher max_tokens budget
+const DEFAULT_MAX_TOKENS = MODEL.startsWith("gemini-2.5") ? 8192 : 4096;
 
-function getClient(): OpenAI {
-  if (!_client) {
-    _client = new OpenAI({
-      baseURL: "https://openrouter.ai/api/v1",
-      apiKey: process.env.OPENROUTER_API_KEY ?? "",
-      defaultHeaders: {
-        "HTTP-Referer": process.env.NEXTAUTH_URL ?? "http://localhost:3000",
-        "X-Title": "DealSync",
-      },
-    });
-  }
-  return _client;
+function isGeminiModel(model: string): boolean {
+  return model.startsWith("gemini-") || model.startsWith("models/gemini-");
+}
+
+function getGeminiClient(): OpenAI {
+  return new OpenAI({
+    baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
+    apiKey: process.env.GEMINI_API_KEY ?? "",
+  });
+}
+
+function getOpenRouterClient(): OpenAI {
+  return new OpenAI({
+    baseURL: "https://openrouter.ai/api/v1",
+    apiKey: process.env.OPENROUTER_API_KEY ?? "",
+    defaultHeaders: {
+      "HTTP-Referer": process.env.NEXTAUTH_URL ?? "http://localhost:3000",
+      "X-Title": "DealSync",
+    },
+  });
+}
+
+function getClientForModel(model: string): OpenAI {
+  return isGeminiModel(model) ? getGeminiClient() : getOpenRouterClient();
 }
 
 export function isAIConfigured(): boolean {
-  const key = process.env.OPENROUTER_API_KEY?.trim() ?? "";
-  return key.startsWith("sk-or-") && key.length > 20;
+  const gemini = process.env.GEMINI_API_KEY?.trim() ?? "";
+  const openrouter = process.env.OPENROUTER_API_KEY?.trim() ?? "";
+  return (
+    gemini.startsWith("AIza") ||
+    (openrouter.startsWith("sk-or-") && openrouter.length > 20)
+  );
 }
 
 export interface ClaudeMessage {
@@ -59,67 +76,53 @@ export interface ClaudeOptions {
   systemPrompt?: string;
 }
 
-async function sleep(ms: number) {
-  return new Promise((r) => setTimeout(r, ms));
-}
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/**
- * Call the OpenRouter API with automatic retry on 429.
- * For free models, falls back through FREE_FALLBACK_MODELS list.
- */
-async function callWithRetry(
+async function callModel(
   model: string,
-  params: Parameters<OpenAI["chat"]["completions"]["create"]>[0],
-  maxRetries = 3
+  messages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
+  maxTokens: number,
+  attempt = 0
 ): Promise<OpenAI.Chat.Completions.ChatCompletion> {
-  const client = getClient();
-  let lastError: unknown;
+  const client = getClientForModel(model);
+  try {
+    const result = await client.chat.completions.create({
+      model,
+      max_tokens: maxTokens,
+      messages,
+      stream: false,
+    } as Parameters<OpenAI["chat"]["completions"]["create"]>[0]);
+    return result as OpenAI.Chat.Completions.ChatCompletion;
+  } catch (err: unknown) {
+    const status = (err as { status?: number })?.status;
 
-  // Build model priority list
-  const modelsToTry = model.endsWith(":free")
-    ? [model, ...FREE_FALLBACK_MODELS.filter((m) => m !== model)]
-    : [model];
-
-  for (const tryModel of modelsToTry) {
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
-      try {
-        const result = await client.chat.completions.create({
-          ...params,
-          model: tryModel,
-          stream: false,
-        } as Parameters<OpenAI["chat"]["completions"]["create"]>[0]);
-        return result as OpenAI.Chat.Completions.ChatCompletion;
-      } catch (err: unknown) {
-        lastError = err;
-        const status = (err as { status?: number })?.status;
-        if (status === 429) {
-          const retryAfter =
-            (
-              err as {
-                error?: { metadata?: { retry_after_seconds?: number } };
-              }
-            )?.error?.metadata?.retry_after_seconds ?? 5;
-          const waitMs = Math.min(retryAfter * 1000, 35000);
-          console.log(
-            `[AI] ${tryModel} rate-limited, waiting ${waitMs / 1000}s (attempt ${attempt + 1}/${maxRetries})`
-          );
-          await sleep(waitMs);
-          continue;
-        }
-        // Non-429 error — skip to next model
-        break;
-      }
+    // Rate limit — retry with backoff (up to 3 times)
+    if (status === 429 && attempt < 3) {
+      const retryAfter =
+        (err as { error?: { metadata?: { retry_after_seconds?: number } } })
+          ?.error?.metadata?.retry_after_seconds ?? 10;
+      const wait = Math.min(retryAfter * 1000, 35_000);
+      console.log(`[AI] ${model} rate-limited, retrying in ${wait / 1000}s...`);
+      await sleep(wait);
+      return callModel(model, messages, maxTokens, attempt + 1);
     }
-  }
 
-  throw lastError;
+    // Primary model failed — try fallback if it's different
+    if (model !== FALLBACK_MODEL && !isGeminiModel(FALLBACK_MODEL) !== !isGeminiModel(model)) {
+      console.log(`[AI] ${model} failed (${status}), falling back to ${FALLBACK_MODEL}`);
+      return callModel(FALLBACK_MODEL, messages, maxTokens, 0);
+    }
+
+    throw err;
+  }
 }
 
 export async function generateText(
   messages: ClaudeMessage[],
   options: ClaudeOptions = {}
 ): Promise<{ content: string; inputTokens: number; outputTokens: number }> {
-  const { maxTokens = 4096, systemPrompt } = options;
+  const maxTokens = options.maxTokens ?? DEFAULT_MAX_TOKENS;
+  const { systemPrompt } = options;
 
   if (!isAIConfigured()) {
     const content = generateMockContent(messages);
@@ -127,17 +130,12 @@ export async function generateText(
     return { content, inputTokens: 0, outputTokens: 0 };
   }
 
-  const response = await callWithRetry(MODEL, {
-    model: MODEL,
-    max_tokens: maxTokens,
-    messages: [
-      ...(systemPrompt
-        ? [{ role: "system" as const, content: systemPrompt }]
-        : []),
-      ...messages.map((m) => ({ role: m.role, content: m.content })),
-    ],
-  });
+  const builtMessages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
+    ...(systemPrompt ? [{ role: "system" as const, content: systemPrompt }] : []),
+    ...messages.map((m) => ({ role: m.role, content: m.content })),
+  ];
 
+  const response = await callModel(MODEL, builtMessages, maxTokens);
   const content = response.choices[0]?.message?.content ?? "";
   const usage = response.usage;
 
@@ -153,7 +151,8 @@ export async function generateStream(
   options: ClaudeOptions = {},
   onChunk: (text: string) => void
 ): Promise<{ inputTokens: number; outputTokens: number }> {
-  const { maxTokens = 4096, systemPrompt } = options;
+  const maxTokens = options.maxTokens ?? DEFAULT_MAX_TOKENS;
+  const { systemPrompt } = options;
 
   if (!isAIConfigured()) {
     const content = generateMockContent(messages);
@@ -164,26 +163,19 @@ export async function generateStream(
     return { inputTokens: 0, outputTokens: 0 };
   }
 
-  // Stream with fallback to non-stream on free models (more reliable)
-  const isFreeModel = MODEL.endsWith(":free");
+  const builtMessages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
+    ...(systemPrompt ? [{ role: "system" as const, content: systemPrompt }] : []),
+    ...messages.map((m) => ({ role: m.role, content: m.content })),
+  ];
 
-  if (isFreeModel) {
-    // Use non-streaming for free models to avoid partial failures
-    const result = await callWithRetry(MODEL, {
-      model: MODEL,
-      max_tokens: maxTokens,
-      messages: [
-        ...(systemPrompt
-          ? [{ role: "system" as const, content: systemPrompt }]
-          : []),
-        ...messages.map((m) => ({ role: m.role, content: m.content })),
-      ],
-    });
+  // Gemini 2.5 thinking models: use non-streaming (more reliable) + simulate chunks
+  const useNonStreaming = isGeminiModel(MODEL) && MODEL.includes("2.5");
+  if (useNonStreaming) {
+    const result = await callModel(MODEL, builtMessages, maxTokens);
     const content = result.choices[0]?.message?.content ?? "";
-    // Simulate streaming for UX
-    for (const chunk of content.match(/[\s\S]{1,30}/g) ?? [content]) {
+    for (const chunk of content.match(/[\s\S]{1,40}/g) ?? [content]) {
       onChunk(chunk);
-      await sleep(10);
+      await sleep(8);
     }
     return {
       inputTokens: result.usage?.prompt_tokens ?? 0,
@@ -191,22 +183,17 @@ export async function generateStream(
     };
   }
 
-  const client = getClient();
+  // Standard streaming for other models
+  const client = getClientForModel(MODEL);
   const stream = await client.chat.completions.create({
     model: MODEL,
     max_tokens: maxTokens,
     stream: true,
-    messages: [
-      ...(systemPrompt
-        ? [{ role: "system" as const, content: systemPrompt }]
-        : []),
-      ...messages.map((m) => ({ role: m.role, content: m.content })),
-    ],
+    messages: builtMessages,
   });
 
   let inputTokens = 0;
   let outputTokens = 0;
-
   for await (const chunk of stream) {
     const delta = chunk.choices[0]?.delta?.content;
     if (delta) onChunk(delta);
@@ -215,6 +202,5 @@ export async function generateStream(
       outputTokens = chunk.usage.completion_tokens ?? 0;
     }
   }
-
   return { inputTokens, outputTokens };
 }
