@@ -16,6 +16,7 @@ import {
 import { cn } from "@/lib/utils";
 import { SECTION_META, getKoreanVisualWidth } from "@/types";
 import { SectionStatus } from "@prisma/client";
+import { Markdown } from "@/components/ui/markdown";
 
 interface Section {
   id: string;
@@ -308,11 +309,11 @@ export function ReportEditor({
                     </div>
                   </div>
                 ) : (
-                  <div className="prose prose-sm max-w-none text-gray-700 whitespace-pre-wrap leading-relaxed">
-                    {section.content || (
-                      <span className="text-gray-400 italic">
-                        내용이 없습니다
-                      </span>
+                  <div>
+                    {section.content ? (
+                      <Markdown content={section.content} />
+                    ) : (
+                      <span className="text-gray-400 italic text-sm">내용이 없습니다</span>
                     )}
                   </div>
                 )}
