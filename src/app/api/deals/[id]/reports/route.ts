@@ -4,8 +4,18 @@ import { z } from "zod";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { AgentType, ReportStatus } from "@prisma/client";
-import { getAgent, inferAgentType } from "@/agents";
+import { inferAgentType } from "@/agents";
 import { SECTION_META } from "@/types";
+import { structurizeDocument } from "@/lib/structurize";
+import { detectSectors } from "@/agents/orchestrator/sector-detector";
+import { runBioAnalysis } from "@/agents/sectors/bio";
+import { runITAnalysis } from "@/agents/sectors/it-saas";
+import { runDeepTechAnalysis } from "@/agents/sectors/deeptech";
+import { runManufacturingAnalysis } from "@/agents/sectors/manufacturing";
+import { runContentAnalysis } from "@/agents/sectors/content";
+import { runFintechAnalysis } from "@/agents/sectors/fintech";
+import { callClaudeJSON } from "@/lib/claude";
+import type { StructuredData } from "@/lib/structurize";
 
 const createReportSchema = z.object({
   agentType: z.nativeEnum(AgentType).optional(),
@@ -52,7 +62,7 @@ export async function POST(
     where: { id: params.id, userId: session.user.id },
     include: {
       documents: {
-        select: { name: true, parsedText: true },
+        select: { name: true, parsedText: true, id: true },
       },
     },
   });
@@ -95,56 +105,104 @@ export async function POST(
   }
 }
 
+const SECTION_TITLES: Record<string, string> = {
+  INVESTMENT_OVERVIEW: "투자개요", COMPANY_OVERVIEW: "회사개요",
+  PRODUCT_TECHNOLOGY: "제품/기술", MARKET_ANALYSIS: "시장분석",
+  FINANCIAL_STATUS: "재무현황", VALUATION: "밸류에이션",
+  RISK_ANALYSIS: "리스크분석", INVESTMENT_TERMS: "투자조건",
+  OPINION_SUMMARY: "의견종합", APPENDIX: "별첨",
+};
+
+async function runSectorAgent(sector: string, structured: StructuredData) {
+  switch (sector) {
+    case "BIO": return runBioAnalysis(structured);
+    case "IT": return runITAnalysis(structured);
+    case "DEEPTECH": return runDeepTechAnalysis(structured);
+    case "GENERAL": return runManufacturingAnalysis(structured);
+    case "CONSUMER": return runContentAnalysis(structured);
+    case "FINTECH": return runFintechAnalysis(structured);
+    default: return runITAnalysis(structured);
+  }
+}
+
 async function generateSectionsAsync(
   reportId: string,
   deal: {
     id: string;
     companyName: string;
+    name: string;
     sector: import("@prisma/client").DealSector;
     investRound: string | null;
     investAmount: number | null;
     valuation: number | null;
     documents: Array<{ name: string; parsedText: string | null }>;
   },
-  agentType: AgentType,
-  additionalContext?: string
+  _agentType: AgentType,
+  _additionalContext?: string
 ) {
   try {
-    const agent = getAgent(agentType, deal.sector);
+    const rawText = deal.documents
+      .map((d) => d.parsedText ?? "")
+      .filter(Boolean)
+      .join("\n\n---\n\n");
 
-    const results = await agent.generateAllSections({
-      dealId: deal.id,
-      companyName: deal.companyName,
-      sector: deal.sector,
-      agentType,
-      investRound: deal.investRound ?? undefined,
-      investAmount: deal.investAmount ?? undefined,
-      valuation: deal.valuation ?? undefined,
-      documents: deal.documents,
-      additionalContext,
+    const textForAnalysis = rawText || `회사명: ${deal.companyName}\n딜명: ${deal.name}`;
+    const { data: structured } = await structurizeDocument(textForAnalysis);
+    const sectorDetection = await detectSectors(structured, textForAnalysis);
+    const sector = (deal.sector as string) || sectorDetection.primary;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const agentResult: any = await runSectorAgent(sector, structured);
+
+    // Map agent results to 10 sections via AI
+    const sectionKeys = Object.keys(SECTION_TITLES);
+    const { data: sectionContents } = await callClaudeJSON<Record<string, string>>({
+      system: "당신은 한국 VC 투자심사보고서 작성 전문가입니다. 에이전트 분석 결과를 바탕으로 각 섹션을 한국어로 작성합니다.",
+      messages: [{
+        role: "user",
+        content: `다음 분석 결과로 투자심사보고서 10개 섹션을 작성하세요.
+
+회사: ${deal.companyName} | 섹터: ${sector} | 라운드: ${deal.investRound ?? "미정"} | 투자금액: ${deal.investAmount ?? "미정"}억 | 밸류: ${deal.valuation ?? "미정"}억
+
+구조화 데이터: ${JSON.stringify(structured)}
+에이전트 분석: ${JSON.stringify(agentResult.analysis ?? {})}
+
+JSON 응답 (각 섹션 300-500자):
+{
+  "INVESTMENT_OVERVIEW": "투자개요",
+  "COMPANY_OVERVIEW": "회사개요",
+  "PRODUCT_TECHNOLOGY": "제품/기술",
+  "MARKET_ANALYSIS": "시장분석",
+  "FINANCIAL_STATUS": "재무현황",
+  "VALUATION": "밸류에이션",
+  "RISK_ANALYSIS": "리스크분석",
+  "INVESTMENT_TERMS": "투자조건",
+  "OPINION_SUMMARY": "의견종합",
+  "APPENDIX": "별첨"
+}`,
+      }],
+      maxTokens: 6000,
+      tier: "premium",
     });
 
-    // Save all sections
-    await prisma.reportSection.createMany({
-      data: results.map((result) => {
-        const meta = SECTION_META.find((m) => m.key === result.sectionKey)!;
-        return {
+    await prisma.reportSection.deleteMany({ where: { reportId } });
+    for (let i = 0; i < sectionKeys.length; i++) {
+      const key = sectionKeys[i];
+      const meta = SECTION_META.find((m) => m.key === key);
+      await prisma.reportSection.create({
+        data: {
           reportId,
-          sectionKey: result.sectionKey,
-          title: meta.title,
-          content: result.content,
-          order: meta.order,
-        };
-      }),
-    });
+          sectionKey: key as import("@prisma/client").SectionKey,
+          title: SECTION_TITLES[key],
+          content: sectionContents[key] ?? `${SECTION_TITLES[key]} 내용 생성 중`,
+          order: meta?.order ?? i + 1,
+        },
+      });
+    }
 
-    // Mark report as draft
     await prisma.report.update({
       where: { id: reportId },
-      data: {
-        status: ReportStatus.DRAFT,
-        generatedAt: new Date(),
-      },
+      data: { status: ReportStatus.DRAFT, generatedAt: new Date(), agentType: sector as AgentType },
     });
   } catch (error) {
     console.error("Section generation error:", error);
