@@ -11,34 +11,17 @@ import {
   Settings,
   ChevronRight,
   Zap,
+  LayoutTemplate,
 } from "lucide-react";
 
 const navItems = [
-  {
-    label: "대시보드",
-    href: "/dashboard",
-    icon: LayoutDashboard,
-  },
-  {
-    label: "딜 관리",
-    href: "/deals",
-    icon: Briefcase,
-  },
-  {
-    label: "보고서",
-    href: "/reports",
-    icon: FileText,
-  },
-  {
-    label: "파일 업로드",
-    href: "/upload",
-    icon: Upload,
-  },
-  {
-    label: "설정",
-    href: "/settings",
-    icon: Settings,
-  },
+  { label: "대시보드", href: "/dashboard", icon: LayoutDashboard },
+  { label: "딜 관리", href: "/deals", icon: Briefcase },
+  { label: "보고서", href: "/reports", icon: FileText },
+  { label: "양식 관리", href: "/dashboard/templates/new", icon: LayoutTemplate },
+  { label: "LP 리포팅", href: "/lp-report", icon: FileText },
+  { label: "파일 업로드", href: "/upload", icon: Upload },
+  { label: "설정", href: "/settings", icon: Settings },
 ];
 
 export function Sidebar() {
@@ -101,7 +84,23 @@ export function Sidebar() {
           </div>
           <div className="flex items-center gap-2 text-xs text-slate-400">
             <div className="w-1.5 h-1.5 rounded-full bg-blue-400" />
-            <span>IT Agent</span>
+            <span>Code (IT/SaaS)</span>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-slate-400">
+            <div className="w-1.5 h-1.5 rounded-full bg-yellow-400" />
+            <span>Neuron (AI/딥테크)</span>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-slate-400">
+            <div className="w-1.5 h-1.5 rounded-full bg-orange-400" />
+            <span>Maker (제조)</span>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-slate-400">
+            <div className="w-1.5 h-1.5 rounded-full bg-pink-400" />
+            <span>Story (콘텐츠)</span>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-slate-400">
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+            <span>Vault (핀테크)</span>
           </div>
         </div>
       </div>

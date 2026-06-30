@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
         size: file.size,
         mimeType: file.type,
         parsedText,
-        metadata: metadata as import("@prisma/client").Prisma.InputJsonValue,
+        metadata: metadata as any // eslint-disable-line,
       },
     });
 

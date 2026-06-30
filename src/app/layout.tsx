@@ -6,8 +6,15 @@ import { Providers } from "./providers";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "DealSync — AI 투자심의 자동화",
-  description: "한국 벤처캐피탈을 위한 AI 기반 투자심의보고서 자동화 플랫폼",
+  title: { default: "DealSync — 섹터별 AI 심사역 SaaS", template: "%s | DealSync" },
+  description: "바이오/IT/AI/제조/콘텐츠/핀테크 6개 섹터 전문 AI가 투자심사보고서를 자동 생성합니다.",
+  keywords: ["VC", "벤처캐피탈", "AI 심사역", "투자심사보고서", "바이오 투자"],
+  openGraph: {
+    title: "DealSync — 섹터별 AI 심사역 SaaS",
+    description: "섹터별 전문 AI 심사역 6명을 고용하세요",
+    locale: "ko_KR",
+    type: "website",
+  },
 };
 
 export default function RootLayout({

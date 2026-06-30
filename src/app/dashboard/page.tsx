@@ -136,7 +136,7 @@ export default async function DashboardPage() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {recentDeals.map((deal) => (
+                  {recentDeals.map((deal: any) => (
                     <Link
                       key={deal.id}
                       href={`/deals/${deal.id}`}
@@ -149,7 +149,7 @@ export default async function DashboardPage() {
                         <p className="text-xs text-gray-500">{deal.name}</p>
                       </div>
                       <Badge variant="outline" className="text-xs">
-                        {stageLabel[deal.stage]}
+                        {stageLabel[deal.stage as keyof typeof stageLabel]}
                       </Badge>
                     </Link>
                   ))}
@@ -173,7 +173,7 @@ export default async function DashboardPage() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {recentReports.map((report) => (
+                  {recentReports.map((report: any) => (
                     <Link
                       key={report.id}
                       href={`/reports/${report.id}`}
@@ -200,7 +200,7 @@ export default async function DashboardPage() {
                             : "bg-gray-50 text-gray-600"
                         }`}
                       >
-                        {statusLabel[report.status]}
+                        {statusLabel[report.status as keyof typeof statusLabel]}
                       </span>
                     </Link>
                   ))}
