@@ -20,6 +20,8 @@ import {
   Sparkles,
   LayoutTemplate,
 } from "lucide-react";
+import { EditDealDialog } from "@/components/deals/edit-deal-dialog";
+import { ReportWizard } from "@/components/reports/report-wizard";
 import {
   Select,
   SelectContent,
@@ -152,6 +154,7 @@ export function DealDetailClient({
   const [detectedSector, setDetectedSector] = useState<{ sector: string; reason: string } | null>(null);
   const [templates, setTemplates] = useState<TemplateOption[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
+  const [wizardOpen, setWizardOpen] = useState(false);
   const eventSourceRef = useRef<EventSource | null>(null);
 
   // 사용 가능한 템플릿 로드
@@ -256,6 +259,11 @@ export function DealDetailClient({
 
   return (
     <div className="space-y-6">
+      <ReportWizard
+        deal={deal}
+        open={wizardOpen}
+        onClose={() => { setWizardOpen(false); router.refresh(); }}
+      />
       {demoMode && (
         <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           <Zap className="w-4 h-4 mt-0.5 flex-shrink-0" />
@@ -282,6 +290,7 @@ export function DealDetailClient({
           )}
         </div>
         <div className="flex flex-wrap gap-2 items-center">
+          <EditDealDialog deal={deal} />
           {deal.documents.length > 0 && (
             <>
               {/* 템플릿 선택 */}
@@ -316,16 +325,11 @@ export function DealDetailClient({
                 섹터 감지
               </Button>
               <Button
-                onClick={generateReport}
-                disabled={generating}
+                onClick={() => setWizardOpen(true)}
                 className="bg-blue-600 hover:bg-blue-700"
               >
-                {generating ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <Zap className="w-4 h-4 mr-2" />
-                )}
-                {generating ? "생성 중..." : "AI 보고서 생성"}
+                <Zap className="w-4 h-4 mr-2" />
+                AI 보고서 생성
               </Button>
             </>
           )}

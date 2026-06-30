@@ -70,6 +70,7 @@ model User {
   team      Team?      @relation(fields: [teamId], references: [id])
   deals     Deal[]
   templates Template[]
+  usageLogs UsageLog[]
 }
 
 model Team {
@@ -227,6 +228,22 @@ enum AgentType {
   MANUFACTURING
   CONTENT
   FINTECH
+}
+
+model UsageLog {
+  id           String      @id @default(cuid())
+  userId       String
+  dealId       String?
+  reportId     String?
+  agentType    AgentType
+  sectionKey   SectionKey?
+  model        String
+  inputTokens  Int         @default(0)
+  outputTokens Int         @default(0)
+  totalTokens  Int         @default(0)
+  createdAt    DateTime    @default(now())
+
+  user User @relation(fields: [userId], references: [id])
 }
 
 enum TemplateFileType {

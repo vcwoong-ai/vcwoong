@@ -4,6 +4,7 @@ import { z } from "zod";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { AgentType, ReportStatus } from "@prisma/client";
+import { MODEL } from "@/lib/claude";
 import { getAgent, inferAgentType } from "@/agents";
 import { SECTION_META } from "@/types";
 import {
@@ -85,7 +86,7 @@ export async function POST(
     });
 
     // Generate sections using AI (async - don't await to return immediately)
-    generateSectionsAsync(report.id, deal, agentType, validated.additionalContext);
+    generateSectionsAsync(report.id, deal, agentType, validated.additionalContext, session.user.id);
 
     return NextResponse.json({ data: report }, { status: 201 });
   } catch (error) {
@@ -115,7 +116,8 @@ async function generateSectionsAsync(
     documents: Array<{ name: string; parsedText: string | null }>;
   },
   agentType: AgentType,
-  additionalContext?: string
+  additionalContext?: string,
+  userId?: string
 ) {
   const total = SECTION_META.length;
   initProgress(reportId, total);
@@ -145,6 +147,24 @@ async function generateSectionsAsync(
         sectionKey
       );
       results.push(result);
+
+      // 사용량 로그 저장 (백그라운드)
+      if (userId && result.tokensUsed > 0) {
+        prisma.usageLog.create({
+          data: {
+            userId,
+            dealId: deal.id,
+            reportId,
+            agentType,
+            sectionKey: result.sectionKey,
+            model: MODEL,
+            inputTokens: Math.round(result.tokensUsed * 0.7),
+            outputTokens: Math.round(result.tokensUsed * 0.3),
+            totalTokens: result.tokensUsed,
+          },
+        }).catch(() => {}); // 로그 실패가 생성 실패로 이어지지 않도록
+
+      }
 
       // 섹션 간 짧은 지연: Gemini 10 RPM 한도 초과 방지
       // DeepSeek 등 유료 모델은 rate limit이 높아 지연 불필요하지만, 안전을 위해 유지

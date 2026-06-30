@@ -7,6 +7,8 @@ import { DeepTechAgent } from "./deeptech-agent";
 import { ManufacturingAgent } from "./manufacturing-agent";
 import { ContentAgent } from "./content-agent";
 import { FintechAgent } from "./fintech-agent";
+import { ClimateAgent } from "./climate-agent";
+import { ConsumerAgent } from "./consumer-agent";
 
 export { BaseAgent } from "./base-agent";
 export { GeneralAgent } from "./general-agent";
@@ -16,6 +18,8 @@ export { DeepTechAgent } from "./deeptech-agent";
 export { ManufacturingAgent } from "./manufacturing-agent";
 export { ContentAgent } from "./content-agent";
 export { FintechAgent } from "./fintech-agent";
+export { ClimateAgent } from "./climate-agent";
+export { ConsumerAgent } from "./consumer-agent";
 
 /** 에이전트 메타 정보 — UI·사이드바·설정 등에서 사용 */
 export const AGENT_META = [
@@ -112,6 +116,9 @@ export function getAgent(agentType: AgentType, sector?: DealSector): BaseAgent {
     case AgentType.FINTECH:
       return new FintechAgent();
     default:
+      // 섹터 기반 세분화
+      if (sector === DealSector.CLIMATE) return new ClimateAgent();
+      if (sector === DealSector.CONSUMER) return new ConsumerAgent();
       return new GeneralAgent();
   }
 }
