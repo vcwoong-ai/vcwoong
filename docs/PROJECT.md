@@ -2,55 +2,53 @@
 
 ## 주소
 
-- **GitHub:** https://github.com/vcwoong-ai/vcwoong (계정: `vcwoong-ai`)
+- **GitHub:** https://github.com/vcwoong-ai/vcwoong
 - **Vercel:** https://dealsync-vcwoong.vercel.app
-- **로컬 통합 폴더:** `W:\OneDrive - SGC\dealsync-app`
-- **에이전트 실행 가이드:** `docs/phases/` (구 `claude/` 폴더에서 이전)
+- **에이전트 가이드:** `docs/phases/`
 
-## Cloud Agent 브랜치 (6개 PR)
+## 현재 작업 브랜치 (2026-07-01 기준)
 
-| PR | 브랜치 | 내용 | 파일 수 |
-|----|--------|------|---------|
-| [#6](https://github.com/vcwoong-ai/vcwoong/pull/6) | `cursor/dealsync-platform-v2-416a` | **플랫폼 v2 (통합 기준)** | 77 |
-| [#4](https://github.com/vcwoong-ai/vcwoong/pull/4) | `cursor/document-upload-897c` | 문서 업로드·텍스트 추출 | 73 |
-| [#1](https://github.com/vcwoong-ai/vcwoong/pull/1) | `cursor/dealsync-app-9c47` | 초기 앱 | 67 |
-| [#2](https://github.com/vcwoong-ai/vcwoong/pull/2) | `cursor/dealsync-mvp-175d` | MVP | 66 |
-| [#3](https://github.com/vcwoong-ai/vcwoong/pull/3) | `cursor/bio-sector-agent-dr-cell-8202` | Dr. Cell BIO 에이전트 | 22 |
-| [#5](https://github.com/vcwoong-ai/vcwoong/pull/5) | `cursor/bio-sector-dr-cell-6332` | Dr. Cell (변형) | — |
+| PR | 브랜치 | 상태 | 비고 |
+|----|--------|------|------|
+| **[#8](https://github.com/vcwoong-ai/vcwoong/pull/8)** | `cursor/feature-improvements-6974` | **메인 (통합 PR)** | Cursor Agent 작업 기준 |
+| [#10](https://github.com/vcwoong-ai/vcwoong/pull/10) | `claude/merged-main` | 중복 | Claude Code 병합 시도 — #8에 흡수 |
+| [#9](https://github.com/vcwoong-ai/vcwoong/pull/9) | `claude/api-integration-options-6hrwyn` | 중복 | 닫기 권장 |
+| [#7](https://github.com/vcwoong-ai/vcwoong/pull/7) | `claude/bold-ramanujan-08y3ri` | 중복 | 닫기 권장 |
 
-**통합 기준 브랜치:** `cursor/dealsync-platform-v2-416a` (가장 많은 파일, PR #6)
+**통합 기준:** PR #8 (`cursor/feature-improvements-6974`)
 
-## 로컬 폴더 구성
+## 병렬 작업 시 충돌 방지
+
+Claude Code(로컬)와 Cursor Agent(클라우드)를 **동시에 GitHub에서 작업해도 파일이 서로 "튕기지" 않습니다.** 각 환경은 독립된 작업 공간이고, GitHub가 유일한 공유 지점입니다.
+
+### 안전한 방법
 
 ```
-dealsync-app/          ← 통합 프로젝트 루트
-├── src/               ← Next.js 앱 (PR #6)
-├── engine/python/     ← Python Dr. Cell 엔진 (PR #3)
-├── prisma/
-├── docs/
-│   ├── PROJECT.md
-│   ├── ROADMAP.md
-│   └── phases/
-└── README.md
+Claude Code  →  claude/내-작업-브랜치  →  PR 생성
+Cursor Agent →  cursor/내-작업-브랜치  →  PR 생성
+                              ↓
+                         main에 머지
 ```
 
-## 통합 완료 (2026-06-17)
+- **다른 브랜치**에서 작업하면 동시에 진행해도 괜찮습니다.
+- 머지할 때만 충돌이 생길 수 있으며, 그때 해결하면 됩니다.
 
-| 항목 | 상태 |
-|------|------|
-| PR #6 → `main` 머지 | **완료** |
-| PR #1~#5 | **닫힘** (중복 브랜치 삭제) |
-| Phase 가이드 문서 | `docs/phases/` |
-| Python Dr. Cell 엔진 | `engine/python/` |
-| 기준 브랜치 | **`main`** |
+### 주의할 점
 
-## 다음 작업
+| 상황 | 위험도 | 설명 |
+|------|--------|------|
+| 같은 브랜치에 동시 push | ⚠️ 높음 | 나중에 push하는 쪽이 거부되거나 덮어씀 |
+| `main`에 직접 push | ⚠️ 높음 | PR 없이 머지하면 추적 어려움 |
+| OneDrive 동기화 폴더에서 로컬 편집 | ⚠️ 중간 | 클라우드 VM과는 무관하지만, 로컬에서 OneDrive가 파일을 동기화하며 충돌 가능 |
+| 서로 다른 브랜치 + PR | ✅ 안전 | 권장 방식 |
 
-1. **로컬 개발** — `npm install && npm run dev` (`.env.local` 설정)
-2. **Vercel** — Production Branch를 `main`으로 설정
+### 권장 워크플로
 
-## 기술 스택 (현재 앱)
+1. **Cursor Agent 작업** → 이 창에서만 요청 (브랜치: `cursor/*`)
+2. **Claude Code 작업** → 별도 브랜치 (`claude/*`)에서 진행
+3. 완료되면 PR로 머지 — **#8이 메인 통합 PR**
+4. `main`에 머지하기 전에 `git pull origin main`으로 최신 상태 유지
 
-Next.js 14, Prisma, PostgreSQL, NextAuth, Claude Sonnet 4.6, shadcn/ui
+## 기술 스택
 
-> 참고: `docs/phases/`의 초기 설계는 Supabase 기준이나, Cloud Agent가 구현한 앱은 **Prisma + PostgreSQL** 스택입니다.
+Next.js 14, Prisma, SQLite(로컬) / PostgreSQL(프로덕션), NextAuth, OpenRouter + Gemini, shadcn/ui
