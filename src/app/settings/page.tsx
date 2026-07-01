@@ -4,9 +4,11 @@ import { authOptions } from "@/lib/auth";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Zap, Database, Shield } from "lucide-react";
+import { Zap, Database, Shield, BarChart3 } from "lucide-react";
 import { ProfileForm } from "@/components/settings/profile-form";
+import { UsageStats } from "@/components/settings/usage-stats";
 import { AGENT_META } from "@/agents";
+import { MODEL } from "@/lib/claude";
 
 export default async function SettingsPage() {
   const session = await getServerSession(authOptions);
@@ -75,8 +77,21 @@ export default async function SettingsPage() {
               ))}
             </div>
             <p className="text-xs text-gray-400 mt-3">
-              * AI 모델: Claude Sonnet 4.6 (Anthropic)
+              * AI 모델: {MODEL} (OpenRouter / Gemini 멀티 프로바이더)
             </p>
+          </CardContent>
+        </Card>
+
+        {/* Usage */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <BarChart3 className="w-4 h-4" />
+              AI 사용량
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <UsageStats />
           </CardContent>
         </Card>
 

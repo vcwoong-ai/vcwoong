@@ -4,15 +4,8 @@ import { z } from "zod";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { AgentType, ReportStatus } from "@prisma/client";
-import { MODEL } from "@/lib/claude";
-import { getAgent, inferAgentType } from "@/agents";
-import { SECTION_META } from "@/types";
-import {
-  initProgress,
-  updateProgress,
-  completeProgress,
-  errorProgress,
-} from "@/lib/generation-progress";
+import { inferAgentType } from "@/agents";
+import { generateSectionsAsync } from "@/lib/report-generation";
 
 const createReportSchema = z.object({
   agentType: z.nativeEnum(AgentType).optional(),
@@ -101,104 +94,5 @@ export async function POST(
       { error: "보고서 생성 중 오류가 발생했습니다" },
       { status: 500 }
     );
-  }
-}
-
-async function generateSectionsAsync(
-  reportId: string,
-  deal: {
-    id: string;
-    companyName: string;
-    sector: import("@prisma/client").DealSector;
-    investRound: string | null;
-    investAmount: number | null;
-    valuation: number | null;
-    documents: Array<{ name: string; parsedText: string | null }>;
-  },
-  agentType: AgentType,
-  additionalContext?: string,
-  userId?: string
-) {
-  const total = SECTION_META.length;
-  initProgress(reportId, total);
-
-  try {
-    const agent = getAgent(agentType, deal.sector);
-    const results = [];
-    const sectionKeys = SECTION_META.map((s) => s.key);
-
-    for (let i = 0; i < sectionKeys.length; i++) {
-      const sectionKey = sectionKeys[i];
-      const meta = SECTION_META.find((m) => m.key === sectionKey)!;
-      updateProgress(reportId, i, meta.title);
-
-      const result = await agent.generateSection(
-        {
-          dealId: deal.id,
-          companyName: deal.companyName,
-          sector: deal.sector,
-          agentType,
-          investRound: deal.investRound ?? undefined,
-          investAmount: deal.investAmount ?? undefined,
-          valuation: deal.valuation ?? undefined,
-          documents: deal.documents,
-          additionalContext,
-        },
-        sectionKey
-      );
-      results.push(result);
-
-      // 사용량 로그 저장 (백그라운드)
-      if (userId && result.tokensUsed > 0) {
-        prisma.usageLog.create({
-          data: {
-            userId,
-            dealId: deal.id,
-            reportId,
-            agentType,
-            sectionKey: result.sectionKey,
-            model: MODEL,
-            inputTokens: Math.round(result.tokensUsed * 0.7),
-            outputTokens: Math.round(result.tokensUsed * 0.3),
-            totalTokens: result.tokensUsed,
-          },
-        }).catch(() => {}); // 로그 실패가 생성 실패로 이어지지 않도록
-
-      }
-
-      // 섹션 간 짧은 지연: Gemini 10 RPM 한도 초과 방지
-      // DeepSeek 등 유료 모델은 rate limit이 높아 지연 불필요하지만, 안전을 위해 유지
-      if (i < sectionKeys.length - 1) {
-        await new Promise((r) => setTimeout(r, 1500));
-      }
-    }
-
-    // Save all sections
-    await prisma.reportSection.createMany({
-      data: results.map((result) => {
-        const meta = SECTION_META.find((m) => m.key === result.sectionKey)!;
-        return {
-          reportId,
-          sectionKey: result.sectionKey,
-          title: meta.title,
-          content: result.content,
-          order: meta.order,
-        };
-      }),
-    });
-
-    await prisma.report.update({
-      where: { id: reportId },
-      data: { status: ReportStatus.DRAFT, generatedAt: new Date() },
-    });
-
-    completeProgress(reportId);
-  } catch (error) {
-    console.error("Section generation error:", error);
-    errorProgress(reportId, String(error));
-    await prisma.report.update({
-      where: { id: reportId },
-      data: { status: ReportStatus.PENDING },
-    });
   }
 }
