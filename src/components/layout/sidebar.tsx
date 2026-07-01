@@ -9,12 +9,14 @@ import {
   FileText,
   Settings,
   Zap,
+  LayoutTemplate,
 } from "lucide-react";
 
 const navItems = [
   { label: "대시보드", href: "/dashboard", icon: LayoutDashboard },
   { label: "딜 관리", href: "/deals", icon: Briefcase },
   { label: "보고서", href: "/reports", icon: FileText },
+  { label: "양식 관리", href: "/dashboard/templates", icon: LayoutTemplate },
   { label: "설정", href: "/settings", icon: Settings },
 ];
 
