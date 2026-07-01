@@ -215,3 +215,41 @@ export async function generateStream(
     outputTokens: result.usage?.completion_tokens ?? 0,
   };
 }
+
+/** JSON 응답이 필요한 섹터 분석·구조화 호출용 */
+export async function callClaudeJSON<T>(params: {
+  system: string;
+  messages: ClaudeMessage[];
+  maxTokens?: number;
+  temperature?: number;
+  retries?: number;
+  tier?: "standard" | "premium";
+}): Promise<{ data: T; inputTokens: number; outputTokens: number }> {
+  const { system, messages, maxTokens = 4096, temperature = 0.3, retries = 2 } = params;
+
+  if (!isAIConfigured()) {
+    return { data: {} as T, inputTokens: 0, outputTokens: 0 };
+  }
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const { content, inputTokens, outputTokens } = await generateText(messages, {
+        systemPrompt: system,
+        maxTokens,
+        temperature,
+      });
+
+      const cleaned = content
+        .replace(/^```json\s*/m, "")
+        .replace(/```\s*$/, "")
+        .trim();
+
+      return { data: JSON.parse(cleaned) as T, inputTokens, outputTokens };
+    } catch (error) {
+      if (attempt === retries) throw error;
+      await sleep(1000 * (attempt + 1));
+    }
+  }
+
+  throw new Error("Unreachable");
+}

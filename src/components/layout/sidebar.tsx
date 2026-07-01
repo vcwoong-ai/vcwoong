@@ -36,6 +36,11 @@ const navItems = [
     icon: LayoutTemplate,
   },
   {
+    label: "LP 리포팅",
+    href: "/lp-report",
+    icon: FileText,
+  },
+  {
     label: "파일 업로드",
     href: "/upload",
     icon: Upload,

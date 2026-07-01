@@ -1,0 +1,31 @@
+{
+  "companyInfo": { "name": "샘플바이오", "foundedYear": "2022", "ceo": "홍길동" },
+  "business": {
+    "summary": "면역항암제 신약 개발 바이오텍. Anti-PD-L1 항체 기반 면역항암제 KX-101을 개발 중이며, 비소세포폐암을 적응증으로 Phase 1 임상 진행 중.",
+    "products": ["KX-101 (Anti-PD-L1 항체, Phase 1)", "KX-201 (BiTE, 전임상)"],
+    "targetMarket": "비소세포폐암 (NSCLC), 삼중음성유방암",
+    "revenueModel": "글로벌 빅파마 라이선스아웃 (milestone + royalty)"
+  },
+  "market": {
+    "tam": "글로벌 면역항암제 시장 $1,400억 (2030E)",
+    "competitors": ["키트루다 (MSD)", "옵디보 (BMS)", "티센트릭 (로슈)"]
+  },
+  "financials": {
+    "fundingHistory": [
+      { "round": "Pre-A", "amount": "30억원", "date": "2024-03" }
+    ],
+    "runway": "18개월"
+  },
+  "team": {
+    "members": [
+      { "name": "홍길동", "role": "대표/CSO", "background": "서울대 약학 박사, 전 셀트리온 연구소장" },
+      { "name": "김철수", "role": "CMO", "background": "연세의대 종양내과, 임상시험 50건 경험" }
+    ],
+    "totalCount": 15
+  },
+  "ask": {
+    "amount": "50억원",
+    "valuation": "250억원 (Post-money)",
+    "purpose": "Phase 1b 임상 완료, KX-201 IND 신청"
+  }
+}
