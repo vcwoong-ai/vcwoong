@@ -9,6 +9,7 @@ import {
   formatExternalDataForPrompt,
   type BioExternalData,
 } from "@/lib/bio/external-data";
+import { buildBioAppendix } from "@/lib/bio/appendix";
 
 /**
  * Dr. Cell — 바이오/헬스케어 전문 투자 심사역 에이전트.
@@ -54,7 +55,8 @@ export class BioAgent extends BaseAgent {
       sectionKey === SectionKey.PRODUCT_TECHNOLOGY ||
       sectionKey === SectionKey.VALUATION ||
       sectionKey === SectionKey.MARKET_ANALYSIS ||
-      sectionKey === SectionKey.RISK_ANALYSIS
+      sectionKey === SectionKey.RISK_ANALYSIS ||
+      sectionKey === SectionKey.APPENDIX
     ) {
       await this.getExternalData(input);
     }
@@ -68,6 +70,8 @@ export class BioAgent extends BaseAgent {
         return this.generateBioMarket(input);
       case SectionKey.RISK_ANALYSIS:
         return this.generateBioRisk(input);
+      case SectionKey.APPENDIX:
+        return this.generateBioAppendix(input);
       default:
         return super.generateSection(input, sectionKey);
     }
@@ -304,5 +308,17 @@ ${documentContext}${externalContext}
     );
 
     return { sectionKey: SectionKey.RISK_ANALYSIS, content: result.content, tokensUsed: result.inputTokens + result.outputTokens };
+  }
+
+  private async generateBioAppendix(input: AgentInput): Promise<GenerationResult> {
+    const documentContext = this.buildDocumentContext(input.documents);
+    const pipelineHints = this.extractPipelineHints(documentContext, input.companyName);
+    const appendix = buildBioAppendix(this._externalData, pipelineHints, input.companyName);
+
+    return {
+      sectionKey: SectionKey.APPENDIX,
+      content: appendix,
+      tokensUsed: 0,
+    };
   }
 }

@@ -3,6 +3,7 @@ import { BaseAgent, AgentInput } from "./base-agent";
 import { generateText } from "@/lib/claude";
 import { getSystemPrompt } from "@/prompts/system-prompts";
 import { GenerationResult } from "@/types";
+import { formatDeepTechAnalysisForPrompt } from "@/lib/deeptech/infra-extract";
 
 /**
  * Neuron — AI/딥테크 전문 투자 심사역 에이전트.
@@ -29,13 +30,14 @@ export class DeepTechAgent extends BaseAgent {
   private async generateTechAssessment(input: AgentInput): Promise<GenerationResult> {
     const systemPrompt = getSystemPrompt(AgentType.DEEPTECH);
     const documentContext = this.buildDocumentContext(input.documents);
+    const infraAnalysis = formatDeepTechAnalysisForPrompt(documentContext);
 
     const userPrompt = `## 투자 대상 기업 정보
 - 기업명: ${input.companyName}
 - 섹터: AI/딥테크
 
 ## 제공 자료
-${documentContext}
+${documentContext}${infraAnalysis}
 
 ## 제품/기술 섹션 작성 요청 (AI/딥테크 특화)
 
@@ -82,6 +84,7 @@ ${documentContext}
   private async generateDeepTechValuation(input: AgentInput): Promise<GenerationResult> {
     const systemPrompt = getSystemPrompt(AgentType.DEEPTECH);
     const documentContext = this.buildDocumentContext(input.documents);
+    const infraAnalysis = formatDeepTechAnalysisForPrompt(documentContext);
 
     const userPrompt = `## 투자 대상 기업 정보
 - 기업명: ${input.companyName}
@@ -91,7 +94,7 @@ ${input.investAmount ? `- 투자 금액: ${input.investAmount.toLocaleString()}�
 ${input.valuation ? `- Post-money 밸류에이션: ${input.valuation.toLocaleString()}억원` : ""}
 
 ## 제공 자료
-${documentContext}
+${documentContext}${infraAnalysis}
 
 ## 밸류에이션 섹션 작성 요청 (AI/딥테크 특화)
 

@@ -3,6 +3,7 @@ import { BaseAgent, AgentInput } from "./base-agent";
 import { generateText } from "@/lib/claude";
 import { getSystemPrompt } from "@/prompts/system-prompts";
 import { GenerationResult } from "@/types";
+import { formatFintechAnalysisForPrompt } from "@/lib/fintech/metrics-extract";
 
 /**
  * Vault — 핀테크/금융 전문 투자 심사역 에이전트.
@@ -29,13 +30,14 @@ export class FintechAgent extends BaseAgent {
   private async generateFintechFinancials(input: AgentInput): Promise<GenerationResult> {
     const systemPrompt = getSystemPrompt(AgentType.FINTECH);
     const documentContext = this.buildDocumentContext(input.documents);
+    const fintechAnalysis = formatFintechAnalysisForPrompt(documentContext);
 
     const userPrompt = `## 투자 대상 기업 정보
 - 기업명: ${input.companyName}
 - 섹터: 핀테크/금융
 
 ## 제공 자료
-${documentContext}
+${documentContext}${fintechAnalysis}
 
 ## 재무현황 섹션 작성 요청 (핀테크 특화)
 
