@@ -21,12 +21,12 @@ model Account {
   type              String
   provider          String
   providerAccountId String
-  refresh_token     String? @db.Text
-  access_token      String? @db.Text
+  refresh_token     String?
+  access_token      String?
   expires_at        Int?
   token_type        String?
   scope             String?
-  id_token          String? @db.Text
+  id_token          String?
   session_state     String?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -89,7 +89,7 @@ model Deal {
   sector       DealSector
   stage        DealStage  @default(SCREENING)
   status       DealStatus @default(ACTIVE)
-  description  String?    @db.Text
+  description  String?   
   investAmount Float?
   investRound  String?
   valuation    Float?
@@ -112,7 +112,7 @@ model Document {
   url        String
   size       Int
   mimeType   String
-  parsedText String?      @db.Text
+  parsedText String?     
   metadata   Json?
   createdAt  DateTime     @default(now())
 
@@ -139,10 +139,10 @@ model ReportSection {
   reportId  String
   sectionKey SectionKey
   title     String
-  content   String        @db.Text
+  content   String       
   order     Int
   status    SectionStatus @default(DRAFT)
-  feedback  String?       @db.Text
+  feedback  String?      
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
 

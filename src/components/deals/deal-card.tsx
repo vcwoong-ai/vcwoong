@@ -1,12 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { FileText, Upload, ArrowRight } from "lucide-react";
-import { Card, CardContent, CardFooter } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { FileText, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { DealSector, DealStage, DealStatus } from "@prisma/client";
+import { DealSector, DealStage } from "@prisma/client";
 
 interface DealCardProps {
   deal: {
@@ -15,7 +12,6 @@ interface DealCardProps {
     companyName: string;
     sector: DealSector;
     stage: DealStage;
-    status: DealStatus;
     investRound: string | null;
     investAmount: number | null;
     valuation: number | null;
@@ -25,131 +21,88 @@ interface DealCardProps {
   };
 }
 
-const SECTOR_CONFIG: Record<
-  DealSector,
-  { label: string; color: string; bg: string }
-> = {
-  BIO: { label: "바이오", color: "text-purple-700", bg: "bg-purple-50 border-purple-200" },
-  IT: { label: "IT", color: "text-blue-700", bg: "bg-blue-50 border-blue-200" },
-  FINTECH: { label: "핀테크", color: "text-emerald-700", bg: "bg-emerald-50 border-emerald-200" },
-  GENERAL: { label: "일반", color: "text-gray-700", bg: "bg-gray-50 border-gray-200" },
-  CONSUMER: { label: "소비재", color: "text-orange-700", bg: "bg-orange-50 border-orange-200" },
-  DEEPTECH: { label: "딥테크", color: "text-red-700", bg: "bg-red-50 border-red-200" },
-  CLIMATE: { label: "기후", color: "text-green-700", bg: "bg-green-50 border-green-200" },
+const SECTOR_CONFIG: Record<DealSector, { label: string; color: string }> = {
+  BIO:      { label: "바이오",   color: "bg-purple-50 text-purple-700 border-purple-200" },
+  IT:       { label: "IT",       color: "bg-blue-50 text-blue-700 border-blue-200" },
+  FINTECH:  { label: "핀테크",   color: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  GENERAL:  { label: "일반",     color: "bg-gray-50 text-gray-600 border-gray-200" },
+  CONSUMER: { label: "소비재",   color: "bg-orange-50 text-orange-700 border-orange-200" },
+  DEEPTECH: { label: "딥테크",   color: "bg-red-50 text-red-700 border-red-200" },
+  CLIMATE:  { label: "기후",     color: "bg-green-50 text-green-700 border-green-200" },
 };
 
-const STAGE_CONFIG: Record<DealStage, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
-  SCREENING: { label: "스크리닝", variant: "outline" },
-  DEEP_DIVE: { label: "딥다이브", variant: "secondary" },
-  IC_PREP: { label: "IC 준비", variant: "default" },
-  IC_REVIEW: { label: "IC 심의", variant: "default" },
-  CLOSED: { label: "투자 완료", variant: "secondary" },
-  REJECTED: { label: "거절", variant: "destructive" },
+const STAGE_CONFIG: Record<DealStage, { label: string; color: string }> = {
+  SCREENING: { label: "스크리닝",  color: "text-gray-500" },
+  DEEP_DIVE: { label: "딥다이브",  color: "text-blue-600" },
+  IC_PREP:   { label: "IC 준비",   color: "text-amber-600" },
+  IC_REVIEW: { label: "IC 심의",   color: "text-orange-600" },
+  CLOSED:    { label: "투자 완료", color: "text-emerald-600" },
+  REJECTED:  { label: "거절",      color: "text-red-500" },
+};
+
+const REPORT_STATUS_COLOR: Record<string, string> = {
+  FINAL:     "bg-emerald-50 text-emerald-700",
+  EXPORTED:  "bg-emerald-50 text-emerald-700",
+  GENERATING:"bg-amber-50 text-amber-700",
+  DRAFT:     "bg-blue-50 text-blue-700",
+};
+
+const REPORT_STATUS_LABEL: Record<string, string> = {
+  PENDING:   "대기",
+  GENERATING:"생성 중",
+  DRAFT:     "초안",
+  REVIEW:    "검토 중",
+  FINAL:     "최종",
+  EXPORTED:  "완료",
 };
 
 export function DealCard({ deal }: DealCardProps) {
-  const sectorCfg = SECTOR_CONFIG[deal.sector];
-  const stageCfg = STAGE_CONFIG[deal.stage];
-  const hasReports = deal.reports.length > 0;
+  const sector = SECTOR_CONFIG[deal.sector];
+  const stage = STAGE_CONFIG[deal.stage];
   const latestReport = deal.reports[0];
 
+  const keyValue = deal.valuation
+    ? `Post ${deal.valuation.toLocaleString()}억`
+    : deal.investAmount
+    ? `${deal.investAmount.toLocaleString()}억원`
+    : null;
+
   return (
-    <Card className="hover:shadow-md transition-shadow duration-200 group">
-      <CardContent className="pt-5">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1 flex-wrap">
-              <span
-                className={cn(
-                  "text-xs font-medium px-2 py-0.5 rounded-full border",
-                  sectorCfg.bg,
-                  sectorCfg.color
-                )}
-              >
-                {sectorCfg.label}
-              </span>
-              <Badge variant={stageCfg.variant} className="text-xs">
-                {stageCfg.label}
-              </Badge>
-            </div>
-            <h3 className="font-semibold text-gray-900 truncate">
-              {deal.companyName}
-            </h3>
-            <p className="text-sm text-gray-500 truncate">{deal.name}</p>
-          </div>
-        </div>
-
-        <div className="mt-4 grid grid-cols-2 gap-3">
-          {deal.investRound && (
-            <div>
-              <p className="text-xs text-gray-400">라운드</p>
-              <p className="text-sm font-medium">{deal.investRound}</p>
-            </div>
-          )}
-          {deal.investAmount && (
-            <div>
-              <p className="text-xs text-gray-400">투자금액</p>
-              <p className="text-sm font-medium">
-                {deal.investAmount.toLocaleString()}억원
-              </p>
-            </div>
-          )}
-          {deal.valuation && (
-            <div>
-              <p className="text-xs text-gray-400">Post 밸류</p>
-              <p className="text-sm font-medium">
-                {deal.valuation.toLocaleString()}억원
-              </p>
-            </div>
-          )}
-        </div>
-
-        <div className="mt-4 flex items-center gap-3 text-xs text-gray-500">
-          <span className="flex items-center gap-1">
-            <Upload className="w-3 h-3" />
-            {deal.documents.length}개 문서
+    <Link href={`/deals/${deal.id}`} className="block group">
+      <div className="bg-white border border-gray-100 rounded-xl p-4 hover:border-blue-200 hover:shadow-sm transition-all">
+        <div className="flex items-start justify-between gap-2 mb-3">
+          <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full border", sector.color)}>
+            {sector.label}
           </span>
-          <span className="flex items-center gap-1">
-            <FileText className="w-3 h-3" />
-            {deal.reports.length}개 보고서
-          </span>
-          {hasReports && latestReport && (
-            <span
-              className={cn(
-                "ml-auto px-1.5 py-0.5 rounded text-xs font-medium",
-                latestReport.status === "FINAL" || latestReport.status === "EXPORTED"
-                  ? "bg-green-50 text-green-700"
-                  : latestReport.status === "GENERATING"
-                  ? "bg-amber-50 text-amber-700"
-                  : "bg-gray-50 text-gray-600"
-              )}
-            >
-              {latestReport.status === "GENERATING"
-                ? "생성 중..."
-                : latestReport.status === "FINAL"
-                ? "최종 완료"
-                : latestReport.status === "EXPORTED"
-                ? "내보내기 완료"
-                : "초안"}
+          {latestReport && (
+            <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full", REPORT_STATUS_COLOR[latestReport.status] ?? "bg-gray-50 text-gray-500")}>
+              {REPORT_STATUS_LABEL[latestReport.status] ?? latestReport.status}
             </span>
           )}
         </div>
-      </CardContent>
 
-      <CardFooter className="pt-0 pb-4">
-        <div className="flex gap-2 w-full">
-          <Link href={`/deals/${deal.id}`} className="flex-1">
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full group-hover:border-blue-300"
-            >
-              상세 보기
-              <ArrowRight className="w-3 h-3 ml-1" />
-            </Button>
-          </Link>
+        <h3 className="font-semibold text-gray-900 mb-0.5 truncate">{deal.companyName}</h3>
+        <p className="text-xs text-gray-400 truncate mb-3">{deal.name}</p>
+
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3 text-xs text-gray-400">
+            <span className="flex items-center gap-1">
+              <Upload className="w-3 h-3" />
+              {deal.documents.length}
+            </span>
+            <span className="flex items-center gap-1">
+              <FileText className="w-3 h-3" />
+              {deal.reports.length}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            {keyValue && (
+              <span className="text-xs font-medium text-gray-700">{keyValue}</span>
+            )}
+            <span className={cn("text-xs font-medium", stage.color)}>{stage.label}</span>
+          </div>
         </div>
-      </CardFooter>
-    </Card>
+      </div>
+    </Link>
   );
 }

@@ -113,9 +113,9 @@ const SECTION_TITLES: Record<string, string> = {
   OPINION_SUMMARY: "의견종합", APPENDIX: "별첨",
 };
 
-async function runSectorAgent(sector: string, structured: StructuredData) {
+async function runSectorAgent(sector: string, structured: StructuredData, documentContext: string, companyName: string) {
   switch (sector) {
-    case "BIO": return runBioAnalysis(structured);
+    case "BIO": return runBioAnalysis(documentContext, companyName);
     case "IT": return runITAnalysis(structured);
     case "DEEPTECH": return runDeepTechAnalysis(structured);
     case "GENERAL": return runManufacturingAnalysis(structured);
@@ -137,8 +137,8 @@ async function generateSectionsAsync(
     valuation: number | null;
     documents: Array<{ name: string; parsedText: string | null }>;
   },
-  _agentType: AgentType,
-  _additionalContext?: string
+  _agentType: AgentType, // eslint-disable-line
+  _additionalContext?: string // eslint-disable-line
 ) {
   try {
     const rawText = deal.documents
@@ -152,7 +152,7 @@ async function generateSectionsAsync(
     const sector = (deal.sector as string) || sectorDetection.primary;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const agentResult: any = await runSectorAgent(sector, structured);
+    const agentResult: any = await runSectorAgent(sector, structured, textForAnalysis, deal.companyName);
 
     // Map agent results to 10 sections via AI
     const sectionKeys = Object.keys(SECTION_TITLES);

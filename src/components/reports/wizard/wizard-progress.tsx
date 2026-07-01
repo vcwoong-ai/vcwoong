@@ -1,50 +1,44 @@
 "use client";
 
-const STEPS = ["자료 업로드", "섹터 + 양식 선택", "보고서 생성"];
-
 interface WizardProgressProps {
-  currentStep: 1 | 2 | 3;
+  currentStep: number;
+  steps: string[];
 }
 
-export function WizardProgress({ currentStep }: WizardProgressProps) {
+export function WizardProgress({ currentStep, steps }: WizardProgressProps) {
   return (
-    <div className="flex items-center justify-center gap-0">
-      {STEPS.map((label, i) => {
-        const stepNum = (i + 1) as 1 | 2 | 3;
-        const done = currentStep > stepNum;
-        const active = currentStep === stepNum;
-        return (
-          <div key={i} className="flex items-center">
-            <div className="flex flex-col items-center gap-1">
-              <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold border-2 transition-colors ${
-                  done
-                    ? "bg-blue-600 border-blue-600 text-white"
-                    : active
-                    ? "border-blue-600 text-blue-600 bg-white"
-                    : "border-gray-300 text-gray-400 bg-white"
-                }`}
-              >
-                {done ? "✓" : stepNum}
-              </div>
-              <span
-                className={`text-xs whitespace-nowrap ${
-                  active ? "text-blue-600 font-medium" : "text-gray-400"
-                }`}
-              >
-                {label}
-              </span>
+    <div className="flex items-center justify-center gap-0 mb-8">
+      {steps.map((step, idx) => (
+        <div key={idx} className="flex items-center">
+          <div className="flex flex-col items-center">
+            <div
+              className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${
+                idx + 1 < currentStep
+                  ? "bg-green-500 text-white"
+                  : idx + 1 === currentStep
+                  ? "bg-blue-600 text-white"
+                  : "bg-gray-200 text-gray-500"
+              }`}
+            >
+              {idx + 1 < currentStep ? "✓" : idx + 1}
             </div>
-            {i < STEPS.length - 1 && (
-              <div
-                className={`w-16 h-0.5 mb-5 mx-1 ${
-                  done ? "bg-blue-600" : "bg-gray-200"
-                }`}
-              />
-            )}
+            <span
+              className={`mt-1 text-xs ${
+                idx + 1 === currentStep ? "text-blue-600 font-semibold" : "text-gray-400"
+              }`}
+            >
+              {step}
+            </span>
           </div>
-        );
-      })}
+          {idx < steps.length - 1 && (
+            <div
+              className={`w-16 h-0.5 mb-5 mx-1 ${
+                idx + 1 < currentStep ? "bg-green-500" : "bg-gray-200"
+              }`}
+            />
+          )}
+        </div>
+      ))}
     </div>
   );
 }

@@ -5,7 +5,8 @@ import { authOptions } from "@/lib/auth";
 import { runBioAnalysis } from "@/agents/sectors/bio";
 
 const schema = z.object({
-  structuredData: z.record(z.string(), z.unknown()),
+  documentContext: z.string().min(1),
+  companyName: z.string().min(1),
 });
 
 export async function POST(request: NextRequest) {
@@ -20,7 +21,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 });
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const result = await runBioAnalysis(parsed.data.structuredData as any);
-  return NextResponse.json(result);
+  const result = await runBioAnalysis(parsed.data.documentContext, parsed.data.companyName);
+  return NextResponse.json({ data: result });
 }

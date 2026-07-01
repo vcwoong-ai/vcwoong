@@ -12,7 +12,7 @@ export default function NewReportPage() {
   const [step, setStep] = useState<Step>(1);
   const [companyName, setCompanyName] = useState("");
   const [items, setItems] = useState<UploadedItem[]>([]);
-  const [selectedSectors, setSelectedSectors] = useState<string[]>([]);
+  const [selectedAgents, setSelectedAgents] = useState<string[]>([]);
 
   return (
     <div className="max-w-2xl mx-auto p-6 space-y-8">
@@ -21,13 +21,13 @@ export default function NewReportPage() {
         <p className="text-gray-500 text-sm mt-1">IR 자료를 업로드하면 AI가 보고서를 자동 생성합니다</p>
       </div>
 
-      <WizardProgress currentStep={step} />
+      <WizardProgress currentStep={step} steps={["문서 업로드", "섹터 & 양식", "보고서 생성"]} />
 
       {step === 1 && (
         <StepUpload
           companyName={companyName}
           onCompanyNameChange={setCompanyName}
-          items={items}
+          uploadedItems={items}
           onItemsChange={setItems}
           onNext={() => setStep(2)}
         />
@@ -35,9 +35,9 @@ export default function NewReportPage() {
 
       {step === 2 && (
         <StepSectorTemplate
-          selectedSectors={selectedSectors}
-          onSectorsChange={setSelectedSectors}
-          onPrev={() => setStep(1)}
+          selectedAgents={selectedAgents}
+          onAgentsChange={setSelectedAgents}
+          onBack={() => setStep(1)}
           onNext={() => setStep(3)}
         />
       )}
@@ -45,8 +45,9 @@ export default function NewReportPage() {
       {step === 3 && (
         <StepGenerate
           companyName={companyName}
-          sectors={selectedSectors}
-          onPrev={() => setStep(2)}
+          selectedAgents={selectedAgents}
+          uploadedItems={items}
+          onBack={() => setStep(2)}
         />
       )}
     </div>

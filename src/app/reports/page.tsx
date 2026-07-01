@@ -4,7 +4,6 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { AppLayout } from "@/components/layout/app-layout";
 import Link from "next/link";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { FileText, Plus, ArrowRight } from "lucide-react";
 
@@ -63,6 +62,7 @@ export default async function ReportsPage() {
           </div>
         ) : (
           <div className="space-y-3">
+            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
             {(reports as any[]).map((report) => {
               const status = STATUS_DISPLAY[report.status] ?? { label: report.status, className: "bg-gray-100 text-gray-600" };
               return (

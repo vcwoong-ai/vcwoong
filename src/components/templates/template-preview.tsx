@@ -24,6 +24,7 @@ interface SlidePreviewProps {
   onSelect?: (id: string) => void;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function SlidePreview({ slide, slideSize, mappings, selectedId, onSelect }: SlidePreviewProps) {
   const SCALE = 300 / slideSize.w; // 300px 너비로 스케일
   const height = slideSize.h * SCALE;

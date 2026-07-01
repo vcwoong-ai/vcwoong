@@ -9,7 +9,8 @@ const createSchema = z.object({
   title: z.string().optional(),
 });
 
-export async function GET(request: NextRequest) {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export async function GET(_request: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: "인증이 필요합니다" }, { status: 401 });
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest) {
     data: {
       dealId: deal.id,
       title: parsed.data.title ?? `${deal.companyName} 투자심사보고서`,
-      agentType: deal.sector as string,
+      agentType: deal.sector as import("@prisma/client").AgentType,
       status: "PENDING",
     },
   });

@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DealSync — 데모 투자심사보고서</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; background: #f8fafc; color: #1e293b; font-size: 14px; }
+  .header { background: white; border-bottom: 1px solid #e2e8f0; padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; }
+  .logo { font-weight: 800; font-size: 18px; color: #2563eb; }
+  .back-btn { color: #64748b; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 4px; }
+  .container { max-width: 900px; margin: 24px auto; padding: 0 16px; }
+  .top-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+  .title-area h2 { font-size: 20px; font-weight: 700; }
+  .title-area p { font-size: 13px; color: #64748b; margin-top: 4px; }
+  .badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 9999px; font-size: 11px; font-weight: 600; }
+  .badge-draft { background: #dbeafe; color: #1d4ed8; }
+  .badge-agent { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
+  .actions { display: flex; gap: 8px; }
+  .btn { display: inline-flex; align-items: center; gap-6px; padding: 7px 14px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; gap: 6px; }
+  .btn-outline { background: white; border: 1px solid #d1d5db; color: #374151; }
+  .btn-outline:hover { background: #f9fafb; }
+  .btn-green { background: #16a34a; color: white; }
+  .btn-blue { background: #2563eb; color: white; }
+  .btn-green-outline { background: white; border: 1px solid #86efac; color: #15803d; }
+  .section-card { background: white; border: 1px solid #e2e8f0; border-radius: 10px; margin-bottom: 16px; overflow: hidden; }
+  .section-card.approved { border-color: #bbf7d0; background: linear-gradient(to bottom, #f0fdf4, white); }
+  .section-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid #f1f5f9; }
+  .section-left { display: flex; align-items: center; gap: 10px; }
+  .section-num { font-size: 11px; font-family: monospace; background: #f1f5f9; color: #94a3b8; padding: 2px 7px; border-radius: 4px; }
+  .section-title { font-size: 15px; font-weight: 600; }
+  .check-icon { color: #22c55e; font-size: 16px; }
+  .section-right { display: flex; align-items: center; gap: 8px; }
+  .char-count { font-size: 11px; color: #94a3b8; }
+  .section-body { padding: 18px; line-height: 1.8; color: #374151; white-space: pre-wrap; font-size: 13.5px; }
+  .section-body h2 { font-size: 14px; font-weight: 700; margin: 16px 0 6px; color: #1e293b; }
+  .progress-bar { background: #e2e8f0; border-radius: 9999px; height: 6px; margin-bottom: 6px; }
+  .progress-fill { background: #2563eb; height: 100%; border-radius: 9999px; transition: width 0.5s; }
+  .generating { text-align: center; padding: 80px 20px; }
+  .spinner { width: 64px; height: 64px; border: 4px solid #dbeafe; border-top-color: #2563eb; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 20px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .step-list { max-width: 320px; margin: 0 auto 24px; text-align: left; }
+  .step-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; font-size: 13px; }
+  .step-done { color: #22c55e; }
+  .step-running { color: #2563eb; font-weight: 600; }
+  .step-pending { color: #cbd5e1; }
+  table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 13px; }
+  th { background: #f8fafc; font-weight: 600; padding: 7px 10px; border: 1px solid #e2e8f0; text-align: left; }
+  td { padding: 6px 10px; border: 1px solid #e2e8f0; }
+  tr:nth-child(even) td { background: #fafafa; }
+  .risk-block { margin-bottom: 16px; }
+  .risk-title { font-weight: 700; margin-bottom: 6px; color: #1e293b; }
+  .risk-label { font-weight: 700; color: #dc2626; }
+  .res-label { font-weight: 700; color: #0369a1; }
+  .tabs { display: flex; gap: 0; border-bottom: 2px solid #e2e8f0; margin-bottom: 0; }
+  .tab { padding: 8px 16px; font-size: 13px; color: #64748b; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; }
+  .tab.active { color: #2563eb; border-bottom-color: #2563eb; font-weight: 600; }
+  .wizard-demo { background: white; border: 1px solid #e2e8f0; border-radius: 10px; padding: 24px; margin-bottom: 24px; }
+  .wizard-steps { display: flex; gap: 0; margin-bottom: 24px; }
+  .wstep { flex: 1; text-align: center; font-size: 12px; position: relative; }
+  .wstep-circle { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; margin: 0 auto 4px; }
+  .wstep.done .wstep-circle { background: #2563eb; color: white; }
+  .wstep.active .wstep-circle { background: #dbeafe; color: #2563eb; border: 2px solid #2563eb; }
+  .wstep.pending .wstep-circle { background: #f1f5f9; color: #94a3b8; }
+  .wstep-line { position: absolute; top: 14px; left: 50%; width: 100%; height: 2px; background: #e2e8f0; z-index: 0; }
+  .wstep.done .wstep-line { background: #2563eb; }
+  .scenario-table { font-size: 13px; }
+  .scenario-table th { background: #1e40af; color: white; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <span class="logo">DealSync</span>
+  <div style="display:flex;gap:12px;align-items:center;">
+    <span class="badge badge-draft">초안</span>
+    <span class="badge badge-agent">GENERAL Agent</span>
+    <span style="font-size:12px;color:#94a3b8;">생성일: 2026. 6. 22.</span>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- Wizard 생성 중 화면 -->
+  <div class="wizard-demo">
+    <p style="font-size:12px;color:#94a3b8;margin-bottom:12px;font-weight:600;">① 보고서 생성 중 화면</p>
+    <p style="font-size:13px;color:#475569;margin-bottom:8px;">아이디어허브 보고서 생성 중...</p>
+    <div class="progress-bar"><div class="progress-fill" style="width:80%"></div></div>
+    <p style="font-size:11px;color:#94a3b8;margin-bottom:16px;">80% 완료</p>
+    <div class="step-list">
+      <div class="step-row"><span class="step-done">✔</span> 자료 업로드</div>
+      <div class="step-row"><span class="step-done">✔</span> 문서 텍스트 추출</div>
+      <div class="step-row"><span class="step-done">✔</span> AI 에이전트 심층 분석</div>
+      <div class="step-row" style="color:#2563eb;font-weight:600;"><span style="display:inline-block;width:16px;height:16px;border:2px solid #2563eb;border-top-color:transparent;border-radius:50%;animation:spin 1s linear infinite;"></span> 보고서 섹션 작성 <span style="font-size:11px;color:#93c5fd;margin-left:6px;">general 에이전트 분석 중... (30~60초 소요)</span></div>
+      <div class="step-row"><span class="step-pending">○</span> <span style="color:#cbd5e1">저장 완료</span></div>
+    </div>
+  </div>
+
+  <!-- 보고서 뷰어 -->
+  <div class="top-bar">
+    <div class="title-area">
+      <h2>아이디어허브 투자심의보고서</h2>
+      <p>승인 완료: 3/11 섹션</p>
+    </div>
+    <div class="actions">
+      <button class="btn btn-green-outline">✓✓ 전체 승인</button>
+      <button class="btn btn-green">✦ 보고서 완성</button>
+      <button class="btn btn-blue">↓ DOCX 내보내기</button>
+    </div>
+  </div>
+
+  <!-- Section 1: 투자개요 -->
+  <div class="section-card approved">
+    <div class="section-header">
+      <div class="section-left">
+        <span class="section-num">1</span>
+        <span class="section-title">투자개요</span>
+        <span class="check-icon">✔</span>
+      </div>
+      <div class="section-right">
+        <span class="char-count">892자</span>
+        <button class="btn btn-outline" style="padding:4px 10px;font-size:12px;">✎ 편집</button>
+      </div>
+    </div>
+    <div class="section-body">당사는 아이디어허브㈜(이하 "동사")에 RCPS(상환전환우선주) 형태로 총 30억원을 투자한다. 금번 투자는 시리즈 A 라운드로, Pre-money Valuation 150억원, Post-money Valuation 180억원 기준이며, 주당 발행가액은 50,000원이다. 공동투자기관은 한국벤처투자(20억원)이며, 당사 투자재원은 제3호 초기투자조합(30억원)이다. 자금 사용 용도는 특허 포트폴리오 확대(40%), 기술 개발 인력 채용(35%), 영업망 확충(25%)이다.
+
+<h2>투자조건 상세</h2>존속기간: 투자일로부터 5년 / YTM: 연 3.0% / 전환조건: 투자금액 기준 1:1 전환, IPO 시 자동전환 / Refixing: 전환가액 하향 Refixing 적용 (최저 발행가 대비 70%) / 배당조건: 액면가 기준 연 1% 우선배당 / 위약벌: 투자금액의 20% / Tag Along: 창업자 지분 매각 시 동일 조건 동반매각권 / 드래그얼롱: 미적용
+
+<h2>투자 목적 및 전략적 의의</h2>당사는 금번 투자를 통해 NPE(비실시 특허관리기업) 섹터 내 초기 창투사로서 House Track Record를 확보하고자 한다. 동사는 국내 유일의 IP 라이선싱 전문 플랫폼으로 포트폴리오 내 IP 관련 시너지 창출이 기대된다.</div>
+  </div>
+
+  <!-- Section 2: 회사개요 -->
+  <div class="section-card">
+    <div class="section-header">
+      <div class="section-left">
+        <span class="section-num">2</span>
+        <span class="section-title">회사개요</span>
+      </div>
+      <div class="section-right">
+        <span class="char-count">1,203자</span>
+        <button class="btn btn-outline" style="padding:4px 10px;font-size:12px;">✎ 편집</button>
+        <button class="btn btn-green-outline" style="padding:4px 10px;font-size:12px;">✔ 승인</button>
+      </div>
+    </div>
+    <div class="section-body">아이디어허브㈜는 2015년 3월 설립된 IP(Intellectual Property) 라이선싱 및 관리 전문기업이다. 대표이사 김지호(KAIST 전기전자공학 박사, 前 삼성전자 특허센터 10년)가 이끄는 동사는 특허 포트폴리오 구축·운용·수익화 사이클 전반을 대행하는 국내 최초 IP-as-a-Service 플랫폼을 운영 중이다. 임직원 수 38명(특허 전문가 22명 포함), 사무소는 판교 테크노밸리 소재.
+
+<h2>회사 연혁</h2>2015년: 법인 설립, 특허 브로커리지 사업 개시
+2017년: 시드 투자 유치 (3억원, 스파크랩)
+2018년: IP 라이선싱 플랫폼 1.0 출시, 첫 라이선스 계약 체결 (IoT 분야)
+2019년: Pre-A 투자 유치 (10억원), 특허 포트폴리오 50건 돌파
+2021년: A 라운드 투자 유치 (30억원), IP 투자조합 I호 설립
+2022년: 미국 특허 소송 대리 서비스 론칭, 누적 라이선스 수익 50억원 달성
+2023년: IP 투자조합 II호 결성 (100억원), 특허 200건 관리
+2025년: 코스닥 상장 예비심사 청구 예정
+
+<h2>팀 평가</h2>대표 김지호(박사, 삼성 특허센터 출신)를 중심으로 IP 소송 전문가 3명(美 변호사 자격 보유), 특허 애널리스트 18명으로 구성. 특허 소송·라이선싱 도메인 depth가 강점. 재무 CFO 공석으로 IPO 준비 체계 강화 필요.</div>
+  </div>
+
+  <!-- Section 3: 제품/기술 -->
+  <div class="section-card">
+    <div class="section-header">
+      <div class="section-left">
+        <span class="section-num">3</span>
+        <span class="section-title">제품, 비즈니스 모델 및 영업현황</span>
+      </div>
+      <div class="section-right">
+        <span class="char-count">1,456자</span>
+        <button class="btn btn-outline" style="padding:4px 10px;font-size:12px;">✎ 편집</button>
+        <button class="btn btn-green-outline" style="padding:4px 10px;font-size:12px;">✔ 승인</button>
+      </div>
+    </div>
+    <div class="section-body"><h2>비즈니스 모델</h2>B2B 구조. 수익원은 ① IP 라이선싱 중개 수수료(계약금액의 15~25%), ② 특허 포트폴리오 관리 구독료(연 3,000~5,000만원/기업), ③ IP 소송 성공보수(회수금액의 20~30%)의 3축으로 구성. 2025년 기준 구독 모델이 전체 매출의 42%로 Recurring Revenue 비중 확대 중. 계약 1건당 평균 LTV 약 2.4억원, 계약 체결 기간 평균 18개월.
+
+<h2>주요 고객/파트너 레퍼런스</h2>삼성전자(IoT 특허 라이선싱, 계약금 15억원), LG이노텍(디스플레이 특허 포트폴리오 관리), 현대모비스(자율주행 특허 전략 컨설팅), 미국 Acacia Research(공동 소송 파트너십), ETRI(국책 특허 수익화 위탁). 2025년 신규 계약 12건, 누적 계약 고객사 87개사.
+
+<h2>IP/특허 현황</h2>자체 보유 특허 218건(국내 145건, PCT 73건), IoT·반도체·디스플레이 분야 집중. 핵심 특허: 'IoT 디바이스 저전력 통신 프로토콜(US10,xxx,xxx)' — 삼성/퀄컴 침해 소송 진행 중. 국책과제: 특허청 IP 금융 활성화 사업(2023~2025, 5억원). 특허 기술이전 가능성 높음.</div>
+  </div>
+
+  <!-- Section 4: 시장분석 -->
+  <div class="section-card">
+    <div class="section-header">
+      <div class="section-left">
+        <span class="section-num">4</span>
+        <span class="section-title">시장 분석 및 경쟁환경</span>
+      </div>
+      <div class="section-right">
+        <span class="char-count">987자</span>
+        <button class="btn btn-outline" style="padding:4px 10px;font-size:12px;">✎ 편집</button>
+        <button class="btn btn-green-outline" style="padding:4px 10px;font-size:12px;">✔ 승인</button>
+      </div>
+    </div>
+    <div class="section-body"><h2>시장 분석</h2>글로벌 IP 라이선싱 시장 규모 약 $3,200억(2024), CAGR 8.2% 성장 전망(2024~2029). 국내 시장은 약 2.3조원 규모로 기업의 특허 수익화 니즈 급증. AI·IoT·반도체 섹터 특허 분쟁 증가로 NPE 시장 연 15% 이상 성장. 정부 IP 금융 활성화 정책(지식재산기본법 개정, 2024) 수혜 직접.
+
+<h2>경쟁 환경</h2>InterDigital(나스닥, PER 26.7x) — 글로벌 통신 표준특허 NPE. Acacia Research(나스닥) — 다분야 특허 포트폴리오. 국내: 아이피큐브파트너스(비상장), IP Value(특허청 인증). 동사는 국내 IT/IoT/반도체 집중 + 기업 구독 SaaS화 전략으로 글로벌 NPE 대비 18.5x PER 적용 시 44.6% 저렴. 국내 기업 고객 Lock-in 구조 차별화.</div>
+  </div>
+
+  <!-- Section 5: 재무현황 -->
+  <div class="section-card approved">
+    <div class="section-header">
+      <div class="section-left">
+        <span class="section-num">5</span>
+        <span class="section-title">재무 현황</span>
+        <span class="check-icon">✔</span>
+      </div>
+      <div class="section-right">
+        <span class="char-count">734자</span>
+        <button class="btn btn-outline" style="padding:4px 10px;font-size:12px;">✎ 편집</button>
+      </div>
+    </div>
+    <div class="section-body">
+<table>
+<tr><th>구분</th><th>2022년</th><th>2023년</th><th>2024년(E)</th></tr>
+<tr><td>매출액(억원)</td><td>28.4</td><td>42.7</td><td>61.3</td></tr>
+<tr><td>영업이익(억원)</td><td>3.2</td><td>8.1</td><td>14.6</td></tr>
+<tr><td>영업이익률</td><td>11.3%</td><td>19.0%</td><td>23.8%</td></tr>
+<tr><td>순이익(억원)</td><td>2.1</td><td>6.4</td><td>11.9</td></tr>
+</table>
+
+매출 CAGR(2022~2024E): 46.8%. 부채비율 38%(업계 평균 120% 대비 안정적). 현금성 자산 12억원, 금번 투자 후 런웨이 약 24개월. 자금조달 이력: 2017년 시드 3억원 → 2019년 Pre-A 10억원 → 2021년 A라운드 30억원. 전 라운드 IRR 흑자 달성 중.</div>
+  </div>
+
+  <!-- Section 6: 투자포인트 -->
+  <div class="section-card">
+    <div class="section-header">
+      <div class="section-left">
+        <span class="section-num">6</span>
+        <span class="section-title">투자포인트</span>
+      </div>
+      <div class="section-right">
+        <span class="char-count">1,102자</span>
+        <button class="btn btn-outline" style="padding:4px 10px;font-size:12px;">✎ 편집</button>
+        <button class="btn btn-green-outline" style="padding:4px 10px;font-size:12px;">✔ 승인</button>
+      </div>
+    </div>
+    <div class="section-body"><h2>투자포인트 (1)</h2>제목: [국내 유일 IP SaaS 플랫폼 — Recurring Revenue 42%]
+동사는 국내 유일의 IP 라이선싱·관리 구독형 플랫폼으로, 매출의 42%가 연간 구독료 기반 Recurring Revenue다. 2024년 구독 고객사 51개사(전년 대비 +31%), 평균 계약기간 2.8년으로 고객 Lock-in 구조가 견고하다. Unit Economics: CAC 1,200만원, LTV 2.4억원, LTV/CAC 20x. 삼성전자·현대모비스 등 대기업 고객 레퍼런스 확보로 엔터프라이즈 확장 가시성이 높은 것으로 판단됨.
+
+<h2>투자포인트 (2)</h2>제목: [글로벌 NPE 시장 고성장 + 정책 수혜]
+글로벌 IP 라이선싱 시장 CAGR 8.2%, 국내 NPE 시장 연 15% 이상 성장 중. 정부 IP 금융 활성화 정책 및 특허청 국책과제 선정(5억원)으로 정책 수혜 직접 향유. AI·IoT 특허 분쟁 증가로 동사의 핵심 역량(반도체·IoT 특허)에 대한 시장 수요 확대 예상됨.
+
+<h2>투자포인트 (3)</h2>제목: [코스닥 상장 Track + M&A Exit 가능성]
+2025년 코스닥 예비심사 청구 예정, 2026년 상장 목표. 비슷한 IP 플랫폼의 국내 상장 사례(이지홀딩스 PER 22x 상장) 참고 시 Exit Multiple 18~22x 적용 가능. InterDigital(나스닥) 등 글로벌 NPE의 국내 M&A 타깃으로도 거론되고 있어 복수 Exit 시나리오가 존재하는 것으로 확인이 필요한 사항임.</div>
+  </div>
+
+  <!-- Section 7: 리스크 -->
+  <div class="section-card">
+    <div class="section-header">
+      <div class="section-left">
+        <span class="section-num">7</span>
+        <span class="section-title">리스크</span>
+      </div>
+      <div class="section-right">
+        <span class="char-count">1,078자</span>
+        <button class="btn btn-outline" style="padding:4px 10px;font-size:12px;">✎ 편집</button>
+        <button class="btn btn-green-outline" style="padding:4px 10px;font-size:12px;">✔ 승인</button>
+      </div>
+    </div>
+    <div class="section-body">
+<div class="risk-block">
+<div class="risk-title">(1) IP 투자조합 풋옵션 행사 리스크</div>
+<span class="risk-label">◼ RISK:</span> 동사는 특허권 등 IP 투자 자금을 PF 조합을 통해 조달하고 있음. IP 투자조합 II호(100억원) 만기(2026년) 도래 시 LP들이 풋옵션을 행사할 경우 유동성 압박이 발생할 수 있으며, 특허 소송 결과가 부진할 경우 조합 수익률 저조로 관계 악화 가능성이 있음. 특히 삼성 소송 지연 시 회수 일정 불확실성 증가.
+<br><span class="res-label">◼ RESOLUTION:</span> 풋옵션 행사 시기가 도래한 IP 투자조합 I호는 투자원금 거의 회수 완료(94%). II호 조합 역시 삼성 소송 화해 협상 진행 중으로 2025년 내 합의 도달 시 조기 회수 가능. 당사는 투자 후 조합 LP 참여를 통해 모니터링 권한 확보 예정.
+</div>
+
+<div class="risk-block">
+<div class="risk-title">(2) 소송 의존도 집중 리스크</div>
+<span class="risk-label">◼ RISK:</span> 2024년 매출의 38%가 특허 소송 성공보수에 집중되어 있어 소송 패소 또는 합의 지연 시 단기 매출 충격이 발생할 수 있음. 현재 진행 중인 주요 소송 3건(총 청구금액 약 320억원) 중 1건이라도 패소 시 연간 매출의 15~20% 감소 예상.
+<br><span class="res-label">◼ RESOLUTION:</span> 구독형 Recurring Revenue 비중을 2026년까지 60%로 확대하여 소송 성공보수 의존도를 낮추는 중. 소송 포트폴리오 분산(현재 21건 진행)으로 단일 소송 의존도 감소 추진.
+</div>
+
+<div class="risk-block">
+<div class="risk-title">(3) IPO 시장 불확실성 및 Exit 지연</div>
+<span class="risk-label">◼ RISK:</span> 코스닥 기술특례 상장 심사 기준 강화(2024년 개정)로 예비심사 통과 난이도 증가. IP 비즈니스 모델의 수익 가시성에 대한 거래소 심사관 이해도 부족으로 상장 지연 가능성. 금리 환경 악화 시 밸류에이션 하락 우려.
+<br><span class="res-label">◼ RESOLUTION:</span> 공인회계법인 Big4 감사법인 조기 선임(삼일회계법인, 2025년 지정) 및 IR 전문 팀 구성. M&A Exit(InterDigital, Acacia Research) 병행 검토로 IPO 의존도 낮춤. 당사 네트워크를 통한 코스닥 상장 심사 자문 지원 예정.
+</div>
+</div>
+  </div>
+
+  <!-- Section 8: P&L 추정 -->
+  <div class="section-card approved">
+    <div class="section-header">
+      <div class="section-left">
+        <span class="section-num">8</span>
+        <span class="section-title">매출 및 손익 추정</span>
+        <span class="check-icon">✔</span>
+      </div>
+      <div class="section-right">
+        <span class="char-count">876자</span>
+        <button class="btn btn-outline" style="padding:4px 10px;font-size:12px;">✎ 편집</button>
+      </div>
+    </div>
+    <div class="section-body"><h2>회사 추정 손익계산서</h2>
+<table>
+<tr><th>연도</th><th>매출(억원)</th><th>영업이익(억원)</th><th>영업이익률</th></tr>
+<tr><td>2025E</td><td>89.0</td><td>24.0</td><td>27.0%</td></tr>
+<tr><td>2026E</td><td>132.0</td><td>43.6</td><td>33.0%</td></tr>
+<tr><td>2027E</td><td>190.0</td><td>72.2</td><td>38.0%</td></tr>
+</table>
+
+<h2>심사역 손익 추정</h2>
+가정: 매출 70% 적용(소송 성공보수 보수화), 판관비 15% 추가 반영(상장 준비 비용), 구독 성장률 하향(회사 추정 +40% → 심사역 추정 +28%)
+<table>
+<tr><th>연도</th><th>매출(억원)</th><th>영업이익(억원)</th><th>영업이익률</th></tr>
+<tr><td>2025E</td><td>62.3</td><td>12.4</td><td>19.9%</td></tr>
+<tr><td>2026E</td><td>92.4</td><td>24.3</td><td>26.3%</td></tr>
+<tr><td>2027E</td><td>133.0</td><td>42.6</td><td>32.0%</td></tr>
+</table>
+</div>
+  </div>
+
+  <!-- Section 9: Valuation -->
+  <div class="section-card">
+    <div class="section-header">
+      <div class="section-left">
+        <span class="section-num">9</span>
+        <span class="section-title">Valuation & Exit 전략</span>
+      </div>
+      <div class="section-right">
+        <span class="char-count">1,234자</span>
+        <button class="btn btn-outline" style="padding:4px 10px;font-size:12px;">✎ 편집</button>
+        <button class="btn btn-green-outline" style="padding:4px 10px;font-size:12px;">✔ 승인</button>
+      </div>
+    </div>
+    <div class="section-body"><h2>Peer Group 분석</h2>
+<table>
+<tr><th>회사명</th><th>분류</th><th>PER</th><th>비고</th></tr>
+<tr><td>InterDigital</td><td>나스닥(NPE)</td><td>26.7x</td><td>통신표준특허 특화</td></tr>
+<tr><td>Acacia Research</td><td>나스닥(NPE)</td><td>22.1x</td><td>다분야 포트폴리오</td></tr>
+<tr><td>이지홀딩스</td><td>코스닥(IP)</td><td>19.4x</td><td>국내 최근 상장 사례</td></tr>
+<tr><td>아이피솔루션스</td><td>비상장</td><td>-</td><td>비교 기준</td></tr>
+</table>
+동사 적용 PER 18.5x (InterDigital 대비 44.6% 저렴, 이지홀딩스 대비 4.6% 할인). 비상장 할인 30% 적용 시 적정 PER 13.0x. 심사역 2026E 순이익 22억원 기준: 적정 기업가치 286억원 ~ 370억원 (현재 투자가치 150억원 대비 1.9x ~ 2.5x).
+
+<h2>기업가치 평가</h2>Pre-money 150억원은 2024E PER 기준 12.6x로 Peer Group 평균(22.7x) 대비 44.5% 할인되어 가격 매력도가 높은 것으로 판단됨. 심사역 보수적 추정(매출 70% 적용) 기준으로도 2026E PER 13.4x로 적정 수준. Recurring Revenue 확대 및 소송 포트폴리오 다각화 진행 시 리레이팅 가능성 존재.
+
+<h2>시나리오별 투자수익 분석</h2>
+<table class="scenario-table">
+<tr><th>시나리오</th><th>보수적</th><th>중립적</th><th>공격적</th></tr>
+<tr><td>적용 PER</td><td>12.8x</td><td>15.0x</td><td>18.3x</td></tr>
+<tr><td>예상 기업가치(억원)</td><td>282</td><td>330</td><td>403</td></tr>
+<tr><td>Expected IRR(%)</td><td>36.5%</td><td>58.2%</td><td>82.8%</td></tr>
+<tr><td>Multiple(x)</td><td>1.9</td><td>2.2</td><td>2.7</td></tr>
+<tr><td>당사 회수금액(억원)</td><td>57</td><td>66</td><td>81</td></tr>
+</table>
+가정: 보수적(IPO 지연 1년 + PER 할인 30%), 중립(2026 코스닥 상장), 공격(M&A Exit, InterDigital 인수 시나리오)
+
+<h2>Exit 전략 및 투자수익성</h2>① IPO: 2026년 코스닥 기술특례 상장 목표(투자 후 4년 이내) → 락업 해제 6개월 후 매각. ② M&A: InterDigital·Acacia Research의 국내 IP 플랫폼 M&A 수요 확인 중. 기준 Multiple 2.0~2.7x, IRR 36~82% 범위 예상.</div>
+  </div>
+
+  <!-- Section 10: 종합의견 -->
+  <div class="section-card">
+    <div class="section-header">
+      <div class="section-left">
+        <span class="section-num">10</span>
+        <span class="section-title">종합 투자의견</span>
+      </div>
+      <div class="section-right">
+        <span class="char-count">823자</span>
+        <button class="btn btn-outline" style="padding:4px 10px;font-size:12px;">✎ 편집</button>
+        <button class="btn btn-green-outline" style="padding:4px 10px;font-size:12px;">✔ 승인</button>
+      </div>
+    </div>
+    <div class="section-body"><strong>[ 투자 찬성 ]</strong>
+
+아이디어허브㈜는 국내 유일의 IP-as-a-Service 플랫폼으로, Recurring Revenue 42% 구조와 대기업 고객 Lock-in을 통해 안정적 수익 기반을 구축하고 있는 것으로 판단됨. 글로벌 NPE 대비 44.6% 저렴한 Valuation, 보수적 시나리오에서도 IRR 36.5% 기대, 심사역 추정 기준 적정 기업가치 286~370억원으로 현재 Pre-money 150억원 대비 충분한 안전마진이 존재하는 것으로 확인됨.
+
+<strong>조건부 사항:</strong>
+① CFO 채용 후 투자금 집행 (IPO 준비 체계화)
+② IP 투자조합 II호 LP 관계 정상화 확약서 수령
+③ 삼성전자 소송 진행 경과 분기별 보고 의무화
+
+<strong>모니터링 포인트:</strong>
+- Recurring Revenue 비중 (반기: 42% → 50% 도달 시기)
+- 코스닥 예비심사 청구 일정 및 결과
+- IP 투자조합 만기 대응 현황
+- 핵심 소송 3건 진행 상황 (특히 삼성 IoT 특허 소송)</div>
+  </div>
+
+  <!-- Section 11: Appendix -->
+  <div class="section-card">
+    <div class="section-header">
+      <div class="section-left">
+        <span class="section-num">11</span>
+        <span class="section-title">창업자 확인 사항</span>
+      </div>
+      <div class="section-right">
+        <span class="char-count">312자</span>
+        <button class="btn btn-outline" style="padding:4px 10px;font-size:12px;">✎ 편집</button>
+        <button class="btn btn-green-outline" style="padding:4px 10px;font-size:12px;">✔ 승인</button>
+      </div>
+    </div>
+    <div class="section-body">1. 삼성전자 IoT 특허 소송의 현재 진행 단계, 예상 합의 금액, 청구 원금 대비 회수 예상 비율은?
+2. IP 투자조합 II호 LP 중 풋옵션 행사 의사를 표명한 LP가 있는지, 있다면 예상 행사 금액은?
+3. CFO 채용 일정 및 IPO 주관사 선정 현황은?
+4. Recurring 구독 매출의 2025년 갱신율(Renewal Rate) 및 순증 고객사 수는?
+5. InterDigital 또는 해외 IP 펀드로부터 M&A/투자 제안을 받은 이력이 있는지?</div>
+  </div>
+
+</div>
+
+<div style="text-align:center;padding:32px;color:#94a3b8;font-size:12px;">
+  DealSync — AI 투자심사보고서 자동화 플랫폼 | Powered by Claude AI
+</div>
+
+</body>
+</html>

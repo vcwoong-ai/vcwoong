@@ -91,7 +91,8 @@ export async function POST(request: NextRequest) {
         size: file.size,
         mimeType: file.type,
         parsedText,
-        metadata: metadata as any // eslint-disable-line,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        metadata: metadata as any,
       },
     });
 

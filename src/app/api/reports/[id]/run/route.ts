@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { AgentType } from "@prisma/client";
 import { structurizeDocument } from "@/lib/structurize";
 import { detectSectors } from "@/agents/orchestrator/sector-detector";
 import { runBioAnalysis } from "@/agents/sectors/bio";
@@ -38,10 +39,10 @@ const SECTION_TITLES: Record<SectionKey, string> = {
   APPENDIX: "별첨",
 };
 
-async function runSectorAnalysis(sector: string, structured: StructuredData) {
+async function runSectorAnalysis(sector: string, structured: StructuredData, documentContext: string, companyName: string) {
   switch (sector) {
     case "BIO":
-      return runBioAnalysis(structured);
+      return runBioAnalysis(documentContext, companyName);
     case "IT":
       return runITAnalysis(structured);
     case "DEEPTECH":
@@ -173,7 +174,7 @@ export async function POST(
     const sector = report.deal.sector ?? sectorDetection.primary;
 
     // Run sector-specific agent analysis
-    const agentResult = await runSectorAnalysis(sector, structured);
+    const agentResult = await runSectorAnalysis(sector, structured, textForAnalysis, report.deal.companyName);
 
     // Build 10 report sections
     const sectionContents = await buildSections(structured, agentResult, sector, report.deal);
@@ -203,7 +204,7 @@ export async function POST(
       data: {
         status: "DRAFT",
         generatedAt: new Date(),
-        agentType: mapSectorToAgentType(sector),
+        agentType: mapSectorToAgentType(sector) as AgentType,
       },
     });
 

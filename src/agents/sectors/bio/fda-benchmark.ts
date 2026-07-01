@@ -10,7 +10,7 @@ export type DrugApproval = {
 
 export async function searchFDAApprovals(
   indication: string,
-  _mechanism = "",
+  _mechanism = "", // eslint-disable-line
   limit = 5
 ): Promise<DrugApproval[]> {
   try {
