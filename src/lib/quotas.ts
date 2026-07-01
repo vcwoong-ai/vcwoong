@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getUserPlanKey } from "@/lib/subscription";
 
 export const PLAN_LIMITS = {
   free: { reports: 5, sectors: 1, templates: 2 },
@@ -27,9 +28,10 @@ function startOfMonth(): Date {
 export async function checkQuota(
   userId: string,
   action: "report" | "template",
-  plan: PlanKey = "free"
+  plan?: PlanKey
 ): Promise<QuotaResult> {
-  const limits = PLAN_LIMITS[plan];
+  const effectivePlan = plan ?? (await getUserPlanKey(userId));
+  const limits = PLAN_LIMITS[effectivePlan];
   const limit = action === "report" ? limits.reports : limits.templates;
   const since = startOfMonth();
 
@@ -52,17 +54,18 @@ export async function checkQuota(
     allowed,
     used,
     limit,
-    plan,
+    plan: effectivePlan,
     message: allowed
       ? undefined
       : `이번 달 ${action === "report" ? "보고서" : "양식"} 한도(${limit}건)를 초과했습니다. (${used}/${limit})`,
   };
 }
 
-export async function getQuotaSummary(userId: string, plan: PlanKey = "free") {
+export async function getQuotaSummary(userId: string, plan?: PlanKey) {
+  const effectivePlan = plan ?? (await getUserPlanKey(userId));
   const [reports, templates] = await Promise.all([
-    checkQuota(userId, "report", plan),
-    checkQuota(userId, "template", plan),
+    checkQuota(userId, "report", effectivePlan),
+    checkQuota(userId, "template", effectivePlan),
   ]);
-  return { reports, templates, plan };
+  return { reports, templates, plan: effectivePlan };
 }

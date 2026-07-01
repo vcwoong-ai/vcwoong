@@ -1,23 +1,46 @@
 import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { cancelSubscription } from "@/lib/subscription";
 
-// Toss Payments 웹훅 수신
-export async function POST(request: NextRequest) {
-  const body = await request.json() as {
-    eventType?: string;
-    data?: { status?: string; customerKey?: string };
+interface TossWebhookBody {
+  eventType?: string;
+  data?: {
+    paymentKey?: string;
+    orderId?: string;
+    status?: string;
+    customerKey?: string;
+    totalAmount?: number;
   };
+}
 
-  const { eventType, data } = body;
+export async function POST(request: NextRequest) {
+  try {
+    const body = (await request.json()) as TossWebhookBody;
+    const { eventType, data } = body;
 
-  // 결제 성공: 구독 갱신
-  if (eventType === "PAYMENT_STATUS_CHANGED" && data?.status === "DONE") {
-    // TODO: 구독 갱신 처리
+    if (!eventType || !data) {
+      return NextResponse.json({ ok: true });
+    }
+
+    if (eventType === "PAYMENT_STATUS_CHANGED" && data.status === "CANCELED") {
+      if (data.paymentKey) {
+        await prisma.subscriptionPayment.updateMany({
+          where: { paymentKey: data.paymentKey },
+          data: { status: "CANCELED" },
+        });
+      }
+    }
+
+    if (eventType === "BILLING_DELETED" && data.customerKey) {
+      const userId = data.customerKey.replace(/^dealsync-/, "");
+      if (userId) {
+        await cancelSubscription(userId);
+      }
+    }
+
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    console.error("Toss webhook error:", error);
+    return NextResponse.json({ ok: false }, { status: 500 });
   }
-
-  // 결제 실패/취소: 구독 만료 처리
-  if (eventType === "PAYMENT_STATUS_CHANGED" && data?.status === "CANCELED") {
-    // TODO: 구독 취소 처리
-  }
-
-  return NextResponse.json({ ok: true });
 }

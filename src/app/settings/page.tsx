@@ -1,18 +1,29 @@
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 import { authOptions } from "@/lib/auth";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Zap, Database, Shield, BarChart3 } from "lucide-react";
+import { Zap, Database, Shield, BarChart3, CreditCard } from "lucide-react";
 import { ProfileForm } from "@/components/settings/profile-form";
 import { UsageStats } from "@/components/settings/usage-stats";
+import { SubscriptionPlans } from "@/components/settings/subscription-plans";
 import { AGENT_META } from "@/agents";
 import { MODEL } from "@/lib/claude";
+import {
+  getUserSubscription,
+  enumToPlanKey,
+} from "@/lib/subscription";
 
 export default async function SettingsPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/login");
+
+  const subscription = await getUserSubscription(session.user.id);
+  const currentPlan = subscription
+    ? enumToPlanKey(subscription.subscriptionPlan)
+    : "free";
 
   const roleLabel: Record<string, string> = {
     ADMIN: "관리자",
@@ -45,6 +56,25 @@ export default async function SettingsPage() {
               </div>
             </div>
             <ProfileForm currentName={session.user.name ?? ""} />
+          </CardContent>
+        </Card>
+
+        {/* Subscription */}
+        <Card id="subscription">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <CreditCard className="w-4 h-4" />
+              구독 플랜
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Suspense fallback={<p className="text-sm text-gray-400">플랜 불러오는 중...</p>}>
+              <SubscriptionPlans
+                userId={session.user.id}
+                currentPlan={currentPlan}
+                hasBillingKey={Boolean(subscription?.billingKey)}
+              />
+            </Suspense>
           </CardContent>
         </Card>
 

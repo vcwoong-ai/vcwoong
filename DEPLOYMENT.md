@@ -18,6 +18,8 @@
 | `AWS_SECRET_ACCESS_KEY` | S3 시크릿 키 | |
 | `AWS_REGION` | S3 리전 | `ap-northeast-2` |
 | `AWS_S3_BUCKET` | S3 버킷명 | `dealsync-uploads` |
+| `OPENROUTER_API_KEY` | OpenRouter API 키 (선택) | |
+| `GEMINI_API_KEY` | Google Gemini API 키 (선택) | |
 | `NEXT_PUBLIC_TOSS_CLIENT_KEY` | Toss 클라이언트 키 | `test_ck_...` |
 | `TOSS_SECRET_KEY` | Toss 시크릿 키 | `test_sk_...` |
 
@@ -26,6 +28,7 @@
 ```bash
 # 로컬에서 마이그레이션 실행
 npx prisma migrate deploy
+npx prisma db push   # 초기 스키마 동기화 (구독 필드 포함)
 npx prisma generate
 ```
 

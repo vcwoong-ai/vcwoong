@@ -17,9 +17,10 @@
 
 ## 머지 후 수동 작업 (별도)
 
-- [ ] Vercel 프로덕션 배포
-- [ ] Toss Payments 결제 연동
-- [ ] PostgreSQL 프로덕션 DB 마이그레이션
+- [x] Vercel 배포 설정 (`vercel.json`, `vercel-build` 스크립트)
+- [x] Toss Payments 결제 연동 (API + 설정 UI)
+- [ ] Vercel 프로덕션 배포 실행
+- [ ] PostgreSQL 프로덕션 DB 마이그레이션 (`prisma db push` 또는 migrate)
 
 ## 로컬 머지 명령
 

@@ -1,5 +1,5 @@
 {
-  "buildCommand": "next build",
+  "buildCommand": "npm run vercel-build",
   "devCommand": "next dev",
   "framework": "nextjs",
   "regions": ["icn1"],
@@ -10,8 +10,12 @@
     "src/app/api/agents/manufacturing/analyze/route.ts": { "maxDuration": 300 },
     "src/app/api/agents/content/analyze/route.ts": { "maxDuration": 300 },
     "src/app/api/agents/fintech/analyze/route.ts": { "maxDuration": 300 },
+    "src/app/api/agents/general/analyze/route.ts": { "maxDuration": 300 },
     "src/app/api/lp-report/generate/route.ts": { "maxDuration": 300 },
     "src/app/api/reports/generate/route.ts": { "maxDuration": 120 },
+    "src/app/api/reports/[id]/run/route.ts": { "maxDuration": 300 },
+    "src/app/api/reports/[id]/progress/route.ts": { "maxDuration": 60 },
+    "src/app/api/deals/[id]/reports/route.ts": { "maxDuration": 120 },
     "src/app/api/upload/route.ts": { "maxDuration": 60 },
     "src/app/api/detect-sector/route.ts": { "maxDuration": 60 }
   }

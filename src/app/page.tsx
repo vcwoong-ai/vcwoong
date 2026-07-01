@@ -284,7 +284,7 @@ export default async function LandingPage() {
                   "우선 지원",
                 ],
                 cta: "Pro 시작하기",
-                href: "/register",
+                href: "/settings#subscription",
                 highlight: true,
               },
               {
@@ -300,8 +300,8 @@ export default async function LandingPage() {
                   "LP 리포팅",
                   "전담 온보딩",
                 ],
-                cta: "팀 플랜 문의",
-                href: "/register",
+                cta: "팀 플랜 시작",
+                href: "/settings#subscription",
                 highlight: false,
               },
             ].map((plan) => (

@@ -61,6 +61,9 @@ model User {
   passwordHash  String?
   role          UserRole  @default(ANALYST)
   teamId        String?
+  subscriptionPlan   SubscriptionPlan   @default(FREE)
+  subscriptionStatus SubscriptionStatus @default(ACTIVE)
+  billingKey         String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -70,6 +73,7 @@ model User {
   deals     Deal[]
   templates Template[]
   usageLogs UsageLog[]
+  payments  SubscriptionPayment[]
 }
 
 model Team {
@@ -181,6 +185,33 @@ enum UserRole {
   ADMIN
   PARTNER
   ANALYST
+}
+
+enum SubscriptionPlan {
+  FREE
+  SOLO
+  SECTOR_PRO
+  MULTI
+  FULL
+  BIO_PREMIUM
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELED
+  PAST_DUE
+}
+
+model SubscriptionPayment {
+  id         String           @id @default(cuid())
+  userId     String
+  plan       SubscriptionPlan
+  amount     Int
+  status     String
+  paymentKey String?
+  createdAt  DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 enum DealSector {
