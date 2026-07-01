@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getQuotaSummary } from "@/lib/quotas";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -12,7 +13,7 @@ export async function GET() {
   const userId = session.user.id;
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
-  const [totalLogs, recentLogs, byAgent, totalReports] = await Promise.all([
+  const [totalLogs, recentLogs, byAgent, totalReports, quota] = await Promise.all([
     // 전체 토큰 합계
     prisma.usageLog.aggregate({
       where: { userId },
@@ -34,6 +35,7 @@ export async function GET() {
     }),
     // 총 보고서 수
     prisma.report.count({ where: { deal: { userId } } }),
+    getQuotaSummary(userId),
   ]);
 
   // 일별 집계
@@ -61,6 +63,7 @@ export async function GET() {
         tokens: a._sum.totalTokens ?? 0,
         calls: a._count,
       })),
+      quota,
     },
   });
 }

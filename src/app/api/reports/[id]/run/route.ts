@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ReportStatus } from "@prisma/client";
 import { generateSectionsAsync } from "@/lib/report-generation";
+import { checkQuota } from "@/lib/quotas";
 
 export async function POST(
   _request: NextRequest,
@@ -41,6 +42,11 @@ export async function POST(
       { error: "딜에 업로드된 문서가 없습니다. 먼저 IR 자료를 업로드해 주세요." },
       { status: 400 }
     );
+  }
+
+  const quota = await checkQuota(session.user.id, "report");
+  if (!quota.allowed) {
+    return NextResponse.json({ error: quota.message }, { status: 429 });
   }
 
   await prisma.report.update({

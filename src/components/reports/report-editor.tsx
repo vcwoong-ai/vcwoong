@@ -14,11 +14,13 @@ import {
   BadgeCheck,
   Copy,
   BarChart2,
+  RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SECTION_META, getKoreanVisualWidth } from "@/types";
 import { SectionStatus } from "@prisma/client";
 import { Markdown } from "@/components/ui/markdown";
+import { ReportPreviewPanel } from "@/components/reports/report-preview-panel";
 
 interface Section {
   id: string;
@@ -39,6 +41,8 @@ interface ReportEditorProps {
   reportStatus?: string;
   onFinalize?: () => void;
   isFinalizing?: boolean;
+  onRegenerate?: () => void;
+  isRegenerating?: boolean;
 }
 
 export function ReportEditor({
@@ -50,6 +54,8 @@ export function ReportEditor({
   reportStatus,
   onFinalize,
   isFinalizing,
+  onRegenerate,
+  isRegenerating,
 }: ReportEditorProps) {
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState("");
@@ -187,6 +193,20 @@ export function ReportEditor({
             {copied ? <CheckCircle className="w-4 h-4 mr-1.5 text-green-500" /> : <Copy className="w-4 h-4 mr-1.5" />}
             {copied ? "복사됨" : "전체 복사"}
           </Button>
+          {!isFinal && onRegenerate && (
+            <Button
+              variant="outline"
+              onClick={onRegenerate}
+              disabled={isRegenerating}
+            >
+              {isRegenerating ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <RefreshCw className="w-4 h-4 mr-2" />
+              )}
+              재생성
+            </Button>
+          )}
           {!isFinal && !allApproved && (
             <Button
               variant="outline"
@@ -231,8 +251,8 @@ export function ReportEditor({
         </div>
       </div>
 
-      {/* Sections */}
-      <div className="space-y-4">
+      <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
+        <div className="xl:col-span-3 space-y-4">
         {sortedSections.map((section) => {
           const meta = SECTION_META.find((m) => m.key === section.sectionKey);
           const isEditing = editingSectionId === section.id;
@@ -343,6 +363,11 @@ export function ReportEditor({
             </Card>
           );
         })}
+        </div>
+
+        <div className="xl:col-span-2 hidden xl:block">
+          <ReportPreviewPanel sections={sortedSections} />
+        </div>
       </div>
     </div>
   );

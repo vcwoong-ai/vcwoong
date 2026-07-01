@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
 import { Bell, LogOut, User } from "lucide-react";
 import {
@@ -76,9 +77,11 @@ export function Header({ title }: HeaderProps) {
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
-              <User className="w-4 h-4 mr-2" />
-              내 프로필
+            <DropdownMenuItem asChild>
+              <Link href="/settings" className="flex items-center cursor-pointer">
+                <User className="w-4 h-4 mr-2" />
+                설정
+              </Link>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem

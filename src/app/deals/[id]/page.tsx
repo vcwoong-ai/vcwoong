@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { getServerSession } from "next-auth";
 import { redirect, notFound } from "next/navigation";
 import { authOptions } from "@/lib/auth";
@@ -29,10 +30,12 @@ export default async function DealDetailPage({
 
   return (
     <AppLayout title={deal.companyName}>
-      <DealDetailClient
-        deal={JSON.parse(JSON.stringify(deal))}
-        demoMode={!isAIConfigured()}
-      />
+      <Suspense fallback={<div className="p-8 text-center text-gray-400">로딩 중...</div>}>
+        <DealDetailClient
+          deal={JSON.parse(JSON.stringify(deal))}
+          demoMode={!isAIConfigured()}
+        />
+      </Suspense>
     </AppLayout>
   );
 }

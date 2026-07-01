@@ -7,6 +7,7 @@ import { TemplateFileType, TemplateStatus } from "@prisma/client";
 import { uploadFile } from "@/lib/storage";
 import { parseTemplate } from "@/lib/template/template-parser";
 import { mapTemplateSections } from "@/lib/template/template-mapper";
+import { checkQuota } from "@/lib/quotas";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -34,6 +35,11 @@ export async function POST(request: NextRequest) {
 
   if (!file) {
     return NextResponse.json({ error: "파일이 없습니다" }, { status: 400 });
+  }
+
+  const quota = await checkQuota(session.user.id, "template");
+  if (!quota.allowed) {
+    return NextResponse.json({ error: quota.message }, { status: 429 });
   }
 
   const allowedTypes = [

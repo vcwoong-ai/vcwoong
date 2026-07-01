@@ -11,6 +11,11 @@ interface UsageData {
     reports: number;
   };
   byAgent: Array<{ agentType: string; tokens: number; calls: number }>;
+  quota?: {
+    reports: { used: number; limit: number };
+    templates: { used: number; limit: number };
+    plan: string;
+  };
 }
 
 const AGENT_LABEL: Record<string, string> = {
@@ -63,6 +68,16 @@ export function UsageStats() {
           </div>
         ))}
       </div>
+
+      {data.quota && (
+        <div className="p-3 bg-blue-50 rounded-lg text-sm space-y-1">
+          <p className="font-medium text-blue-900">이번 달 사용 한도 (Free 플랜)</p>
+          <p className="text-blue-700 text-xs">
+            보고서 {data.quota.reports.used}/{data.quota.reports.limit}건 ·
+            양식 {data.quota.templates.used}/{data.quota.templates.limit}건
+          </p>
+        </div>
+      )}
 
       {data.byAgent.length > 0 && (
         <div className="space-y-2">

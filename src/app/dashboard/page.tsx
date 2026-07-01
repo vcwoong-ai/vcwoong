@@ -17,6 +17,7 @@ import {
 import Link from "next/link";
 import { DealStage, ReportStatus, DealSector } from "@prisma/client";
 import { DashboardCharts } from "./dashboard-charts";
+import { DashboardQuickActions } from "@/components/dashboard/quick-actions";
 
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
@@ -134,6 +135,8 @@ export default async function DashboardPage() {
             <p className="text-gray-500 mt-1">오늘도 좋은 투자 딜을 발굴하세요.</p>
           </div>
         </div>
+
+        <DashboardQuickActions />
 
         {/* 통계 카드 */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">

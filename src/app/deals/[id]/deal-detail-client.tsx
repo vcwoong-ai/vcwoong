@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -147,6 +147,7 @@ export function DealDetailClient({
   demoMode?: boolean;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [generating, setGenerating] = useState(false);
   const [progress, setProgress] = useState<GenerationProgress | null>(null);
   const [uploadKey, setUploadKey] = useState(0);
@@ -169,6 +170,9 @@ export function DealDetailClient({
 
   useEffect(() => {
     loadTemplates();
+    if (searchParams.get("wizard") === "1") {
+      setWizardOpen(true);
+    }
     return () => {
       eventSourceRef.current?.close();
     };

@@ -50,7 +50,7 @@ const SECTOR_OPTIONS = [
   { value: DealSector.GENERAL,       label: "📁 일반"             },
 ];
 
-export function CreateDealDialog() {
+export function CreateDealDialog({ trigger }: { trigger?: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -101,9 +101,11 @@ export function CreateDealDialog() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button>
-          <Plus className="w-4 h-4 mr-2" />새 딜 등록
-        </Button>
+        {trigger ?? (
+          <Button>
+            <Plus className="w-4 h-4 mr-2" />새 딜 등록
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent className="sm:max-w-[520px]">
         <DialogHeader>

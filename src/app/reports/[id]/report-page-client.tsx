@@ -131,6 +131,7 @@ export function ReportPageClient({ report }: { report: Report }) {
   const [isExporting, setIsExporting] = useState(false);
   const [isFinalizing, setIsFinalizing] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const [pageStatus, setPageStatus] = useState(report.status);
 
@@ -150,6 +151,22 @@ export function ReportPageClient({ report }: { report: Report }) {
       setStartError(error instanceof Error ? error.message : "오류가 발생했습니다");
     } finally {
       setIsStarting(false);
+    }
+  };
+
+  const handleRegenerate = async () => {
+    if (!confirm("기존 섹션 내용이 덮어씌워집니다. 재생성하시겠습니까?")) return;
+    setIsRegenerating(true);
+    try {
+      const response = await fetch(`/api/reports/${report.id}/run`, { method: "POST" });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error ?? "재생성 실패");
+      }
+      setPageStatus("GENERATING");
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "재생성 중 오류가 발생했습니다");
+      setIsRegenerating(false);
     }
   };
 
@@ -277,6 +294,8 @@ export function ReportPageClient({ report }: { report: Report }) {
         reportStatus={pageStatus}
         onFinalize={handleFinalize}
         isFinalizing={isFinalizing}
+        onRegenerate={handleRegenerate}
+        isRegenerating={isRegenerating}
       />
     </div>
   );

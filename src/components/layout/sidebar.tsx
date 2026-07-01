@@ -12,6 +12,7 @@ import {
   ChevronRight,
   Zap,
   LayoutTemplate,
+  Sparkles,
 } from "lucide-react";
 
 const navItems = [
@@ -29,6 +30,11 @@ const navItems = [
     label: "보고서",
     href: "/reports",
     icon: FileText,
+  },
+  {
+    label: "보고서 생성",
+    href: "/reports/new",
+    icon: Sparkles,
   },
   {
     label: "양식 관리",

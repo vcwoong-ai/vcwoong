@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { AgentType, ReportStatus } from "@prisma/client";
 import { inferAgentType } from "@/agents";
 import { generateSectionsAsync } from "@/lib/report-generation";
+import { checkQuota } from "@/lib/quotas";
 
 const createReportSchema = z.object({
   agentType: z.nativeEnum(AgentType).optional(),
@@ -59,6 +60,11 @@ export async function POST(
   });
   if (!deal) {
     return NextResponse.json({ error: "딜을 찾을 수 없습니다" }, { status: 404 });
+  }
+
+  const quota = await checkQuota(session.user.id, "report");
+  if (!quota.allowed) {
+    return NextResponse.json({ error: quota.message }, { status: 429 });
   }
 
   try {
