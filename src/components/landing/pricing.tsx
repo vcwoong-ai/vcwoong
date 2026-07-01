@@ -43,10 +43,12 @@ const PLANS = [
 
 export function Pricing() {
   return (
-    <section className="py-20 px-6 bg-gray-50">
+    <section id="pricing" className="py-20 px-6 bg-gray-50">
       <div className="max-w-5xl mx-auto">
         <h2 className="text-3xl font-bold text-center mb-3">투명한 가격</h2>
-        <p className="text-center text-gray-500 mb-12">모든 플랜 첫 보고서 1건 무료</p>
+        <p className="text-center text-gray-500 mb-12">
+          모든 플랜 첫 보고서 1건 무료 · 연간 결제 시 20% 할인
+        </p>
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {PLANS.map((plan) => (
             <div
@@ -91,11 +93,17 @@ export function Pricing() {
                     : "bg-blue-600 text-white hover:bg-blue-700"
                 )}
               >
-                <Link href="/register">시작하기</Link>
+                <Link href="/register">무료로 시작하기</Link>
               </Button>
             </div>
           ))}
         </div>
+        <p className="text-center text-xs text-gray-400 mt-8">
+          엔터프라이즈 · 커스텀 양식 도입 문의:{" "}
+          <a href="mailto:contact@dealsync.ai" className="underline hover:text-gray-600">
+            contact@dealsync.ai
+          </a>
+        </p>
       </div>
     </section>
   );

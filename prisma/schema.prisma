@@ -66,10 +66,11 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  accounts Account[]
-  sessions Session[]
-  team     Team?     @relation(fields: [teamId], references: [id])
-  deals    Deal[]
+  accounts  Account[]
+  sessions  Session[]
+  team      Team?      @relation(fields: [teamId], references: [id])
+  deals     Deal[]
+  templates Template[]
 }
 
 model Team {
@@ -132,6 +133,18 @@ model Report {
 
   deal     Deal            @relation(fields: [dealId], references: [id], onDelete: Cascade)
   sections ReportSection[]
+}
+
+model Template {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  analysis  Json?
+  mappings  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model ReportSection {

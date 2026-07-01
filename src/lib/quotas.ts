@@ -24,11 +24,12 @@ export async function checkQuota(
   const limits = PLAN_LIMITS[plan];
   const limit = action === "report" ? limits.reports : limits.templates;
 
-  // TODO: Supabase에서 현재 월 사용량 조회
-  // const { count } = await prisma.report.count({
-  //   where: { deal: { userId }, createdAt: { gte: startOfMonth } }
-  // });
-  const used = 0; // placeholder
+  const { prisma } = await import("@/lib/prisma");
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const used = await prisma.report.count({
+    where: { deal: { userId }, createdAt: { gte: startOfMonth } },
+  });
 
   return {
     allowed: used < limit,

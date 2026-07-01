@@ -10,6 +10,15 @@ import { StepGenerate } from "@/components/reports/wizard/step-generate";
 
 const WIZARD_STEPS = ["자료 업로드", "섹터 선택", "보고서 생성"];
 
+const AGENT_TO_SECTOR: Record<string, string> = {
+  bio: "BIO",
+  "it-saas": "IT",
+  "ai-deeptech": "AI",
+  manufacturing: "MANUFACTURING",
+  content: "CONTENT",
+  fintech: "FINTECH",
+};
+
 function NewReportContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -30,7 +39,7 @@ function NewReportContent() {
         body: JSON.stringify({
           name: companyName,
           companyName,
-          sector: "BIO",
+          sector: AGENT_TO_SECTOR[selectedAgents[0]] ?? "BIO",
         }),
       });
       const data = await res.json();

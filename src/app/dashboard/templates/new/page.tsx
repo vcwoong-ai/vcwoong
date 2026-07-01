@@ -54,13 +54,36 @@ export default function NewTemplatePage() {
     maxFiles: 1,
   });
 
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState("");
+
   const handleSave = async () => {
     if (!templateName.trim()) {
-      alert("양식 이름을 입력해주세요");
+      setSaveMsg("양식 이름을 입력해주세요");
       return;
     }
-    // TODO: Supabase에 저장
-    alert(`"${templateName}" 양식이 저장되었습니다.`);
+    setSaving(true);
+    setSaveMsg("");
+    try {
+      const res = await fetch("/api/templates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: templateName,
+          analysis,
+          mappings,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json() as { error?: string };
+        throw new Error(err.error ?? "저장 실패");
+      }
+      setSaveMsg(`"${templateName}" 양식이 저장되었습니다.`);
+    } catch (e) {
+      setSaveMsg((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -192,9 +215,14 @@ export default function NewTemplatePage() {
                 onChange={(e) => setTemplateName(e.target.value)}
               />
             </div>
+            {saveMsg && (
+              <p className={`text-sm ${saveMsg.includes("저장되었") ? "text-green-600" : "text-red-500"}`}>
+                {saveMsg}
+              </p>
+            )}
             <div className="flex justify-between">
               <Button variant="outline" onClick={() => setStep(2)}>이전</Button>
-              <Button onClick={handleSave}>저장하기</Button>
+              <Button onClick={handleSave} disabled={saving}>{saving ? "저장 중..." : "저장하기"}</Button>
             </div>
           </CardContent>
         </Card>
