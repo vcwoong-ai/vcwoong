@@ -12,6 +12,8 @@ import {
   Loader2,
   CheckCheck,
   BadgeCheck,
+  Copy,
+  BarChart2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SECTION_META, getKoreanVisualWidth } from "@/types";
@@ -54,8 +56,20 @@ export function ReportEditor({
   const [saving, setSaving] = useState<string | null>(null);
   const [approvingAll, setApprovingAll] = useState(false);
   const [localSections, setLocalSections] = useState<Section[]>(sections);
+  const [copied, setCopied] = useState(false);
 
   const sortedSections = [...localSections].sort((a, b) => a.order - b.order);
+
+  const totalChars = sortedSections.reduce((s, sec) => s + getKoreanVisualWidth(sec.content), 0);
+
+  const copyAll = async () => {
+    const text = sortedSections
+      .map((s) => `## ${s.title}\n\n${s.content}`)
+      .join("\n\n---\n\n");
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   const startEdit = (section: Section) => {
     setEditingSectionId(section.id);
@@ -154,10 +168,14 @@ export function ReportEditor({
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold text-gray-900">{dealName}</h2>
-          <p className="text-sm text-gray-500">
-            승인 완료: {approvedCount}/{totalCount} 섹션
+          <p className="text-sm text-gray-500 flex items-center gap-3">
+            <span>승인: {approvedCount}/{totalCount} 섹션</span>
+            <span className="flex items-center gap-1">
+              <BarChart2 className="w-3 h-3" />
+              {totalChars.toLocaleString()}자
+            </span>
             {isFinal && (
-              <span className="ml-2 inline-flex items-center gap-1 text-green-600 font-medium">
+              <span className="inline-flex items-center gap-1 text-green-600 font-medium">
                 <BadgeCheck className="w-3.5 h-3.5" />
                 완성본
               </span>
@@ -165,6 +183,10 @@ export function ReportEditor({
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={copyAll}>
+            {copied ? <CheckCircle className="w-4 h-4 mr-1.5 text-green-500" /> : <Copy className="w-4 h-4 mr-1.5" />}
+            {copied ? "복사됨" : "전체 복사"}
+          </Button>
           {!isFinal && !allApproved && (
             <Button
               variant="outline"
