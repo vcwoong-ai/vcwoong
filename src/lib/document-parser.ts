@@ -2,7 +2,7 @@ import { parsePPTX } from "@/lib/parsers/pptx";
 
 /**
  * Document parsing utilities for DOCX, PDF, XLSX, and PPTX files.
- * Extracts plain text for AI processing.
+ * Extracts structured text for AI processing.
  */
 
 export async function parseDocument(
@@ -13,8 +13,7 @@ export async function parseDocument(
   const ext = filename.split(".").pop()?.toLowerCase();
 
   if (
-    mimeType ===
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+    mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
     ext === "docx"
   ) {
     return parseDOCX(buffer);
@@ -25,8 +24,7 @@ export async function parseDocument(
   }
 
   if (
-    mimeType ===
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+    mimeType === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
     mimeType === "application/vnd.ms-excel" ||
     ext === "xlsx" ||
     ext === "xls"
@@ -55,14 +53,78 @@ async function parseDOCX(
   buffer: Buffer
 ): Promise<{ text: string; metadata: Record<string, unknown> }> {
   const mammoth = await import("mammoth");
-  const result = await mammoth.extractRawText({ buffer });
+
+  // Extract HTML to preserve table structure, then convert to readable text
+  const htmlResult = await mammoth.convertToHtml({ buffer });
+  const rawResult = await mammoth.extractRawText({ buffer });
+
+  // Convert HTML tables to markdown-style tables for better AI comprehension
+  const textWithTables = htmlToStructuredText(htmlResult.value);
+
+  // Use structured text if tables found, otherwise fall back to raw text
+  const hasTable = htmlResult.value.includes("<table");
+  const finalText = hasTable ? textWithTables : rawResult.value;
+
   return {
-    text: result.value,
+    text: finalText,
     metadata: {
       type: "docx",
-      messages: result.messages,
+      hasTables: hasTable,
+      messages: rawResult.messages,
     },
   };
+}
+
+/**
+ * Converts HTML (from mammoth) to plain text, preserving table structure
+ * as markdown-style pipe tables for AI readability.
+ */
+function htmlToStructuredText(html: string): string {
+  // Replace table rows with pipe-delimited rows
+  const text = html
+    // Table headers
+    .replace(/<thead[^>]*>([\s\S]*?)<\/thead>/gi, (_, content) => {
+      const row = extractCells(content, "th");
+      return row ? `| ${row.join(" | ")} |\n| ${row.map(() => "---").join(" | ")} |\n` : "";
+    })
+    // Table body rows
+    .replace(/<tr[^>]*>([\s\S]*?)<\/tr>/gi, (_, content) => {
+      const cells = extractCells(content, "td");
+      return cells ? `| ${cells.join(" | ")} |\n` : "";
+    })
+    // Headings
+    .replace(/<h1[^>]*>([\s\S]*?)<\/h1>/gi, "\n# $1\n")
+    .replace(/<h2[^>]*>([\s\S]*?)<\/h2>/gi, "\n## $1\n")
+    .replace(/<h3[^>]*>([\s\S]*?)<\/h3>/gi, "\n### $1\n")
+    // Lists
+    .replace(/<li[^>]*>([\s\S]*?)<\/li>/gi, "- $1\n")
+    // Paragraphs and line breaks
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n")
+    .replace(/<p[^>]*>/gi, "")
+    // Strip remaining tags
+    .replace(/<[^>]+>/g, "")
+    // Decode HTML entities
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+    // Clean up excess whitespace
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  return text;
+}
+
+function extractCells(html: string, tag: "td" | "th"): string[] | null {
+  const regex = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, "gi");
+  const cells: string[] = [];
+  let match;
+  while ((match = regex.exec(html)) !== null) {
+    cells.push(match[1].replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").trim());
+  }
+  return cells.length > 0 ? cells : null;
 }
 
 async function parsePDF(
@@ -88,21 +150,37 @@ async function parseXLSX(
   const xlsx = await import("xlsx");
   const workbook = xlsx.read(buffer, { type: "buffer" });
   const texts: string[] = [];
-  const sheetNames = workbook.SheetNames;
 
-  for (const sheetName of sheetNames) {
+  for (const sheetName of workbook.SheetNames) {
     const sheet = workbook.Sheets[sheetName];
-    const csv = xlsx.utils.sheet_to_csv(sheet);
-    if (csv.trim()) {
-      texts.push(`[시트: ${sheetName}]\n${csv}`);
-    }
+    const rows: string[][] = xlsx.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+
+    if (rows.length === 0) continue;
+
+    // Build markdown table for better AI comprehension
+    const nonEmptyRows = rows.filter((row) => row.some((cell) => String(cell).trim() !== ""));
+    if (nonEmptyRows.length === 0) continue;
+
+    const colWidths = nonEmptyRows[0].map((_, ci) =>
+      Math.max(...nonEmptyRows.map((r) => String(r[ci] ?? "").length), 3)
+    );
+
+    const formatRow = (row: string[]) =>
+      "| " + row.map((cell, i) => String(cell ?? "").padEnd(colWidths[i])).join(" | ") + " |";
+
+    const separator = "| " + colWidths.map((w) => "-".repeat(w)).join(" | ") + " |";
+
+    const header = formatRow(nonEmptyRows[0].map(String));
+    const dataRows = nonEmptyRows.slice(1).map((r) => formatRow(r.map(String)));
+
+    texts.push(`## 시트: ${sheetName}\n\n${header}\n${separator}\n${dataRows.join("\n")}`);
   }
 
   return {
     text: texts.join("\n\n"),
     metadata: {
       type: "xlsx",
-      sheets: sheetNames,
+      sheets: workbook.SheetNames,
     },
   };
 }
