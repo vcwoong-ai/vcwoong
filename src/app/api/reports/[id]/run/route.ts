@@ -140,6 +140,17 @@ export async function POST(
     return NextResponse.json({ error: "이미 생성 중입니다" }, { status: 409 });
   }
 
+  // Check documents before marking as generating
+  const documents = report.deal.documents;
+  const rawText = documents
+    .map((d: { parsedText: string | null }) => d.parsedText ?? "")
+    .filter(Boolean)
+    .join("\n\n---\n\n");
+
+  if (!rawText && documents.length === 0) {
+    return NextResponse.json({ error: "분석할 문서가 없습니다. 먼저 파일을 업로드해주세요." }, { status: 400 });
+  }
+
   // Mark as generating
   await prisma.report.update({
     where: { id: params.id },
@@ -147,21 +158,6 @@ export async function POST(
   });
 
   try {
-    const documents = report.deal.documents;
-
-    // Combine all parsed text from uploaded documents
-    const rawText = documents
-      .map((d: { parsedText: string | null }) => d.parsedText ?? "")
-      .filter(Boolean)
-      .join("\n\n---\n\n");
-
-    if (!rawText && documents.length === 0) {
-      await prisma.report.update({
-        where: { id: params.id },
-        data: { status: "DRAFT" },
-      });
-      return NextResponse.json({ error: "분석할 문서가 없습니다. 먼저 파일을 업로드해주세요." }, { status: 400 });
-    }
 
     // Use deal description as fallback if no documents
     const textForAnalysis = rawText || `회사명: ${report.deal.companyName}\n설명: ${report.deal.description ?? ""}`;

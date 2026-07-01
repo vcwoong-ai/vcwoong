@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { ReportEditor } from "@/components/reports/report-editor";
 import { Button } from "@/components/ui/button";
@@ -76,6 +76,13 @@ export function ReportPageClient({ report }: { report: Report }) {
   const [isExporting, setIsExporting] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isFinalizing, setIsFinalizing] = useState(false);
+
+  // Auto-refresh while generating
+  useEffect(() => {
+    if (report.status !== "GENERATING") return;
+    const interval = setInterval(() => window.location.reload(), 5000);
+    return () => clearInterval(interval);
+  }, [report.status]);
 
   const handleFinalize = async () => {
     setIsFinalizing(true);
@@ -165,7 +172,7 @@ export function ReportPageClient({ report }: { report: Report }) {
               {report.deal.companyName}의 투자심의보고서를 생성하는 중입니다.
             </p>
             <p className="text-sm text-gray-400 mt-1">
-              10개 섹션을 순차적으로 작성합니다. 잠시 기다려주세요.
+              10개 섹션을 순차적으로 작성합니다. 5초마다 자동으로 확인합니다.
             </p>
           </div>
           <Button
@@ -176,7 +183,7 @@ export function ReportPageClient({ report }: { report: Report }) {
             <RefreshCw
               className={`w-4 h-4 mr-2 ${isRefreshing ? "animate-spin" : ""}`}
             />
-            새로고침
+            지금 확인
           </Button>
         </div>
       </div>

@@ -278,7 +278,7 @@ export function StepGenerate({
       }
 
       if (!documentContext.trim()) {
-        documentContext = `회사명: ${companyName}\n분석 요청`;
+        throw new Error("분석할 문서가 없습니다. 이전 단계에서 파일을 업로드해주세요.");
       }
       setStepStatus(1, "done");
 

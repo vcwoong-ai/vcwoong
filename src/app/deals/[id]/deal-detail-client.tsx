@@ -102,15 +102,18 @@ export function DealDetailClient({
         throw new Error(err.error ?? "보고서 생성 실패");
       }
       const { data: created } = await response.json();
-      if (created?.id) {
-        for (let i = 0; i < 40; i++) {
-          await new Promise((r) => setTimeout(r, 1500));
-          const res = await fetch(`/api/deals/${deal.id}/reports`);
-          if (!res.ok) continue;
-          const { data: reports } = await res.json();
-          const current = reports?.find((rep: { id: string }) => rep.id === created.id);
-          if (current && current.status !== "GENERATING") break;
-        }
+      if (!created?.id) {
+        router.refresh();
+        return;
+      }
+      for (let i = 0; i < 40; i++) {
+        await new Promise((r) => setTimeout(r, 1500));
+        const res = await fetch(`/api/deals/${deal.id}/reports`);
+        if (!res.ok) continue;
+        const { data: reports } = await res.json();
+        const current = reports?.find((rep: { id: string }) => rep.id === created.id);
+        if (current && current.status !== "GENERATING") break;
+        if (i === 39) throw new Error("보고서 생성이 오래 걸리고 있습니다. 잠시 후 새로고침해주세요.");
       }
       router.refresh();
     } catch (error) {
