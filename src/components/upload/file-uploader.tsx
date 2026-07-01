@@ -13,6 +13,8 @@ interface UploadedFile {
   progress: number;
   error?: string;
   documentId?: string;
+  parsedChars?: number;
+  parsedPreview?: string;
 }
 
 interface FileUploaderProps {
@@ -85,6 +87,8 @@ export function FileUploader({ dealId, onUploadComplete }: FileUploaderProps) {
                 status: "done" as const,
                 progress: 100,
                 documentId: result.data.id,
+                parsedChars: result.data.parsedText?.length ?? 0,
+                parsedPreview: result.data.parsedText?.slice(0, 120),
               }
             : f
         )
@@ -168,8 +172,8 @@ export function FileUploader({ dealId, onUploadComplete }: FileUploaderProps) {
       {files.length > 0 && (
         <div className="space-y-2">
           {files.map((uf, idx) => (
+            <div key={idx}>
             <div
-              key={idx}
               className="flex items-center gap-3 p-3 bg-white border rounded-lg"
             >
               <div className="flex-shrink-0">
@@ -194,7 +198,7 @@ export function FileUploader({ dealId, onUploadComplete }: FileUploaderProps) {
                   </span>
                   {uf.status === "done" && (
                     <span className="text-xs text-green-600">
-                      업로드 완료 · 텍스트 추출됨
+                      ✓ {uf.parsedChars ? `${uf.parsedChars.toLocaleString()}자 추출` : "텍스트 추출 완료"}
                     </span>
                   )}
                   {uf.status === "error" && (
@@ -216,6 +220,13 @@ export function FileUploader({ dealId, onUploadComplete }: FileUploaderProps) {
                   <X className="w-3 h-3" />
                 </Button>
               )}
+            </div>
+            {/* 파싱 텍스트 미리보기 */}
+            {uf.status === "done" && uf.parsedPreview && (
+              <div className="mt-1 ml-8 text-xs text-gray-400 bg-gray-50 rounded px-2 py-1 line-clamp-2">
+                {uf.parsedPreview}...
+              </div>
+            )}
             </div>
           ))}
         </div>

@@ -116,12 +116,31 @@ export default function LoginPage() {
               </Button>
             </form>
 
+            {/* 데모 계정 빠른 로그인 */}
+            <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+              <p className="text-xs text-amber-700 font-medium mb-2">데모 계정으로 체험</p>
+              <button
+                type="button"
+                onClick={async () => {
+                  setLoading(true);
+                  const result = await signIn("credentials", {
+                    email: "demo@dealsync.kr",
+                    password: "Demo1234!",
+                    redirect: false,
+                  });
+                  if (!result?.error) { router.push("/dashboard"); router.refresh(); }
+                  else setLoading(false);
+                }}
+                className="w-full text-xs text-amber-800 bg-amber-100 hover:bg-amber-200 rounded px-3 py-2 transition-colors"
+                disabled={loading}
+              >
+                demo@dealsync.kr / Demo1234! 로 로그인
+              </button>
+            </div>
+
             <div className="mt-4 text-center text-sm text-gray-500">
               계정이 없으신가요?{" "}
-              <Link
-                href="/register"
-                className="text-blue-600 hover:underline font-medium"
-              >
+              <Link href="/register" className="text-blue-600 hover:underline font-medium">
                 회원가입
               </Link>
             </div>
@@ -129,7 +148,7 @@ export default function LoginPage() {
         </Card>
 
         <p className="text-center text-xs text-blue-900 mt-6">
-          © 2025 DealSync · 투자심의 보고서 자동화
+          © 2026 DealSync · 투자심의 보고서 자동화
         </p>
       </div>
     </div>
