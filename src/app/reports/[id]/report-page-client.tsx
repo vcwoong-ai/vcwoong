@@ -1,11 +1,40 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { ReportEditor } from "@/components/reports/report-editor";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Loader2, RefreshCw } from "lucide-react";
+import { ArrowLeft, Loader2, RefreshCw, Sparkles } from "lucide-react";
+
+function RunReportButton({ reportId }: { reportId: string }) {
+  const [isRunning, setIsRunning] = useState(false);
+
+  const handleRun = async () => {
+    setIsRunning(true);
+    try {
+      const response = await fetch(`/api/reports/${reportId}/run`, { method: "POST" });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error ?? "분석 시작 실패");
+      }
+      window.location.reload();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "분석 시작 중 오류가 발생했습니다");
+      setIsRunning(false);
+    }
+  };
+
+  return (
+    <Button onClick={handleRun} disabled={isRunning} size="lg" className="gap-2">
+      {isRunning ? (
+        <><Loader2 className="w-5 h-5 animate-spin" /> AI 분석 중...</>
+      ) : (
+        <><Sparkles className="w-5 h-5" /> AI 보고서 생성 시작</>
+      )}
+    </Button>
+  );
+}
 
 interface ReportSection {
   id: string;
@@ -47,6 +76,13 @@ export function ReportPageClient({ report }: { report: Report }) {
   const [isExporting, setIsExporting] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isFinalizing, setIsFinalizing] = useState(false);
+
+  // Auto-refresh while generating
+  useEffect(() => {
+    if (report.status !== "GENERATING") return;
+    const interval = setInterval(() => window.location.reload(), 5000);
+    return () => clearInterval(interval);
+  }, [report.status]);
 
   const handleFinalize = async () => {
     setIsFinalizing(true);
@@ -136,7 +172,7 @@ export function ReportPageClient({ report }: { report: Report }) {
               {report.deal.companyName}의 투자심의보고서를 생성하는 중입니다.
             </p>
             <p className="text-sm text-gray-400 mt-1">
-              10개 섹션을 순차적으로 작성합니다. 잠시 기다려주세요.
+              10개 섹션을 순차적으로 작성합니다. 5초마다 자동으로 확인합니다.
             </p>
           </div>
           <Button
@@ -147,7 +183,7 @@ export function ReportPageClient({ report }: { report: Report }) {
             <RefreshCw
               className={`w-4 h-4 mr-2 ${isRefreshing ? "animate-spin" : ""}`}
             />
-            새로고침
+            지금 확인
           </Button>
         </div>
       </div>
@@ -165,16 +201,20 @@ export function ReportPageClient({ report }: { report: Report }) {
             </Button>
           </Link>
         </div>
-        <div className="text-center py-16 text-gray-500">
-          <p>보고서 생성 대기 중입니다.</p>
-          <Button
-            variant="outline"
-            className="mt-4"
-            onClick={handleRefresh}
-          >
-            <RefreshCw className="w-4 h-4 mr-2" />
-            새로고침
-          </Button>
+        <div className="flex flex-col items-center justify-center py-24 space-y-6">
+          <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center text-4xl">
+            🤖
+          </div>
+          <div className="text-center">
+            <h2 className="text-xl font-bold text-gray-900">AI 분석 준비 완료</h2>
+            <p className="text-gray-500 mt-2">
+              {report.deal.companyName}의 투자심사보고서를 AI로 자동 생성합니다.
+            </p>
+            <p className="text-sm text-gray-400 mt-1">
+              업로드된 문서를 분석하여 10개 섹션의 보고서를 작성합니다. (약 1~3분 소요)
+            </p>
+          </div>
+          <RunReportButton reportId={report.id} />
         </div>
       </div>
     );

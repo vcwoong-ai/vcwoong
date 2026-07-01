@@ -3,10 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { FileUploader } from "@/components/upload/file-uploader";
 import {
   FileText,
@@ -15,7 +12,7 @@ import {
   Loader2,
   ExternalLink,
   File,
-  Calendar,
+  AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AgentType, DealSector, DealStage } from "@prisma/client";
@@ -45,12 +42,7 @@ interface DealWithRelations {
     agentType: AgentType;
     status: string;
     createdAt: string;
-    sections: Array<{
-      id: string;
-      title: string;
-      order: number;
-      status: string;
-    }>;
+    sections: Array<{ id: string; title: string; order: number; status: string }>;
   }>;
 }
 
@@ -64,31 +56,23 @@ const SECTOR_AGENT_MAP: Record<DealSector, AgentType> = {
   CLIMATE: AgentType.GENERAL,
 };
 
-const AGENT_INFO = {
-  [AgentType.BIO]: {
-    name: "Dr. Cell",
-    desc: "바이오/헬스케어 특화 — rNPV 모델링 포함",
-    color: "text-purple-700 bg-purple-50 border-purple-200",
-  },
-  [AgentType.IT]: {
-    name: "IT Agent",
-    desc: "IT/SaaS 특화 — SaaS 지표 분석 포함",
-    color: "text-blue-700 bg-blue-50 border-blue-200",
-  },
-  [AgentType.GENERAL]: {
-    name: "General Agent",
-    desc: "범용 투자 분석 에이전트",
-    color: "text-gray-700 bg-gray-50 border-gray-200",
-  },
+const SECTOR_LABEL: Record<DealSector, string> = {
+  BIO: "바이오", IT: "IT", FINTECH: "핀테크", GENERAL: "일반",
+  CONSUMER: "소비재", DEEPTECH: "딥테크", CLIMATE: "기후",
 };
 
-const STATUS_LABEL: Record<string, string> = {
-  PENDING: "대기",
-  GENERATING: "생성 중",
-  DRAFT: "초안",
-  REVIEW: "검토 중",
-  FINAL: "최종",
-  EXPORTED: "내보내기",
+const STAGE_LABEL: Record<DealStage, string> = {
+  SCREENING: "스크리닝", DEEP_DIVE: "딥다이브", IC_PREP: "IC 준비",
+  IC_REVIEW: "IC 심의", CLOSED: "투자 완료", REJECTED: "거절",
+};
+
+const REPORT_STATUS: Record<string, { label: string; color: string }> = {
+  PENDING:   { label: "대기",    color: "text-gray-400" },
+  GENERATING:{ label: "생성 중", color: "text-amber-600" },
+  DRAFT:     { label: "초안",    color: "text-blue-600" },
+  REVIEW:    { label: "검토 중", color: "text-purple-600" },
+  FINAL:     { label: "최종",    color: "text-emerald-600" },
+  EXPORTED:  { label: "완료",    color: "text-emerald-600" },
 };
 
 export function DealDetailClient({
@@ -101,9 +85,9 @@ export function DealDetailClient({
   const router = useRouter();
   const [generating, setGenerating] = useState(false);
   const [uploadKey, setUploadKey] = useState(0);
+  const [activeTab, setActiveTab] = useState<"docs" | "reports">("docs");
 
   const recommendedAgent = SECTOR_AGENT_MAP[deal.sector] ?? AgentType.GENERAL;
-  const agentInfo = AGENT_INFO[recommendedAgent];
 
   const generateReport = async () => {
     setGenerating(true);
@@ -113,302 +97,202 @@ export function DealDetailClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ agentType: recommendedAgent }),
       });
-
       if (!response.ok) {
         const err = await response.json();
         throw new Error(err.error ?? "보고서 생성 실패");
       }
-
       const { data: created } = await response.json();
-      const reportId: string | undefined = created?.id;
-
-      // Generation runs asynchronously on the server. Poll until the report
-      // leaves the GENERATING state (DRAFT on success, PENDING on failure).
-      if (reportId) {
-        for (let i = 0; i < 40; i++) {
-          await new Promise((r) => setTimeout(r, 1500));
-          const res = await fetch(`/api/deals/${deal.id}/reports`);
-          if (!res.ok) continue;
-          const { data: reports } = await res.json();
-          const current = reports?.find(
-            (rep: { id: string }) => rep.id === reportId
-          );
-          if (current && current.status !== "GENERATING") break;
-        }
+      if (!created?.id) {
+        router.refresh();
+        return;
       }
-
+      for (let i = 0; i < 40; i++) {
+        await new Promise((r) => setTimeout(r, 1500));
+        const res = await fetch(`/api/deals/${deal.id}/reports`);
+        if (!res.ok) continue;
+        const { data: reports } = await res.json();
+        const current = reports?.find((rep: { id: string }) => rep.id === created.id);
+        if (current && current.status !== "GENERATING") break;
+        if (i === 39) throw new Error("보고서 생성이 오래 걸리고 있습니다. 잠시 후 새로고침해주세요.");
+      }
       router.refresh();
     } catch (error) {
-      alert(
-        error instanceof Error ? error.message : "보고서 생성 중 오류가 발생했습니다"
-      );
+      alert(error instanceof Error ? error.message : "보고서 생성 중 오류가 발생했습니다");
     } finally {
       setGenerating(false);
     }
   };
 
-  const formatFileSize = (bytes: number) => {
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)}KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
-  };
+  const formatSize = (bytes: number) =>
+    bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(0)}KB` : `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-3xl space-y-6">
       {demoMode && (
         <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          <Zap className="w-4 h-4 mt-0.5 flex-shrink-0" />
-          <span>
-            <strong>데모 모드</strong> — Anthropic API 키가 설정되지 않아 AI
-            보고서가 샘플 콘텐츠로 생성됩니다. 전체 흐름(생성·편집·내보내기)은
-            그대로 동작하며, <code>.env.local</code>에 실제 키를 입력하면 자동으로
-            실제 AI 생성으로 전환됩니다.
-          </span>
+          <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+          <span>데모 모드 — <code>.env.local</code>에 API 키 설정 시 실제 AI 생성으로 전환됩니다.</span>
         </div>
       )}
 
       {/* Deal header */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-2">
-            <Badge variant="outline">{deal.sector}</Badge>
-            <Badge variant="secondary">{deal.stage}</Badge>
+      <div className="bg-white border border-gray-100 rounded-xl p-6">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+                {SECTOR_LABEL[deal.sector]}
+              </span>
+              <span className="text-xs font-medium text-gray-500">
+                {STAGE_LABEL[deal.stage]}
+              </span>
+            </div>
+            <h1 className="text-xl font-bold text-gray-900">{deal.companyName}</h1>
+            {deal.description && (
+              <p className="text-sm text-gray-500 mt-1 leading-relaxed">{deal.description}</p>
+            )}
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">{deal.companyName}</h1>
-          <p className="text-gray-500">{deal.name}</p>
-          {deal.description && (
-            <p className="text-sm text-gray-600 mt-2 max-w-2xl">{deal.description}</p>
-          )}
+          <Button
+            onClick={generateReport}
+            disabled={generating || deal.documents.length === 0}
+            className="bg-blue-600 hover:bg-blue-700 flex-shrink-0"
+            size="sm"
+          >
+            {generating ? (
+              <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+            ) : (
+              <Zap className="w-3.5 h-3.5 mr-1.5" />
+            )}
+            {generating ? "생성 중..." : "AI 보고서 생성"}
+          </Button>
         </div>
-        <div className="flex gap-2">
-          {deal.documents.length > 0 && (
-            <Button
-              onClick={generateReport}
-              disabled={generating}
-              className="bg-blue-600 hover:bg-blue-700"
-            >
-              {generating ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <Zap className="w-4 h-4 mr-2" />
-              )}
-              {generating ? "AI 보고서 생성 중..." : "AI 보고서 생성"}
-            </Button>
-          )}
-        </div>
-      </div>
 
-      {/* Investment details */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        {[
-          { label: "투자 라운드", value: deal.investRound },
-          {
-            label: "투자 금액",
-            value: deal.investAmount
-              ? `${deal.investAmount.toLocaleString()}억원`
-              : null,
-          },
-          {
-            label: "Post 밸류에이션",
-            value: deal.valuation
-              ? `${deal.valuation.toLocaleString()}억원`
-              : null,
-          },
-          {
-            label: "추천 에이전트",
-            value: agentInfo.name,
-          },
-        ].map((item) =>
-          item.value ? (
-            <Card key={item.label}>
-              <CardContent className="pt-4 pb-4">
-                <p className="text-xs text-gray-400">{item.label}</p>
-                <p className="font-semibold text-gray-900 mt-0.5">
-                  {item.value}
-                </p>
-              </CardContent>
-            </Card>
-          ) : null
+        {/* Key metrics strip */}
+        {(deal.investRound || deal.investAmount || deal.valuation) && (
+          <div className="flex items-center gap-5 mt-4 pt-4 border-t border-gray-50">
+            {deal.investRound && (
+              <div>
+                <p className="text-[11px] text-gray-400 mb-0.5">라운드</p>
+                <p className="text-sm font-semibold text-gray-800">{deal.investRound}</p>
+              </div>
+            )}
+            {deal.investAmount && (
+              <div>
+                <p className="text-[11px] text-gray-400 mb-0.5">투자금액</p>
+                <p className="text-sm font-semibold text-gray-800">{deal.investAmount.toLocaleString()}억원</p>
+              </div>
+            )}
+            {deal.valuation && (
+              <div>
+                <p className="text-[11px] text-gray-400 mb-0.5">Post 밸류</p>
+                <p className="text-sm font-semibold text-gray-800">{deal.valuation.toLocaleString()}억원</p>
+              </div>
+            )}
+          </div>
         )}
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="documents">
-        <TabsList>
-          <TabsTrigger value="documents" className="flex items-center gap-1.5">
-            <Upload className="w-3.5 h-3.5" />
-            문서 ({deal.documents.length})
-          </TabsTrigger>
-          <TabsTrigger value="reports" className="flex items-center gap-1.5">
-            <FileText className="w-3.5 h-3.5" />
-            보고서 ({deal.reports.length})
-          </TabsTrigger>
-          <TabsTrigger value="agent" className="flex items-center gap-1.5">
-            <Zap className="w-3.5 h-3.5" />
-            AI 에이전트
-          </TabsTrigger>
-        </TabsList>
+      <div>
+        <div className="flex border-b border-gray-100 mb-4">
+          {[
+            { key: "docs" as const, label: "문서", icon: Upload, count: deal.documents.length },
+            { key: "reports" as const, label: "보고서", icon: FileText, count: deal.reports.length },
+          ].map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={cn(
+                "flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px",
+                activeTab === tab.key
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700"
+              )}
+            >
+              <tab.icon className="w-3.5 h-3.5" />
+              {tab.label}
+              <span className={cn(
+                "text-xs px-1.5 py-0.5 rounded-full",
+                activeTab === tab.key ? "bg-blue-50 text-blue-600" : "bg-gray-100 text-gray-500"
+              )}>
+                {tab.count}
+              </span>
+            </button>
+          ))}
+        </div>
 
-        {/* Documents tab */}
-        <TabsContent value="documents" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">문서 업로드</CardTitle>
-            </CardHeader>
-            <CardContent>
+        {activeTab === "docs" && (
+          <div className="space-y-4">
+            <div className="bg-white border border-gray-100 rounded-xl p-5">
+              <p className="text-sm font-medium text-gray-700 mb-3">파일 업로드</p>
               <FileUploader
                 key={uploadKey}
                 dealId={deal.id}
-                onUploadComplete={() => {
-                  setUploadKey((k) => k + 1);
-                  router.refresh();
-                }}
+                onUploadComplete={() => { setUploadKey((k) => k + 1); router.refresh(); }}
               />
-            </CardContent>
-          </Card>
+            </div>
 
-          {deal.documents.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">
-                  업로드된 문서 ({deal.documents.length})
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
+            {deal.documents.length > 0 && (
+              <div className="bg-white border border-gray-100 rounded-xl overflow-hidden">
+                <div className="divide-y divide-gray-50">
                   {deal.documents.map((doc) => (
-                    <div
-                      key={doc.id}
-                      className="flex items-center gap-3 p-3 rounded-lg border bg-gray-50"
-                    >
-                      <File className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                    <div key={doc.id} className="flex items-center gap-3 px-5 py-3">
+                      <File className="w-4 h-4 text-gray-300 flex-shrink-0" />
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-800 truncate">
-                          {doc.name}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {formatFileSize(doc.size)} ·{" "}
-                          {new Date(doc.createdAt).toLocaleDateString("ko-KR")}
-                          {doc.parsedText && (
-                            <span className="ml-2 text-green-600">
-                              ✓ 텍스트 추출 완료
-                            </span>
-                          )}
+                        <p className="text-sm text-gray-800 truncate">{doc.name}</p>
+                        <p className="text-xs text-gray-400">
+                          {formatSize(doc.size)} · {new Date(doc.createdAt).toLocaleDateString("ko-KR")}
+                          {doc.parsedText && <span className="ml-2 text-emerald-600">텍스트 추출됨</span>}
                         </p>
                       </div>
                     </div>
                   ))}
                 </div>
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
+              </div>
+            )}
+          </div>
+        )}
 
-        {/* Reports tab */}
-        <TabsContent value="reports" className="space-y-4">
-          {deal.reports.length === 0 ? (
-            <Card>
-              <CardContent className="py-12 text-center">
-                <FileText className="w-12 h-12 mx-auto text-gray-300 mb-3" />
-                <p className="text-gray-500">아직 생성된 보고서가 없습니다.</p>
-                <p className="text-sm text-gray-400 mt-1">
-                  문서를 업로드한 후 AI 보고서를 생성해보세요.
-                </p>
+        {activeTab === "reports" && (
+          <div className="space-y-3">
+            {deal.reports.length === 0 ? (
+              <div className="bg-white border border-gray-100 rounded-xl py-12 text-center">
+                <FileText className="w-10 h-10 mx-auto text-gray-200 mb-3" />
+                <p className="text-sm text-gray-500">생성된 보고서가 없습니다</p>
                 {deal.documents.length > 0 && (
-                  <Button
-                    className="mt-4 bg-blue-600 hover:bg-blue-700"
-                    onClick={generateReport}
-                    disabled={generating}
-                  >
-                    <Zap className="w-4 h-4 mr-2" />
+                  <Button size="sm" className="mt-4 bg-blue-600 hover:bg-blue-700" onClick={generateReport} disabled={generating}>
+                    <Zap className="w-3.5 h-3.5 mr-1.5" />
                     AI 보고서 생성
                   </Button>
                 )}
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-3">
-              {deal.reports.map((report) => (
-                <Card key={report.id}>
-                  <CardContent className="pt-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p className="font-medium text-gray-900">
-                            {report.title}
-                          </p>
-                          <span
-                            className={cn(
-                              "text-xs px-2 py-0.5 rounded font-medium",
-                              report.status === "FINAL" ||
-                                report.status === "EXPORTED"
-                                ? "bg-green-50 text-green-700"
-                                : report.status === "GENERATING"
-                                ? "bg-amber-50 text-amber-700"
-                                : "bg-gray-50 text-gray-600"
-                            )}
-                          >
-                            {STATUS_LABEL[report.status] ?? report.status}
-                          </span>
-                        </div>
-                        <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1">
-                          <Calendar className="w-3 h-3" />
-                          {new Date(report.createdAt).toLocaleDateString("ko-KR")}
-                          <span className="mx-1">·</span>
-                          {report.sections.length}개 섹션
-                        </p>
-                      </div>
+              </div>
+            ) : (
+              deal.reports.map((report) => {
+                const st = REPORT_STATUS[report.status] ?? { label: report.status, color: "text-gray-500" };
+                return (
+                  <div key={report.id} className="bg-white border border-gray-100 rounded-xl px-5 py-4 flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">{report.title}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        {new Date(report.createdAt).toLocaleDateString("ko-KR")} · {report.sections.length}개 섹션
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className={cn("text-xs font-medium", st.color)}>{st.label}</span>
                       <Link href={`/reports/${report.id}`}>
                         <Button variant="outline" size="sm">
                           <ExternalLink className="w-3 h-3 mr-1" />
-                          보고서 열기
+                          열기
                         </Button>
                       </Link>
                     </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-        </TabsContent>
-
-        {/* AI Agent tab */}
-        <TabsContent value="agent">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">AI 에이전트 정보</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {Object.entries(AGENT_INFO).map(([type, info]) => (
-                <div
-                  key={type}
-                  className={cn(
-                    "p-4 rounded-lg border",
-                    type === recommendedAgent
-                      ? info.color
-                      : "bg-gray-50 border-gray-200 text-gray-500"
-                  )}
-                >
-                  <div className="flex items-center gap-2">
-                    <Zap
-                      className={cn(
-                        "w-4 h-4",
-                        type === recommendedAgent
-                          ? ""
-                          : "opacity-40"
-                      )}
-                    />
-                    <span className="font-semibold">{info.name}</span>
-                    {type === recommendedAgent && (
-                      <Badge className="ml-auto text-xs">추천</Badge>
-                    )}
                   </div>
-                  <p className="text-sm mt-1 opacity-80">{info.desc}</p>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+                );
+              })
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
