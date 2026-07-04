@@ -1,4 +1,4 @@
-// DealSync - Investment Review Report Automation Platform
+// Vcwoong (VC우ng) - Investment Review Report Automation Platform
 // Prisma schema for PostgreSQL
 
 generator client {

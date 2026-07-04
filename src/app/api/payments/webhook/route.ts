@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { parseCustomerKeyUserId } from "@/lib/brand";
 import { cancelSubscription } from "@/lib/subscription";
 
 interface TossWebhookBody {
@@ -32,7 +33,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (eventType === "BILLING_DELETED" && data.customerKey) {
-      const userId = data.customerKey.replace(/^dealsync-/, "");
+      const userId = parseCustomerKeyUserId(data.customerKey);
       if (userId) {
         await cancelSubscription(userId);
       }

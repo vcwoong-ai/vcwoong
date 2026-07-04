@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Zap, AlertCircle } from "lucide-react";
+import { BRAND } from "@/lib/brand";
 import Link from "next/link";
 
 const registerSchema = z
@@ -86,8 +87,8 @@ export default function RegisterPage() {
           <div className="inline-flex items-center justify-center w-14 h-14 bg-blue-500 rounded-2xl mb-4">
             <Zap className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-white">DealSync</h1>
-          <p className="text-blue-300 mt-1 text-sm">AI 투자심의 자동화 플랫폼</p>
+          <h1 className="text-3xl font-bold text-white">{BRAND.name}</h1>
+          <p className="text-blue-300 mt-1 text-sm">{BRAND.nameKr} · AI 투자심의 자동화</p>
         </div>
 
         <Card className="border-0 shadow-2xl">

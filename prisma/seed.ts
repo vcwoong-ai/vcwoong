@@ -18,10 +18,10 @@ async function main() {
   // Create demo user
   const passwordHash = await bcrypt.hash("Demo1234!", 12);
   const user = await prisma.user.upsert({
-    where: { email: "demo@dealsync.kr" },
+    where: { email: "demo@vcwoong.kr" },
     update: {},
     create: {
-      email: "demo@dealsync.kr",
+      email: "demo@vcwoong.kr",
       name: "김심사",
       passwordHash,
       role: UserRole.ANALYST,
@@ -241,7 +241,7 @@ async function main() {
   );
   console.log("\nSeed completed successfully!");
   console.log("\nDemo credentials:");
-  console.log("  Email: demo@dealsync.kr");
+  console.log("  Email: demo@vcwoong.kr");
   console.log("  Password: Demo1234!");
 }
 

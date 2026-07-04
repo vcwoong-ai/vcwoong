@@ -1,13 +1,16 @@
-# DealSync — AI 투자심의 자동화 플랫폼
+# Vcwoong (VC우ng) — AI 투자심의 자동화 플랫폼
 
 한국 벤처캐피탈을 위한 AI 기반 투자심의보고서(IC Report) 자동화 SaaS
+
+> **브랜드:** Vcwoong (VC우ng) · GitHub `vcwoong-ai/vcwoong`  
+> **참고:** Claude Code의 별도 프로젝트 "DealSync"와 무관합니다.
 
 ## 링크
 
 | 항목 | 주소 |
 |------|------|
 | GitHub | https://github.com/vcwoong-ai/vcwoong |
-| Vercel (배포) | https://dealsync-vcwoong.vercel.app |
+| Vercel (배포) | https://dealsync-jade.vercel.app |
 | 현재 브랜치 | `main` |
 | 에이전트 가이드 | [`docs/phases/`](docs/phases/) |
 | 브랜치·PR 통합 현황 | [`docs/PROJECT.md`](docs/PROJECT.md) |
@@ -47,7 +50,7 @@ cp .env.local.example .env.local
 필수 환경 변수:
 
 ```env
-DATABASE_URL="postgresql://user:password@localhost:5432/dealsync"
+DATABASE_URL="postgresql://user:password@localhost:5432/vcwoong"
 NEXTAUTH_SECRET="your-secret-here"
 ANTHROPIC_API_KEY="sk-ant-..."
 ```
@@ -79,7 +82,7 @@ http://localhost:3000 에서 확인하세요.
 ### 데모 계정
 
 ```
-이메일: demo@dealsync.kr
+이메일: demo@vcwoong.kr
 비밀번호: Demo1234!
 ```
 
@@ -145,7 +148,7 @@ STORAGE_MODE="s3"
 AWS_ACCESS_KEY_ID="..."
 AWS_SECRET_ACCESS_KEY="..."
 AWS_REGION="ap-northeast-2"
-AWS_S3_BUCKET="dealsync-documents"
+AWS_S3_BUCKET="vcwoong-documents"
 ```
 
 ## 라이선스

@@ -1,5 +1,6 @@
 import { SubscriptionPlan } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { BRAND } from "@/lib/brand";
 
 const TOSS_API = "https://api.tosspayments.com/v1";
 
@@ -72,7 +73,7 @@ export async function chargeBilling(
       customerKey,
       amount,
       orderId,
-      orderName: `DealSync ${PLAN_NAMES[planKey] ?? planKey} 구독`,
+      orderName: `${BRAND.name} ${PLAN_NAMES[planKey] ?? planKey} 구독`,
     }),
   });
   const data = await res.json();

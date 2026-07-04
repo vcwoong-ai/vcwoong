@@ -20,6 +20,7 @@
 
 import OpenAI from "openai";
 import { generateMockContent } from "./mock-generator";
+import { BRAND } from "@/lib/brand";
 
 export const MODEL =
   process.env.AI_MODEL ?? "meta-llama/llama-3.3-70b-instruct:free";
@@ -53,7 +54,7 @@ function getClientForModel(model: string): OpenAI {
     apiKey: process.env.OPENROUTER_API_KEY ?? "",
     defaultHeaders: {
       "HTTP-Referer": process.env.NEXTAUTH_URL ?? "http://localhost:3000",
-      "X-Title": "DealSync",
+      "X-Title": BRAND.name,
     },
   });
 }

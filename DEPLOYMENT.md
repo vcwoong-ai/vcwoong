@@ -1,4 +1,4 @@
-# DealSync 배포 가이드
+# Vcwoong 배포 가이드
 
 ## 1. GitHub 레포 연결
 
@@ -13,11 +13,11 @@
 | `ANTHROPIC_API_KEY` | Anthropic API 키 | `sk-ant-...` |
 | `DATABASE_URL` | PostgreSQL 연결 URL | `postgresql://...` |
 | `NEXTAUTH_SECRET` | NextAuth 시크릿 (랜덤 32자) | `openssl rand -base64 32` |
-| `NEXTAUTH_URL` | 배포 URL | `https://dealsync.vercel.app` |
+| `NEXTAUTH_URL` | 배포 URL | `https://dealsync-jade.vercel.app` |
 | `AWS_ACCESS_KEY_ID` | S3 접근 키 | |
 | `AWS_SECRET_ACCESS_KEY` | S3 시크릿 키 | |
 | `AWS_REGION` | S3 리전 | `ap-northeast-2` |
-| `AWS_S3_BUCKET` | S3 버킷명 | `dealsync-uploads` |
+| `AWS_S3_BUCKET` | S3 버킷명 | `vcwoong-uploads` |
 | `OPENROUTER_API_KEY` | OpenRouter API 키 (선택) | |
 | `GEMINI_API_KEY` | Google Gemini API 키 (선택) | |
 | `NEXT_PUBLIC_TOSS_CLIENT_KEY` | Toss 클라이언트 키 | `test_ck_...` |

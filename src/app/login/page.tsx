@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Zap, AlertCircle } from "lucide-react";
 import Link from "next/link";
+import { BRAND } from "@/lib/brand";
 
 const loginSchema = z.object({
   email: z.string().email("유효한 이메일을 입력해주세요"),
@@ -58,8 +59,8 @@ export default function LoginPage() {
           <div className="inline-flex items-center justify-center w-14 h-14 bg-blue-500 rounded-2xl mb-4">
             <Zap className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-white">DealSync</h1>
-          <p className="text-blue-300 mt-1 text-sm">AI 투자심의 자동화 플랫폼</p>
+          <h1 className="text-3xl font-bold text-white">{BRAND.name}</h1>
+          <p className="text-blue-300 mt-1 text-sm">{BRAND.nameKr} · AI 투자심의 자동화</p>
         </div>
 
         <Card className="border-0 shadow-2xl">
@@ -124,8 +125,8 @@ export default function LoginPage() {
                 onClick={async () => {
                   setLoading(true);
                   const result = await signIn("credentials", {
-                    email: "demo@dealsync.kr",
-                    password: "Demo1234!",
+                    email: BRAND.demoEmail,
+                    password: BRAND.demoPassword,
                     redirect: false,
                   });
                   if (!result?.error) { router.push("/dashboard"); router.refresh(); }
@@ -134,7 +135,7 @@ export default function LoginPage() {
                 className="w-full text-xs text-amber-800 bg-amber-100 hover:bg-amber-200 rounded px-3 py-2 transition-colors"
                 disabled={loading}
               >
-                demo@dealsync.kr / Demo1234! 로 로그인
+                {BRAND.demoEmail} / {BRAND.demoPassword} 로 로그인
               </button>
             </div>
 
@@ -148,7 +149,7 @@ export default function LoginPage() {
         </Card>
 
         <p className="text-center text-xs text-blue-900 mt-6">
-          © 2026 DealSync · 투자심의 보고서 자동화
+          © 2026 {BRAND.name} · 투자심의 보고서 자동화
         </p>
       </div>
     </div>

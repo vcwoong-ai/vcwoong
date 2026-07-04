@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { BRAND } from "@/lib/brand";
 import {
   LayoutDashboard,
   Briefcase,
@@ -70,8 +71,8 @@ export function Sidebar() {
             <Zap className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h1 className="text-lg font-bold tracking-tight">DealSync</h1>
-            <p className="text-xs text-slate-400">AI 투자심의 자동화</p>
+            <h1 className="text-lg font-bold tracking-tight">{BRAND.name}</h1>
+            <p className="text-xs text-slate-400">{BRAND.nameKr} · {BRAND.tagline}</p>
           </div>
         </div>
       </div>

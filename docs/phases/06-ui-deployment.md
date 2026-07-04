@@ -4,7 +4,7 @@
 
 ---
 
-DealSync Phase 6를 진행합니다. MVP 완성 + Vercel 배포까지 진행합니다.
+Vcwoong Phase 6를 진행합니다. MVP 완성 + Vercel 배포까지 진행합니다.
 
 ## 작업 목표
 
@@ -162,7 +162,7 @@ DealSync Phase 6를 진행합니다. MVP 완성 + Vercel 배포까지 진행합�
 2. 📄 회사별 양식 1:1 재현 (디자인 그대로)
 3. 🔄 풀사이클 (소싱→심사→사후관리→LP리포팅)
 
-// 경쟁사 비교 표 (VCNote vs DealSync)
+// 경쟁사 비교 표 (VCNote vs Vcwoong)
 
 // 가격
 Solo: 9.9만원/월 (1개 섹터)
@@ -274,11 +274,11 @@ API 라우트 공통 에러 핸들러.
 `/app/layout.tsx` 업데이트:
 ```tsx
 export const metadata = {
-  title: 'DealSync - 섹터별 AI 심사역 SaaS',
+  title: 'Vcwoong - 섹터별 AI 심사역 SaaS',
   description: '바이오/IT/AI/제조/콘텐츠/핀테크 6개 섹터 전문 AI가 투자심사보고서를 자동 생성합니다.',
   keywords: ['VC', '벤처캐피털', 'AI 심사역', '투자심사보고서', '바이오 투자'],
   openGraph: {
-    title: 'DealSync',
+    title: 'Vcwoong',
     description: '섹터별 전문 AI 심사역 6명을 고용하세요',
     images: ['/og-image.png'],
   },
@@ -356,4 +356,4 @@ export const metadata = {
 - [ ] ROADMAP.md
 
 git commit + tag v0.1.0-mvp 만들어주세요.
-"🎉 DealSync MVP 완성! Vercel 배포 후 W님의 VC 네트워크에 베타 테스트를 요청하세요. 다음 단계는 Phase 7 (정부지원 사업계획서)입니다." 출력.
+"🎉 Vcwoong MVP 완성! Vercel 배포 후 W님의 VC 네트워크에 베타 테스트를 요청하세요. 다음 단계는 Phase 7 (정부지원 사업계획서)입니다." 출력.

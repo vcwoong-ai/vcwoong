@@ -8,6 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { BRAND } from "@/lib/brand";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
@@ -252,7 +253,7 @@ export function ReportWizard({ deal, open, onClose }: WizardProps) {
                 <div className="flex items-center gap-2">
                   <Brain className="w-4 h-4 text-gray-500" />
                   <div>
-                    <p className="text-sm font-medium">기본 DealSync 양식</p>
+                    <p className="text-sm font-medium">기본 {BRAND.name} 양식</p>
                     <p className="text-xs text-gray-500">표준 10섹션 IC 보고서</p>
                   </div>
                   {!selectedTemplateId && <Badge className="ml-auto">선택됨</Badge>}

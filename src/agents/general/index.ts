@@ -1,6 +1,6 @@
 import { generateText } from "@/lib/claude";
 
-const GENERAL_AGENT_PROMPT = `당신은 DealSync의 VC 투자심사 AI 에이전트입니다.
+const GENERAL_AGENT_PROMPT = `당신은 Vcwoong(VC우ng)의 VC 투자심사 AI 에이전트입니다.
 10년 이상 경력의 한국 VC 심사역 관점에서 투자심사보고서를 작성합니다.
 
 작성 원칙:

@@ -1,9 +1,11 @@
-# DealSync — Agent Context
+# Vcwoong — Agent Context
 
 ## 제품 개요
 
-- **이름:** DealSync (딜싱크)
+- **이름:** Vcwoong (VC우ng)
 - **한 줄:** 섹터별 전문 AI 심사역 6명을 고용하는 VC용 투자심사보고서 자동화 SaaS
+- **배포:** https://dealsync-jade.vercel.app
+- **주의:** Claude Code의 "DealSync"와 별개 프로젝트 — 브랜드명 혼용 금지
 
 ## 4축 차별화
 

@@ -3,6 +3,7 @@
  * Generates a structured investment committee report in DOCX format.
  */
 
+import { BRAND } from "@/lib/brand";
 import {
   Document,
   Packer,
@@ -242,7 +243,7 @@ export async function generateReportDOCX(
               new Paragraph({
                 children: [
                   new TextRun({
-                    text: `DealSync | ${deal.companyName} 투자심의보고서`,
+                    text: `${BRAND.name} | ${deal.companyName} 투자심의보고서`,
                     size: 18,
                     color: "999999",
                   }),

@@ -1,4 +1,4 @@
-# 🚀 DealSync 빠른 시작 가이드
+# 🚀 Vcwoong 빠른 시작 가이드
 
 ## 5분 안에 개발 시작하기
 
@@ -12,7 +12,7 @@ node --version
 npm install -g @anthropic-ai/claude-code
 
 # 작업 폴더 만들기
-mkdir ~/dealsync && cd ~/dealsync
+mkdir ~/vcwoong && cd ~/vcwoong
 ```
 
 ### 2. 계정 만들기 (각 5분)
@@ -39,7 +39,7 @@ SUPABASE_SERVICE_ROLE_KEY=eyJ...
 ### 4. Claude Code 시작
 
 ```bash
-cd ~/dealsync
+cd ~/vcwoong
 claude
 ```
 

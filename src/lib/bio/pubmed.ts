@@ -4,6 +4,8 @@
  * https://www.ncbi.nlm.nih.gov/books/NBK25499/
  */
 
+import { BRAND } from "@/lib/brand";
+
 const BASE = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils";
 const API_KEY = process.env.NCBI_API_KEY ?? "";
 
@@ -19,7 +21,7 @@ export interface PubMedArticle {
 
 async function fetchJson(url: string): Promise<unknown> {
   const res = await fetch(url, {
-    headers: { "User-Agent": "DealSync/1.0 (mailto:admin@dealsync.kr)" },
+    headers: { "User-Agent": `${BRAND.name}/1.0 (mailto:${BRAND.supportEmail})` },
     signal: AbortSignal.timeout(8000),
   });
   if (!res.ok) throw new Error(`PubMed HTTP ${res.status}`);
@@ -28,7 +30,7 @@ async function fetchJson(url: string): Promise<unknown> {
 
 async function fetchText(url: string): Promise<string> {
   const res = await fetch(url, {
-    headers: { "User-Agent": "DealSync/1.0" },
+    headers: { "User-Agent": `${BRAND.name}/1.0` },
     signal: AbortSignal.timeout(8000),
   });
   if (!res.ok) throw new Error(`PubMed HTTP ${res.status}`);

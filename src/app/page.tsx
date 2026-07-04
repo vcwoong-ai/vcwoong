@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
+import { BRAND } from "@/lib/brand";
 import {
   Zap,
   CheckCircle,
@@ -26,7 +27,7 @@ export default async function LandingPage() {
             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
               <Zap className="w-5 h-5 text-white" />
             </div>
-            <span className="text-lg font-bold text-gray-900">DealSync</span>
+            <span className="text-lg font-bold text-gray-900">{BRAND.name}</span>
           </div>
           <div className="hidden md:flex items-center gap-8 text-sm text-gray-600">
             <a href="#features" className="hover:text-gray-900 transition-colors">기능</a>
@@ -106,7 +107,7 @@ export default async function LandingPage() {
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-3xl font-bold text-gray-900">4가지 핵심 차별화</h2>
-            <p className="text-gray-500 mt-3">경쟁사가 제공하지 않는 DealSync만의 기능</p>
+            <p className="text-gray-500 mt-3">경쟁사가 제공하지 않는 {BRAND.name}만의 기능</p>
           </div>
 
           <div className="grid md:grid-cols-2 gap-8">
@@ -209,7 +210,7 @@ export default async function LandingPage() {
                       <div className="w-5 h-5 bg-blue-600 rounded flex items-center justify-center">
                         <Zap className="w-3 h-3 text-white" />
                       </div>
-                      <span className="font-bold text-blue-600">DealSync</span>
+                      <span className="font-bold text-blue-600">{BRAND.name}</span>
                     </div>
                   </th>
                   <th className="py-3 px-4 text-center text-gray-500 font-medium">VCNote</th>
@@ -361,7 +362,7 @@ export default async function LandingPage() {
             {[
               {
                 q: "AI가 생성한 보고서를 그대로 IC에 제출할 수 있나요?",
-                a: "아니요, 초안으로 활용하세요. DealSync는 심사역의 분석 시간을 80% 단축하는 도구입니다. AI가 생성한 초안을 심사역이 검토하고 편집한 후 최종 제출하는 방식을 권장합니다.",
+                a: `아니요, 초안으로 활용하세요. ${BRAND.name}는 심사역의 분석 시간을 80% 단축하는 도구입니다. AI가 생성한 초안을 심사역이 검토하고 편집한 후 최종 제출하는 방식을 권장합니다.`,
               },
               {
                 q: "기존에 사용하던 IC 보고서 양식을 그대로 쓸 수 있나요?",
@@ -418,7 +419,7 @@ export default async function LandingPage() {
                 <div className="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center">
                   <Zap className="w-4 h-4 text-white" />
                 </div>
-                <span className="font-bold text-white">DealSync</span>
+                <span className="font-bold text-white">{BRAND.name}</span>
               </div>
               <p className="text-sm">섹터별 전문 AI 심사역 6명을 고용하는<br />VC용 투자심사보고서 자동화 SaaS</p>
             </div>
@@ -441,7 +442,7 @@ export default async function LandingPage() {
             </div>
           </div>
           <div className="border-t border-slate-800 mt-8 pt-8 text-xs text-center">
-            © 2026 DealSync. All rights reserved.
+            © 2026 {BRAND.name}. All rights reserved.
           </div>
         </div>
       </footer>

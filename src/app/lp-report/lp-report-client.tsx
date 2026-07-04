@@ -75,7 +75,7 @@ export function LPReportClient({ deals }: { deals: DealSummary[] }) {
   const now = new Date();
   const defaultPeriod = `${now.getFullYear()} Q${Math.ceil((now.getMonth() + 1) / 3)}`;
 
-  const [fundName, setFundName] = useState("DealSync Growth Fund I");
+  const [fundName, setFundName] = useState("Vcwoong Growth Fund I");
   const [reportingPeriod, setReportingPeriod] = useState(defaultPeriod);
   const [additionalNarrative, setAdditionalNarrative] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);

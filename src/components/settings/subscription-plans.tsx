@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Check, CreditCard, Loader2 } from "lucide-react";
 import { PLANS } from "@/lib/subscription";
 import type { PlanKey } from "@/lib/quotas";
+import { brandCustomerKey } from "@/lib/brand";
 
 interface SubscriptionPlansProps {
   userId: string;
@@ -66,7 +67,7 @@ export function SubscriptionPlans({
       }
 
       const tossPayments = await loadTossPayments(clientKey);
-      const customerKey = `dealsync-${userId}`;
+      const customerKey = brandCustomerKey(userId);
 
       await tossPayments.requestBillingAuth("카드", {
         customerKey,
