@@ -2,56 +2,87 @@
 
 ## 1. GitHub 레포 연결
 
-1. [vercel.com](https://vercel.com) → New Project → GitHub 레포 선택
+1. [vercel.com](https://vercel.com) → New Project → GitHub 레포 `vcwoong-ai/vcwoong` 선택
 2. Framework: Next.js (자동 감지)
-3. Root Directory: `/` (기본값)
+3. Build Command: `npm run vercel-build` (`vercel.json`에 설정됨)
 
-## 2. 환경 변수 설정 (Vercel Dashboard → Settings → Environment Variables)
+## 2. Neon PostgreSQL (DB — Supabase 대신 권장)
 
-| 변수 | 설명 | 예시 |
-|------|------|------|
-| `ANTHROPIC_API_KEY` | Anthropic API 키 | `sk-ant-...` |
-| `DATABASE_URL` | PostgreSQL 연결 URL | `postgresql://...` |
-| `NEXTAUTH_SECRET` | NextAuth 시크릿 (랜덤 32자) | `openssl rand -base64 32` |
-| `NEXTAUTH_URL` | 배포 URL | `https://dealsync-jade.vercel.app` |
-| `AWS_ACCESS_KEY_ID` | S3 접근 키 | |
-| `AWS_SECRET_ACCESS_KEY` | S3 시크릿 키 | |
-| `AWS_REGION` | S3 리전 | `ap-northeast-2` |
-| `AWS_S3_BUCKET` | S3 버킷명 | `vcwoong-uploads` |
-| `OPENROUTER_API_KEY` | OpenRouter API 키 (선택) | |
-| `GEMINI_API_KEY` | Google Gemini API 키 (선택) | |
-| `NEXT_PUBLIC_TOSS_CLIENT_KEY` | Toss 클라이언트 키 | `test_ck_...` |
-| `TOSS_SECRET_KEY` | Toss 시크릿 키 | `test_sk_...` |
+1. [neon.tech](https://neon.tech) → Sign up (GitHub 로그인 가능)
+2. **New Project** → 이름: `vcwoong` → Region: **AWS ap-northeast-1 (Tokyo)** (Vercel icn1과 가까움)
+3. Dashboard → **Connect** 버튼 클릭
+4. 두 개의 connection string 복사:
 
-## 3. Supabase / PostgreSQL 설정
+| Neon에서 | Vercel 변수 | 용도 |
+|----------|-------------|------|
+| **Pooled connection** | `DATABASE_URL` | 앱 런타임 (Vercel) |
+| **Direct connection** | `DIRECT_URL` | `prisma db push` |
+
+> Connection string 끝에 `?sslmode=require` 가 없으면 붙여 주세요.
+
+5. 로컬에서 스키마 반영 (1회):
 
 ```bash
-# 로컬에서 마이그레이션 실행
-npx prisma migrate deploy
-npx prisma db push   # 초기 스키마 동기화 (구독 필드 포함)
-npx prisma generate
+cp .env.local.example .env.local
+# DATABASE_URL, DIRECT_URL 붙여넣기
+
+npx prisma db push
+npx prisma db seed   # demo@vcwoong.kr / Demo1234!
 ```
 
-## 4. 첫 배포
+## 3. Vercel 환경 변수
 
-```bash
-git push origin main
-# Vercel이 자동으로 빌드 + 배포
+Vercel → **dealsync-jade** → Settings → Environment Variables
+
+### 필수 (없으면 500)
+
+| 변수 | 값 |
+|------|-----|
+| `DATABASE_URL` | Neon **Pooled** connection string |
+| `DIRECT_URL` | Neon **Direct** connection string |
+| `NEXTAUTH_SECRET` | `openssl rand -base64 32` |
+| `NEXTAUTH_URL` | `https://dealsync-jade.vercel.app` |
+
+### AI (최소 1개 — 없으면 데모 모드)
+
+| 변수 | 어디서 |
+|------|--------|
+| `OPENROUTER_API_KEY` | [openrouter.ai](https://openrouter.ai) |
+| `GEMINI_API_KEY` | [Google AI Studio](https://aistudio.google.com) |
+
+### 파일 업로드 (Vercel 프로덕션 — 나중에)
+
+| 변수 | 값 |
+|------|-----|
+| `STORAGE_MODE` | `s3` |
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | IAM |
+| `AWS_REGION` | `ap-northeast-2` |
+| `AWS_S3_BUCKET` | `vcwoong-uploads` |
+
+### 결제 (나중에)
+
+| 변수 | 값 |
+|------|-----|
+| `NEXT_PUBLIC_TOSS_CLIENT_KEY` | `test_ck_...` |
+| `TOSS_SECRET_KEY` | `test_sk_...` |
+
+→ 저장 후 **Deployments → Redeploy**
+
+## 4. Toss 웹훅 (결제 사용 시)
+
+```
+https://dealsync-jade.vercel.app/api/payments/webhook
 ```
 
-## 5. 도메인 설정
+## 5. 배포 후 확인
 
-Vercel Dashboard → Domains → 커스텀 도메인 추가
+- [ ] https://dealsync-jade.vercel.app 랜딩 페이지 (500 없음)
+- [ ] `/login` → `demo@vcwoong.kr` / `Demo1234!`
+- [ ] Neon Console → Tables → `User` 테이블 존재
+- [ ] 보고서 생성 end-to-end
 
-## 6. Toss Payments 운영 설정
+## Supabase → Neon 전환 시
 
-1. [developers.tosspayments.com](https://developers.tosspayments.com) → 운영 키 발급
-2. 웹훅 URL 등록: `https://your-domain.com/api/payments/webhook`
-3. 환경 변수를 테스트 키 → 운영 키로 교체
-
-## 7. 배포 후 확인
-
-- [ ] 회원가입 → 로그인 정상 동작
-- [ ] 보고서 생성 end-to-end 테스트
-- [ ] ANTHROPIC_API_KEY 정상 연결 (isAIConfigured() 반환 true)
-- [ ] 결제 테스트 (Toss 테스트 카드로)
+- Vercel에서 기존 Supabase `DATABASE_URL` **삭제 또는 교체**
+- Neon `DATABASE_URL` + `DIRECT_URL` 추가
+- `npx prisma db push` 재실행 (데이터는 새 DB에 seed 필요)
