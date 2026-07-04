@@ -12,8 +12,9 @@
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
-    "db:setup:local": "prisma generate --schema prisma/schema.sqlite.prisma && prisma db push --schema prisma/schema.sqlite.prisma && tsx prisma/seed.ts",
-    "dev:local": "prisma generate --schema prisma/schema.sqlite.prisma && next dev",
+    "db:setup:local": "DATABASE_URL='file:./dev.db' prisma generate --schema prisma/schema.sqlite.prisma && DATABASE_URL='file:./dev.db' prisma db push --schema prisma/schema.sqlite.prisma && DATABASE_URL='file:./dev.db' tsx prisma/seed.ts",
+    "dev:local": "DATABASE_URL='file:./dev.db' prisma generate --schema prisma/schema.sqlite.prisma && DATABASE_URL='file:./dev.db' next dev",
+    "test:ai": "tsx --env-file=.env.local tools/test-gemini.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {
