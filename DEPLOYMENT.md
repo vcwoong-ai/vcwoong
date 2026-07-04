@@ -1,88 +1,81 @@
 # Vcwoong 배포 가이드
 
-## 1. GitHub 레포 연결
+## 1. GitHub + Vercel
 
-1. [vercel.com](https://vercel.com) → New Project → GitHub 레포 `vcwoong-ai/vcwoong` 선택
-2. Framework: Next.js (자동 감지)
-3. Build Command: `npm run vercel-build` (`vercel.json`에 설정됨)
+1. [vercel.com](https://vercel.com) → 프로젝트 **dealsync-jade** (GitHub `vcwoong-ai/vcwoong`)
+2. Build Command: `npm run vercel-build`
 
-## 2. Neon PostgreSQL (DB — Supabase 대신 권장)
+## 2. Supabase PostgreSQL (DB — 권장)
 
-1. [neon.tech](https://neon.tech) → Sign up (GitHub 로그인 가능)
-2. **New Project** → 이름: `vcwoong` → Region: **AWS ap-northeast-1 (Tokyo)** (Vercel icn1과 가까움)
-3. Dashboard → **Connect** 버튼 클릭
-4. 두 개의 connection string 복사:
+### 기존 프로젝트 사용 가능
 
-| Neon에서 | Vercel 변수 | 용도 |
-|----------|-------------|------|
-| **Pooled connection** | `DATABASE_URL` | 앱 런타임 (Vercel) |
-| **Direct connection** | `DIRECT_URL` | `prisma db push` |
+- Project ID: `jgmvqtmohoxcriobjjfk`
+- Region: Tokyo (`ap-northeast-1`)
 
-> Connection string 끝에 `?sslmode=require` 가 없으면 붙여 주세요.
+### A. 테이블 생성 (1회)
 
-5. 로컬에서 스키마 반영 (1회):
+Supabase Dashboard → **SQL Editor** → `prisma/db-init.sql` 전체 실행
+
+### B. Connection string
+
+**Project Settings → Database → Connection string → URI**
+
+| Supabase Mode | Vercel 변수 | 포트 |
+|---------------|-------------|------|
+| **Transaction** (pooler) | `DATABASE_URL` | 6543 |
+| **Session** (direct) | `DIRECT_URL` | 5432 |
+
+Transaction URI 예시:
+```
+postgresql://postgres.jgmvqtmohoxcriobjjfk:[PASSWORD]@aws-0-ap-northeast-1.pooler.supabase.com:6543/postgres?pgbouncer=true
+```
+
+Session URI 예시:
+```
+postgresql://postgres.jgmvqtmohoxcriobjjfk:[PASSWORD]@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres
+```
+
+### C. 로컬 (선택)
 
 ```bash
 cp .env.local.example .env.local
-# DATABASE_URL, DIRECT_URL 붙여넣기
-
 npx prisma db push
 npx prisma db seed   # demo@vcwoong.kr / Demo1234!
 ```
 
-## 3. Vercel 환경 변수
-
-Vercel → **dealsync-jade** → Settings → Environment Variables
-
-### 필수 (없으면 500)
+## 3. Vercel 환경 변수 (필수)
 
 | 변수 | 값 |
 |------|-----|
-| `DATABASE_URL` | Neon **Pooled** connection string |
-| `DIRECT_URL` | Neon **Direct** connection string |
+| `DATABASE_URL` | Supabase Transaction pooler |
+| `DIRECT_URL` | Supabase Session/direct |
 | `NEXTAUTH_SECRET` | `openssl rand -base64 32` |
 | `NEXTAUTH_URL` | `https://dealsync-jade.vercel.app` |
 
-### AI (최소 1개 — 없으면 데모 모드)
+### 선택
 
-| 변수 | 어디서 |
-|------|--------|
-| `OPENROUTER_API_KEY` | [openrouter.ai](https://openrouter.ai) |
-| `GEMINI_API_KEY` | [Google AI Studio](https://aistudio.google.com) |
+| 변수 | 용도 |
+|------|------|
+| `OPENROUTER_API_KEY` / `GEMINI_API_KEY` | AI 보고서 |
+| `STORAGE_MODE=s3` + AWS_* | Vercel 파일 업로드 |
+| `NEXT_PUBLIC_TOSS_CLIENT_KEY` / `TOSS_SECRET_KEY` | 구독 결제 |
 
-### 파일 업로드 (Vercel 프로덕션 — 나중에)
+→ **Redeploy**
 
-| 변수 | 값 |
-|------|-----|
-| `STORAGE_MODE` | `s3` |
-| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | IAM |
-| `AWS_REGION` | `ap-northeast-2` |
-| `AWS_S3_BUCKET` | `vcwoong-uploads` |
-
-### 결제 (나중에)
-
-| 변수 | 값 |
-|------|-----|
-| `NEXT_PUBLIC_TOSS_CLIENT_KEY` | `test_ck_...` |
-| `TOSS_SECRET_KEY` | `test_sk_...` |
-
-→ 저장 후 **Deployments → Redeploy**
-
-## 4. Toss 웹훅 (결제 사용 시)
+## 4. Toss 웹훅
 
 ```
 https://dealsync-jade.vercel.app/api/payments/webhook
 ```
 
-## 5. 배포 후 확인
+## 5. 확인
 
-- [ ] https://dealsync-jade.vercel.app 랜딩 페이지 (500 없음)
-- [ ] `/login` → `demo@vcwoong.kr` / `Demo1234!`
-- [ ] Neon Console → Tables → `User` 테이블 존재
-- [ ] 보고서 생성 end-to-end
+- [ ] 사이트 500 없음
+- [ ] 회원가입/로그인
+- [ ] Supabase Table Editor → `User` 테이블
 
-## Supabase → Neon 전환 시
+## Neon 대신 Supabase?
 
-- Vercel에서 기존 Supabase `DATABASE_URL` **삭제 또는 교체**
-- Neon `DATABASE_URL` + `DIRECT_URL` 추가
-- `npx prisma db push` 재실행 (데이터는 새 DB에 seed 필요)
+Neon(`neon-red-mountain`)은 Claude 쪽일 수 있음 → **Vcwoong은 Supabase `jgmvqtmohoxcriobjjfk` 사용**
+
+📱 모바일 가이드: [`docs/MOBILE-SETUP.md`](docs/MOBILE-SETUP.md)
