@@ -47,7 +47,7 @@ export class ClimateAgent extends BaseAgent {
 분량: 700~900자, 문어체`;
 
     const result = await generateText([{ role: "user", content: userPrompt }], { systemPrompt, maxTokens: 3000 });
-    return { sectionKey: SectionKey.MARKET_ANALYSIS, content: result.content, tokensUsed: result.inputTokens + result.outputTokens };
+    return { sectionKey: SectionKey.MARKET_ANALYSIS, content: result.content, tokensUsed: result.inputTokens + result.outputTokens, modelUsed: result.usedModel };
   }
 
   private async generateClimateRisk(input: AgentInput): Promise<GenerationResult> {
@@ -82,6 +82,6 @@ export class ClimateAgent extends BaseAgent {
 분량: 700~900자, 문어체`;
 
     const result = await generateText([{ role: "user", content: userPrompt }], { systemPrompt, maxTokens: 3000 });
-    return { sectionKey: SectionKey.RISK_ANALYSIS, content: result.content, tokensUsed: result.inputTokens + result.outputTokens };
+    return { sectionKey: SectionKey.RISK_ANALYSIS, content: result.content, tokensUsed: result.inputTokens + result.outputTokens, modelUsed: result.usedModel };
   }
 }

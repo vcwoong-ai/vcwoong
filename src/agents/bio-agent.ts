@@ -89,14 +89,32 @@ export class BioAgent extends BaseAgent {
       { pattern: /전임상|preclinical/i, phase: "PRECLINICAL" },
       { pattern: /NDA|BLA|허가\s*신청/i, phase: "NDA" },
     ];
+
+    // IR에서 피크 매출/시장 규모 힌트 추출 (없으면 보수적 기본값)
+    const peakMatch =
+      /피크\s*매출[:\s]*([\d,.]+)\s*억/i.exec(documentContext) ||
+      /peak\s*sales?[:\s]*[\$]?([\d,.]+)\s*(억|bn|b)?/i.exec(documentContext);
+    const peakRevenueBillionKRW = peakMatch
+      ? Math.max(100, Math.round(parseFloat(peakMatch[1].replace(/,/g, "")) || 3000))
+      : 3000; // 이전 하드코딩 5000 → 보수적 3000
+
+    const penMatch = /(?:점유율|penetration)[:\s]*([\d.]+)\s*%/i.exec(documentContext);
+    const marketPenetration = penMatch
+      ? Math.min(0.5, Math.max(0.01, parseFloat(penMatch[1]) / 100))
+      : 0.05;
+
+    const indicationMatch =
+      /(?:적응증|indication)[:\s]*([^\n,]{2,40})/i.exec(documentContext);
+    const indication = indicationMatch?.[1]?.trim() ?? "주요 적응증 (확인 필요)";
+
     for (const { pattern, phase } of phasePatterns) {
       if (pattern.test(documentContext)) {
         return [{
           name: `${companyName} 주요 파이프라인`,
-          indication: "주요 적응증",
+          indication,
           phase,
-          peakRevenueBillionKRW: 5000,
-          marketPenetration: 0.05,
+          peakRevenueBillionKRW,
+          marketPenetration,
           royaltyRate: 0.10,
         }];
       }
@@ -155,10 +173,10 @@ ${documentContext}${externalContext}
 
     const result = await generateText(
       [{ role: "user", content: userPrompt }],
-      { systemPrompt, maxTokens: 4096 }
+      { systemPrompt, maxTokens: 4096, temperature: 0.35 }
     );
 
-    return { sectionKey: SectionKey.PRODUCT_TECHNOLOGY, content: result.content, tokensUsed: result.inputTokens + result.outputTokens };
+    return { sectionKey: SectionKey.PRODUCT_TECHNOLOGY, content: result.content, tokensUsed: result.inputTokens + result.outputTokens, modelUsed: result.usedModel };
   }
 
   private async generateBioValuation(input: AgentInput): Promise<GenerationResult> {
@@ -214,10 +232,10 @@ ${documentContext}${rnpvContext}${externalContext}
 
     const result = await generateText(
       [{ role: "user", content: userPrompt }],
-      { systemPrompt, maxTokens: 4096 }
+      { systemPrompt, maxTokens: 4096, temperature: 0.35 }
     );
 
-    return { sectionKey: SectionKey.VALUATION, content: result.content, tokensUsed: result.inputTokens + result.outputTokens };
+    return { sectionKey: SectionKey.VALUATION, content: result.content, tokensUsed: result.inputTokens + result.outputTokens, modelUsed: result.usedModel };
   }
 
   private async generateBioMarket(input: AgentInput): Promise<GenerationResult> {
@@ -258,10 +276,10 @@ ${documentContext}${externalContext}
 
     const result = await generateText(
       [{ role: "user", content: userPrompt }],
-      { systemPrompt, maxTokens: 4096 }
+      { systemPrompt, maxTokens: 4096, temperature: 0.35 }
     );
 
-    return { sectionKey: SectionKey.MARKET_ANALYSIS, content: result.content, tokensUsed: result.inputTokens + result.outputTokens };
+    return { sectionKey: SectionKey.MARKET_ANALYSIS, content: result.content, tokensUsed: result.inputTokens + result.outputTokens, modelUsed: result.usedModel };
   }
 
   private async generateBioRisk(input: AgentInput): Promise<GenerationResult> {
@@ -304,10 +322,10 @@ ${documentContext}${externalContext}
 
     const result = await generateText(
       [{ role: "user", content: userPrompt }],
-      { systemPrompt, maxTokens: 4096 }
+      { systemPrompt, maxTokens: 4096, temperature: 0.35 }
     );
 
-    return { sectionKey: SectionKey.RISK_ANALYSIS, content: result.content, tokensUsed: result.inputTokens + result.outputTokens };
+    return { sectionKey: SectionKey.RISK_ANALYSIS, content: result.content, tokensUsed: result.inputTokens + result.outputTokens, modelUsed: result.usedModel };
   }
 
   private async generateBioAppendix(input: AgentInput): Promise<GenerationResult> {
@@ -319,6 +337,7 @@ ${documentContext}${externalContext}
       sectionKey: SectionKey.APPENDIX,
       content: appendix,
       tokensUsed: 0,
+      modelUsed: "bio-appendix",
     };
   }
 }

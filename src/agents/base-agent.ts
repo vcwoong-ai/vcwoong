@@ -8,6 +8,9 @@ import {
 import { GenerationResult } from "@/types";
 import { SECTION_META } from "@/types";
 
+/** IR 문서당 컨텍스트 길이 (품질↑ — 재무표·파이프라인 누락 방지) */
+const DOC_CONTEXT_CHARS = 8000;
+
 export interface AgentInput {
   dealId: string;
   companyName: string;
@@ -36,7 +39,14 @@ export abstract class BaseAgent {
 
     return documents
       .filter((d) => d.parsedText)
-      .map((d) => `### ${d.name}\n${d.parsedText?.slice(0, 3000)}...`)
+      .map((d) => {
+        const text = d.parsedText ?? "";
+        const clipped =
+          text.length > DOC_CONTEXT_CHARS
+            ? `${text.slice(0, DOC_CONTEXT_CHARS)}\n…(이하 생략)`
+            : text;
+        return `### ${d.name}\n${clipped}`;
+      })
       .join("\n\n");
   }
 
@@ -64,6 +74,7 @@ export abstract class BaseAgent {
       {
         systemPrompt,
         maxTokens: 4096,
+        temperature: 0.35,
       }
     );
 
@@ -71,6 +82,7 @@ export abstract class BaseAgent {
       sectionKey,
       content: result.content,
       tokensUsed: result.inputTokens + result.outputTokens,
+      modelUsed: result.usedModel,
     };
   }
 
@@ -78,7 +90,6 @@ export abstract class BaseAgent {
     const results: GenerationResult[] = [];
     const sectionKeys = SECTION_META.map((s) => s.key);
 
-    // Generate sections sequentially to avoid rate limits
     for (const sectionKey of sectionKeys) {
       const result = await this.generateSection(input, sectionKey);
       results.push(result);

@@ -63,13 +63,14 @@ ${documentContext}
 
     const result = await generateText(
       [{ role: "user", content: userPrompt }],
-      { systemPrompt, maxTokens: 4096 }
+      { systemPrompt, maxTokens: 4096, temperature: 0.35 }
     );
 
     return {
       sectionKey: SectionKey.PRODUCT_TECHNOLOGY,
       content: result.content,
       tokensUsed: result.inputTokens + result.outputTokens,
+      modelUsed: result.usedModel,
     };
   }
 
@@ -109,13 +110,14 @@ ${documentContext}
 
     const result = await generateText(
       [{ role: "user", content: userPrompt }],
-      { systemPrompt, maxTokens: 4096 }
+      { systemPrompt, maxTokens: 4096, temperature: 0.35 }
     );
 
     return {
       sectionKey: SectionKey.MARKET_ANALYSIS,
       content: result.content,
       tokensUsed: result.inputTokens + result.outputTokens,
+      modelUsed: result.usedModel,
     };
   }
 }

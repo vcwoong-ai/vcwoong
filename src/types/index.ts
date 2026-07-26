@@ -187,6 +187,8 @@ export interface GenerationResult {
   sectionKey: SectionKey;
   content: string;
   tokensUsed: number;
+  /** 실제 호출된 모델명 (폴백 포함) */
+  modelUsed?: string;
 }
 
 // Korean character width counting

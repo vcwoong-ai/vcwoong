@@ -54,7 +54,7 @@ export class ConsumerAgent extends BaseAgent {
 분량: 800~1,000자, 문어체`;
 
     const result = await generateText([{ role: "user", content: userPrompt }], { systemPrompt, maxTokens: 3000 });
-    return { sectionKey: SectionKey.FINANCIAL_STATUS, content: result.content, tokensUsed: result.inputTokens + result.outputTokens };
+    return { sectionKey: SectionKey.FINANCIAL_STATUS, content: result.content, tokensUsed: result.inputTokens + result.outputTokens, modelUsed: result.usedModel };
   }
 
   private async generateConsumerMarket(input: AgentInput): Promise<GenerationResult> {
@@ -85,6 +85,6 @@ export class ConsumerAgent extends BaseAgent {
 분량: 700~900자, 문어체`;
 
     const result = await generateText([{ role: "user", content: userPrompt }], { systemPrompt, maxTokens: 3000 });
-    return { sectionKey: SectionKey.MARKET_ANALYSIS, content: result.content, tokensUsed: result.inputTokens + result.outputTokens };
+    return { sectionKey: SectionKey.MARKET_ANALYSIS, content: result.content, tokensUsed: result.inputTokens + result.outputTokens, modelUsed: result.usedModel };
   }
 }

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { ReportEditor } from "@/components/reports/report-editor";
+import { ReportQualityPanel } from "@/components/reports/report-quality-panel";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -284,6 +285,10 @@ export function ReportPageClient({ report }: { report: Report }) {
           </p>
         )}
       </div>
+
+      {report.sections.length > 0 && (
+        <ReportQualityPanel reportId={report.id} />
+      )}
 
       <ReportEditor
         reportId={report.id}

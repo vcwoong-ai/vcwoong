@@ -3,11 +3,10 @@ import { ClaudeMessage } from "./claude";
 /**
  * Demo-mode IC report generator.
  *
- * When no Anthropic API key is configured, the platform still produces a
+ * When no Gemini/OpenRouter API key is configured, the platform still produces a
  * complete, realistic-looking investment review report so the full pipeline
  * (deal → report → edit → export) can be exercised end-to-end. Swapping in a
- * real API key automatically switches to live Claude generation — no other
- * code changes required.
+ * real API key (GEMINI_API_KEY) automatically switches to live generation.
  */
 
 const SECTION_TITLES = [
@@ -61,8 +60,8 @@ function extractFacts(prompt: string): PromptFacts {
 }
 
 const DEMO_NOTICE =
-  "> ⚙️ **데모 모드** — Anthropic API 키가 설정되지 않아 샘플 콘텐츠로 생성되었습니다. " +
-  "실제 API 키를 `.env.local`에 입력하면 동일한 흐름으로 실제 AI가 본문을 작성합니다.\n\n";
+  "> ⚙️ **데모 모드** — Gemini/OpenRouter API 키가 설정되지 않아 샘플 콘텐츠로 생성되었습니다. " +
+  "`GEMINI_API_KEY`를 `.env.local`에 입력하면 동일한 흐름으로 실제 AI가 본문을 작성합니다.\n\n";
 
 function sectionBody(f: PromptFacts): string {
   const c = f.companyName;

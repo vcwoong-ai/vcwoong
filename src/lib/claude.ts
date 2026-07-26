@@ -1,32 +1,34 @@
 /**
- * AI provider abstraction — multi-provider (OpenRouter free + Gemini paid).
+ * AI provider abstraction — Gemini-first + OpenRouter fallback.
  *
  * 호출 우선순위:
- *   1. AI_MODEL (기본값: OpenRouter 무료 모델)
- *      → 성공하면 그대로 사용 (비용 $0)
- *   2. 429 레이트리밋 발생 시 → AI_FALLBACK_MODEL (Gemini 유료)로 즉시 전환
- *      → 비용 발생하지만 빠르게 처리
+ *   1. AI_MODEL (기본: gemini-2.5-flash — GEMINI_API_KEY 있을 때)
+ *      Gemini 없으면 OpenRouter 무료 모델
+ *   2. 429/5xx → AI_FALLBACK_MODEL 로 전환
  *
  * 라우팅:
  *   gemini-*  →  Google AI Studio (GEMINI_API_KEY)
  *   그 외      →  OpenRouter       (OPENROUTER_API_KEY)
- *
- * .env.local 설정:
- *   GEMINI_API_KEY=AIza...
- *   OPENROUTER_API_KEY=sk-or-...
- *   AI_MODEL=meta-llama/llama-3.3-70b-instruct:free   ← 무료 기본
- *   AI_FALLBACK_MODEL=gemini-2.5-flash                 ← 유료 폴백
  */
 
 import OpenAI from "openai";
 import { generateMockContent } from "./mock-generator";
-import { BRAND } from "@/lib/brand";
+import { BRAND } from "./brand";
 
-export const MODEL =
-  process.env.AI_MODEL ?? "meta-llama/llama-3.3-70b-instruct:free";
+function resolveDefaultModel(): string {
+  if (process.env.AI_MODEL?.trim()) return process.env.AI_MODEL.trim();
+  const gemini = process.env.GEMINI_API_KEY?.trim() ?? "";
+  if (gemini.startsWith("AIza")) return "gemini-2.5-flash";
+  return "meta-llama/llama-3.3-70b-instruct:free";
+}
+
+export const MODEL = resolveDefaultModel();
 
 export const FALLBACK_MODEL =
-  process.env.AI_FALLBACK_MODEL ?? "gemini-2.5-flash";
+  process.env.AI_FALLBACK_MODEL ??
+  (MODEL.startsWith("gemini-")
+    ? "meta-llama/llama-3.3-70b-instruct:free"
+    : "gemini-2.5-flash");
 
 /** Gemini 2.5는 thinking 토큰을 내부 사용하므로 max_tokens를 더 높게 설정해야 함 */
 function getMaxTokens(model: string, requested?: number): number {
@@ -79,15 +81,20 @@ export interface ClaudeOptions {
   systemPrompt?: string;
 }
 
+export interface GenerateTextResult {
+  content: string;
+  inputTokens: number;
+  outputTokens: number;
+  usedModel: string;
+}
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/**
- * 단일 모델 호출. 실패 시 에러를 throw (폴백 결정은 호출부에서).
- */
 async function callOnce(
   model: string,
   messages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
-  maxTokens: number
+  maxTokens: number,
+  temperature?: number
 ): Promise<OpenAI.Chat.Completions.ChatCompletion> {
   const client = getClientForModel(model);
   const result = await client.chat.completions.create({
@@ -95,53 +102,68 @@ async function callOnce(
     max_tokens: maxTokens,
     messages,
     stream: false,
+    ...(typeof temperature === "number" ? { temperature } : {}),
   } as Parameters<OpenAI["chat"]["completions"]["create"]>[0]);
   return result as OpenAI.Chat.Completions.ChatCompletion;
 }
 
 /**
- * 메인 호출 함수:
- * - 무료 모델: 429/503 → 즉시 Gemini 폴백
- * - Gemini: 429/503 → 지수 백오프 재시도 (최대 4회)
- * - 모든 실패 시 → 마지막 에러 throw
+ * 메인 호출:
+ * - 기본 모델 실패(429/5xx) → 폴백 모델
+ * - 폴백도 실패 시 지수 백오프 재시도
  */
 async function callWithFallback(
   model: string,
   messages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
-  maxTokens: number
+  maxTokens: number,
+  temperature?: number
 ): Promise<{ result: OpenAI.Chat.Completions.ChatCompletion; usedModel: string }> {
   const isRetryable = (err: unknown) => {
     const s = (err as { status?: number })?.status;
     return s === 429 || s === 503 || s === 502 || s === 500;
   };
 
-  // 1. 기본 모델 시도
   try {
-    const result = await callOnce(model, messages, maxTokens);
+    const result = await callOnce(model, messages, maxTokens, temperature);
     return { result, usedModel: model };
   } catch (err) {
     if (!isRetryable(err)) throw err;
-
-    // 무료 모델 에러 → Gemini 즉시 전환
     if (isFreeModel(model) && model !== FALLBACK_MODEL) {
-      console.log(`[AI] 무료 모델 레이트리밋 → Gemini(${FALLBACK_MODEL})로 전환`);
+      console.log(`[AI] 무료 모델 레이트리밋 → ${FALLBACK_MODEL}로 전환`);
+    } else {
+      console.log(`[AI] ${model} 오류 → ${FALLBACK_MODEL}로 전환`);
     }
   }
 
-  // 2. 폴백 모델 (Gemini) — 지수 백오프로 최대 4회
-  const fallbackTokens = getMaxTokens(FALLBACK_MODEL, maxTokens);
+  // 폴백 모델이 설정되지 않았거나 키가 없으면 기본 모델만 재시도
+  const fallback = FALLBACK_MODEL;
+  const canUseFallback =
+    fallback !== model &&
+    ((isGeminiModel(fallback) &&
+      (process.env.GEMINI_API_KEY?.trim() ?? "").startsWith("AIza")) ||
+      (!isGeminiModel(fallback) &&
+        (process.env.OPENROUTER_API_KEY?.trim() ?? "").startsWith("sk-or-")));
+
+  const retryModel = canUseFallback ? fallback : model;
+  const fallbackTokens = getMaxTokens(retryModel, maxTokens);
   let lastErr: unknown;
 
   for (let attempt = 0; attempt < 4; attempt++) {
     if (attempt > 0) {
       const waitMs = Math.min(15_000 * Math.pow(2, attempt - 1), 60_000);
-      console.log(`[AI] ${FALLBACK_MODEL} 재시도 ${attempt}/3, ${waitMs / 1000}초 대기...`);
+      console.log(
+        `[AI] ${retryModel} 재시도 ${attempt}/3, ${waitMs / 1000}초 대기...`
+      );
       await sleep(waitMs);
     }
     try {
-      const result = await callOnce(FALLBACK_MODEL, messages, fallbackTokens);
-      if (attempt > 0) console.log(`[AI] 실제 사용 모델: ${FALLBACK_MODEL}`);
-      return { result, usedModel: FALLBACK_MODEL };
+      const result = await callOnce(
+        retryModel,
+        messages,
+        fallbackTokens,
+        temperature
+      );
+      return { result, usedModel: retryModel };
     } catch (err) {
       lastErr = err;
       if (!isRetryable(err)) break;
@@ -154,21 +176,31 @@ async function callWithFallback(
 export async function generateText(
   messages: ClaudeMessage[],
   options: ClaudeOptions = {}
-): Promise<{ content: string; inputTokens: number; outputTokens: number }> {
+): Promise<GenerateTextResult> {
   if (!isAIConfigured()) {
     const content = generateMockContent(messages);
     await sleep(400);
-    return { content, inputTokens: 0, outputTokens: 0 };
+    return { content, inputTokens: 0, outputTokens: 0, usedModel: "demo-mock" };
   }
 
-  const { systemPrompt } = options;
-  const builtMessages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
-    ...(systemPrompt ? [{ role: "system" as const, content: systemPrompt }] : []),
+  const { systemPrompt, temperature } = options;
+  const builtMessages: Array<{
+    role: "system" | "user" | "assistant";
+    content: string;
+  }> = [
+    ...(systemPrompt
+      ? [{ role: "system" as const, content: systemPrompt }]
+      : []),
     ...messages.map((m) => ({ role: m.role, content: m.content })),
   ];
 
   const maxTokens = getMaxTokens(MODEL, options.maxTokens);
-  const { result, usedModel } = await callWithFallback(MODEL, builtMessages, maxTokens);
+  const { result, usedModel } = await callWithFallback(
+    MODEL,
+    builtMessages,
+    maxTokens,
+    temperature
+  );
 
   if (usedModel !== MODEL) {
     console.log(`[AI] 실제 사용 모델: ${usedModel}`);
@@ -178,6 +210,7 @@ export async function generateText(
     content: result.choices[0]?.message?.content ?? "",
     inputTokens: result.usage?.prompt_tokens ?? 0,
     outputTokens: result.usage?.completion_tokens ?? 0,
+    usedModel,
   };
 }
 
@@ -185,35 +218,18 @@ export async function generateStream(
   messages: ClaudeMessage[],
   options: ClaudeOptions = {},
   onChunk: (text: string) => void
-): Promise<{ inputTokens: number; outputTokens: number }> {
-  if (!isAIConfigured()) {
-    const content = generateMockContent(messages);
-    for (const chunk of content.match(/[\s\S]{1,24}/g) ?? [content]) {
-      onChunk(chunk);
-      await sleep(15);
-    }
-    return { inputTokens: 0, outputTokens: 0 };
-  }
-
-  const { systemPrompt } = options;
-  const builtMessages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
-    ...(systemPrompt ? [{ role: "system" as const, content: systemPrompt }] : []),
-    ...messages.map((m) => ({ role: m.role, content: m.content })),
-  ];
-
-  // 비스트리밍 방식으로 받은 후 청크 시뮬레이션 (Gemini 2.5 thinking 모델 대응)
-  const maxTokens = getMaxTokens(MODEL, options.maxTokens);
-  const { result } = await callWithFallback(MODEL, builtMessages, maxTokens);
-  const content = result.choices[0]?.message?.content ?? "";
-
-  for (const chunk of content.match(/[\s\S]{1,40}/g) ?? [content]) {
+): Promise<{ inputTokens: number; outputTokens: number; usedModel: string }> {
+  const result = await generateText(messages, options);
+  for (const chunk of result.content.match(/[\s\S]{1,40}/g) ?? [
+    result.content,
+  ]) {
     onChunk(chunk);
     await sleep(8);
   }
-
   return {
-    inputTokens: result.usage?.prompt_tokens ?? 0,
-    outputTokens: result.usage?.completion_tokens ?? 0,
+    inputTokens: result.inputTokens,
+    outputTokens: result.outputTokens,
+    usedModel: result.usedModel,
   };
 }
 
@@ -225,27 +241,46 @@ export async function callClaudeJSON<T>(params: {
   temperature?: number;
   retries?: number;
   tier?: "standard" | "premium";
-}): Promise<{ data: T; inputTokens: number; outputTokens: number }> {
-  const { system, messages, maxTokens = 4096, temperature = 0.3, retries = 2 } = params;
+}): Promise<{ data: T; inputTokens: number; outputTokens: number; usedModel: string }> {
+  const {
+    system,
+    messages,
+    maxTokens = 4096,
+    temperature = 0.3,
+    retries = 2,
+  } = params;
 
   if (!isAIConfigured()) {
-    return { data: {} as T, inputTokens: 0, outputTokens: 0 };
+    return { data: {} as T, inputTokens: 0, outputTokens: 0, usedModel: "demo-mock" };
   }
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      const { content, inputTokens, outputTokens } = await generateText(messages, {
-        systemPrompt: system,
-        maxTokens,
-        temperature,
-      });
+      const { content, inputTokens, outputTokens, usedModel } =
+        await generateText(messages, {
+          systemPrompt: `${system}\n\n반드시 유효한 JSON만 출력하세요. 마크다운 코드펜스 없이 순수 JSON.`,
+          maxTokens,
+          temperature,
+        });
 
       const cleaned = content
         .replace(/^```json\s*/m, "")
-        .replace(/```\s*$/, "")
+        .replace(/^```\s*/m, "")
+        .replace(/```\s*$/m, "")
         .trim();
 
-      return { data: JSON.parse(cleaned) as T, inputTokens, outputTokens };
+      // JSON 객체 부분만 추출
+      const start = cleaned.indexOf("{");
+      const end = cleaned.lastIndexOf("}");
+      const jsonStr =
+        start >= 0 && end > start ? cleaned.slice(start, end + 1) : cleaned;
+
+      return {
+        data: JSON.parse(jsonStr) as T,
+        inputTokens,
+        outputTokens,
+        usedModel,
+      };
     } catch (error) {
       if (attempt === retries) throw error;
       await sleep(1000 * (attempt + 1));
