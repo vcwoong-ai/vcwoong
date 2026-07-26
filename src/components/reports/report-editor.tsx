@@ -43,6 +43,8 @@ interface ReportEditorProps {
   isFinalizing?: boolean;
   onRegenerate?: () => void;
   isRegenerating?: boolean;
+  /** 섹션 단위 재생성 성공 시 (품질 패널 새로고침용) */
+  onSectionRegenerated?: (sectionKey: string) => void;
 }
 
 export function ReportEditor({
@@ -56,6 +58,7 @@ export function ReportEditor({
   isFinalizing,
   onRegenerate,
   isRegenerating,
+  onSectionRegenerated,
 }: ReportEditorProps) {
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState("");
@@ -177,6 +180,7 @@ export function ReportEditor({
               : s
           )
         );
+        onSectionRegenerated?.(section.sectionKey);
       }
     } catch (error) {
       console.error(error);

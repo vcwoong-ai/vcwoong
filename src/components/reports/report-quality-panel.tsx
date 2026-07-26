@@ -16,17 +16,35 @@ interface QualitySummary {
   suggestions: string[];
 }
 
-export function ReportQualityPanel({ reportId }: { reportId: string }) {
+export function ReportQualityPanel({
+  reportId,
+  refreshKey = 0,
+}: {
+  reportId: string;
+  /** 섹션 재생성 후 증가시켜 품질 점수를 다시 불러온다 */
+  refreshKey?: number;
+}) {
   const [data, setData] = useState<QualitySummary | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
     fetch(`/api/reports/${reportId}/quality`)
       .then((r) => r.json())
-      .then((res) => setData(res.data))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [reportId]);
+      .then((res) => {
+        if (!cancelled) setData(res.data);
+      })
+      .catch(() => {
+        if (!cancelled) setData(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [reportId, refreshKey]);
 
   if (loading) {
     return (

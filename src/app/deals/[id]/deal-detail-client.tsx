@@ -73,7 +73,7 @@ const SECTOR_AGENT_MAP: Record<DealSector, AgentType> = {
   DEEPTECH: AgentType.DEEPTECH,
   MANUFACTURING: AgentType.MANUFACTURING,
   CONTENT: AgentType.CONTENT,
-  CONSUMER: AgentType.CONTENT,
+  CONSUMER: AgentType.GENERAL,
   GENERAL: AgentType.GENERAL,
   CLIMATE: AgentType.GENERAL,
 };
@@ -111,10 +111,16 @@ const AGENT_INFO: Record<AgentType, { name: string; desc: string; color: string 
   },
   [AgentType.GENERAL]: {
     name: "General",
-    desc: "범용 투자 분석 에이전트",
+    desc: "범용 투자 분석 — 기후/소비재는 Climate·Consumer 특화",
     color: "text-gray-700 bg-gray-50 border-gray-200",
   },
 };
+
+function recommendedAgentLabel(sector: DealSector, agentType: AgentType): string {
+  if (sector === DealSector.CLIMATE) return "Climate";
+  if (sector === DealSector.CONSUMER) return "Consumer";
+  return AGENT_INFO[agentType].name;
+}
 
 const STATUS_LABEL: Record<string, string> = {
   PENDING: "대기",
@@ -156,6 +162,7 @@ export function DealDetailClient({
   const [templates, setTemplates] = useState<TemplateOption[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [loadingFixture, setLoadingFixture] = useState(false);
   const eventSourceRef = useRef<EventSource | null>(null);
 
   // 사용 가능한 템플릿 로드
@@ -180,6 +187,29 @@ export function DealDetailClient({
 
   const recommendedAgent = SECTOR_AGENT_MAP[deal.sector] ?? AgentType.GENERAL;
   const agentInfo = AGENT_INFO[recommendedAgent];
+  const agentDisplayName = recommendedAgentLabel(deal.sector, recommendedAgent);
+
+  const loadFixture = async () => {
+    setLoadingFixture(true);
+    try {
+      const res = await fetch(`/api/deals/${deal.id}/load-fixture`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error ?? "픽스처 로드 실패");
+      }
+      router.refresh();
+    } catch (error) {
+      alert(
+        error instanceof Error ? error.message : "픽스처 로드 중 오류가 발생했습니다"
+      );
+    } finally {
+      setLoadingFixture(false);
+    }
+  };
 
   const generateReport = async () => {
     setGenerating(true);
@@ -389,7 +419,7 @@ export function DealDetailClient({
           },
           {
             label: "추천 에이전트",
-            value: agentInfo.name,
+            value: agentDisplayName,
           },
         ].map((item) =>
           item.value ? (
@@ -425,10 +455,27 @@ export function DealDetailClient({
         {/* Documents tab */}
         <TabsContent value="documents" className="space-y-4">
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
               <CardTitle className="text-base">문서 업로드</CardTitle>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={loadFixture}
+                disabled={loadingFixture}
+                title="섹터에 맞는 골든 IR 샘플을 문서로 로드"
+              >
+                {loadingFixture ? (
+                  <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                ) : (
+                  <FileText className="w-3.5 h-3.5 mr-1.5" />
+                )}
+                골든 IR 로드
+              </Button>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-3">
+              <p className="text-xs text-gray-500">
+                연습용: 딜 섹터에 맞는 골든 IR 마크다운을 문서에 추가합니다.
+              </p>
               <FileUploader
                 key={uploadKey}
                 dealId={deal.id}
@@ -550,6 +597,9 @@ export function DealDetailClient({
           <Card>
             <CardHeader>
               <CardTitle className="text-base">AI 에이전트 정보</CardTitle>
+              <p className="text-sm text-gray-500 font-normal">
+                이 딜 추천: {agentDisplayName} — {agentInfo.desc}
+              </p>
             </CardHeader>
             <CardContent className="space-y-4">
               {Object.entries(AGENT_INFO).map(([type, info]) => (

@@ -3,7 +3,7 @@ import { BaseAgent } from "./base-agent";
 
 /**
  * General investment agent for non-specialized sectors.
- * Handles GENERAL, CONSUMER, DEEPTECH, CLIMATE sectors.
+ * CLIMATE/CONSUMER는 각각 ClimateAgent/ConsumerAgent로 라우팅된다.
  */
 export class GeneralAgent extends BaseAgent {
   constructor() {

@@ -5,7 +5,7 @@ import { getSystemPrompt } from "@/prompts/system-prompts";
 import { GenerationResult } from "@/types";
 
 /**
- * 소비재/D2C 전문 투자 심사역 에이전트.
+ * Consumer — 소비재/D2C 전문 투자 심사역 에이전트.
  * 브랜드 파워, D2C 지표, 유통 채널, 소비자 트렌드 분석에 특화.
  */
 export class ConsumerAgent extends BaseAgent {
@@ -13,78 +13,158 @@ export class ConsumerAgent extends BaseAgent {
     super(AgentType.GENERAL, DealSector.CONSUMER);
   }
 
-  async generateSection(input: AgentInput, sectionKey: SectionKey): Promise<GenerationResult> {
-    if (sectionKey === SectionKey.FINANCIAL_STATUS) return this.generateConsumerFinancials(input);
-    if (sectionKey === SectionKey.MARKET_ANALYSIS) return this.generateConsumerMarket(input);
-    return super.generateSection(input, sectionKey);
+  async generateSection(
+    input: AgentInput,
+    sectionKey: SectionKey
+  ): Promise<GenerationResult> {
+    switch (sectionKey) {
+      case SectionKey.PRODUCT_TECHNOLOGY:
+        return this.generateBrandProduct(input);
+      case SectionKey.MARKET_ANALYSIS:
+        return this.generateMarket(input);
+      case SectionKey.FINANCIAL_STATUS:
+        return this.generateFinancials(input);
+      case SectionKey.VALUATION:
+        return this.generateValuation(input);
+      case SectionKey.RISK_ANALYSIS:
+        return this.generateRisk(input);
+      default:
+        return super.generateSection(input, sectionKey);
+    }
   }
 
-  private async generateConsumerFinancials(input: AgentInput): Promise<GenerationResult> {
+  private async run(
+    input: AgentInput,
+    sectionKey: SectionKey,
+    userPrompt: string
+  ): Promise<GenerationResult> {
     const systemPrompt = getSystemPrompt(AgentType.GENERAL, DealSector.CONSUMER);
-    const documentContext = this.buildDocumentContext(input.documents);
-
-    const userPrompt = `## 기업: ${input.companyName} (소비재/D2C)
-## 자료: ${documentContext}
-
-## 재무현황 섹션 (소비재 특화)
-
-### 1. 핵심 소비재 지표
-- GMV (총 거래액) 및 YoY 성장률
-- 채널별 매출 비중 (온라인/오프라인/해외)
-- 반복 구매율 (Repeat Purchase Rate)
-- 평균 주문 금액 (AOV) 및 객단가
-
-### 2. 브랜드/마케팅 효율
-- CAC (채널별 신규 고객 획득 비용)
-- ROAS (광고 수익률)
-- 재구매 고객 비중 및 LTV
-
-### 3. 손익 요약
-| 구분 | FY22 | FY23 | FY24 | FY25E |
-|------|------|------|------|-------|
-| GMV | | | | |
-| 매출 (Net Revenue) | | | | |
-| 매출총이익률 | | | | |
-| 영업이익 | | | | |
-
-### 4. 재고·물류
-- 재고 회전율 및 SKU 관리 현황
-- 물류 내재화 vs 외주화 비용
-
-분량: 800~1,000자, 문어체`;
-
-    const result = await generateText([{ role: "user", content: userPrompt }], { systemPrompt, maxTokens: 3000 });
-    return { sectionKey: SectionKey.FINANCIAL_STATUS, content: result.content, tokensUsed: result.inputTokens + result.outputTokens, modelUsed: result.usedModel };
+    const result = await generateText([{ role: "user", content: userPrompt }], {
+      systemPrompt,
+      maxTokens: 4096,
+      temperature: 0.35,
+    });
+    return {
+      sectionKey,
+      content: result.content,
+      tokensUsed: result.inputTokens + result.outputTokens,
+      modelUsed: result.usedModel,
+    };
   }
 
-  private async generateConsumerMarket(input: AgentInput): Promise<GenerationResult> {
-    const systemPrompt = getSystemPrompt(AgentType.GENERAL, DealSector.CONSUMER);
+  private async generateBrandProduct(
+    input: AgentInput
+  ): Promise<GenerationResult> {
     const documentContext = this.buildDocumentContext(input.documents);
+    return this.run(
+      input,
+      SectionKey.PRODUCT_TECHNOLOGY,
+      `## 기업: ${input.companyName} (소비재/D2C)
+${input.additionalContext ?? ""}
 
-    const userPrompt = `## 기업: ${input.companyName} (소비재/D2C)
-## 자료: ${documentContext}
+## 자료
+${documentContext}
 
-## 시장분석 섹션 (소비재 특화)
+## 제품/브랜드 (소비재 특화)
+### 1. 핵심 제품·SKU 포트폴리오
+### 2. 브랜드 포지셔닝·차별화
+### 3. 품질·원료·인증
+### 4. 제품 로드맵·시즌성
+### 5. 리뷰·NPS·리텐션 시그널
 
-### 1. 시장 규모
-- 카테고리별 국내/글로벌 TAM
-- 소비자 트렌드 (건강, 친환경, 프리미엄, MZ 소비 패턴)
+700~1,100자. 없는 수치는 확인 필요.`
+    );
+  }
 
-### 2. 경쟁 구도
-- 주요 경쟁 브랜드 및 시장점유율
-- 대형 유통사(쿠팡, 배민, 무신사 등) 의존도
+  private async generateMarket(input: AgentInput): Promise<GenerationResult> {
+    const documentContext = this.buildDocumentContext(input.documents);
+    return this.run(
+      input,
+      SectionKey.MARKET_ANALYSIS,
+      `## 기업: ${input.companyName} (소비재/D2C)
+${input.additionalContext ?? ""}
 
-### 3. 유통 채널 분석
-- D2C vs 멀티채널 전략 적합성
-- 해외 진출 채널 (아마존, 쇼피, 글로벌 D2C)
+## 자료
+${documentContext}
 
-### 4. 브랜드 파워
-- 소비자 인지도, SNS 팔로워, NPS
-- 리뷰·평점 현황
+## 시장분석 (소비재 특화)
+### 1. 카테고리 TAM · 소비자 트렌드
+### 2. 경쟁 브랜드·점유율
+### 3. 유통 채널 (D2C / 마켓플레이스 / 오프라인)
+### 4. 대형 유통 의존도
+### 5. 해외 진출 채널
 
-분량: 700~900자, 문어체`;
+700~1,100자.`
+    );
+  }
 
-    const result = await generateText([{ role: "user", content: userPrompt }], { systemPrompt, maxTokens: 3000 });
-    return { sectionKey: SectionKey.MARKET_ANALYSIS, content: result.content, tokensUsed: result.inputTokens + result.outputTokens, modelUsed: result.usedModel };
+  private async generateFinancials(
+    input: AgentInput
+  ): Promise<GenerationResult> {
+    const documentContext = this.buildDocumentContext(input.documents);
+    return this.run(
+      input,
+      SectionKey.FINANCIAL_STATUS,
+      `## 기업: ${input.companyName} (소비재/D2C)
+${input.additionalContext ?? ""}
+
+## 자료
+${documentContext}
+
+## 재무현황 (소비재 특화)
+### 1. GMV · Net Revenue · YoY
+### 2. 채널별 매출 비중 · AOV · 재구매율
+### 3. CAC · ROAS · LTV
+### 4. 손익 표 (총이익·영업이익)
+### 5. 재고 회전·물류 비용
+
+800~1,100자.`
+    );
+  }
+
+  private async generateValuation(input: AgentInput): Promise<GenerationResult> {
+    const documentContext = this.buildDocumentContext(input.documents);
+    return this.run(
+      input,
+      SectionKey.VALUATION,
+      `## 기업: ${input.companyName} (소비재/D2C)
+${input.investRound ? `- 라운드: ${input.investRound}` : ""}
+${input.valuation ? `- Post-money: ${input.valuation}억원` : ""}
+${input.additionalContext ?? ""}
+
+## 자료
+${documentContext}
+
+## 밸류에이션 (소비재 특화)
+### 1. 라운드 요약
+### 2. EV/매출 · EV/GMV
+### 3. Peer comps (D2C/브랜드)
+### 4. 브랜드 프리미엄 시나리오
+### 5. Exit (전략 M&A · 유통사)
+
+700~1,100자.`
+    );
+  }
+
+  private async generateRisk(input: AgentInput): Promise<GenerationResult> {
+    const documentContext = this.buildDocumentContext(input.documents);
+    return this.run(
+      input,
+      SectionKey.RISK_ANALYSIS,
+      `## 기업: ${input.companyName} (소비재/D2C)
+${input.additionalContext ?? ""}
+
+## 자료
+${documentContext}
+
+## 리스크 (소비재 특화)
+### 1. 마케팅 효율 악화 (CAC 상승)
+### 2. 채널 집중·플랫폼 정책
+### 3. 재고·시즌성·트렌드
+### 4. 브랜드 평판·리콜
+### 5. 완화 방안
+
+700~1,000자.`
+    );
   }
 }

@@ -15,8 +15,10 @@ Supabase/Vercel과 무관하게 **로컬에서 보고서 품질을 올리는** �
 | BIO PoS | 시스템 프롬프트 ↔ rNPV 테이블 일치 |
 | IT Agent | 제품/시장/재무/밸류/리스크 5섹션 특화 |
 | Vault / Neuron / Maker / Story | 동일 5섹션 특화 |
+| Climate / Consumer | 5섹션 특화 + 섹터 우선 라우팅 |
 | General Agent | 전용 시스템 프롬프트 |
-| 섹션 재생성 | 보고서 편집기에서 섹션별 AI 재생성 |
+| 섹션 재생성 | 보고서 편집기에서 섹션별 AI 재생성 → 품질 점수 자동 새로고침 |
+| 골든 IR 1클릭 | 딜 상세 → 문서 탭 → 「골든 IR 로드」 |
 | 골든 비교 | `npm run test:golden` (Gemini) |
 
 ## 로컬 실행
@@ -38,12 +40,12 @@ npm run dev:local
 
 ## 품질 연습 루프 (추천)
 
-1. 헬스케어AI 딜 → BIO 보고서 생성
-2. 보고서 상세 → **자동 품질 점수** 확인
-3. 약한 섹션만 **재생성** 버튼 클릭
-4. `/api/reports/{id}/quality` JSON으로 섹션별 이슈 확인
-5. 프롬프트 수정 (`src/prompts/`, `src/agents/*-agent.ts`)
-6. 재생성 → 점수 비교
+1. 딜 생성(섹터 선택) → 문서 탭 **골든 IR 로드**
+2. AI 보고서 생성
+3. 보고서 상세 → **자동 품질 점수** 확인
+4. 약한 섹션만 **재생성** → 품질 점수 자동 갱신
+5. `/api/reports/{id}/quality` JSON으로 섹션별 이슈 확인
+6. 프롬프트 수정 (`src/prompts/`, `src/agents/*-agent.ts`) → 재비교
 
 ### 채점 기준 (자동)
 
@@ -59,10 +61,14 @@ npm run dev:local
 - `src/prompts/section-prompts.ts`
 - `src/agents/bio-agent.ts` / `it-agent.ts` / `fintech-agent.ts` / `deeptech-agent.ts`
 - `src/agents/manufacturing-agent.ts` / `content-agent.ts`
+- `src/agents/climate-agent.ts` / `consumer-agent.ts`
 - `src/lib/shared-facts.ts`
 - `src/lib/report-quality.ts`
+- `src/lib/fixtures.ts` · `docs/fixtures/*`
 
 ## API
 
 - `GET /api/reports/[id]/quality` — 로그인 필요, 품질 요약 JSON
 - `POST /api/reports/[id]/sections/regenerate` — `{ sectionKey }` 단일 섹션 재생성
+- `POST /api/deals/[id]/load-fixture` — 골든 IR 문서로 적재 (`fixtureId` 선택)
+- `GET /api/deals/[id]/load-fixture` — 사용 가능 픽스처 목록

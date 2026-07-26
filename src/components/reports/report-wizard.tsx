@@ -51,6 +51,8 @@ const SECTOR_AGENT_MAP: Partial<Record<DealSector, AgentType>> = {
   MANUFACTURING: AgentType.MANUFACTURING,
   CONTENT: AgentType.CONTENT,
   FINTECH: AgentType.FINTECH,
+  CLIMATE: AgentType.GENERAL,
+  CONSUMER: AgentType.GENERAL,
 };
 
 interface GenerationProgress {

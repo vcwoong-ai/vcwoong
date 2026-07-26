@@ -59,7 +59,7 @@ export const AGENT_META = [
     id: AgentType.CONTENT,
     name: "Story",
     desc: "콘텐츠/엔터 특화 — IP 가치, 팬덤 경제",
-    sectors: [DealSector.CONTENT, DealSector.CONSUMER],
+    sectors: [DealSector.CONTENT],
     dot: "bg-pink-400",
     color: "text-pink-700 bg-pink-50 border-pink-200",
   },
@@ -74,8 +74,8 @@ export const AGENT_META = [
   {
     id: AgentType.GENERAL,
     name: "General",
-    desc: "범용 투자 분석 — 일반/소비재/기후",
-    sectors: [DealSector.GENERAL, DealSector.CLIMATE],
+    desc: "범용·기후·소비재 — Climate/Consumer 특화 라우팅",
+    sectors: [DealSector.GENERAL, DealSector.CLIMATE, DealSector.CONSUMER],
     dot: "bg-gray-400",
     color: "text-gray-700 bg-gray-50 border-gray-200",
   },
@@ -93,14 +93,18 @@ export function inferAgentType(sector: DealSector): AgentType {
 
 /**
  * AgentType + 선택적 DealSector에 따라 전문 에이전트 인스턴스를 반환한다.
+ * CLIMATE/CONSUMER는 Prisma AgentType이 없어 섹터 우선으로 라우팅한다.
  */
 export function getAgent(agentType: AgentType, sector?: DealSector): BaseAgent {
+  if (sector === DealSector.CLIMATE) return new ClimateAgent();
+  if (sector === DealSector.CONSUMER) return new ConsumerAgent();
+
   const effective =
     agentType !== AgentType.GENERAL
       ? agentType
       : sector
-      ? inferAgentType(sector)
-      : AgentType.GENERAL;
+        ? inferAgentType(sector)
+        : AgentType.GENERAL;
 
   switch (effective) {
     case AgentType.BIO:
@@ -116,9 +120,6 @@ export function getAgent(agentType: AgentType, sector?: DealSector): BaseAgent {
     case AgentType.FINTECH:
       return new FintechAgent();
     default:
-      // 섹터 기반 세분화
-      if (sector === DealSector.CLIMATE) return new ClimateAgent();
-      if (sector === DealSector.CONSUMER) return new ConsumerAgent();
       return new GeneralAgent();
   }
 }

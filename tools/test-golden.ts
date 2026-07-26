@@ -33,6 +33,28 @@ const CASES = [
     investAmount: 50,
     valuation: 300,
   },
+  {
+    name: "CLIMATE / GreenLoop",
+    path: "docs/fixtures/climate-greenloop-ir.md",
+    companyName: "GreenLoop",
+    sector: DealSector.CLIMATE,
+    agentType: AgentType.GENERAL,
+    sectionKey: SectionKey.MARKET_ANALYSIS,
+    investRound: "Series A",
+    investAmount: 60,
+    valuation: 280,
+  },
+  {
+    name: "CONSUMER / BloomLab",
+    path: "docs/fixtures/consumer-bloomlab-ir.md",
+    companyName: "BloomLab",
+    sector: DealSector.CONSUMER,
+    agentType: AgentType.GENERAL,
+    sectionKey: SectionKey.FINANCIAL_STATUS,
+    investRound: "Series A",
+    investAmount: 45,
+    valuation: 200,
+  },
 ];
 
 async function runCase(c: (typeof CASES)[number]) {

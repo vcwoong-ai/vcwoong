@@ -6,43 +6,15 @@ import { readFileSync } from "fs";
 import { resolve } from "path";
 import { extractSharedFacts } from "../src/lib/shared-facts";
 import { evaluateSection } from "../src/lib/report-quality";
+import { GOLDEN_FIXTURES } from "../src/lib/fixtures";
 
-const FIXTURES = [
-  {
-    path: "docs/fixtures/bio-healthcareai-ir.md",
-    companyName: "헬스케어AI Inc.",
-    sector: "BIO",
-    investRound: "Series B",
-    investAmount: 100,
-    valuation: 800,
-    expectPhase: "Phase II",
-  },
-  {
-    path: "docs/fixtures/it-dataflow-ir.md",
-    companyName: "DataFlow SaaS",
-    sector: "IT",
-    investRound: "Series A",
-    investAmount: 50,
-    valuation: 300,
-    expectArr: true,
-  },
-  {
-    path: "docs/fixtures/manufacturing-maker-ir.md",
-    companyName: "Maker Corp",
-    sector: "MANUFACTURING",
-    investRound: "Series B",
-    investAmount: 80,
-    valuation: 450,
-  },
-  {
-    path: "docs/fixtures/content-storyworks-ir.md",
-    companyName: "StoryWorks",
-    sector: "CONTENT",
-    investRound: "Series A",
-    investAmount: 40,
-    valuation: 220,
-  },
-];
+const EXTRA_EXPECT: Record<
+  string,
+  { expectPhase?: string; expectArr?: boolean }
+> = {
+  bio: { expectPhase: "Phase II" },
+  it: { expectArr: true },
+};
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -51,38 +23,44 @@ function assert(cond: boolean, msg: string) {
 function main() {
   console.log("\n=== Vcwoong 픽스처 검증 ===\n");
 
-  for (const f of FIXTURES) {
-    const text = readFileSync(resolve(process.cwd(), f.path), "utf8");
+  for (const f of GOLDEN_FIXTURES) {
+    const text = readFileSync(resolve(process.cwd(), f.relativePath), "utf8");
     const facts = extractSharedFacts({
       companyName: f.companyName,
       sector: f.sector,
       investRound: f.investRound,
       investAmount: f.investAmount,
       valuation: f.valuation,
-      documents: [{ name: f.path, parsedText: text }],
+      documents: [{ name: f.relativePath, parsedText: text }],
     });
 
-    console.log(`📄 ${f.path}`);
+    console.log(`📄 ${f.relativePath}`);
     console.log(`   facts: ${facts.summaryLines.join(" | ")}`);
 
-    if ("expectPhase" in f && f.expectPhase) {
+    const expect = EXTRA_EXPECT[f.id] ?? {};
+    if (expect.expectPhase) {
       assert(
-        facts.clinicalPhase === f.expectPhase,
-        `${f.path}: clinicalPhase expected ${f.expectPhase}, got ${facts.clinicalPhase}`
+        facts.clinicalPhase === expect.expectPhase,
+        `${f.relativePath}: clinicalPhase expected ${expect.expectPhase}, got ${facts.clinicalPhase}`
       );
     }
-    if ("expectArr" in f && f.expectArr) {
-      assert(Boolean(facts.metrics.ARR), `${f.path}: ARR expected`);
-      assert(Boolean(facts.metrics.NRR), `${f.path}: NRR expected`);
+    if (expect.expectArr) {
+      assert(Boolean(facts.metrics.ARR), `${f.relativePath}: ARR expected`);
+      assert(Boolean(facts.metrics.NRR), `${f.relativePath}: NRR expected`);
     }
 
+    assert(text.length > 200, `${f.relativePath}: fixture too short`);
+
     // IR 텍스트를 "제품/기술" 섹션처럼 평가 (길이·구조 휴리스틱)
-    const q = evaluateSection("PRODUCT_TECHNOLOGY", text + "\n### 요약\n출처: IR 자료\n" + "가".repeat(200));
+    const q = evaluateSection(
+      "PRODUCT_TECHNOLOGY",
+      text + "\n### 요약\n출처: IR 자료\n" + "가".repeat(200)
+    );
     console.log(`   quality heuristic: ${q.score}/100`);
     console.log("");
   }
 
-  console.log("✅ 픽스처 검증 통과\n");
+  console.log(`✅ 픽스처 검증 통과 (${GOLDEN_FIXTURES.length}개)\n`);
 }
 
 main();

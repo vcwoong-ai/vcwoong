@@ -135,6 +135,7 @@ export function ReportPageClient({ report }: { report: Report }) {
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const [pageStatus, setPageStatus] = useState(report.status);
+  const [qualityRefreshKey, setQualityRefreshKey] = useState(0);
 
   const handleReload = useCallback(() => window.location.reload(), []);
 
@@ -287,7 +288,10 @@ export function ReportPageClient({ report }: { report: Report }) {
       </div>
 
       {report.sections.length > 0 && (
-        <ReportQualityPanel reportId={report.id} />
+        <ReportQualityPanel
+          reportId={report.id}
+          refreshKey={qualityRefreshKey}
+        />
       )}
 
       <ReportEditor
@@ -301,6 +305,9 @@ export function ReportPageClient({ report }: { report: Report }) {
         isFinalizing={isFinalizing}
         onRegenerate={handleRegenerate}
         isRegenerating={isRegenerating}
+        onSectionRegenerated={() =>
+          setQualityRefreshKey((k) => k + 1)
+        }
       />
     </div>
   );
