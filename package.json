@@ -16,6 +16,8 @@
     "dev:local": "DATABASE_URL='file:./dev.db' prisma generate --schema prisma/schema.sqlite.prisma && DATABASE_URL='file:./dev.db' next dev",
     "test:ai": "tsx --env-file=.env.local tools/test-gemini.ts",
     "test:quality": "tsx tools/test-quality.ts",
+    "test:fixtures": "tsx tools/test-fixtures.ts",
+    "test:all": "npm run test:quality && npm run test:fixtures",
     "postinstall": "prisma generate"
   },
   "dependencies": {

@@ -7,7 +7,6 @@ import { formatDeepTechAnalysisForPrompt } from "@/lib/deeptech/infra-extract";
 
 /**
  * Neuron — AI/딥테크 전문 투자 심사역 에이전트.
- * 기술 성숙도(TRL), AI 유닛 이코노믹스, 딥테크 IP 분석에 특화.
  */
 export class DeepTechAgent extends BaseAgent {
   constructor() {
@@ -18,119 +17,159 @@ export class DeepTechAgent extends BaseAgent {
     input: AgentInput,
     sectionKey: SectionKey
   ): Promise<GenerationResult> {
-    if (sectionKey === SectionKey.PRODUCT_TECHNOLOGY) {
-      return this.generateTechAssessment(input);
+    switch (sectionKey) {
+      case SectionKey.PRODUCT_TECHNOLOGY:
+        return this.generateTechAssessment(input);
+      case SectionKey.MARKET_ANALYSIS:
+        return this.generateMarket(input);
+      case SectionKey.FINANCIAL_STATUS:
+        return this.generateFinancials(input);
+      case SectionKey.VALUATION:
+        return this.generateDeepTechValuation(input);
+      case SectionKey.RISK_ANALYSIS:
+        return this.generateRisk(input);
+      default:
+        return super.generateSection(input, sectionKey);
     }
-    if (sectionKey === SectionKey.VALUATION) {
-      return this.generateDeepTechValuation(input);
-    }
-    return super.generateSection(input, sectionKey);
   }
 
-  private async generateTechAssessment(input: AgentInput): Promise<GenerationResult> {
+  private async run(
+    input: AgentInput,
+    sectionKey: SectionKey,
+    userPrompt: string
+  ): Promise<GenerationResult> {
     const systemPrompt = getSystemPrompt(AgentType.DEEPTECH);
-    const documentContext = this.buildDocumentContext(input.documents);
-    const infraAnalysis = formatDeepTechAnalysisForPrompt(documentContext);
-
-    const userPrompt = `## 투자 대상 기업 정보
-- 기업명: ${input.companyName}
-- 섹터: AI/딥테크
-
-## 제공 자료
-${documentContext}${infraAnalysis}
-
-## 제품/기술 섹션 작성 요청 (AI/딥테크 특화)
-
-다음 구조로 **제품/기술** 섹션을 작성해주세요:
-
-### 1. 핵심 기술 개요
-- 기술 분류 (AI/ML, 반도체, 로봇, 양자컴퓨팅 등)
-- TRL (Technology Readiness Level) 현황 (1~9 단계)
-- 기술 원천 (자체개발/대학 스핀오프/라이선스)
-
-### 2. AI/모델 역량 (AI 기업 해당 시)
-- 모델 아키텍처 및 파라미터 규모
-- 학습 데이터 규모 및 독점 데이터 확보 전략
-- 성능 벤치마크 (업계 표준 대비)
-- GPU/클라우드 인프라 비용 및 인퍼런스 마진
-
-### 3. IP 포트폴리오
-- 핵심 특허 및 논문 (피인용수 포함)
-- 기술이전/라이선스 현황
-- FTO(Freedom to Operate) 검토
-
-### 4. 기술 차별성 및 해자
-- 경쟁 기술 대비 성능/비용/속도 우위
-- 데이터 해자, 네트워크 효과, 전환 비용
-
-### 5. 상업화 로드맵
-- 파일럿 → 양산/서비스화 타임라인
-- 주요 레퍼런스 고객 및 POC 결과
-
-분량: 800~1,200자 (한글 기준), 문어체 사용`;
-
-    const result = await generateText(
-      [{ role: "user", content: userPrompt }],
-      { systemPrompt, maxTokens: 4096, temperature: 0.35 }
-    );
-
+    const result = await generateText([{ role: "user", content: userPrompt }], {
+      systemPrompt,
+      maxTokens: 4096,
+      temperature: 0.35,
+    });
     return {
-      sectionKey: SectionKey.PRODUCT_TECHNOLOGY,
+      sectionKey,
       content: result.content,
       tokensUsed: result.inputTokens + result.outputTokens,
       modelUsed: result.usedModel,
     };
   }
 
-  private async generateDeepTechValuation(input: AgentInput): Promise<GenerationResult> {
-    const systemPrompt = getSystemPrompt(AgentType.DEEPTECH);
+  private async generateTechAssessment(
+    input: AgentInput
+  ): Promise<GenerationResult> {
     const documentContext = this.buildDocumentContext(input.documents);
     const infraAnalysis = formatDeepTechAnalysisForPrompt(documentContext);
+    return this.run(
+      input,
+      SectionKey.PRODUCT_TECHNOLOGY,
+      `## 기업: ${input.companyName} (AI/딥테크)
+${input.additionalContext ?? ""}
 
-    const userPrompt = `## 투자 대상 기업 정보
-- 기업명: ${input.companyName}
-- 섹터: AI/딥테크
-${input.investRound ? `- 투자 라운드: ${input.investRound}` : ""}
-${input.investAmount ? `- 투자 금액: ${input.investAmount.toLocaleString()}억원` : ""}
-${input.valuation ? `- Post-money 밸류에이션: ${input.valuation.toLocaleString()}억원` : ""}
-
-## 제공 자료
+## 자료
 ${documentContext}${infraAnalysis}
 
-## 밸류에이션 섹션 작성 요청 (AI/딥테크 특화)
+## 제품/기술 (딥테크 특화)
+### 1. 핵심 기술·TRL
+### 2. 모델/데이터 해자 (해당 시) + GPU 비용 힌트 활용
+### 3. IP·논문
+### 4. 차별성·해자
+### 5. 상업화 로드맵·레퍼런스
 
-### 1. 이번 라운드 요약
-- Pre/Post-money 밸류에이션, 투자 조건
+800~1,200자. 없는 수치 확인 필요.`
+    );
+  }
 
-### 2. 기술 가치 평가
-- TRL 단계별 가치 할증/할인 (TRL 1~4: 기술 리스크 프리미엄 50~80%)
-- 특허 포트폴리오 가치 추산
+  private async generateMarket(input: AgentInput): Promise<GenerationResult> {
+    const documentContext = this.buildDocumentContext(input.documents);
+    const infraAnalysis = formatDeepTechAnalysisForPrompt(documentContext);
+    return this.run(
+      input,
+      SectionKey.MARKET_ANALYSIS,
+      `## 기업: ${input.companyName}
+${input.additionalContext ?? ""}
 
-### 3. 비교 밸류에이션 (AI/딥테크 Comps)
-- 국내외 유사 AI 스타트업 최근 라운드 배수
-- ARR 대비 NTM 배수 (AI SaaS: 20~60x ARR)
-- 전략적 M&A 프리미엄 (빅테크 인수 사례)
+## 자료
+${documentContext}${infraAnalysis}
 
-### 4. DCF 가정 및 시나리오
-- Bull/Base/Bear 시나리오별 Exit 가치
-- 할인율 및 Terminal Value 가정
+## 시장분석 (딥테크)
+### 1. TAM·채택 사이클
+### 2. 경쟁 기술/오픈소스
+### 3. 바이어(엔터프라이즈/정부/빅테크)
+### 4. Go-to-market
+### 5. 표준·규제
 
+700~1,100자.`
+    );
+  }
+
+  private async generateFinancials(input: AgentInput): Promise<GenerationResult> {
+    const documentContext = this.buildDocumentContext(input.documents);
+    const infraAnalysis = formatDeepTechAnalysisForPrompt(documentContext);
+    return this.run(
+      input,
+      SectionKey.FINANCIAL_STATUS,
+      `## 기업: ${input.companyName}
+${input.additionalContext ?? ""}
+
+## 자료
+${documentContext}${infraAnalysis}
+
+## 재무현황 (딥테크)
+### 1. 매출·그로스마진 (있는 경우)
+### 2. R&D·GPU/클라우드 비용 구조
+### 3. 번레이트·런웨이
+### 4. 유닛 이코노믹스 (인퍼런스 마진)
+### 5. 자금 조달 이력
+
+700~1,100자.`
+    );
+  }
+
+  private async generateDeepTechValuation(
+    input: AgentInput
+  ): Promise<GenerationResult> {
+    const documentContext = this.buildDocumentContext(input.documents);
+    const infraAnalysis = formatDeepTechAnalysisForPrompt(documentContext);
+    return this.run(
+      input,
+      SectionKey.VALUATION,
+      `## 기업: ${input.companyName}
+${input.investRound ? `- 라운드: ${input.investRound}` : ""}
+${input.valuation ? `- Post-money: ${input.valuation}억원` : ""}
+${input.additionalContext ?? ""}
+
+## 자료
+${documentContext}${infraAnalysis}
+
+## 밸류에이션 (딥테크)
+### 1. 라운드 요약
+### 2. TRL 할증/할인
+### 3. AI SaaS ARR 배수 / 전략적 M&A comps
+### 4. Bull/Base/Bear Exit
 ### 5. 전략적 가치
-- 잠재 인수자 및 인수 시너지 분석
-- 기술이전 로열티 옵션 가치
 
-분량: 700~1,000자 (한글 기준), 문어체 사용`;
-
-    const result = await generateText(
-      [{ role: "user", content: userPrompt }],
-      { systemPrompt, maxTokens: 4096, temperature: 0.35 }
+700~1,100자.`
     );
+  }
 
-    return {
-      sectionKey: SectionKey.VALUATION,
-      content: result.content,
-      tokensUsed: result.inputTokens + result.outputTokens,
-      modelUsed: result.usedModel,
-    };
+  private async generateRisk(input: AgentInput): Promise<GenerationResult> {
+    const documentContext = this.buildDocumentContext(input.documents);
+    const infraAnalysis = formatDeepTechAnalysisForPrompt(documentContext);
+    return this.run(
+      input,
+      SectionKey.RISK_ANALYSIS,
+      `## 기업: ${input.companyName}
+${input.additionalContext ?? ""}
+
+## 자료
+${documentContext}${infraAnalysis}
+
+## 리스크 (딥테크)
+### 1. 기술·TRL 리스크
+### 2. 데이터/모델 대체·오픈소스
+### 3. 인프라 비용·마진
+### 4. IP·인재
+### 5. 완화 방안
+
+700~1,000자.`
+    );
   }
 }
