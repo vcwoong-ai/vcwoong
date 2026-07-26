@@ -6,7 +6,6 @@ import { GenerationResult } from "@/types";
 
 /**
  * Story — 콘텐츠/엔터테인먼트 전문 투자 심사역 에이전트.
- * IP 가치, 팬덤 경제, 한류 프리미엄 분석에 특화.
  */
 export class ContentAgent extends BaseAgent {
   constructor() {
@@ -17,107 +16,154 @@ export class ContentAgent extends BaseAgent {
     input: AgentInput,
     sectionKey: SectionKey
   ): Promise<GenerationResult> {
-    if (sectionKey === SectionKey.PRODUCT_TECHNOLOGY) {
-      return this.generateIPAssessment(input);
+    switch (sectionKey) {
+      case SectionKey.PRODUCT_TECHNOLOGY:
+        return this.generateIPAssessment(input);
+      case SectionKey.MARKET_ANALYSIS:
+        return this.generateContentMarket(input);
+      case SectionKey.FINANCIAL_STATUS:
+        return this.generateFinancials(input);
+      case SectionKey.VALUATION:
+        return this.generateValuation(input);
+      case SectionKey.RISK_ANALYSIS:
+        return this.generateRisk(input);
+      default:
+        return super.generateSection(input, sectionKey);
     }
-    if (sectionKey === SectionKey.MARKET_ANALYSIS) {
-      return this.generateContentMarket(input);
-    }
-    return super.generateSection(input, sectionKey);
   }
 
-  private async generateIPAssessment(input: AgentInput): Promise<GenerationResult> {
+  private async run(
+    input: AgentInput,
+    sectionKey: SectionKey,
+    userPrompt: string
+  ): Promise<GenerationResult> {
     const systemPrompt = getSystemPrompt(AgentType.CONTENT);
-    const documentContext = this.buildDocumentContext(input.documents);
-
-    const userPrompt = `## 투자 대상 기업 정보
-- 기업명: ${input.companyName}
-- 섹터: 콘텐츠/엔터테인먼트
-
-## 제공 자료
-${documentContext}
-
-## 제품/IP 섹션 작성 요청 (콘텐츠/엔터 특화)
-
-### 1. 핵심 IP 포트폴리오
-- 오리지널 IP 목록 (웹툰/드라마/영화/게임/음악 등)
-- 각 IP별 팬덤 규모 및 해외 진출 현황
-- IP 수명주기 단계 및 확장 계획 (OSMU: One Source Multi-Use)
-
-### 2. 아티스트/크리에이터 역량
-- 소속 아티스트/크리에이터 현황 및 계약 구조
-- 전속 계약 만료 리스크 및 재계약 현황
-- 신인 발굴 시스템 및 육성 트랙레코드
-
-### 3. 플랫폼 및 유통 역량
-- 주요 유통 플랫폼별 수익 구조 (스트리밍/OTT/유튜브)
-- 자체 플랫폼 보유 여부 및 MAU
-- 글로벌 파트너십 현황
-
-### 4. 수익 다변화
-- 매출 포트폴리오 (공연/굿즈/라이선싱/광고/게임 등)
-- 글로벌 MG(최소보장금) 계약 현황
-- 신규 수익원 개발 계획
-
-분량: 700~1,000자 (한글 기준), 문어체 사용`;
-
-    const result = await generateText(
-      [{ role: "user", content: userPrompt }],
-      { systemPrompt, maxTokens: 4096, temperature: 0.35 }
-    );
-
+    const result = await generateText([{ role: "user", content: userPrompt }], {
+      systemPrompt,
+      maxTokens: 4096,
+      temperature: 0.35,
+    });
     return {
-      sectionKey: SectionKey.PRODUCT_TECHNOLOGY,
+      sectionKey,
       content: result.content,
       tokensUsed: result.inputTokens + result.outputTokens,
       modelUsed: result.usedModel,
     };
   }
 
-  private async generateContentMarket(input: AgentInput): Promise<GenerationResult> {
-    const systemPrompt = getSystemPrompt(AgentType.CONTENT);
+  private async generateIPAssessment(
+    input: AgentInput
+  ): Promise<GenerationResult> {
     const documentContext = this.buildDocumentContext(input.documents);
+    return this.run(
+      input,
+      SectionKey.PRODUCT_TECHNOLOGY,
+      `## 기업: ${input.companyName} (콘텐츠/엔터)
+${input.additionalContext ?? ""}
 
-    const userPrompt = `## 투자 대상 기업 정보
-- 기업명: ${input.companyName}
-- 섹터: 콘텐츠/엔터테인먼트
-
-## 제공 자료
+## 자료
 ${documentContext}
 
-## 시장분석 섹션 작성 요청 (콘텐츠/엔터 특화)
+## 제품/IP (콘텐츠 특화)
+### 1. 핵심 IP 포트폴리오·OSMU
+### 2. 아티스트/크리에이터 계약
+### 3. 유통·플랫폼·MAU
+### 4. 수익 다변화 (공연/굿즈/라이선스)
+### 5. 글로벌 확장
 
-### 1. 글로벌 콘텐츠 시장 규모 및 성장성
-- TAM: 글로벌 엔터/콘텐츠 시장 규모
-- SAM: 해당 장르/플랫폼 시장
-- 한류(K-Content) 프리미엄 및 성장 드라이버
-
-### 2. 경쟁 구도
-- 국내 주요 경쟁사 (HYBE, SM, JYP, YG, CJ ENM 등)
-- 해외 경쟁사 및 글로벌 OTT 플랫폼의 K-콘텐츠 투자 동향
-- 진입장벽 분석 (IP 축적, 아티스트 독점, 유통 채널)
-
-### 3. 팬덤 경제 트렌드
-- 팬덤 규모 측정 지표 (스트리밍 순위, SNS 팔로워, 팬클럽 규모)
-- 팬덤 기반 소비 패턴 (앨범/굿즈/공연/팬미팅)
-- 크리에이터 이코노미 성장 및 플랫폼 파편화
-
-### 4. 규제 환경
-- 대중문화예술인 계약 관련 규제 (공정위 가이드라인)
-- 해외 진출 시 현지 규제 (중국 한한령 등)
-
-분량: 700~1,000자 (한글 기준), 문어체 사용`;
-
-    const result = await generateText(
-      [{ role: "user", content: userPrompt }],
-      { systemPrompt, maxTokens: 4096, temperature: 0.35 }
+700~1,100자. 없는 수치는 확인 필요.`
     );
+  }
 
-    return {
-      sectionKey: SectionKey.MARKET_ANALYSIS,
-      content: result.content,
-      tokensUsed: result.inputTokens + result.outputTokens,
-      modelUsed: result.usedModel,
-    };
+  private async generateContentMarket(
+    input: AgentInput
+  ): Promise<GenerationResult> {
+    const documentContext = this.buildDocumentContext(input.documents);
+    return this.run(
+      input,
+      SectionKey.MARKET_ANALYSIS,
+      `## 기업: ${input.companyName}
+${input.additionalContext ?? ""}
+
+## 자료
+${documentContext}
+
+## 시장분석 (콘텐츠 특화)
+### 1. TAM·한류 프리미엄
+### 2. 경쟁 (HYBE/SM/JYP/YG/CJ ENM)
+### 3. 팬덤 경제 지표
+### 4. OTT/스트리밍 트렌드
+### 5. 규제 (공정위·해외)
+
+700~1,100자.`
+    );
+  }
+
+  private async generateFinancials(input: AgentInput): Promise<GenerationResult> {
+    const documentContext = this.buildDocumentContext(input.documents);
+    return this.run(
+      input,
+      SectionKey.FINANCIAL_STATUS,
+      `## 기업: ${input.companyName}
+${input.additionalContext ?? ""}
+
+## 자료
+${documentContext}
+
+## 재무현황 (콘텐츠 특화)
+### 1. 매출 포트폴리오 (공연/앨범/라이선스/광고)
+### 2. 손익·마진 구조
+### 3. MG·선수금·이연수익
+### 4. 아티스트 정산·원가
+### 5. 현금·런웨이
+
+700~1,100자.`
+    );
+  }
+
+  private async generateValuation(input: AgentInput): Promise<GenerationResult> {
+    const documentContext = this.buildDocumentContext(input.documents);
+    return this.run(
+      input,
+      SectionKey.VALUATION,
+      `## 기업: ${input.companyName}
+${input.investRound ? `- 라운드: ${input.investRound}` : ""}
+${input.valuation ? `- Post-money: ${input.valuation}억원` : ""}
+${input.additionalContext ?? ""}
+
+## 자료
+${documentContext}
+
+## 밸류에이션 (콘텐츠 특화)
+### 1. 라운드 요약
+### 2. EV/EBITDA · 구독자×ARPU
+### 3. IP DCF
+### 4. M&A comps (엔터)
+### 5. Exit 시나리오
+
+700~1,100자.`
+    );
+  }
+
+  private async generateRisk(input: AgentInput): Promise<GenerationResult> {
+    const documentContext = this.buildDocumentContext(input.documents);
+    return this.run(
+      input,
+      SectionKey.RISK_ANALYSIS,
+      `## 기업: ${input.companyName}
+${input.additionalContext ?? ""}
+
+## 자료
+${documentContext}
+
+## 리스크 (콘텐츠 특화)
+### 1. 아티스트 이탈·스캔들
+### 2. IP 수명·흥행 변동성
+### 3. 플랫폼 의존·정산
+### 4. 해외 규제·환율
+### 5. 완화 방안
+
+700~1,000자.`
+    );
   }
 }

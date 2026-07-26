@@ -26,6 +26,22 @@ const FIXTURES = [
     valuation: 300,
     expectArr: true,
   },
+  {
+    path: "docs/fixtures/manufacturing-maker-ir.md",
+    companyName: "Maker Corp",
+    sector: "MANUFACTURING",
+    investRound: "Series B",
+    investAmount: 80,
+    valuation: 450,
+  },
+  {
+    path: "docs/fixtures/content-storyworks-ir.md",
+    companyName: "StoryWorks",
+    sector: "CONTENT",
+    investRound: "Series A",
+    investAmount: 40,
+    valuation: 220,
+  },
 ];
 
 function assert(cond: boolean, msg: string) {

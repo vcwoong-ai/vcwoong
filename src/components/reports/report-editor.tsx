@@ -63,6 +63,7 @@ export function ReportEditor({
   const [approvingAll, setApprovingAll] = useState(false);
   const [localSections, setLocalSections] = useState<Section[]>(sections);
   const [copied, setCopied] = useState(false);
+  const [regeneratingKey, setRegeneratingKey] = useState<string | null>(null);
 
   const sortedSections = [...localSections].sort((a, b) => a.order - b.order);
 
@@ -138,6 +139,52 @@ export function ReportEditor({
       console.error(error);
     } finally {
       setSaving(null);
+    }
+  };
+
+  const regenerateSection = async (section: Section) => {
+    if (
+      !confirm(
+        `"${section.title}" 섹션만 AI로 다시 생성할까요?\n기존 내용은 덮어씁니다.`
+      )
+    ) {
+      return;
+    }
+    setRegeneratingKey(section.sectionKey);
+    try {
+      const response = await fetch(
+        `/api/reports/${reportId}/sections/regenerate`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sectionKey: section.sectionKey }),
+        }
+      );
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error ?? "재생성 실패");
+      }
+      const { data } = await response.json();
+      if (data?.section) {
+        setLocalSections((prev) =>
+          prev.map((s) =>
+            s.sectionKey === section.sectionKey
+              ? {
+                  ...s,
+                  content: data.section.content,
+                  status: SectionStatus.DRAFT,
+                }
+              : s
+          )
+        );
+      }
+    } catch (error) {
+      console.error(error);
+      alert(
+        error instanceof Error ? error.message : "섹션 재생성 중 오류가 발생했습니다"
+      );
+    } finally {
+      setRegeneratingKey(null);
     }
   };
 
@@ -288,6 +335,20 @@ export function ReportEditor({
                         <Button
                           variant="ghost"
                           size="sm"
+                          onClick={() => regenerateSection(section)}
+                          disabled={regeneratingKey !== null}
+                          title="이 섹션만 AI 재생성"
+                        >
+                          {regeneratingKey === section.sectionKey ? (
+                            <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                          ) : (
+                            <RefreshCw className="w-3 h-3 mr-1" />
+                          )}
+                          재생성
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           onClick={() => startEdit(section)}
                         >
                           <Edit3 className="w-3 h-3 mr-1" />
@@ -299,7 +360,7 @@ export function ReportEditor({
                             size="sm"
                             className="border-green-300 text-green-700 hover:bg-green-50"
                             onClick={() => approveSection(section)}
-                            disabled={isSaving}
+                            disabled={isSaving || regeneratingKey !== null}
                           >
                             <CheckCircle className="w-3 h-3 mr-1" />
                             승인
