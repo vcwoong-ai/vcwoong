@@ -29,7 +29,7 @@ function assert(cond: boolean, msg: string) {
 }
 
 function main() {
-  console.log("\n=== Vcwoong 픽스처 검증 ===\n");
+  console.log("\n=== Axiom 픽스처 검증 ===\n");
 
   for (const f of GOLDEN_FIXTURES) {
     const text = readFileSync(resolve(process.cwd(), f.relativePath), "utf8");

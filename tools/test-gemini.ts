@@ -8,7 +8,7 @@ async function main() {
   const key = process.env.GEMINI_API_KEY?.trim() ?? "";
   const model = process.env.AI_MODEL ?? "gemini-2.5-flash";
 
-  console.log("\n=== Vcwoong AI 테스트 ===\n");
+  console.log("\n=== Axiom AI 테스트 ===\n");
   console.log(`GEMINI_API_KEY: ${key.startsWith("AIza") ? "✅ 설정됨" : "❌ 없음"}`);
   console.log(`AI_MODEL: ${model}\n`);
 
@@ -39,7 +39,7 @@ async function main() {
     ],
     {
       systemPrompt:
-        "당신은 Vcwoong(VC우ng) BIO 투자심사 AI입니다. 간결하고 전문적으로 작성하세요.",
+        "당신은 Axiom(액시엄) BIO 투자심사 AI입니다. 간결하고 전문적으로 작성하세요.",
       maxTokens: 512,
     }
   );

@@ -1,11 +1,25 @@
-# Vcwoong — Agent Context
+# Axiom — Agent Context
 
 ## 제품 개요
 
-- **이름:** Vcwoong (VC우ng)
+- **이름:** Axiom (액시엄)
 - **한 줄:** 섹터별 전문 AI 심사역 6명을 고용하는 VC용 투자심사보고서 자동화 SaaS
-- **배포:** https://dealsync-jade.vercel.app
-- **주의:** Claude Code의 "DealSync"와 별개 프로젝트 — 브랜드명 혼용 금지
+- **이름 유래:** axiom(공리) — 판단의 전제를 명확히 남기는 보고서
+- **브랜드 단일 소스:** `src/lib/brand.ts` (UI·메타데이터는 반드시 `BRAND` 참조)
+
+### 사용 금지 이름
+
+과거 명칭이거나 다른 프로젝트/경쟁사의 것이므로 새 코드에 쓰지 말 것.
+
+| 금지 | 이유 |
+|------|------|
+| Vcwoong / VC우ng | 이전 제품명 (2026-07 폐기) |
+| DealSync / 딜싱크 | Claude Code의 별개 프로젝트 |
+| VCNote / 심사노트 | 직접 경쟁사 |
+| 비키 / 메리 / ZUZU | 경쟁사 |
+
+> Vercel 슬러그(`dealsync-jade`)와 GitHub 저장소명(`vcwoong-ai/vcwoong`)은
+> 인프라 식별자라 그대로 두지만, 제품 문구에는 노출하지 않는다.
 
 ## 4축 차별화
 
@@ -16,9 +30,13 @@
 
 ## 경쟁사
 
-- **VCNote** — 직접 경쟁, 멀티에이전트·6영역 점수, 한국 데이터 연동
-- **메리/비키/KV파트너스** — VC 인하우스 AI, 외부 미판매
+- **VCNote(심사노트)** — 직접 경쟁. 6개 전문 에이전트, 소싱→펀드 운용 풀사이클, LP 분기리포트까지 제공
+- **ZUZU** — 딜소싱·포트폴리오 관리, IR AI 요약 (소싱 무료)
+- **비키(더벤처스)/메리(MYSC)** — VC 인하우스 AI, 외부 미판매
 - **Skywork** — 글로벌 범용, 한국 VC 도메인·양식 재현 없음
+
+> 기능 목록만으로는 VCNote와 겹친다. 방어 가능한 차별점은
+> **회사별 양식 1:1 재현**과 **섹터 분석 깊이(rNPV·PubMed 등)** 두 가지다.
 
 ## 기술 스택
 
@@ -56,8 +74,13 @@ Phase별 상세 지시는 `docs/phases/` 참고:
 | content | Story | 콘텐츠/엔터 |
 | fintech | Vault | 핀테크/금융 |
 
+## 현재 구현 상태
+
+`docs/PRODUCT-STATUS.md` 참고 — 4축 기준으로 구현/미구현과 다음 우선순위를 정리해 둠.
+
 ## 작업 시 주의
 
-- Phase 순서 준수 (이전 Phase 산출물 기반)
 - 민감 정보는 `.env.local`에만 저장
-- 각 Phase 완료 후 git commit
+- 브랜드 문자열 하드코딩 금지 — `BRAND`에서 가져올 것
+- 오프라인 테스트: `npm run test:all` (API 키 불필요)
+- 로컬 DB: `npm run db:setup:local` → `npm run dev:local`

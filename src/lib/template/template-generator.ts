@@ -271,7 +271,7 @@ export async function generateTemplateBasedDOCX(
     new Paragraph({
       children: [
         new TextRun({
-          text: options.vcFirmName ?? "Vcwoong",
+          text: options.vcFirmName ?? "Axiom",
           size: 24,
           color: "595959",
           font: "맑은 고딕",
@@ -375,7 +375,7 @@ export async function generateTemplateBasedDOCX(
   }
 
   const doc = new Document({
-    creator: "Vcwoong",
+    creator: "Axiom",
     title: `${options.companyName} 투자심의보고서`,
     description: "AI 생성 투자심의보고서",
     sections: [
@@ -391,7 +391,7 @@ export async function generateTemplateBasedDOCX(
                     color: "808080",
                   }),
                   new TextRun({ text: "  |  ", size: 16, color: "CCCCCC" }),
-                  new TextRun({ text: options.vcFirmName ?? "Vcwoong", size: 16, color: "808080" }),
+                  new TextRun({ text: options.vcFirmName ?? "Axiom", size: 16, color: "808080" }),
                 ],
                 alignment: AlignmentType.RIGHT,
               }),

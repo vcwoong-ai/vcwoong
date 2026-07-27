@@ -18,11 +18,11 @@ async function main() {
   // Create demo user
   const passwordHash = await bcrypt.hash("Demo1234!", 12);
   const user = await prisma.user.upsert({
-    where: { email: "demo@vcwoong.kr" },
+    where: { email: "demo@axiom.kr" },
     // 데모 계정은 모든 기능을 체험할 수 있도록 최상위 플랜으로 둔다
     update: { subscriptionPlan: "FULL", subscriptionStatus: "ACTIVE" },
     create: {
-      email: "demo@vcwoong.kr",
+      email: "demo@axiom.kr",
       name: "김심사",
       passwordHash,
       role: UserRole.ANALYST,
@@ -332,7 +332,7 @@ async function main() {
     update: {},
     create: {
       id: "seed-fund-001",
-      name: "Vcwoong 1호 벤처투자조합",
+      name: "Axiom 1호 벤처투자조합",
       vintageYear: 2023,
       fundSize: 500,
       paidIn: 320,
@@ -455,7 +455,7 @@ async function main() {
   );
   console.log("\nSeed completed successfully!");
   console.log("\nDemo credentials:");
-  console.log("  Email: demo@vcwoong.kr");
+  console.log("  Email: demo@axiom.kr");
   console.log("  Password: Demo1234!");
 }
 

@@ -1,4 +1,4 @@
-# Vcwoong 배포 가이드
+# Axiom 배포 가이드
 
 ## 1. GitHub + Vercel
 
@@ -40,7 +40,7 @@ postgresql://postgres.jgmvqtmohoxcriobjjfk:[PASSWORD]@aws-0-ap-northeast-1.poole
 ```bash
 cp .env.local.example .env.local
 npx prisma db push
-npx prisma db seed   # demo@vcwoong.kr / Demo1234!
+npx prisma db seed   # demo@axiom.kr / Demo1234!
 ```
 
 ## 3. Vercel 환경 변수 (필수)
@@ -76,6 +76,6 @@ https://dealsync-jade.vercel.app/api/payments/webhook
 
 ## Neon 대신 Supabase?
 
-Neon(`neon-red-mountain`)은 Claude 쪽일 수 있음 → **Vcwoong은 Supabase `jgmvqtmohoxcriobjjfk` 사용**
+Neon(`neon-red-mountain`)은 Claude 쪽일 수 있음 → **Axiom은 Supabase `jgmvqtmohoxcriobjjfk` 사용**
 
 📱 모바일 가이드: [`docs/MOBILE-SETUP.md`](docs/MOBILE-SETUP.md)

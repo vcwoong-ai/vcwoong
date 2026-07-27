@@ -1,4 +1,4 @@
-# Vcwoong 제품 현황 (배포 제외)
+# Axiom 제품 현황 (배포 제외)
 
 4축 차별화 기준으로 현재 무엇이 동작하고 무엇이 남았는지 정리한 문서입니다.
 다른 환경(예: Claude)에서 작업한 내용과 병합할 때 기준점으로 사용하세요.
@@ -69,7 +69,7 @@ npm run dev:local
 npm run test:all           # quality + fixtures + routing (API 키 불필요)
 ```
 
-데모: `demo@vcwoong.kr` / `Demo1234!` (FULL 플랜)
+데모: `demo@axiom.kr` / `Demo1234!` (FULL 플랜)
 
 ## 남은 우선순위
 

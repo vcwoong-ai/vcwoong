@@ -142,7 +142,7 @@ export function LPReportClient({ funds }: { funds: FundView[] }) {
                 id="fund-name"
                 value={newFundName}
                 onChange={(e) => setNewFundName(e.target.value)}
-                placeholder="예: Vcwoong 2호 벤처투자조합"
+                placeholder="예: Axiom 2호 벤처투자조합"
               />
             </div>
             <div>

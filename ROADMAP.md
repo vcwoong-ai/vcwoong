@@ -1,4 +1,4 @@
-# Vcwoong 로드맵
+# Axiom 로드맵
 
 ## v1.0 — 현재 (MVP)
 - BIO 섹터 에이전트 (Dr. Cell)

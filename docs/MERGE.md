@@ -34,5 +34,5 @@ git push origin main
 
 ## 데모 계정
 
-- Email: `demo@vcwoong.kr`
+- Email: `demo@axiom.kr`
 - Password: `Demo1234!`

@@ -58,7 +58,7 @@ npm run test:ai         # Gemini 스모크
 npm run dev:local
 ```
 
-데모 로그인: `demo@vcwoong.kr` / `Demo1234!`
+데모 로그인: `demo@axiom.kr` / `Demo1234!`
 
 ## 품질 연습 루프 (추천)
 

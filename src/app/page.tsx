@@ -62,7 +62,8 @@ export default function LandingPage() {
           </h1>
           <p className="text-xl text-slate-300 mb-10 max-w-2xl mx-auto leading-relaxed">
             BIO·IT·AI·제조·콘텐츠·핀테크 6개 섹터 전문 AI가<br className="hidden md:block" />
-            PubMed·ClinicalTrials·OpenFDA 실시간 데이터로 10섹션 IC 보고서를 자동 작성합니다.
+            10섹션 IC 보고서를 자동 작성합니다.
+            딜소싱부터 사후관리·LP 리포팅까지 한 흐름으로 이어집니다.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link
@@ -375,6 +376,10 @@ export default function LandingPage() {
                 <span className="font-bold text-white">{BRAND.name}</span>
               </div>
               <p className="text-sm">섹터별 전문 AI 심사역 6명을 고용하는<br />VC용 투자심사보고서 자동화 SaaS</p>
+              <p className="text-xs text-slate-500 mt-3 max-w-xs">
+                {BRAND.name}({BRAND.nameKr}) — 공리(公理).
+                판단의 전제를 분명히 남기는 보고서.
+              </p>
             </div>
             <div className="grid grid-cols-2 gap-8 text-sm">
               <div>
@@ -382,7 +387,7 @@ export default function LandingPage() {
                 <div className="space-y-2">
                   <a href="#features" className="block hover:text-white transition-colors">기능</a>
                   <a href="#agents" className="block hover:text-white transition-colors">AI 에이전트</a>
-                  <a href="#pricing" className="block hover:text-white transition-colors">가격</a>
+                  <Link href="/pricing" className="block hover:text-white transition-colors">가격</Link>
                 </div>
               </div>
               <div>

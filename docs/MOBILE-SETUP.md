@@ -1,4 +1,4 @@
-# 📱 모바일 5분 셋업 (Vcwoong + Supabase)
+# 📱 모바일 5분 셋업 (Axiom + Supabase)
 
 ## Vercel / Supabase가 뭐야?
 
@@ -10,7 +10,7 @@
 배포 URL: https://dealsync-jade.vercel.app
 
 > **기존 Supabase 프로젝트** `jgmvqtmohoxcriobjjfk` (Tokyo) **그대로 쓰면 됩니다.**  
-> Claude DealSync와는 별개입니다 (vcwoong@gmail.com 계정).
+> Claude DealSync와는 별개입니다 (axiom@gmail.com 계정).
 
 ---
 

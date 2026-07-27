@@ -89,7 +89,7 @@ async function runCase(f: (typeof GOLDEN_FIXTURES)[number]) {
 }
 
 async function main() {
-  console.log("\n=== Vcwoong 골든 샘플 (실제 에이전트) ===\n");
+  console.log("\n=== Axiom 골든 샘플 (실제 에이전트) ===\n");
 
   if (!isAIConfigured()) {
     console.log("❌ GEMINI_API_KEY (또는 OPENROUTER)가 없습니다.");

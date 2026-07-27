@@ -1,10 +1,10 @@
-# Vcwoong 개발 로드맵
+# Axiom 개발 로드맵
 
 에이전트(Claude Code / Cursor Agent)로 단계별 실행하는 통합 로드맵입니다.
 
 ## 실행 원칙
 
-1. **작업 디렉터리:** `W:\OneDrive - SGC\vcwoong` (프로젝트 루트)
+1. **작업 디렉터리:** `W:\OneDrive - SGC\axiom` (프로젝트 루트)
 2. **Phase마다 새 세션** — 컨텍스트 초기화 후 다음 파일 붙여넣기
 3. **순서 준수** — 이전 Phase 산출물이 다음 Phase의 전제
 
@@ -64,7 +64,7 @@
 Claude Code에서 "Deal sync progress" 제목으로 다음 경로에서 실행됨:
 
 - 이전: `W:\OneDrive - SGC\claude`
-- **현재 통합:** `W:\OneDrive - SGC\vcwoong`
+- **현재 통합:** `W:\OneDrive - SGC\axiom`
 
 ## 다음 단계
 

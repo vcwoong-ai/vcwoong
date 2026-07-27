@@ -4,7 +4,7 @@
 
 ---
 
-Vcwoong 프로젝트의 Phase 2를 진행합니다.
+Axiom 프로젝트의 Phase 2를 진행합니다.
 Phase 1에서 만든 프로젝트 구조 위에 Supabase 연동과 DB 스키마를 구현합니다.
 
 ## 작업 목표
@@ -232,7 +232,7 @@ CREATE POLICY "Users read own files" ON storage.objects FOR SELECT
 - 사이드바 네비게이션
   - 대시보드 / 보고서 / 양식 / 포트폴리오 / 설정
 - 우상단: 사용자 정보 + 로그아웃
-- 로고: "Vcwoong"
+- 로고: "Axiom"
 
 ## 8. 시드 데이터
 

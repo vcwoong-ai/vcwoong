@@ -1,4 +1,4 @@
-// Vcwoong (VC우ng) - Investment Review Report Automation Platform
+// Axiom (액시엄) - Investment Review Report Automation Platform
 // Prisma schema for PostgreSQL
 
 generator client {

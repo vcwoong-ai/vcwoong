@@ -6,7 +6,7 @@ import { BRAND } from "@/lib/brand";
 export const metadata = {
   title: `가격 — ${BRAND.name}`,
   description:
-    "Vcwoong 요금제. 무료로 시작하고, 필요할 때 섹터·양식·LP 리포팅을 확장하세요.",
+    "Axiom 요금제. 무료로 시작하고, 필요할 때 섹터·양식·LP 리포팅을 확장하세요.",
 };
 
 const FAQ = [
