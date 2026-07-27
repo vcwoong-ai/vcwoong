@@ -27,6 +27,7 @@ export function ReportQualityPanel({
   onImproveSection,
   onBatchImprove,
   batchImproving = false,
+  improvingSectionKey = null,
 }: {
   reportId: string;
   /** 섹션 재생성 후 증가시켜 품질 점수를 다시 불러온다 */
@@ -36,6 +37,8 @@ export function ReportQualityPanel({
   /** 약한 섹션 일괄 개선 */
   onBatchImprove?: () => void;
   batchImproving?: boolean;
+  /** 현재 재생성 중인 섹션 키 (타일 로딩 표시용) */
+  improvingSectionKey?: string | null;
 }) {
   const [data, setData] = useState<QualitySummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -148,7 +151,9 @@ export function ReportQualityPanel({
         {data.sections.map((s) => {
           const issues = [...s.issues, ...s.warnings];
           const weak = s.score < 70;
-          const clickable = Boolean(onImproveSection) && weak;
+          const improving = improvingSectionKey === s.sectionKey;
+          const clickable =
+            Boolean(onImproveSection) && weak && !improvingSectionKey;
           return (
             <button
               key={s.sectionKey}
@@ -175,10 +180,16 @@ export function ReportQualityPanel({
               }
             >
               <div className="truncate opacity-70 flex items-center justify-center gap-0.5">
-                {clickable && <RefreshCw className="w-2.5 h-2.5" />}
+                {improving ? (
+                  <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                ) : (
+                  clickable && <RefreshCw className="w-2.5 h-2.5" />
+                )}
                 {s.sectionKey}
               </div>
-              <div className="font-semibold">{s.score}</div>
+              <div className="font-semibold">
+                {improving ? "재생성 중" : s.score}
+              </div>
             </button>
           );
         })}

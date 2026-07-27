@@ -336,6 +336,7 @@ export function ReportPageClient({ report }: { report: Report }) {
           reportId={report.id}
           refreshKey={qualityRefreshKey}
           batchImproving={batchImproving}
+          improvingSectionKey={improveRequest?.sectionKey ?? null}
           onImproveSection={(sectionKey, qualityIssues) =>
             setImproveRequest({
               sectionKey,
