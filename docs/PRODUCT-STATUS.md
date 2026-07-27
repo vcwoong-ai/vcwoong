@@ -21,13 +21,29 @@
 |------|------|
 | DOCX·PPTX 양식 업로드·파싱 | 동작 |
 | 섹션 구조 → SectionKey 매핑 | 동작 (키워드 + AI) |
-| 양식 순서 반영 DOCX 생성 | 동작 |
-| **원본 파일의 폰트·색상·레이아웃 재현** | **미구현** — 현재는 일반 DOCX 생성 |
+| **원본 DOCX 서식 1:1 재현** | **동작** — 원본 파일에 본문 단락만 치환 |
+| 폰트·색상·헤더/푸터·표지·styles.xml 보존 | 동작 (`test:template`으로 검증) |
+| 마크다운 → 단락·불릿·표 변환 | 동작 |
+| 플레이스홀더 치환 (`{{기업명}}`, `[기업명]`) | 동작 |
+| 재현 미리보기 (교체 구간 표시) | 동작 |
 | PPTX 출력 | 미구현 (항상 DOCX) |
-| 원본 대비 시각 비교 UI | 미구현 |
+| 원본 대비 렌더 이미지 비교 | 미구현 |
 
-> 이 축이 4개 중 약속과 구현 간극이 가장 큽니다.
-> 다음 작업: `template-reconstructor.ts` — 업로드된 원본을 열어 플레이스홀더만 치환.
+### 재현 동작 방식
+
+새 문서를 만들지 않고 **업로드된 원본 DOCX를 열어 본문만 갈아끼운다.**
+`styles.xml`·theme·헤더/푸터·이미지·번호매기기를 건드리지 않으므로
+회사 양식의 폰트·색상·여백이 원본과 동일하게 유지된다.
+
+내보내기는 3단 폴백으로 동작한다 (응답의 `X-Export-Mode` 헤더로 확인 가능).
+
+| 순위 | 모드 | 조건 |
+|------|------|------|
+| 1 | `reconstructed:N/M` | DOCX 원본을 읽고 섹션 제목 매칭 성공 |
+| 2 | `template-ordered` | 매칭 실패 — 섹션 순서만 반영한 신규 DOCX |
+| 3 | `default` | 양식 없음 또는 플랜 미해당 |
+
+관련 파일: `src/lib/template/docx-xml.ts`, `template-reconstructor.ts`
 
 ## 3. 풀사이클
 
@@ -66,15 +82,16 @@
 ```bash
 npm run db:setup:local     # SQLite + 시드 (펀드·포트폴리오·인바운드 포함)
 npm run dev:local
-npm run test:all           # quality + fixtures + routing (API 키 불필요)
+npm run test:all           # quality + fixtures + routing + template (API 키 불필요)
+npm run test:template      # 양식 1:1 재현 서식 보존 검증
 ```
 
 데모: `demo@axiom.kr` / `Demo1234!` (FULL 플랜)
 
 ## 남은 우선순위
 
-1. 양식 1:1 재현 엔진 (`template-reconstructor.ts`, PPTX 출력, 비교 UI)
-2. 팀 협업 — `Team` 모델 활성화, 딜·양식 공유
+1. 팀 협업 — `Team` 모델 활성화, 딜·양식 공유
+2. PPTX 양식 출력 (현재 DOCX만 1:1 재현)
 3. KIPRIS 특허 연동 (BIO 에이전트)
 4. 딜소싱 자동 수집 (메일 인입 파싱)
 5. LP 리포트 인쇄/PDF 뷰
