@@ -277,8 +277,52 @@ ${c}의 핵심 제품은 ${f.sector} 고객의 핵심 페인포인트를 직접 
 /**
  * Produces demo-mode content for a given prompt set.
  */
+/**
+ * 대괄호 라벨 형식을 요구하는 프롬프트(LP 리포트·분기 노트)는
+ * 같은 형식으로 응답해야 파서가 내용을 살릴 수 있다.
+ */
+function labeledBlocksFor(prompt: string): string | null {
+  const labels: string[] = [];
+  const re = /^\[([^\]\n]{2,20})\]$/gm;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(prompt)) !== null) {
+    labels.push(match[1]);
+  }
+  if (labels.length < 2) return null;
+
+  const uniq = labels.filter((l, i) => labels.indexOf(l) === i);
+  const filler: Record<string, string> = {
+    총평:
+      "본 분기는 확정 수치 기준으로 안정적인 운용 흐름을 유지함. 실현 회수가 발생해 DPI가 개선되었으며, 잔여 보유사의 평가가치도 원금 수준 이상을 유지하고 있음. 다만 관찰 등급 기업의 런웨이가 짧아 후속 대응이 필요함.",
+    "포트폴리오 현황":
+      "보유사별로 성과 편차가 존재함. 바이오 보유사는 매출이 개선되고 있으나 런웨이가 축소되었고, 소비재 보유사는 성장세가 정체됨. 회수 완료 건은 원금 대비 양호한 배수를 기록함. 세부 수치는 상단 지표 표를 참고 바람.",
+    "분기 하이라이트":
+      "핵심 마일스톤 일부가 계획대로 완료되었고, 회수 건이 실현되어 분배 재원을 확보함. 주요 보유사의 분기 매출이 직전 분기 대비 개선됨.",
+    "관찰 대상":
+      "관찰 등급 기업은 런웨이와 월 번레이트를 매월 점검 중임. 브리지 라운드 또는 비용 구조 조정을 검토하고 있으며, 모니터링 지표는 런웨이(개월)와 월 매출임.",
+    "다음 분기 계획":
+      "후속 투자 검토와 신규 딜 소싱을 병행하고, 관찰 등급 기업에 대해서는 월 단위 점검 체계를 유지할 계획임.",
+    요약:
+      "직전 분기 대비 핵심 지표가 개선되었으나 런웨이 축소로 자금 계획 점검이 필요함. 마일스톤 진행 상황은 대체로 계획 범위 내에 있음.",
+    하이라이트: "- 분기 매출 개선\n- 핵심 마일스톤 완료",
+    우려사항:
+      "- 런웨이 축소 — 모니터링 지표: 월 번레이트\n- 후속 라운드 일정 지연 가능성 — 모니터링 지표: 텀시트 수령 여부",
+  };
+
+  return uniq
+    .map(
+      (label) =>
+        `[${label}]\n${filler[label] ?? "확인 필요 — 데모 모드 샘플 텍스트임."}`
+    )
+    .join("\n\n");
+}
+
 export function generateMockContent(messages: ClaudeMessage[]): string {
   const userPrompt = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
+
+  const labeled = labeledBlocksFor(userPrompt);
+  if (labeled) return labeled;
+
   const facts = extractFacts(userPrompt);
   return DEMO_NOTICE + sectionBody(facts);
 }

@@ -278,3 +278,166 @@ export async function generateReportDOCX(
   const buffer = await Packer.toBuffer(doc);
   return buffer;
 }
+
+/**
+ * 마크다운 본문을 그대로 DOCX로 변환한다 (LP 리포트 등 범용 문서용).
+ * 헤딩·표·불릿만 처리하고 나머지는 일반 단락으로 둔다.
+ */
+export async function generateMarkdownDOCX(params: {
+  title: string;
+  subtitle?: string;
+  markdown: string;
+}): Promise<Buffer> {
+  const children: (Paragraph | Table)[] = [];
+
+  children.push(
+    new Paragraph({
+      text: params.title,
+      heading: HeadingLevel.TITLE,
+      alignment: AlignmentType.CENTER,
+      spacing: { before: 600, after: 200 },
+    })
+  );
+  if (params.subtitle) {
+    children.push(
+      new Paragraph({
+        children: [
+          new TextRun({ text: params.subtitle, size: 22, color: "666666" }),
+        ],
+        alignment: AlignmentType.CENTER,
+        spacing: { after: 500 },
+      })
+    );
+  }
+
+  const lines = params.markdown.split("\n");
+  let tableBuffer: string[] = [];
+
+  const flushTable = () => {
+    if (tableBuffer.length === 0) return;
+    const rows = tableBuffer
+      .filter((l) => !/^\|\s*-{2,}/.test(l.replace(/\s/g, "")))
+      .map((l) =>
+        l
+          .replace(/^\||\|$/g, "")
+          .split("|")
+          .map((c) => c.trim())
+      );
+    tableBuffer = [];
+    if (rows.length === 0) return;
+
+    const colCount = Math.max(...rows.map((r) => r.length));
+    children.push(
+      new Table({
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        rows: rows.map(
+          (cells, rowIdx) =>
+            new TableRow({
+              children: Array.from({ length: colCount }, (_, i) => {
+                const text = cells[i] ?? "";
+                return new TableCell({
+                  children: [
+                    new Paragraph({
+                      children: [
+                        new TextRun({ text, bold: rowIdx === 0, size: 20 }),
+                      ],
+                    }),
+                  ],
+                  shading:
+                    rowIdx === 0 ? { fill: "F2F4F7", type: "clear" } : undefined,
+                });
+              }),
+            })
+        ),
+      })
+    );
+    children.push(new Paragraph({ text: "", spacing: { after: 200 } }));
+  };
+
+  for (const raw of lines) {
+    const line = raw.trimEnd();
+
+    if (line.trimStart().startsWith("|")) {
+      tableBuffer.push(line.trim());
+      continue;
+    }
+    flushTable();
+
+    if (!line.trim()) {
+      children.push(new Paragraph({ text: "" }));
+      continue;
+    }
+
+    const heading = /^(#{1,4})\s+(.*)$/.exec(line);
+    if (heading) {
+      const level = heading[1].length;
+      children.push(
+        new Paragraph({
+          text: heading[2],
+          heading:
+            level === 1
+              ? HeadingLevel.HEADING_1
+              : level === 2
+                ? HeadingLevel.HEADING_2
+                : HeadingLevel.HEADING_3,
+          spacing: { before: 280, after: 140 },
+        })
+      );
+      continue;
+    }
+
+    const bullet = /^\s*[-*]\s+(.*)$/.exec(line);
+    if (bullet) {
+      children.push(
+        new Paragraph({
+          text: bullet[1].replace(/\*\*/g, ""),
+          bullet: { level: 0 },
+          spacing: { after: 60 },
+        })
+      );
+      continue;
+    }
+
+    children.push(
+      new Paragraph({
+        children: [
+          new TextRun({ text: line.replace(/\*\*/g, ""), size: 22 }),
+        ],
+        spacing: { after: 120 },
+      })
+    );
+  }
+  flushTable();
+
+  const doc = new Document({
+    sections: [
+      {
+        properties: {},
+        footers: {
+          default: new Footer({
+            children: [
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: `${BRAND.name} · 대외비 — `,
+                    size: 16,
+                    color: "999999",
+                  }),
+                  new TextRun({
+                    children: [PageNumber.CURRENT],
+                    size: 16,
+                    color: "999999",
+                  }),
+                ],
+                alignment: AlignmentType.CENTER,
+              }),
+            ],
+          }),
+        },
+        children,
+      },
+    ],
+  });
+
+  return Packer.toBuffer(doc);
+}
