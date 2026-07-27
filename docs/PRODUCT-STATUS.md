@@ -20,13 +20,16 @@
 |------|------|
 | DOCX·PPTX 양식 업로드·파싱 | 동작 |
 | 섹션 구조 → SectionKey 매핑 | 동작 (키워드 + AI) |
-| 양식 순서 반영 DOCX 생성 | 동작 |
-| **원본 파일의 폰트·색상·레이아웃 재현** | **미구현** — 현재는 일반 DOCX 생성 |
-| PPTX 출력 | 미구현 (항상 DOCX) |
-| 원본 대비 시각 비교 UI | 미구현 |
+| **원본 파일의 폰트·색상·레이아웃 재현** | 동작 — `template-reconstructor.ts` |
+| PPTX 출력 | 동작 — `pptx-reconstructor.ts` |
+| 원본 대비 시각 비교 UI | 동작 — `/templates/[id]/compare` |
+| 양식 순서 반영 재생성 (폴백) | 동작 — 원본을 못 읽을 때 |
 
-> 이 축이 4개 중 약속과 구현 간극이 가장 큽니다.
-> 다음 작업: `template-reconstructor.ts` — 업로드된 원본을 열어 플레이스홀더만 치환.
+> 재현 방식: 새 파일을 만들지 않고 **업로드된 원본 zip을 열어
+> `word/document.xml`(또는 슬라이드 XML)의 본문 단락만 교체**한다.
+> `styles.xml`·테마·numbering·머리글을 건드리지 않으므로 서식이 그대로 남고,
+> 새 본문은 해당 섹션 원본 단락의 `pPr`/`rPr`을 복제해 폰트·색상을 물려받는다.
+> 검증: `npm run test:template`
 
 ## 3. 풀사이클
 
@@ -54,9 +57,9 @@
 
 | 형식 | IC 보고서 | LP 리포트 |
 |------|-----------|-----------|
-| DOCX | O | O |
+| DOCX | O (양식 연결 시 원본 1:1 재현) | O |
 | PDF | O (브라우저 인쇄 뷰 `/reports/[id]/print`) | O (`/lp-report/[id]/print`) |
-| PPTX | X | X |
+| PPTX | O (PPTX 양식 연결 시) | X |
 
 > 한글 PDF는 폰트 임베딩(15MB+)이 필요해 브라우저 "PDF로 저장"을 사용합니다.
 
@@ -65,12 +68,11 @@
 ```bash
 npm run db:setup:local     # SQLite + 시드 (펀드·포트폴리오·인바운드 포함)
 npm run dev:local
-npm run test:all           # quality + fixtures + routing (API 키 불필요)
+npm run test:all           # quality + fixtures + routing + email + template (API 키 불필요)
 ```
 
 데모: `demo@axiom.kr` / `Demo1234!` (FULL 플랜)
 
 ## 남은 우선순위
 
-1. 양식 1:1 재현 엔진 (`template-reconstructor.ts`, PPTX 출력, 비교 UI)
-2. 팀 협업 — `Team` 모델 활성화, 딜·양식 공유
+1. 팀 협업 — `Team` 모델 활성화, 딜·양식 공유

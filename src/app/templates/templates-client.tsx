@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import Link from "next/link";
 import { useDropzone } from "react-dropzone";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,7 @@ import {
   Sparkles,
   ChevronDown,
   ChevronUp,
+  Columns2,
 } from "lucide-react";
 
 interface Template {
@@ -88,6 +90,14 @@ function TemplateCard({ template, onDelete }: TemplateCardProps) {
           </div>
 
           <div className="flex items-center gap-2 flex-shrink-0">
+            {template.status === "READY" && (
+              <Button variant="outline" size="sm" asChild>
+                <Link href={`/templates/${template.id}/compare`}>
+                  <Columns2 className="w-3.5 h-3.5 mr-1.5" />
+                  원본 비교
+                </Link>
+              </Button>
+            )}
             {template.status === "READY" && sections.length > 0 && (
               <Button
                 variant="ghost"
@@ -228,12 +238,15 @@ export function TemplatesClient({ templates: initialTemplates }: { templates: Te
       <div className="flex items-start gap-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
         <Sparkles className="w-5 h-5 text-blue-500 mt-0.5 flex-shrink-0" />
         <div className="text-sm text-blue-800">
-          <p className="font-medium">양식 재현 엔진 사용법</p>
+          <p className="font-medium">양식 1:1 재현 엔진 사용법</p>
           <ol className="mt-1 space-y-1 text-blue-700 list-decimal list-inside">
             <li>기존 IC 보고서 DOCX 또는 PPTX를 업로드</li>
             <li>AI가 섹션 구조를 자동 분석 및 매핑 (30초~1분)</li>
             <li>딜 상세 페이지에서 보고서 생성 시 이 양식 선택</li>
-            <li>AI 생성 내용이 업로드한 양식 구조 그대로 출력</li>
+            <li>
+              내보내기 시 <strong>업로드한 원본 파일을 열어 본문만 교체</strong>하므로
+              폰트·색상·여백·표지가 그대로 유지됩니다
+            </li>
           </ol>
         </div>
       </div>
