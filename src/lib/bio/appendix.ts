@@ -2,6 +2,7 @@ import type { BioExternalData } from "./external-data";
 import { formatClinicalTrialsForPrompt } from "./clinical-trials";
 import { formatPubMedForPrompt } from "./pubmed";
 import { formatFdaForPrompt } from "./openfda";
+import { formatKiprisForPrompt } from "./kipris";
 import { formatRNPVTable, calculateRNPV, type PipelineAsset } from "./rnpv";
 
 export function buildBioAppendix(
@@ -26,8 +27,11 @@ export function buildBioAppendix(
     if (externalData.fdaDrugs.length > 0) {
       sections.push("## D. FDA 승인 경쟁약물\n" + formatFdaForPrompt(externalData.fdaDrugs, externalData.indication));
     }
+    if (externalData.kiprisPatents.length > 0) {
+      sections.push("## E. KIPRIS 특허 현황\n" + formatKiprisForPrompt(externalData.kiprisPatents, externalData.companyQuery));
+    }
     sections.push(
-      `\n---\n*데이터 출처: PubMed (NCBI), ClinicalTrials.gov v2, OpenFDA — ${new Date().toLocaleDateString("ko-KR")} 자동 조회*`
+      `\n---\n*데이터 출처: PubMed (NCBI), ClinicalTrials.gov v2, OpenFDA, KIPRIS(특허청) — ${new Date().toLocaleDateString("ko-KR")} 자동 조회*`
     );
   } else {
     sections.push("\n*외부 데이터 조회 결과 없음 — IR 자료 기반 분석만 포함*");

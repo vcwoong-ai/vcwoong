@@ -16,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Download, Loader2, Plus, Sparkles, Wallet } from "lucide-react";
+import { Download, Loader2, Plus, Printer, Sparkles, Wallet } from "lucide-react";
 import { currentPeriod, recentPeriods } from "@/lib/portfolio";
 import type { LpReportComputed } from "@/lib/lp-report";
 
@@ -309,19 +309,27 @@ export function LPReportClient({ funds }: { funds: FundView[] }) {
                     {r.period}
                   </Badge>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => exportDocx(r.id, r.title)}
-                  disabled={exportingId === r.id}
-                >
-                  {exportingId === r.id ? (
-                    <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-                  ) : (
-                    <Download className="w-3.5 h-3.5 mr-1.5" />
-                  )}
-                  DOCX
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" asChild>
+                    <Link href={`/lp-report/${r.id}/print`} target="_blank">
+                      <Printer className="w-3.5 h-3.5 mr-1.5" />
+                      PDF
+                    </Link>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => exportDocx(r.id, r.title)}
+                    disabled={exportingId === r.id}
+                  >
+                    {exportingId === r.id ? (
+                      <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                    ) : (
+                      <Download className="w-3.5 h-3.5 mr-1.5" />
+                    )}
+                    DOCX
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
                 <Markdown content={r.content} />

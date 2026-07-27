@@ -19,7 +19,8 @@
     "test:fixtures": "tsx tools/test-fixtures.ts",
     "test:golden": "tsx --env-file=.env.local tools/test-golden.ts",
     "test:routing": "tsx tools/test-routing.ts",
-    "test:all": "npm run test:quality && npm run test:fixtures && npm run test:routing",
+    "test:email": "tsx tools/test-email-intake.ts",
+    "test:all": "npm run test:quality && npm run test:fixtures && npm run test:routing && npm run test:email",
     "postinstall": "prisma generate"
   },
   "dependencies": {

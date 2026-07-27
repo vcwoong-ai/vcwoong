@@ -20,6 +20,7 @@ import {
   ArrowUpRight,
   Inbox,
   Loader2,
+  Mail,
   Plus,
   Sparkles,
   Trash2,
@@ -32,6 +33,7 @@ import {
   scoreTone,
 } from "@/lib/sourcing";
 import type { DealSourceType, InboundStatus } from "@prisma/client";
+import type { ParsedEmailLead } from "@/lib/email-intake";
 
 interface Lead {
   id: string;
@@ -79,6 +81,11 @@ export function SourcingPageClient({ leads }: { leads: Lead[] }) {
   const [contactEmail, setContactEmail] = useState("");
   const [summary, setSummary] = useState("");
 
+  const [showEmailImport, setShowEmailImport] = useState(false);
+  const [emailRaw, setEmailRaw] = useState("");
+  const [emailPreview, setEmailPreview] = useState<ParsedEmailLead[] | null>(null);
+  const [emailBusy, setEmailBusy] = useState(false);
+
   const visible =
     filter === "ALL" ? leads : leads.filter((l) => l.status === filter);
 
@@ -116,6 +123,37 @@ export function SourcingPageClient({ leads }: { leads: Lead[] }) {
       alert(e instanceof Error ? e.message : "등록 실패");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const callEmailImport = async (preview: boolean) => {
+    if (emailRaw.trim().length < 20) {
+      return alert("메일 본문을 20자 이상 붙여넣으세요");
+    }
+    setEmailBusy(true);
+    try {
+      const res = await fetch("/api/sourcing/import-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ raw: emailRaw, preview }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error ?? "메일 파싱 실패");
+      }
+      const { data } = await res.json();
+      if (preview) {
+        setEmailPreview(data.leads);
+      } else {
+        setEmailRaw("");
+        setEmailPreview(null);
+        setShowEmailImport(false);
+        router.refresh();
+      }
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "메일 파싱 실패");
+    } finally {
+      setEmailBusy(false);
     }
   };
 
@@ -186,13 +224,22 @@ export function SourcingPageClient({ leads }: { leads: Lead[] }) {
             인바운드 딜을 모아 AI로 1차 선별하고 심사 파이프라인으로 넘깁니다.
           </p>
         </div>
-        <Button
-          onClick={() => setShowForm((v) => !v)}
-          className="bg-blue-600 hover:bg-blue-700"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          딜 추가
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setShowEmailImport((v) => !v)}
+          >
+            <Mail className="w-4 h-4 mr-2" />
+            메일로 등록
+          </Button>
+          <Button
+            onClick={() => setShowForm((v) => !v)}
+            className="bg-blue-600 hover:bg-blue-700"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            딜 추가
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -210,6 +257,99 @@ export function SourcingPageClient({ leads }: { leads: Lead[] }) {
           </Card>
         ))}
       </div>
+
+      {showEmailImport && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Mail className="w-4 h-4" />
+              IR 메일 붙여넣기
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-gray-500">
+              메일 원문을 그대로 붙여넣으면 기업명·담당자·섹터를 자동 추출합니다.
+              전달된 메일 여러 통을 한 번에 붙여넣어도 됩니다.
+            </p>
+            <Textarea
+              rows={10}
+              value={emailRaw}
+              onChange={(e) => {
+                setEmailRaw(e.target.value);
+                setEmailPreview(null);
+              }}
+              placeholder={
+                "From: 홍길동 <hong@greenloop.kr>\nSubject: [그린루프] 시리즈A IR 자료 송부\n\n안녕하세요, 그린루프 대표 홍길동입니다..."
+              }
+              className="font-mono text-xs"
+            />
+
+            {emailPreview && (
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-gray-600">
+                  파싱 결과 {emailPreview.length}건
+                </p>
+                {emailPreview.map((p, i) => (
+                  <div
+                    key={i}
+                    className="text-xs border rounded p-2.5 bg-gray-50 space-y-1"
+                  >
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold text-gray-900">
+                        {p.companyName}
+                      </span>
+                      {!p.companyNameConfident && (
+                        <span className="text-amber-600">
+                          기업명 확인 필요
+                        </span>
+                      )}
+                      <Badge variant="outline" className="text-[10px]">
+                        {p.sector}
+                      </Badge>
+                      <span className="text-gray-400">
+                        {SOURCE_LABEL[p.source]}
+                      </span>
+                    </div>
+                    <p className="text-gray-500">
+                      {p.contactName ?? "담당자 미상"}
+                      {p.contactEmail ? ` · ${p.contactEmail}` : ""}
+                    </p>
+                    <p className="text-gray-600 line-clamp-2">{p.summary}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowEmailImport(false);
+                  setEmailPreview(null);
+                }}
+              >
+                취소
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => callEmailImport(true)}
+                disabled={emailBusy}
+              >
+                {emailBusy && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                미리보기
+              </Button>
+              <Button
+                onClick={() => callEmailImport(false)}
+                disabled={emailBusy}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                {emailBusy && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                인박스에 등록
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {showForm && (
         <Card>
