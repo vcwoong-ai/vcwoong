@@ -154,7 +154,10 @@ export async function POST(
 
       const afterQ = evaluateSection(result.sectionKey, result.content);
       await prisma.reportSection.updateMany({
-        where: { reportId: report.id, sectionKey: target.sectionKey },
+        where: {
+          reportId: report.id,
+          sectionKey: target.sectionKey as SectionKey,
+        },
         data: { content: result.content, status: SectionStatus.DRAFT },
       });
 
