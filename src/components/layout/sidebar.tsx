@@ -13,6 +13,7 @@ import {
   ChevronRight,
   Zap,
   LayoutTemplate,
+  LineChart,
   Sparkles,
 } from "lucide-react";
 
@@ -41,6 +42,11 @@ const navItems = [
     label: "양식 관리",
     href: "/templates",
     icon: LayoutTemplate,
+  },
+  {
+    label: "포트폴리오",
+    href: "/portfolio",
+    icon: LineChart,
   },
   {
     label: "LP 리포팅",

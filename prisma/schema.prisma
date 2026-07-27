@@ -54,27 +54,30 @@ model VerificationToken {
 // ───────────────────────────────────────────────
 
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String?   @unique
-  emailVerified DateTime?
-  image         String?
-  passwordHash  String?
-  role          UserRole  @default(ANALYST)
-  teamId        String?
+  id                 String             @id @default(cuid())
+  name               String?
+  email              String?            @unique
+  emailVerified      DateTime?
+  image              String?
+  passwordHash       String?
+  role               UserRole           @default(ANALYST)
+  teamId             String?
   subscriptionPlan   SubscriptionPlan   @default(FREE)
   subscriptionStatus SubscriptionStatus @default(ACTIVE)
   billingKey         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
 
-  accounts  Account[]
-  sessions  Session[]
-  team      Team?      @relation(fields: [teamId], references: [id])
-  deals     Deal[]
-  templates Template[]
-  usageLogs UsageLog[]
-  payments  SubscriptionPayment[]
+  accounts           Account[]
+  sessions           Session[]
+  team               Team?                 @relation(fields: [teamId], references: [id])
+  deals              Deal[]
+  templates          Template[]
+  usageLogs          UsageLog[]
+  payments           SubscriptionPayment[]
+  funds              Fund[]
+  portfolioCompanies PortfolioCompany[]
+  inboundDeals       InboundDeal[]
 }
 
 model Team {
@@ -83,7 +86,7 @@ model Team {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users User[]
+  users     User[]
   deals     Deal[]
   templates Template[]
 }
@@ -104,10 +107,11 @@ model Deal {
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
-  user      User       @relation(fields: [userId], references: [id])
-  team      Team?      @relation(fields: [teamId], references: [id])
+  user      User              @relation(fields: [userId], references: [id])
+  team      Team?             @relation(fields: [teamId], references: [id])
   documents Document[]
   reports   Report[]
+  portfolio PortfolioCompany?
 }
 
 model Document {
@@ -164,16 +168,16 @@ model Report {
 }
 
 model ReportSection {
-  id        String        @id @default(cuid())
-  reportId  String
+  id         String        @id @default(cuid())
+  reportId   String
   sectionKey SectionKey
-  title     String
-  content   String        @db.Text
-  order     Int
-  status    SectionStatus @default(DRAFT)
-  feedback  String?       @db.Text
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
+  title      String
+  content    String        @db.Text
+  order      Int
+  status     SectionStatus @default(DRAFT)
+  feedback   String?       @db.Text
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
 
   report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
 }
@@ -305,14 +309,187 @@ enum SectionStatus {
 }
 
 enum SectionKey {
-  INVESTMENT_OVERVIEW       // 투자개요
-  COMPANY_OVERVIEW          // 회사개요
-  PRODUCT_TECHNOLOGY        // 제품/기술
-  MARKET_ANALYSIS           // 시장분석
-  FINANCIAL_STATUS          // 재무현황
-  VALUATION                 // 밸류에이션
-  RISK_ANALYSIS             // 리스크
-  INVESTMENT_TERMS          // 투자조건
-  OPINION_SUMMARY           // 의견종합
-  APPENDIX                  // 별첨
+  INVESTMENT_OVERVIEW // 투자개요
+  COMPANY_OVERVIEW // 회사개요
+  PRODUCT_TECHNOLOGY // 제품/기술
+  MARKET_ANALYSIS // 시장분석
+  FINANCIAL_STATUS // 재무현황
+  VALUATION // 밸류에이션
+  RISK_ANALYSIS // 리스크
+  INVESTMENT_TERMS // 투자조건
+  OPINION_SUMMARY // 의견종합
+  APPENDIX // 별첨
+}
+
+// ───────────────────────────────────────────────
+// 풀사이클: 딜소싱 → 심사 → 사후관리 → LP 리포팅
+// ───────────────────────────────────────────────
+
+/// 펀드 — LP 리포팅과 포트폴리오의 기준 단위
+model Fund {
+  id            String   @id @default(cuid())
+  name          String
+  vintageYear   Int
+  /// 결성 총액 (억원)
+  fundSize      Float
+  /// 납입 완료액 (억원)
+  paidIn        Float    @default(0)
+  /// 운용 보수율 (%)
+  managementFee Float    @default(2)
+  userId        String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companies PortfolioCompany[]
+  lpReports LpReport[]
+}
+
+/// 투자 집행된 포트폴리오사 (사후관리 대상)
+model PortfolioCompany {
+  id               String          @id @default(cuid())
+  /// 심사 딜에서 승격된 경우 원본 딜
+  dealId           String?         @unique
+  fundId           String?
+  companyName      String
+  sector           DealSector
+  investedAt       DateTime
+  /// 투자금 (억원)
+  investAmount     Float
+  /// 지분율 (%)
+  ownershipPercent Float
+  /// 투자 시점 기업가치 (억원)
+  entryValuation   Float
+  /// 최근 평가 기업가치 (억원)
+  currentValuation Float?
+  /// 회수 금액 (억원)
+  realizedAmount   Float           @default(0)
+  status           PortfolioStatus @default(ACTIVE)
+  notes            String?         @db.Text
+  userId           String
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fund       Fund?             @relation(fields: [fundId], references: [id])
+  deal       Deal?             @relation(fields: [dealId], references: [id])
+  kpis       CompanyKPI[]
+  milestones Milestone[]
+  updates    PortfolioUpdate[]
+}
+
+/// 분기별 핵심 지표
+model CompanyKPI {
+  id        String   @id @default(cuid())
+  companyId String
+  /// 2025Q1 형식
+  period    String
+  metric    String
+  value     Float
+  unit      String
+  createdAt DateTime @default(now())
+
+  company PortfolioCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, period, metric])
+}
+
+/// 투자 조건·사업 마일스톤
+model Milestone {
+  id        String          @id @default(cuid())
+  companyId String
+  title     String
+  dueDate   DateTime
+  status    MilestoneStatus @default(PLANNED)
+  note      String?
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  company PortfolioCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+/// 분기 모니터링 노트
+model PortfolioUpdate {
+  id         String   @id @default(cuid())
+  companyId  String
+  period     String
+  summary    String   @db.Text
+  highlights String?  @db.Text
+  concerns   String?  @db.Text
+  createdAt  DateTime @default(now())
+
+  company PortfolioCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, period])
+}
+
+/// 생성된 LP 리포트
+model LpReport {
+  id        String       @id @default(cuid())
+  fundId    String
+  period    String
+  title     String
+  content   String       @db.Text
+  metrics   Json?
+  status    ReportStatus @default(DRAFT)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  fund Fund @relation(fields: [fundId], references: [id], onDelete: Cascade)
+}
+
+/// 딜소싱 인박스 — 심사 전 인바운드 딜
+model InboundDeal {
+  id             String         @id @default(cuid())
+  companyName    String
+  sector         DealSector     @default(GENERAL)
+  source         DealSourceType @default(OTHER)
+  contactName    String?
+  contactEmail   String?
+  summary        String?        @db.Text
+  rawText        String?        @db.Text
+  /// AI 스크리닝 점수 0~100
+  screeningScore Int?
+  screeningNotes String?        @db.Text
+  status         InboundStatus  @default(NEW)
+  /// 심사 딜로 승격된 경우
+  dealId         String?
+  userId         String
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+enum PortfolioStatus {
+  ACTIVE
+  WATCH
+  RISK
+  EXITED
+  WRITTEN_OFF
+}
+
+enum MilestoneStatus {
+  PLANNED
+  IN_PROGRESS
+  DONE
+  DELAYED
+}
+
+enum DealSourceType {
+  INBOUND
+  REFERRAL
+  DEMO_DAY
+  ACCELERATOR
+  OUTREACH
+  PARTNER
+  OTHER
+}
+
+enum InboundStatus {
+  NEW
+  REVIEWING
+  QUALIFIED
+  PROMOTED
+  REJECTED
 }

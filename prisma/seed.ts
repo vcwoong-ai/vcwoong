@@ -322,6 +322,134 @@ async function main() {
   console.log(
     `Created 1 completed (FINAL) sample report with ${finalSections.length} approved sections`
   );
+
+  // ── 풀사이클: 펀드 + 포트폴리오 사후관리 ──
+  const fund = await prisma.fund.upsert({
+    where: { id: "seed-fund-001" },
+    update: {},
+    create: {
+      id: "seed-fund-001",
+      name: "Vcwoong 1호 벤처투자조합",
+      vintageYear: 2023,
+      fundSize: 500,
+      paidIn: 320,
+      managementFee: 2.5,
+      userId: user.id,
+    },
+  });
+
+  const portfolioSeed = [
+    {
+      id: "seed-pf-001",
+      companyName: "메디랩스",
+      sector: DealSector.BIO,
+      investedAt: new Date("2023-06-15"),
+      investAmount: 40,
+      ownershipPercent: 8,
+      entryValuation: 500,
+      currentValuation: 900,
+      status: "ACTIVE" as const,
+      kpis: [
+        { period: "2025Q2", metric: "런웨이", value: 18, unit: "개월" },
+        { period: "2025Q3", metric: "런웨이", value: 15, unit: "개월" },
+        { period: "2025Q4", metric: "런웨이", value: 11, unit: "개월" },
+        { period: "2026Q1", metric: "런웨이", value: 8, unit: "개월" },
+        { period: "2025Q4", metric: "매출", value: 12, unit: "억원" },
+        { period: "2026Q1", metric: "매출", value: 18, unit: "억원" },
+      ],
+      milestones: [
+        { title: "Phase I 톱라인 발표", dueDate: new Date("2026-03-31"), status: "DONE" as const },
+        { title: "기술이전 LOI 체결", dueDate: new Date("2026-09-30"), status: "IN_PROGRESS" as const },
+      ],
+    },
+    {
+      id: "seed-pf-002",
+      companyName: "커머스플로우",
+      sector: DealSector.CONSUMER,
+      investedAt: new Date("2024-02-20"),
+      investAmount: 25,
+      ownershipPercent: 12,
+      entryValuation: 200,
+      currentValuation: 180,
+      status: "WATCH" as const,
+      kpis: [
+        { period: "2025Q3", metric: "ARR", value: 22, unit: "억원" },
+        { period: "2025Q4", metric: "ARR", value: 24, unit: "억원" },
+        { period: "2026Q1", metric: "ARR", value: 23, unit: "억원" },
+        { period: "2026Q1", metric: "런웨이", value: 5, unit: "개월" },
+      ],
+      milestones: [
+        { title: "월 BEP 달성", dueDate: new Date("2026-01-31"), status: "DELAYED" as const },
+      ],
+    },
+    {
+      id: "seed-pf-003",
+      companyName: "노드시스템",
+      sector: DealSector.IT,
+      investedAt: new Date("2022-11-10"),
+      investAmount: 30,
+      ownershipPercent: 15,
+      entryValuation: 200,
+      currentValuation: 200,
+      realizedAmount: 96,
+      status: "EXITED" as const,
+      kpis: [{ period: "2025Q4", metric: "ARR", value: 60, unit: "억원" }],
+      milestones: [
+        { title: "전략적 M&A 클로징", dueDate: new Date("2026-01-15"), status: "DONE" as const },
+      ],
+    },
+  ];
+
+  for (const p of portfolioSeed) {
+    const { kpis, milestones, ...company } = p;
+    await prisma.portfolioCompany.upsert({
+      where: { id: p.id },
+      update: {},
+      create: {
+        ...company,
+        realizedAmount: company.realizedAmount ?? 0,
+        fundId: fund.id,
+        userId: user.id,
+      },
+    });
+    for (const k of kpis) {
+      await prisma.companyKPI.upsert({
+        where: {
+          companyId_period_metric: {
+            companyId: p.id,
+            period: k.period,
+            metric: k.metric,
+          },
+        },
+        update: { value: k.value, unit: k.unit },
+        create: { companyId: p.id, ...k },
+      });
+    }
+    const existingMs = await prisma.milestone.count({ where: { companyId: p.id } });
+    if (existingMs === 0) {
+      await prisma.milestone.createMany({
+        data: milestones.map((m) => ({ companyId: p.id, ...m })),
+      });
+    }
+  }
+
+  await prisma.portfolioUpdate.upsert({
+    where: { companyId_period: { companyId: "seed-pf-001", period: "2026Q1" } },
+    update: {},
+    create: {
+      companyId: "seed-pf-001",
+      period: "2026Q1",
+      summary:
+        "메디랩스는 2026Q1 매출 18억원으로 직전 분기 대비 50% 성장했으나, 런웨이는 8개월로 축소됨. Phase I 톱라인 발표를 완료해 기술이전 협상 레버리지를 확보한 상태임.",
+      highlights: "- 매출 12억 → 18억 (+50% QoQ)\n- Phase I 톱라인 발표 완료",
+      concerns:
+        "- 런웨이 8개월 — 후속 라운드 착수 시점 점검 (모니터링: 월 번레이트)\n- 기술이전 LOI 지연 시 자금 계획 재수립 필요 (모니터링: LOI 체결 여부)",
+    },
+  });
+
+  console.log(
+    `Created fund + ${portfolioSeed.length} portfolio companies with KPIs/milestones`
+  );
   console.log("\nSeed completed successfully!");
   console.log("\nDemo credentials:");
   console.log("  Email: demo@vcwoong.kr");
