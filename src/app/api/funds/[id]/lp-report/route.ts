@@ -4,6 +4,7 @@ import { z } from "zod";
 import { ReportStatus } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { requireFeature } from "@/lib/plan-gates";
 import { currentPeriod } from "@/lib/portfolio";
 import {
   computeLpFigures,
@@ -24,6 +25,9 @@ export async function POST(
   if (!session?.user?.id) {
     return NextResponse.json({ error: "인증이 필요합니다" }, { status: 401 });
   }
+
+  const locked = await requireFeature(session.user.id, "lpReporting");
+  if (locked) return locked;
 
   const fund = await prisma.fund.findFirst({
     where: { id: params.id, userId: session.user.id },

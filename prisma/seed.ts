@@ -19,12 +19,15 @@ async function main() {
   const passwordHash = await bcrypt.hash("Demo1234!", 12);
   const user = await prisma.user.upsert({
     where: { email: "demo@vcwoong.kr" },
-    update: {},
+    // 데모 계정은 모든 기능을 체험할 수 있도록 최상위 플랜으로 둔다
+    update: { subscriptionPlan: "FULL", subscriptionStatus: "ACTIVE" },
     create: {
       email: "demo@vcwoong.kr",
       name: "김심사",
       passwordHash,
       role: UserRole.ANALYST,
+      subscriptionPlan: "FULL",
+      subscriptionStatus: "ACTIVE",
     },
   });
 

@@ -4,6 +4,7 @@ import { z } from "zod";
 import { DealSector, DealStage, PortfolioStatus } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { requireFeature } from "@/lib/plan-gates";
 import { calculatePortfolioMetrics } from "@/lib/portfolio";
 
 const createSchema = z.object({
@@ -50,6 +51,9 @@ export async function POST(request: NextRequest) {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "인증이 필요합니다" }, { status: 401 });
   }
+
+  const locked = await requireFeature(session.user.id, "portfolio");
+  if (locked) return locked;
 
   const parsed = createSchema.safeParse(
     await request.json().catch(() => null)

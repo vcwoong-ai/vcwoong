@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { BRAND } from "@/lib/brand";
 import { LandingAuthRedirect } from "@/components/landing-auth-redirect";
+import { PUBLIC_PLANS } from "@/lib/plans";
 import {
   Zap,
   CheckCircle,
@@ -28,7 +29,7 @@ export default function LandingPage() {
           <div className="hidden md:flex items-center gap-8 text-sm text-gray-600">
             <a href="#features" className="hover:text-gray-900 transition-colors">기능</a>
             <a href="#agents" className="hover:text-gray-900 transition-colors">AI 에이전트</a>
-            <a href="#pricing" className="hover:text-gray-900 transition-colors">가격</a>
+            <Link href="/pricing" className="hover:text-gray-900 transition-colors">가격</Link>
             <a href="#faq" className="hover:text-gray-900 transition-colors">FAQ</a>
           </div>
           <div className="flex items-center gap-3">
@@ -252,58 +253,9 @@ export default function LandingPage() {
             <p className="text-gray-500 mt-3">모든 플랜에 6개 AI 에이전트 포함</p>
           </div>
           <div className="grid md:grid-cols-3 gap-8">
-            {[
-              {
-                name: "Free",
-                price: "₩0",
-                period: "/월",
-                desc: "개인 심사역 체험",
-                features: [
-                  "월 5건 보고서",
-                  "6개 AI 에이전트",
-                  "DOCX 내보내기",
-                  "문서 업로드 50MB",
-                ],
-                cta: "무료로 시작",
-                href: "/register",
-                highlight: false,
-              },
-              {
-                name: "Pro",
-                price: "₩99,000",
-                period: "/월",
-                desc: "활성 VC 심사역",
-                features: [
-                  "월 50건 보고서",
-                  "6개 AI 에이전트",
-                  "양식 재현 엔진",
-                  "PubMed/FDA 연동",
-                  "우선 지원",
-                ],
-                cta: "Pro 시작하기",
-                href: "/settings#subscription",
-                highlight: true,
-              },
-              {
-                name: "Team",
-                price: "₩299,000",
-                period: "/월",
-                desc: "VC 팀 전체",
-                features: [
-                  "월 무제한 보고서",
-                  "팀원 최대 10명",
-                  "공유 양식 라이브러리",
-                  "딜 공동 편집",
-                  "LP 리포팅",
-                  "전담 온보딩",
-                ],
-                cta: "팀 플랜 시작",
-                href: "/settings#subscription",
-                highlight: false,
-              },
-            ].map((plan) => (
+            {PUBLIC_PLANS.slice(0, 3).map((plan) => (
               <div
-                key={plan.name}
+                key={plan.key}
                 className={`rounded-2xl p-8 border-2 ${
                   plan.highlight
                     ? "bg-blue-600 border-blue-600 text-white shadow-xl shadow-blue-200"
@@ -316,14 +268,14 @@ export default function LandingPage() {
                   </p>
                   <div className="flex items-end gap-1">
                     <span className={`text-4xl font-bold ${plan.highlight ? "text-white" : "text-gray-900"}`}>
-                      {plan.price}
+                      {plan.price === 0 ? "₩0" : `₩${plan.price.toLocaleString()}`}
                     </span>
                     <span className={`text-sm mb-1 ${plan.highlight ? "text-blue-200" : "text-gray-400"}`}>
-                      {plan.period}
+                      /월
                     </span>
                   </div>
                   <p className={`text-sm mt-1 ${plan.highlight ? "text-blue-200" : "text-gray-500"}`}>
-                    {plan.desc}
+                    {plan.tagline}
                   </p>
                 </div>
                 <ul className="space-y-3 mb-8">
@@ -335,18 +287,23 @@ export default function LandingPage() {
                   ))}
                 </ul>
                 <Link
-                  href={plan.href}
+                  href={plan.price === 0 ? "/register" : "/settings#subscription"}
                   className={`block text-center py-3 rounded-xl font-semibold text-sm transition-colors ${
                     plan.highlight
                       ? "bg-white text-blue-600 hover:bg-blue-50"
                       : "bg-gray-900 text-white hover:bg-gray-700"
                   }`}
                 >
-                  {plan.cta}
+                  {plan.price === 0 ? "무료로 시작" : `${plan.name} 시작하기`}
                 </Link>
               </div>
             ))}
           </div>
+          <p className="text-center mt-10">
+            <Link href="/pricing" className="text-sm text-blue-600 hover:underline font-medium">
+              전체 6개 플랜 비교 보기 →
+            </Link>
+          </p>
         </div>
       </section>
 

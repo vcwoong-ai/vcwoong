@@ -32,6 +32,24 @@ export function SubscriptionPlans({
   const searchParams = useSearchParams();
   const [loadingPlan, setLoadingPlan] = useState<PlanKey | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [canceling, setCanceling] = useState(false);
+
+  async function handleCancel() {
+    if (!confirm("구독을 해지하고 Free 플랜으로 전환할까요?")) return;
+    setCanceling(true);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/payments/cancel", { method: "POST" });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error ?? "해지 실패");
+      }
+      window.location.reload();
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "해지 중 오류가 발생했습니다");
+      setCanceling(false);
+    }
+  }
 
   useEffect(() => {
     const payment = searchParams.get("payment");
@@ -101,6 +119,25 @@ export function SubscriptionPlans({
           <CreditCard className="h-4 w-4" />
           등록된 결제 수단이 있습니다. 플랜 변경 시 즉시 청구됩니다.
         </p>
+      )}
+
+      {currentPlan !== "free" && (
+        <div className="rounded-lg border p-3 flex items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">
+            구독을 해지하면 즉시 Free 플랜으로 전환됩니다. 위약금은 없습니다.
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={canceling}
+            onClick={handleCancel}
+          >
+            {canceling ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : null}
+            구독 해지
+          </Button>
+        </div>
       )}
 
       <div className="grid gap-3 sm:grid-cols-2">
