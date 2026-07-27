@@ -11,6 +11,7 @@ import {
 } from "@/lib/shared-facts";
 import { evaluateSection } from "@/lib/report-quality";
 import { checkQuota } from "@/lib/quotas";
+import { buildPriorSectionSummary } from "@/lib/section-context";
 
 const bodySchema = z.object({
   sectionKey: z.nativeEnum(SectionKey),
@@ -72,18 +73,7 @@ export async function POST(
     });
     const factsBlock = formatSharedFactsForPrompt(sharedFacts);
 
-    const prior = report.sections
-      .filter((s) => s.sectionKey !== body.sectionKey && s.content)
-      .slice(-4)
-      .map((s) => {
-        const nums = (s.content.match(/[\d,.]+(?:억|조|%|원)?/g) ?? [])
-          .slice(0, 5)
-          .join(", ");
-        return `- ${s.title}: ${s.content.replace(/\s+/g, " ").trim().slice(0, 180)}${
-          nums ? ` [수치: ${nums}]` : ""
-        }`;
-      })
-      .join("\n");
+    const prior = buildPriorSectionSummary(report.sections, body.sectionKey);
 
     const qualityGuide =
       body.qualityIssues && body.qualityIssues.length > 0

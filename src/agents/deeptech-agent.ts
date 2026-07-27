@@ -49,7 +49,7 @@ export class DeepTechAgent extends BaseAgent {
     sectionKey: SectionKey,
     userPrompt: string
   ): Promise<GenerationResult> {
-    const systemPrompt = getSystemPrompt(AgentType.DEEPTECH);
+    const systemPrompt = getSystemPrompt(AgentType.DEEPTECH, this.sector ?? input.sector);
     const result = await generateText([{ role: "user", content: userPrompt }], {
       systemPrompt,
       maxTokens: 4096,

@@ -94,17 +94,21 @@ export function inferAgentType(sector: DealSector): AgentType {
 /**
  * AgentType + 선택적 DealSector에 따라 전문 에이전트 인스턴스를 반환한다.
  * CLIMATE/CONSUMER는 Prisma AgentType이 없어 섹터 우선으로 라우팅한다.
+ *
+ * 저장된 agentType이 딜 섹터와 어긋나면(예: IT 딜에 BIO 에이전트) 섹터 전문
+ * 에이전트를 우선한다 — 잘못된 rNPV/임상 프레임이 적용되는 것을 막는다.
  */
 export function getAgent(agentType: AgentType, sector?: DealSector): BaseAgent {
   if (sector === DealSector.CLIMATE) return new ClimateAgent();
   if (sector === DealSector.CONSUMER) return new ConsumerAgent();
 
+  const sectorAgent = sector ? inferAgentType(sector) : AgentType.GENERAL;
   const effective =
-    agentType !== AgentType.GENERAL
-      ? agentType
-      : sector
-        ? inferAgentType(sector)
-        : AgentType.GENERAL;
+    agentType === AgentType.GENERAL
+      ? sectorAgent
+      : sectorAgent !== AgentType.GENERAL && sectorAgent !== agentType
+        ? sectorAgent
+        : agentType;
 
   switch (effective) {
     case AgentType.BIO:

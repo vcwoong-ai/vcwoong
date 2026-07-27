@@ -129,6 +129,7 @@ export function checkFactConsistency(
     investAmount?: number;
     valuation?: number;
     metrics?: Record<string, string>;
+    terms?: Record<string, string>;
     clinicalPhase?: string;
   }
 ): { checked: number; matched: number; missing: string[] } {
@@ -166,7 +167,11 @@ export function checkFactConsistency(
     }
   }
 
-  for (const [key, raw] of Object.entries(facts.metrics ?? {})) {
+  const numericFacts = {
+    ...(facts.metrics ?? {}),
+    ...(facts.terms ?? {}),
+  };
+  for (const [key, raw] of Object.entries(numericFacts)) {
     const num = raw.match(/([\d,.]+)/)?.[1];
     if (!num || num.length < 2) continue;
     // FY24 등 연도성 짧은 토큰 스킵
@@ -183,6 +188,7 @@ export function evaluateReport(
     investAmount?: number;
     valuation?: number;
     metrics?: Record<string, string>;
+    terms?: Record<string, string>;
     clinicalPhase?: string;
   }
 ): ReportQualitySummary {
@@ -204,7 +210,11 @@ export function evaluateReport(
   if (overallScore < 60) {
     suggestions.push("전체 품질이 낮습니다. IR 자료 보강 후 재생성하세요.");
   }
-  if (evaluated.some((s) => s.stats.citations === 0)) {
+  if (
+    evaluated.some(
+      (s) => s.stats.citations === 0 && s.sectionKey !== "APPENDIX"
+    )
+  ) {
     suggestions.push("출처 표기를 늘리면 신뢰도가 올라갑니다.");
   }
   if (evaluated.some((s) => s.stats.uncertainMarkers > 5)) {

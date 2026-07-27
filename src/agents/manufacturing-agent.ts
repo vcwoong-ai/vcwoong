@@ -51,7 +51,7 @@ export class ManufacturingAgent extends BaseAgent {
     sectionKey: SectionKey,
     userPrompt: string
   ): Promise<GenerationResult> {
-    const systemPrompt = getSystemPrompt(AgentType.MANUFACTURING);
+    const systemPrompt = getSystemPrompt(AgentType.MANUFACTURING, this.sector ?? input.sector);
     const result = await generateText([{ role: "user", content: userPrompt }], {
       systemPrompt,
       maxTokens: 4096,

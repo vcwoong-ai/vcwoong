@@ -15,11 +15,14 @@ export interface SharedDealFacts {
   summaryLines: string[];
 }
 
+/**
+ * 지표 패턴. 금액성 지표는 단위(조/억)를 요구하고,
+ * 값 앞 구간에서 FY24 같은 회계연도 토큰은 건너뛴다.
+ */
 const METRIC_PATTERNS: Array<{ key: string; re: RegExp }> = [
-  // 금액성 지표는 단위(조/억)를 요구해 FY24 등 연도 오탐을 피한다
   { key: "ARR", re: /ARR[^\n]{0,24}?([\d,.]+)\s*(억|백만|만|M|K)/i },
   { key: "NRR", re: /NRR[^\d\n]{0,8}?([\d.]+)\s*%?/i },
-  { key: "MRR", re: /MRR[^\n]{0,24}?([\d,.]+)\s*(억|백만|만|M|K|원)?/i },
+  { key: "MRR", re: /MRR[^\n]{0,24}?([\d,.]+)\s*(억|백만|만|M|K)/i },
   { key: "LTV/CAC", re: /LTV\s*[/／]\s*CAC[^\d\n]{0,8}?([\d.]+)/i },
   { key: "Churn", re: /(?:Churn|이탈률)[^\d\n]{0,8}?([\d.]+)\s*%?/i },
   { key: "TPV", re: /TPV[^\n]{0,28}?([\d,.]+)\s*(조|억)/i },
@@ -37,12 +40,12 @@ const METRIC_PATTERNS: Array<{ key: string; re: RegExp }> = [
     key: "감축량",
     re: /(?:감축|tCO2e|tCO₂e)[^\d\n]{0,20}?([\d,.]+)\s*(tCO2e|tCO₂e|톤)?/i,
   },
-  { key: "EBITDA", re: /EBITDA[^\d\n]{0,12}?([\d,.]+)\s*%?/i },
+  { key: "EBITDA", re: /EBITDA[^\d\n]{0,12}?([\d,.]+)\s*%/i },
   {
     key: "Gross Margin",
     re: /(?:Gross\s*Margin|매출총이익률)[^\d\n]{0,8}?([\d.]+)\s*%?/i,
   },
-  { key: "CAPA", re: /CAPA[^\d\n]{0,16}?([\d,.]+)/i },
+  { key: "CAPA", re: /CAPA[^\d\n]{0,20}?([\d,.]{2,})\s*(?:만|억|대|개|톤|\/)/i },
   { key: "직원수", re: /(?:임직원|직원)\s*([\d,]+)\s*명/ },
 ];
 
@@ -51,8 +54,17 @@ const PHASE_PATTERNS: Array<{ label: string; re: RegExp }> = [
   { label: "Phase II", re: /phase\s*2|phase\s*II|임상\s*2상/i },
   { label: "Phase I", re: /phase\s*1|phase\s*I|임상\s*1상/i },
   { label: "전임상", re: /전임상|preclinical/i },
-  { label: "NDA/BLA", re: /NDA|BLA|허가\s*신청/i },
+  {
+    // 비밀유지계약(NDA)과 구분하기 위해 허가 맥락을 요구한다
+    label: "NDA/BLA",
+    re: /\bBLA\b|(?:NDA|BLA)\s*(?:submission|submitted|filing|신청|제출|승인)|신약\s*허가\s*신청|품목\s*허가\s*신청/i,
+  },
 ];
+
+/** FY24, 2024 같은 회계연도 토큰인지 */
+function isYearToken(raw: string): boolean {
+  return /^(19|20)\d{2}$/.test(raw.replace(/,/g, ""));
+}
 
 const TERM_PATTERNS: Array<{ key: string; re: RegExp }> = [
   { key: "투자수단", re: /\b(RCPS|SAFE|CB|보통주|우선주|전환사채)\b/i },
@@ -87,8 +99,10 @@ export function extractSharedFacts(input: {
   for (const { key, re } of METRIC_PATTERNS) {
     const m = re.exec(text);
     if (!m) continue;
+    if (m[1] && isYearToken(m[1])) continue;
     const value = [m[1], m[2]].filter(Boolean).join("").trim();
-    metrics[key] = value ? `${key}: ${value}` : m[0].trim();
+    if (!value) continue;
+    metrics[key] = value;
   }
 
   let clinicalPhase: string | undefined;
@@ -103,7 +117,7 @@ export function extractSharedFacts(input: {
   for (const { key, re } of TERM_PATTERNS) {
     const m = re.exec(text);
     if (!m) continue;
-    terms[key] = (m[1] ? `${key}: ${m[1]}` : m[0]).trim();
+    terms[key] = (m[1] ?? m[0]).trim();
   }
 
   const summaryLines: string[] = [

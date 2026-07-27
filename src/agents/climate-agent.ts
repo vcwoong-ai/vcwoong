@@ -3,6 +3,10 @@ import { BaseAgent, AgentInput } from "./base-agent";
 import { generateText } from "@/lib/claude";
 import { getSystemPrompt } from "@/prompts/system-prompts";
 import { GenerationResult } from "@/types";
+import {
+  buildInvestmentOverviewPrompt,
+  SECTOR_OVERVIEW_FLAVOR,
+} from "./overview-helpers";
 
 /**
  * Climate — 기후/ESG 전문 투자 심사역 에이전트.
@@ -57,27 +61,10 @@ export class ClimateAgent extends BaseAgent {
   private async generateInvestmentOverview(
     input: AgentInput
   ): Promise<GenerationResult> {
-    const documentContext = this.buildDocumentContext(input.documents);
     return this.run(
       input,
       SectionKey.INVESTMENT_OVERVIEW,
-      `## 기업: ${input.companyName} (기후/ESG)
-${input.investRound ? `- 라운드: ${input.investRound}` : ""}
-${input.investAmount != null ? `- 투자금액: ${input.investAmount}억원` : ""}
-${input.valuation != null ? `- Post-money: ${input.valuation}억원` : ""}
-${input.additionalContext ?? ""}
-
-## 자료
-${documentContext}
-
-## 투자개요 (기후 특화)
-### 1. 한 줄 요약 (기술·감축 임팩트·비즈니스 모델)
-### 2. 투자 조건 (라운드·금액·밸류)
-### 3. Why Now (정책·탄소시장·수요)
-### 4. 핵심 투자 포인트 Top 3
-### 5. 주요 우려·전제 조건
-
-600~900자. 없는 수치는 확인 필요.`
+      buildInvestmentOverviewPrompt(input, SECTOR_OVERVIEW_FLAVOR.CLIMATE)
     );
   }
 

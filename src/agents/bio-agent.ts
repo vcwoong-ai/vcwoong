@@ -161,7 +161,7 @@ export class BioAgent extends BaseAgent {
     const userPrompt = `## 투자 대상 기업 정보
 - 기업명: ${input.companyName}
 - 섹터: 바이오/헬스케어
-
+${input.additionalContext ? `\n${input.additionalContext}\n` : ""}
 ## 제공 자료 (IR 덱 등 업로드 문서)
 ${documentContext}${externalContext}
 
@@ -225,7 +225,7 @@ ${documentContext}${externalContext}
 ${input.investRound ? `- 투자 라운드: ${input.investRound}` : ""}
 ${input.investAmount ? `- 투자 금액: ${input.investAmount.toLocaleString()}억원` : ""}
 ${input.valuation ? `- 투자 후 기업가치: ${input.valuation.toLocaleString()}억원` : ""}
-
+${input.additionalContext ? `\n${input.additionalContext}\n` : ""}
 ## 제공 자료
 ${documentContext}${rnpvContext}${externalContext}
 
@@ -273,7 +273,7 @@ ${documentContext}${rnpvContext}${externalContext}
     const userPrompt = `## 투자 대상 기업 정보
 - 기업명: ${input.companyName}
 - 섹터: 바이오/헬스케어
-
+${input.additionalContext ? `\n${input.additionalContext}\n` : ""}
 ## 제공 자료
 ${documentContext}${externalContext}
 
@@ -317,7 +317,7 @@ ${documentContext}${externalContext}
     const userPrompt = `## 투자 대상 기업 정보
 - 기업명: ${input.companyName}
 - 섹터: 바이오/헬스케어
-
+${input.additionalContext ? `\n${input.additionalContext}\n` : ""}
 ## 제공 자료
 ${documentContext}${externalContext}
 

@@ -89,6 +89,48 @@ function main() {
   assert(Boolean(termsFacts.terms.투자수단), "투자수단 추출");
   assert(Boolean(termsFacts.terms.지분율), "지분율 추출");
 
+  // 회귀: 비밀유지계약(NDA)을 임상단계로 오인하면 안 된다
+  const ndaFacts = extractSharedFacts({
+    companyName: "SaaSCo",
+    sector: "IT",
+    documents: [
+      { name: "ir.md", parsedText: "파트너사와 NDA 체결 후 PoC 진행 중." },
+    ],
+  });
+  assert(
+    ndaFacts.clinicalPhase === undefined,
+    `비밀유지 NDA는 임상단계가 아니어야 함, got ${ndaFacts.clinicalPhase}`
+  );
+
+  // 회귀: FY24 같은 회계연도 토큰을 금액으로 잡으면 안 된다
+  const fyFacts = extractSharedFacts({
+    companyName: "FYCo",
+    sector: "IT",
+    documents: [
+      {
+        name: "ir.md",
+        parsedText:
+          "MRR 추이 FY24 38억원. EBITDA FY24 14% margin. CAPA 프로세스 개선 완료. 생산 CAPA 200만 개",
+      },
+    ],
+  });
+  for (const [k, v] of Object.entries(fyFacts.metrics)) {
+    assert(
+      !/^(19|20)\d{2}$/.test(v.replace(/[^\d]/g, "")),
+      `${k}가 연도(${v})를 값으로 잡음`
+    );
+  }
+  assert(
+    !fyFacts.metrics.CAPA || /\d/.test(fyFacts.metrics.CAPA),
+    `CAPA 값에 숫자가 있어야 함, got ${fyFacts.metrics.CAPA}`
+  );
+
+  // 회귀: 지표 값에 키 접두어가 중복되면 안 된다
+  assert(
+    !Object.entries(facts.metrics).some(([k, v]) => v.startsWith(`${k}:`)),
+    "지표 값에 키 접두어 중복"
+  );
+
   const consistent = checkFactConsistency(
     "Series B 100억원 Post 800. Phase II. ARR 50억 NRR 110%. " +
       "가".repeat(100),

@@ -49,7 +49,7 @@ export class FintechAgent extends BaseAgent {
     sectionKey: SectionKey,
     userPrompt: string
   ): Promise<GenerationResult> {
-    const systemPrompt = getSystemPrompt(AgentType.FINTECH);
+    const systemPrompt = getSystemPrompt(AgentType.FINTECH, this.sector ?? input.sector);
     const result = await generateText([{ role: "user", content: userPrompt }], {
       systemPrompt,
       maxTokens: 4096,
@@ -166,6 +166,7 @@ ${documentContext}${fintechAnalysis}
     input: AgentInput
   ): Promise<GenerationResult> {
     const documentContext = this.buildDocumentContext(input.documents);
+    const fintechAnalysis = formatFintechAnalysisForPrompt(documentContext);
     return this.run(
       input,
       SectionKey.RISK_ANALYSIS,
@@ -173,7 +174,7 @@ ${documentContext}${fintechAnalysis}
 ${input.additionalContext ?? ""}
 
 ## 자료
-${documentContext}
+${documentContext}${fintechAnalysis}
 
 ## 리스크 (핀테크 특화)
 ### 1. 규제/라이선스

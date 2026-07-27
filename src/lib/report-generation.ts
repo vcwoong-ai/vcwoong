@@ -137,6 +137,7 @@ export async function generateSectionsAsync(
         investAmount: sharedFacts.investAmount,
         valuation: sharedFacts.valuation,
         metrics: sharedFacts.metrics,
+        terms: sharedFacts.terms,
         clinicalPhase: sharedFacts.clinicalPhase,
       }
     );
@@ -166,20 +167,22 @@ export async function generateSectionsAsync(
       };
     }
 
-    await prisma.reportSection.deleteMany({ where: { reportId } });
-
-    await prisma.reportSection.createMany({
-      data: results.map((result) => {
-        const meta = SECTION_META.find((m) => m.key === result.sectionKey)!;
-        return {
-          reportId,
-          sectionKey: result.sectionKey,
-          title: meta.title,
-          content: result.content,
-          order: meta.order,
-        };
+    // 삭제 후 생성 사이에 실패하면 본문이 통째로 사라지므로 트랜잭션으로 묶는다
+    await prisma.$transaction([
+      prisma.reportSection.deleteMany({ where: { reportId } }),
+      prisma.reportSection.createMany({
+        data: results.map((result) => {
+          const meta = SECTION_META.find((m) => m.key === result.sectionKey)!;
+          return {
+            reportId,
+            sectionKey: result.sectionKey,
+            title: meta.title,
+            content: result.content,
+            order: meta.order,
+          };
+        }),
       }),
-    });
+    ]);
 
     await prisma.report.update({
       where: { id: reportId },

@@ -26,6 +26,18 @@ Supabase/Vercel과 무관하게 **로컬에서 보고서 품질을 올리는** �
 | test:golden | 실제 `getAgent()` 경로로 8픽스처 검증 |
 | 회사개요 특화 | BaseAgent에서 전 섹터 COMPANY_OVERVIEW 특화 |
 | 일괄 개선 | `POST .../improve-weak` + 품질 패널 버튼 |
+| 컨텍스트 누수 수정 | Bio 4개 섹션이 공유팩트를 받도록 수정 |
+| 팩트 추출 정확도 | 비밀유지 NDA·FY24 연도 오탐 제거, terms 검증 포함 |
+| 라우팅 안전장치 | 저장된 agentType이 섹터와 어긋나면 섹터 전문가 우선 |
+| 섹션 컨텍스트 | 재생성 시 "앞선" 섹션만 참조 (`section-context.ts`) |
+
+## 테스트
+
+```bash
+npm run test:all      # quality + fixtures + routing (API 키 불필요)
+npm run test:routing  # 에이전트 라우팅·섹션 컨텍스트 회귀
+npm run test:golden   # Gemini 실제 호출 (키 필요)
+```
 | General Agent | 전용 시스템 프롬프트 |
 | 섹션 재생성 | 보고서 편집기에서 섹션별 AI 재생성 → 품질 점수 자동 새로고침 |
 | 골든 IR 1클릭 | 딜 상세 → 문서 탭 → 「골든 IR 로드」 |

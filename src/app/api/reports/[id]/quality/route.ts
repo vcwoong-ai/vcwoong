@@ -48,6 +48,7 @@ export async function GET(
       investAmount: facts.investAmount,
       valuation: facts.valuation,
       metrics: facts.metrics,
+      terms: facts.terms,
       clinicalPhase: facts.clinicalPhase,
     }
   );

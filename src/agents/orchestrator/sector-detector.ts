@@ -174,7 +174,8 @@ export async function detectSectors(
     temperature: 0.1,
   });
 
-  const toSectorStr = (s: string): DealSectorStr => {
+  const toSectorStr = (s: string | undefined | null): DealSectorStr => {
+    if (!s) return "GENERAL";
     const valid: DealSectorStr[] = [
       "BIO",
       "IT",

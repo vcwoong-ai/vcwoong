@@ -11,6 +11,7 @@ import {
 } from "@/lib/shared-facts";
 import { evaluateReport, evaluateSection } from "@/lib/report-quality";
 import { checkQuota } from "@/lib/quotas";
+import { buildPriorSectionSummary } from "@/lib/section-context";
 
 const bodySchema = z.object({
   /** 개선할 최대 섹션 수 (기본 3) */
@@ -89,6 +90,7 @@ export async function POST(
         investAmount: facts.investAmount,
         valuation: facts.valuation,
         metrics: facts.metrics,
+        terms: facts.terms,
         clinicalPhase: facts.clinicalPhase,
       }
     );
@@ -117,14 +119,10 @@ export async function POST(
     }> = [];
 
     for (const target of targets) {
-      const prior = report.sections
-        .filter((s) => s.sectionKey !== target.sectionKey && s.content)
-        .slice(-4)
-        .map(
-          (s) =>
-            `- ${s.title}: ${s.content.replace(/\s+/g, " ").trim().slice(0, 160)}`
-        )
-        .join("\n");
+      const prior = buildPriorSectionSummary(
+        report.sections,
+        target.sectionKey
+      );
 
       const qualityIssues = [
         ...target.issues,
@@ -211,6 +209,7 @@ export async function POST(
         investAmount: facts.investAmount,
         valuation: facts.valuation,
         metrics: facts.metrics,
+        terms: facts.terms,
         clinicalPhase: facts.clinicalPhase,
       }
     );
