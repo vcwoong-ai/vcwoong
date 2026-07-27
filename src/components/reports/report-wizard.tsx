@@ -73,6 +73,7 @@ export function ReportWizard({ deal, open, onClose }: WizardProps) {
   const [detectedSector, setDetectedSector] = useState<{ sector: string; label: string } | null>(null);
   const [detecting, setDetecting] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [genError, setGenError] = useState<string | null>(null);
   const [progress, setProgress] = useState<GenerationProgress | null>(null);
   const [reportId, setReportId] = useState<string | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -108,7 +109,9 @@ export function ReportWizard({ deal, open, onClose }: WizardProps) {
   };
 
   const startGeneration = async () => {
+    if (generating) return;
     setGenerating(true);
+    setGenError(null);
     setStep(3);
 
     try {
@@ -120,7 +123,10 @@ export function ReportWizard({ deal, open, onClose }: WizardProps) {
           ...(selectedTemplateId ? { templateId: selectedTemplateId } : {}),
         }),
       });
-      if (!res.ok) throw new Error("보고서 생성 요청 실패");
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error ?? "보고서 생성 요청 실패");
+      }
 
       const { data } = await res.json();
       const id = data?.id as string;
@@ -130,23 +136,39 @@ export function ReportWizard({ deal, open, onClose }: WizardProps) {
       const es = new EventSource(`/api/reports/${id}/progress`);
       eventSourceRef.current = es;
 
-      await new Promise<void>((resolve) => {
-        es.onmessage = (event) => {
-          try {
-            const prog: GenerationProgress = JSON.parse(event.data);
-            setProgress(prog);
-            if (prog.status === "completed" || prog.status === "error") {
-              es.close();
-              resolve();
+      const finalStatus = await new Promise<GenerationProgress["status"] | "dropped">(
+        (resolve) => {
+          es.onmessage = (event) => {
+            try {
+              const prog: GenerationProgress = JSON.parse(event.data);
+              setProgress(prog);
+              if (prog.status === "completed" || prog.status === "error") {
+                es.close();
+                resolve(prog.status);
+              }
+            } catch {
+              /* 파싱 실패는 무시하고 다음 이벤트를 기다린다 */
             }
-          } catch { /* ignore */ }
-        };
-        es.onerror = () => { es.close(); resolve(); };
-      });
+          };
+          es.onerror = () => {
+            es.close();
+            resolve("dropped");
+          };
+        }
+      );
+
+      if (finalStatus !== "completed") {
+        setGenError(
+          finalStatus === "error"
+            ? "생성 중 오류가 발생했습니다. 보고서 페이지에서 상태를 확인하세요."
+            : "진행 상태 연결이 끊겼습니다. 보고서 페이지에서 확인하세요."
+        );
+      }
     } catch (e) {
-      alert(e instanceof Error ? e.message : "오류 발생");
-      setGenerating(false);
+      setGenError(e instanceof Error ? e.message : "오류 발생");
       setStep(2);
+    } finally {
+      setGenerating(false);
     }
   };
 
@@ -161,7 +183,14 @@ export function ReportWizard({ deal, open, onClose }: WizardProps) {
   const selectedAgentMeta = AGENT_META.find((a) => a.id === selectedAgent);
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!generating) onClose(); else if (o === false && isDone) onClose(); }}>
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (o) return;
+        // 생성 중에는 닫히지 않지만, 완료/오류 상태에서는 항상 닫을 수 있어야 한다
+        if (!generating || isDone || genError) onClose();
+      }}
+    >
       <DialogContent className="sm:max-w-[560px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -307,17 +336,51 @@ export function ReportWizard({ deal, open, onClose }: WizardProps) {
               <Button variant="outline" onClick={() => setStep(1)} className="flex-1">
                 <ArrowLeft className="w-4 h-4 mr-1" /> 이전
               </Button>
-              <Button onClick={startGeneration} className="flex-1 bg-blue-600 hover:bg-blue-700">
-                <Zap className="w-4 h-4 mr-1" /> 생성 시작
+              <Button
+                onClick={startGeneration}
+                disabled={generating}
+                className="flex-1 bg-blue-600 hover:bg-blue-700"
+              >
+                {generating ? (
+                  <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                ) : (
+                  <Zap className="w-4 h-4 mr-1" />
+                )}
+                생성 시작
               </Button>
             </div>
           </div>
         )}
 
+        {step === 2 && genError && (
+          <p className="text-sm text-red-600">{genError}</p>
+        )}
+
         {/* Step 3: 생성 중 */}
         {step === 3 && (
           <div className="space-y-6 py-2">
-            {!isDone ? (
+            {genError ? (
+              <div className="space-y-4 text-center">
+                <p className="text-sm text-red-600">{genError}</p>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => {
+                      setGenError(null);
+                      setStep(2);
+                    }}
+                  >
+                    다시 시도
+                  </Button>
+                  {reportId && (
+                    <Button className="flex-1" onClick={goToReport}>
+                      보고서 열기 <ArrowRight className="w-4 h-4 ml-1" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ) : !isDone ? (
               <>
                 <div className="text-center">
                   <div className="w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center mx-auto mb-4">

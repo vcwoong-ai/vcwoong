@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -80,6 +80,13 @@ export function ReportEditor({
     sectionKey: string;
     score: number;
   } | null>(null);
+  const handledImproveToken = useRef<number | null>(null);
+
+  // 서버에서 섹션이 갱신되면(재생성·일괄개선 후 refresh) 로컬 상태를 다시 맞춘다
+  useEffect(() => {
+    setLocalSections(sections);
+    setEditingSectionId(null);
+  }, [sections]);
 
   const sortedSections = [...localSections].sort((a, b) => a.order - b.order);
 
@@ -89,9 +96,13 @@ export function ReportEditor({
     const text = sortedSections
       .map((s) => `## ${s.title}\n\n${s.content}`)
       .join("\n\n---\n\n");
-    await navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      alert("클립보드 복사에 실패했습니다. 브라우저 권한을 확인해 주세요.");
+    }
   };
 
   const startEdit = (section: Section) => {
@@ -153,6 +164,7 @@ export function ReportEditor({
       );
     } catch (error) {
       console.error(error);
+      alert("섹션 승인 중 오류가 발생했습니다");
     } finally {
       setSaving(null);
     }
@@ -221,6 +233,10 @@ export function ReportEditor({
 
   useEffect(() => {
     if (!improveRequest) return;
+    // Strict Mode에서 이펙트가 두 번 실행돼 중복 요청이 나가는 것을 막는다
+    if (handledImproveToken.current === improveRequest.token) return;
+    handledImproveToken.current = improveRequest.token;
+
     const section = localSections.find(
       (s) => s.sectionKey === improveRequest.sectionKey
     );

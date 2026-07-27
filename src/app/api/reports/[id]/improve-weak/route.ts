@@ -10,6 +10,7 @@ import {
   formatSharedFactsForPrompt,
 } from "@/lib/shared-facts";
 import { evaluateReport, evaluateSection } from "@/lib/report-quality";
+import { checkQuota } from "@/lib/quotas";
 
 const bodySchema = z.object({
   /** 개선할 최대 섹션 수 (기본 3) */
@@ -61,6 +62,11 @@ export async function POST(
         { error: "개선할 섹션이 없습니다" },
         { status: 400 }
       );
+    }
+
+    const quota = await checkQuota(session.user.id, "report");
+    if (!quota.allowed) {
+      return NextResponse.json({ error: quota.message }, { status: 429 });
     }
 
     const deal = report.deal;

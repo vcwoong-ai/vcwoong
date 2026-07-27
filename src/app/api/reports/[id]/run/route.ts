@@ -49,18 +49,22 @@ export async function POST(
     return NextResponse.json({ error: quota.message }, { status: 429 });
   }
 
-  await prisma.report.update({
-    where: { id: report.id },
+  // 동시 요청이 둘 다 통과하지 않도록 조건부 업데이트로 락을 건다
+  const claimed = await prisma.report.updateMany({
+    where: { id: report.id, status: { not: ReportStatus.GENERATING } },
     data: { status: ReportStatus.GENERATING },
   });
+  if (claimed.count === 0) {
+    return NextResponse.json({ error: "이미 생성 중입니다" }, { status: 409 });
+  }
 
-  generateSectionsAsync(
+  void generateSectionsAsync(
     report.id,
     report.deal,
     report.agentType,
     undefined,
     session.user.id
-  );
+  ).catch((err) => console.error("generateSectionsAsync failed:", err));
 
   return NextResponse.json({ data: { id: report.id, status: "GENERATING" } });
 }

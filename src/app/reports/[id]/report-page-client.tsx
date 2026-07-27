@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ReportEditor } from "@/components/reports/report-editor";
 import { ReportQualityPanel } from "@/components/reports/report-quality-panel";
@@ -58,6 +59,7 @@ function GeneratingView({
   onComplete: () => void;
 }) {
   const [progress, setProgress] = useState<GenerationProgress | null>(null);
+  const [streamDropped, setStreamDropped] = useState(false);
   const eventSourceRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
@@ -65,7 +67,12 @@ function GeneratingView({
     eventSourceRef.current = es;
 
     es.onmessage = (event) => {
-      const data: GenerationProgress = JSON.parse(event.data);
+      let data: GenerationProgress;
+      try {
+        data = JSON.parse(event.data);
+      } catch {
+        return;
+      }
       setProgress(data);
       if (data.status === "completed") {
         es.close();
@@ -76,13 +83,18 @@ function GeneratingView({
       }
     };
 
-    es.onerror = () => es.close();
+    es.onerror = () => {
+      es.close();
+      setStreamDropped(true);
+    };
 
     return () => {
       es.close();
       eventSourceRef.current = null;
     };
   }, [report.id, onComplete]);
+
+  const stuck = streamDropped || progress?.status === "error";
 
   const pct =
     progress && progress.total > 0
@@ -100,16 +112,26 @@ function GeneratingView({
         </Link>
       </div>
       <div className="flex flex-col items-center justify-center py-16 space-y-6 max-w-md mx-auto">
-        <div className="w-20 h-20 rounded-full bg-blue-50 flex items-center justify-center">
-          <Loader2 className="w-10 h-10 text-blue-500 animate-spin" />
+        <div
+          className={`w-20 h-20 rounded-full flex items-center justify-center ${
+            stuck ? "bg-red-50" : "bg-blue-50"
+          }`}
+        >
+          {stuck ? (
+            <Sparkles className="w-10 h-10 text-red-400" />
+          ) : (
+            <Loader2 className="w-10 h-10 text-blue-500 animate-spin" />
+          )}
         </div>
         <div className="text-center w-full">
           <h2 className="text-xl font-bold text-gray-900">
-            AI가 보고서를 작성하고 있습니다
+            {stuck
+              ? "생성 상태를 확인할 수 없습니다"
+              : "AI가 보고서를 작성하고 있습니다"}
           </h2>
           <p className="text-gray-500 mt-2">{report.deal.companyName}</p>
         </div>
-        {progress && progress.total > 0 && (
+        {progress && progress.total > 0 && !stuck && (
           <div className="w-full space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">{progress.currentSection}</span>
@@ -120,8 +142,16 @@ function GeneratingView({
             <Progress value={pct} className="h-2" />
           </div>
         )}
-        {progress?.status === "error" && (
-          <p className="text-sm text-red-600">{progress.error ?? "생성 중 오류가 발생했습니다"}</p>
+        {stuck && (
+          <div className="space-y-3 text-center">
+            <p className="text-sm text-red-600">
+              {progress?.error ??
+                "진행 상태 연결이 끊겼습니다. 상태를 다시 확인해 주세요."}
+            </p>
+            <Button variant="outline" size="sm" onClick={onComplete}>
+              상태 새로고침
+            </Button>
+          </div>
         )}
       </div>
     </div>
@@ -129,12 +159,18 @@ function GeneratingView({
 }
 
 export function ReportPageClient({ report }: { report: Report }) {
+  const router = useRouter();
   const [isExporting, setIsExporting] = useState(false);
   const [isFinalizing, setIsFinalizing] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const [pageStatus, setPageStatus] = useState(report.status);
+
+  // 다른 보고서로 이동해도 컴포넌트가 재사용될 수 있어 서버 상태와 다시 맞춘다
+  useEffect(() => {
+    setPageStatus(report.status);
+  }, [report.id, report.status]);
   const [qualityRefreshKey, setQualityRefreshKey] = useState(0);
   const [improveRequest, setImproveRequest] = useState<{
     sectionKey: string;
@@ -175,6 +211,7 @@ export function ReportPageClient({ report }: { report: Report }) {
       setPageStatus("GENERATING");
     } catch (error) {
       alert(error instanceof Error ? error.message : "재생성 중 오류가 발생했습니다");
+    } finally {
       setIsRegenerating(false);
     }
   };
@@ -335,7 +372,8 @@ export function ReportPageClient({ report }: { report: Report }) {
                   `개선 ${data.improved?.length ?? 0}개 · ${data.beforeScore} → ${data.afterScore}점`
               );
               setQualityRefreshKey((k) => k + 1);
-              handleReload();
+              // 서버에서 갱신된 본문을 가져오되, 결과 메시지를 볼 수 있게 살짝 늦춘다
+              setTimeout(() => router.refresh(), 1500);
             } catch (e) {
               alert(e instanceof Error ? e.message : "일괄 개선 실패");
             } finally {

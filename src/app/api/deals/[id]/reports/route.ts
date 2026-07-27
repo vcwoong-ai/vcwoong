@@ -67,11 +67,42 @@ export async function POST(
     return NextResponse.json({ error: quota.message }, { status: 429 });
   }
 
+  if (deal.documents.length === 0) {
+    return NextResponse.json(
+      { error: "딜에 업로드된 문서가 없습니다. 먼저 IR 자료를 업로드해 주세요." },
+      { status: 400 }
+    );
+  }
+
+  const inFlight = await prisma.report.findFirst({
+    where: { dealId: params.id, status: ReportStatus.GENERATING },
+    select: { id: true },
+  });
+  if (inFlight) {
+    return NextResponse.json(
+      { error: "이미 생성 중인 보고서가 있습니다.", data: { id: inFlight.id } },
+      { status: 409 }
+    );
+  }
+
   try {
     const body = await request.json();
     const validated = createReportSchema.parse(body);
 
     const agentType = validated.agentType ?? inferAgentType(deal.sector);
+
+    if (validated.templateId) {
+      const template = await prisma.template.findFirst({
+        where: { id: validated.templateId, userId: session.user.id },
+        select: { id: true },
+      });
+      if (!template) {
+        return NextResponse.json(
+          { error: "양식을 찾을 수 없습니다" },
+          { status: 404 }
+        );
+      }
+    }
 
     // Create report record
     const report = await prisma.report.create({
@@ -85,7 +116,13 @@ export async function POST(
     });
 
     // Generate sections using AI (async - don't await to return immediately)
-    generateSectionsAsync(report.id, deal, agentType, validated.additionalContext, session.user.id);
+    void generateSectionsAsync(
+      report.id,
+      deal,
+      agentType,
+      validated.additionalContext,
+      session.user.id
+    ).catch((err) => console.error("generateSectionsAsync failed:", err));
 
     return NextResponse.json({ data: report }, { status: 201 });
   } catch (error) {

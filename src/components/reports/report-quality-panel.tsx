@@ -39,17 +39,24 @@ export function ReportQualityPanel({
 }) {
   const [data, setData] = useState<QualitySummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    setError(null);
     fetch(`/api/reports/${reportId}/quality`)
-      .then((r) => r.json())
-      .then((res) => {
-        if (!cancelled) setData(res.data);
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`품질 점수를 불러오지 못했습니다 (${r.status})`);
+        return r.json();
       })
-      .catch(() => {
-        if (!cancelled) setData(null);
+      .then((res) => {
+        if (!cancelled) setData(res.data ?? null);
+      })
+      .catch((e: unknown) => {
+        if (cancelled) return;
+        setData(null);
+        setError(e instanceof Error ? e.message : "품질 점수 조회 실패");
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -64,6 +71,14 @@ export function ReportQualityPanel({
       <div className="flex items-center gap-2 text-sm text-gray-400 py-2">
         <Loader2 className="w-4 h-4 animate-spin" />
         품질 점수 계산 중...
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+        {error}
       </div>
     );
   }

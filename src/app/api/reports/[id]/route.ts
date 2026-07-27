@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
+import { z } from "zod";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ReportStatus, SectionStatus } from "@prisma/client";
+
+const patchSchema = z.object({
+  status: z.nativeEnum(ReportStatus).optional(),
+  approveAllSections: z.boolean().optional(),
+});
 
 export async function GET(
   request: NextRequest,
@@ -57,11 +63,16 @@ export async function PATCH(
     );
   }
 
-  const body = await request.json();
-  const { status, approveAllSections } = body as {
-    status?: ReportStatus;
-    approveAllSections?: boolean;
-  };
+  const parsed = patchSchema.safeParse(
+    await request.json().catch(() => null)
+  );
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "입력 데이터가 올바르지 않습니다" },
+      { status: 400 }
+    );
+  }
+  const { status, approveAllSections } = parsed.data;
 
   if (approveAllSections) {
     await prisma.reportSection.updateMany({

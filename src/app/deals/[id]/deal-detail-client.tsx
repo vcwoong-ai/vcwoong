@@ -116,6 +116,9 @@ const AGENT_INFO: Record<AgentType, { name: string; desc: string; color: string 
   },
 };
 
+/** Radix Select는 빈 문자열 value를 허용하지 않아 센티널 값을 쓴다 */
+const DEFAULT_TEMPLATE_VALUE = "__default__";
+
 function recommendedAgentLabel(sector: DealSector, agentType: AgentType): string {
   if (sector === DealSector.CLIMATE) return "Climate";
   if (sector === DealSector.CONSUMER) return "Consumer";
@@ -160,7 +163,9 @@ export function DealDetailClient({
   const [detectingsector, setDetectingSector] = useState(false);
   const [detectedSector, setDetectedSector] = useState<{ sector: string; reason: string } | null>(null);
   const [templates, setTemplates] = useState<TemplateOption[]>([]);
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>(
+    DEFAULT_TEMPLATE_VALUE
+  );
   const [wizardOpen, setWizardOpen] = useState(false);
   const [loadingFixture, setLoadingFixture] = useState(false);
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -220,7 +225,9 @@ export function DealDetailClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           agentType: recommendedAgent,
-          ...(selectedTemplateId ? { templateId: selectedTemplateId } : {}),
+          ...(selectedTemplateId && selectedTemplateId !== DEFAULT_TEMPLATE_VALUE
+            ? { templateId: selectedTemplateId }
+            : {}),
         }),
       });
 
@@ -337,7 +344,7 @@ export function DealDetailClient({
                     <SelectValue placeholder="양식 선택 (선택)" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">기본 양식</SelectItem>
+                    <SelectItem value={DEFAULT_TEMPLATE_VALUE}>기본 양식</SelectItem>
                     {templates.map((t) => (
                       <SelectItem key={t.id} value={t.id}>
                         {t.name}

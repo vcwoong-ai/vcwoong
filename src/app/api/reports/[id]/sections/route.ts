@@ -39,13 +39,25 @@ export async function PATCH(
     const body = await request.json();
     const validated = updateSectionSchema.parse(body);
 
-    const section = await prisma.reportSection.update({
-      where: { id: validated.sectionId },
+    // 섹션이 이 보고서에 속하는지까지 확인해야 타 사용자 섹션 수정을 막을 수 있다
+    const updated = await prisma.reportSection.updateMany({
+      where: { id: validated.sectionId, reportId: report.id },
       data: {
         ...(validated.content !== undefined ? { content: validated.content } : {}),
         ...(validated.status ? { status: validated.status } : {}),
         ...(validated.feedback !== undefined ? { feedback: validated.feedback } : {}),
       },
+    });
+
+    if (updated.count === 0) {
+      return NextResponse.json(
+        { error: "섹션을 찾을 수 없습니다" },
+        { status: 404 }
+      );
+    }
+
+    const section = await prisma.reportSection.findFirst({
+      where: { id: validated.sectionId, reportId: report.id },
     });
 
     return NextResponse.json({ data: section });

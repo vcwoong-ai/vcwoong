@@ -28,7 +28,10 @@ export default async function ReportPage({
 
   return (
     <AppLayout title={`보고서: ${report.deal.companyName}`}>
-      <ReportPageClient report={JSON.parse(JSON.stringify(report))} />
+      <ReportPageClient
+        key={report.id}
+        report={JSON.parse(JSON.stringify(report))}
+      />
     </AppLayout>
   );
 }
