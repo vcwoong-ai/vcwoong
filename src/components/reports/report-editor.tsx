@@ -14,6 +14,7 @@ import {
   BadgeCheck,
   Copy,
   BarChart2,
+  Printer,
   RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -304,6 +305,12 @@ export function ReportEditor({
             {copied ? <CheckCircle className="w-4 h-4 mr-1.5 text-green-500" /> : <Copy className="w-4 h-4 mr-1.5" />}
             {copied ? "복사됨" : "전체 복사"}
           </Button>
+          <a href={`/reports/${reportId}/print`} target="_blank" rel="noreferrer">
+            <Button variant="outline" size="sm">
+              <Printer className="w-4 h-4 mr-1.5" />
+              PDF
+            </Button>
+          </a>
           {!isFinal && onRegenerate && (
             <Button
               variant="outline"
