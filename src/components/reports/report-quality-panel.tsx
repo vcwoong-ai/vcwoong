@@ -14,6 +14,11 @@ interface QualitySummary {
   }>;
   criticalIssues: string[];
   suggestions: string[];
+  factConsistency?: {
+    checked: number;
+    matched: number;
+    missing: string[];
+  };
 }
 
 export function ReportQualityPanel({
@@ -76,6 +81,16 @@ export function ReportQualityPanel({
 
       {data.suggestions[0] && (
         <p className="text-sm mt-2 opacity-90">{data.suggestions[0]}</p>
+      )}
+
+      {data.factConsistency && data.factConsistency.checked > 0 && (
+        <p className="text-xs mt-2 opacity-80">
+          공유 팩트 일치: {data.factConsistency.matched}/
+          {data.factConsistency.checked}
+          {data.factConsistency.missing[0]
+            ? ` · 누락 예: ${data.factConsistency.missing[0]}`
+            : ""}
+        </p>
       )}
 
       {data.criticalIssues.length > 0 && (

@@ -2,7 +2,11 @@
  * 오프라인 품질 평가 단위 테스트 (API 키 불필요)
  * Usage: npm run test:quality
  */
-import { evaluateSection, evaluateReport } from "../src/lib/report-quality";
+import {
+  evaluateSection,
+  evaluateReport,
+  checkFactConsistency,
+} from "../src/lib/report-quality";
 import { extractSharedFacts } from "../src/lib/shared-facts";
 
 function assert(cond: boolean, msg: string) {
@@ -72,11 +76,32 @@ function main() {
     "라운드 포함"
   );
 
+  const consistent = checkFactConsistency(
+    "Series B 100억원 Post 800. Phase II. ARR 50억 NRR 110%. " +
+      "가".repeat(100),
+    {
+      investAmount: 100,
+      valuation: 800,
+      clinicalPhase: "Phase II",
+      metrics: facts.metrics,
+    }
+  );
+  assert(consistent.matched >= 3, `팩트 일치 기대 >=3, got ${consistent.matched}`);
+
+  const inconsistent = checkFactConsistency("내용만 있고 수치 없음 " + "가".repeat(50), {
+    investAmount: 100,
+    valuation: 800,
+  });
+  assert(inconsistent.missing.length >= 2, "누락 팩트 감지 필요");
+
   console.log("✅ evaluateSection(short):", short.score);
   console.log("✅ evaluateSection(good):", good.score);
   console.log("✅ evaluateSection(hallu) issues:", hallu.issues.join(", "));
   console.log("✅ evaluateReport overall:", report.overallScore);
   console.log("✅ sharedFacts:", facts.summaryLines.join(" | "));
+  console.log(
+    `✅ factConsistency: ${consistent.matched}/${consistent.checked}`
+  );
   console.log("\n✅ 모든 품질 모듈 테스트 통과\n");
 }
 

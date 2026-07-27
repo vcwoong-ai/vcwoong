@@ -91,6 +91,17 @@ export const GOLDEN_FIXTURES: GoldenFixture[] = [
     investAmount: 120,
     valuation: 900,
   },
+  {
+    id: "deeptech",
+    sector: DealSector.DEEPTECH,
+    label: "딥테크 · NeuronLab",
+    companyName: "NeuronLab",
+    fileName: "deeptech-neuronlab-ir.md",
+    relativePath: "docs/fixtures/deeptech-neuronlab-ir.md",
+    investRound: "Series A",
+    investAmount: 70,
+    valuation: 350,
+  },
 ];
 
 export function fixtureForSector(sector: DealSector): GoldenFixture | undefined {

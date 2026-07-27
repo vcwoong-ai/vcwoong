@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { evaluateReport } from "@/lib/report-quality";
+import { extractSharedFacts } from "@/lib/shared-facts";
 
 export async function GET(
   _request: NextRequest,
@@ -17,6 +18,11 @@ export async function GET(
     where: { id: params.id, deal: { userId: session.user.id } },
     include: {
       sections: { orderBy: { order: "asc" } },
+      deal: {
+        include: {
+          documents: { select: { name: true, parsedText: true } },
+        },
+      },
     },
   });
 
@@ -24,11 +30,26 @@ export async function GET(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
+  const facts = extractSharedFacts({
+    companyName: report.deal.companyName,
+    sector: report.deal.sector,
+    investRound: report.deal.investRound ?? undefined,
+    investAmount: report.deal.investAmount ?? undefined,
+    valuation: report.deal.valuation ?? undefined,
+    documents: report.deal.documents,
+  });
+
   const summary = evaluateReport(
     report.sections.map((s) => ({
       sectionKey: s.sectionKey,
       content: s.content,
-    }))
+    })),
+    {
+      investAmount: facts.investAmount,
+      valuation: facts.valuation,
+      metrics: facts.metrics,
+      clinicalPhase: facts.clinicalPhase,
+    }
   );
 
   return NextResponse.json({ data: summary });

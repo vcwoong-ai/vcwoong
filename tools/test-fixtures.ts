@@ -21,6 +21,7 @@ const EXTRA_EXPECT: Record<
   consumer: { expectMetric: "GMV" },
   fintech: { expectMetric: "TPV" },
   climate: { expectMetric: "감축량" },
+  deeptech: { expectArr: true },
 };
 
 function assert(cond: boolean, msg: string) {

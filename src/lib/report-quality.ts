@@ -1,6 +1,6 @@
 /**
  * IC 보고서 섹션 품질 검증.
- * 생성 후 길이·환각 신호·구조 점수를 산출한다.
+ * 생성 후 길이·환각 신호·구조·공유팩트 일치 점수를 산출한다.
  */
 
 export interface SectionQuality {
@@ -22,6 +22,11 @@ export interface ReportQualitySummary {
   sections: SectionQuality[];
   criticalIssues: string[];
   suggestions: string[];
+  factConsistency?: {
+    checked: number;
+    matched: number;
+    missing: string[];
+  };
 }
 
 const UNCERTAIN_RE =
@@ -103,13 +108,74 @@ export function evaluateSection(
   };
 }
 
+/** 공유 팩트 수치(숫자 토큰)가 보고서 본문에 등장하는지 검사 */
+export function checkFactConsistency(
+  reportText: string,
+  facts: {
+    investAmount?: number;
+    valuation?: number;
+    metrics?: Record<string, string>;
+    clinicalPhase?: string;
+  }
+): { checked: number; matched: number; missing: string[] } {
+  const missing: string[] = [];
+  let checked = 0;
+  let matched = 0;
+  const body = reportText.replace(/\s/g, "");
+
+  const checkToken = (label: string, token: string | undefined) => {
+    if (!token) return;
+    checked += 1;
+    const normalized = token.replace(/\s/g, "");
+    if (normalized && body.includes(normalized)) {
+      matched += 1;
+    } else {
+      missing.push(label);
+    }
+  };
+
+  if (facts.investAmount != null) {
+    checkToken(`투자금액 ${facts.investAmount}`, String(facts.investAmount));
+  }
+  if (facts.valuation != null) {
+    checkToken(`Post-money ${facts.valuation}`, String(facts.valuation));
+  }
+  if (facts.clinicalPhase) {
+    checked += 1;
+    if (
+      reportText.includes(facts.clinicalPhase) ||
+      reportText.includes(facts.clinicalPhase.replace(/\s/g, ""))
+    ) {
+      matched += 1;
+    } else {
+      missing.push(`임상단계 ${facts.clinicalPhase}`);
+    }
+  }
+
+  for (const [key, raw] of Object.entries(facts.metrics ?? {})) {
+    const num = raw.match(/([\d,.]+)/)?.[1];
+    if (!num || num.length < 2) continue;
+    // FY24 등 연도성 짧은 토큰 스킵
+    if (/^(19|20)\d{2}$/.test(num.replace(/,/g, ""))) continue;
+    checkToken(`${key} ${num}`, num.replace(/,/g, ""));
+  }
+
+  return { checked, matched, missing };
+}
+
 export function evaluateReport(
-  sections: Array<{ sectionKey: string; content: string }>
+  sections: Array<{ sectionKey: string; content: string }>,
+  facts?: {
+    investAmount?: number;
+    valuation?: number;
+    metrics?: Record<string, string>;
+    clinicalPhase?: string;
+  }
 ): ReportQualitySummary {
   const evaluated = sections.map((s) =>
     evaluateSection(s.sectionKey, s.content)
   );
-  const overallScore =
+  let overallScore =
     evaluated.length === 0
       ? 0
       : Math.round(
@@ -133,7 +199,37 @@ export function evaluateReport(
     );
   }
 
-  return { overallScore, sections: evaluated, criticalIssues, suggestions };
+  let factConsistency: ReportQualitySummary["factConsistency"];
+  if (facts) {
+    const reportText = sections.map((s) => s.content).join("\n");
+    factConsistency = checkFactConsistency(reportText, facts);
+    if (factConsistency.checked > 0) {
+      const ratio = factConsistency.matched / factConsistency.checked;
+      if (ratio < 0.5) {
+        overallScore = Math.max(0, overallScore - 8);
+        suggestions.push(
+          `공유 팩트 수치가 본문에 적습니다 (${factConsistency.matched}/${factConsistency.checked}). 재생성 시 일관성을 확인하세요.`
+        );
+      } else if (ratio >= 0.8) {
+        overallScore = Math.min(100, overallScore + 3);
+      }
+      if (factConsistency.missing.length > 0) {
+        criticalIssues.push(
+          ...factConsistency.missing
+            .slice(0, 3)
+            .map((m) => `[FACT] 본문에 없음: ${m}`)
+        );
+      }
+    }
+  }
+
+  return {
+    overallScore,
+    sections: evaluated,
+    criticalIssues,
+    suggestions,
+    factConsistency,
+  };
 }
 
 /** 품질 점수를 보고서 끝에 붙이는 짧은 메모 (선택) */
