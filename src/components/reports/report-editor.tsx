@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -44,7 +44,14 @@ interface ReportEditorProps {
   onRegenerate?: () => void;
   isRegenerating?: boolean;
   /** 섹션 단위 재생성 성공 시 (품질 패널 새로고침용) */
-  onSectionRegenerated?: (sectionKey: string) => void;
+  onSectionRegenerated?: (sectionKey: string, qualityScore?: number) => void;
+  /** 품질 패널에서 요청한 개선 재생성 */
+  improveRequest?: {
+    sectionKey: string;
+    qualityIssues: string[];
+    token: number;
+  } | null;
+  onImproveHandled?: () => void;
 }
 
 export function ReportEditor({
@@ -59,6 +66,8 @@ export function ReportEditor({
   onRegenerate,
   isRegenerating,
   onSectionRegenerated,
+  improveRequest,
+  onImproveHandled,
 }: ReportEditorProps) {
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState("");
@@ -67,6 +76,10 @@ export function ReportEditor({
   const [localSections, setLocalSections] = useState<Section[]>(sections);
   const [copied, setCopied] = useState(false);
   const [regeneratingKey, setRegeneratingKey] = useState<string | null>(null);
+  const [lastRegenQuality, setLastRegenQuality] = useState<{
+    sectionKey: string;
+    score: number;
+  } | null>(null);
 
   const sortedSections = [...localSections].sort((a, b) => a.order - b.order);
 
@@ -145,8 +158,12 @@ export function ReportEditor({
     }
   };
 
-  const regenerateSection = async (section: Section) => {
+  const regenerateSection = async (
+    section: Section,
+    opts?: { qualityIssues?: string[]; skipConfirm?: boolean }
+  ) => {
     if (
+      !opts?.skipConfirm &&
       !confirm(
         `"${section.title}" 섹션만 AI로 다시 생성할까요?\n기존 내용은 덮어씁니다.`
       )
@@ -160,7 +177,10 @@ export function ReportEditor({
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sectionKey: section.sectionKey }),
+          body: JSON.stringify({
+            sectionKey: section.sectionKey,
+            qualityIssues: opts?.qualityIssues?.slice(0, 12),
+          }),
         }
       );
       if (!response.ok) {
@@ -180,7 +200,14 @@ export function ReportEditor({
               : s
           )
         );
-        onSectionRegenerated?.(section.sectionKey);
+        const score = data?.quality?.score as number | undefined;
+        if (typeof score === "number") {
+          setLastRegenQuality({
+            sectionKey: section.sectionKey,
+            score,
+          });
+        }
+        onSectionRegenerated?.(section.sectionKey, score);
       }
     } catch (error) {
       console.error(error);
@@ -191,6 +218,23 @@ export function ReportEditor({
       setRegeneratingKey(null);
     }
   };
+
+  useEffect(() => {
+    if (!improveRequest) return;
+    const section = localSections.find(
+      (s) => s.sectionKey === improveRequest.sectionKey
+    );
+    if (!section) {
+      onImproveHandled?.();
+      return;
+    }
+    void regenerateSection(section, {
+      qualityIssues: improveRequest.qualityIssues,
+      skipConfirm: true,
+    }).finally(() => onImproveHandled?.());
+    // token으로 동일 섹션 재요청도 처리
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [improveRequest?.token]);
 
   const approveAll = async () => {
     setApprovingAll(true);
@@ -301,6 +345,13 @@ export function ReportEditor({
           </Button>
         </div>
       </div>
+
+      {lastRegenQuality && (
+        <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">
+          재생성 완료 · {lastRegenQuality.sectionKey} 품질{" "}
+          <strong>{lastRegenQuality.score}/100</strong>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
         <div className="xl:col-span-3 space-y-4">

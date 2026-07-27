@@ -20,6 +20,10 @@ Supabase/Vercel과 무관하게 **로컬에서 보고서 품질을 올리는** �
 | 섹터 감지 | CONSUMER·CLIMATE 키워드 분리 (콘텐츠와 구분) |
 | 팩트 일치 검사 | 품질 API가 공유 수치 본문 포함 여부 채점 |
 | Deeptech 픽스처 | NeuronLab IR 추가 (골든 IR 8개) |
+| 전 에이전트 투자개요 | BIO~Story 섹터별 INVESTMENT_OVERVIEW 특화 |
+| 투자조건·의견종합 | 한국 VC 텀시트/권고 라벨 프롬프트 강화 |
+| 품질 클릭 재생성 | 70점 미만 섹션 클릭 → 이슈 반영 재생성 |
+| test:golden | 실제 `getAgent()` 경로로 8픽스처 검증 |
 | General Agent | 전용 시스템 프롬프트 |
 | 섹션 재생성 | 보고서 편집기에서 섹션별 AI 재생성 → 품질 점수 자동 새로고침 |
 | 골든 IR 1클릭 | 딜 상세 → 문서 탭 → 「골든 IR 로드」 |

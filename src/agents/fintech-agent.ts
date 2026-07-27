@@ -4,6 +4,11 @@ import { generateText } from "@/lib/claude";
 import { getSystemPrompt } from "@/prompts/system-prompts";
 import { GenerationResult } from "@/types";
 import { formatFintechAnalysisForPrompt } from "@/lib/fintech/metrics-extract";
+import {
+  buildInvestmentOverviewPrompt,
+  OVERVIEW_SECTION,
+  SECTOR_OVERVIEW_FLAVOR,
+} from "./overview-helpers";
 
 /**
  * Vault — 핀테크/금융 전문 투자 심사역 에이전트.
@@ -18,6 +23,12 @@ export class FintechAgent extends BaseAgent {
     sectionKey: SectionKey
   ): Promise<GenerationResult> {
     switch (sectionKey) {
+      case SectionKey.INVESTMENT_OVERVIEW:
+        return this.run(
+          input,
+          OVERVIEW_SECTION,
+          buildInvestmentOverviewPrompt(input, SECTOR_OVERVIEW_FLAVOR.FINTECH)
+        );
       case SectionKey.PRODUCT_TECHNOLOGY:
         return this.generateProduct(input);
       case SectionKey.MARKET_ANALYSIS:

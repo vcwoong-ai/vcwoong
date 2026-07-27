@@ -3,6 +3,11 @@ import { BaseAgent, AgentInput } from "./base-agent";
 import { generateText } from "@/lib/claude";
 import { getSystemPrompt } from "@/prompts/system-prompts";
 import { GenerationResult } from "@/types";
+import {
+  buildInvestmentOverviewPrompt,
+  OVERVIEW_SECTION,
+  SECTOR_OVERVIEW_FLAVOR,
+} from "./overview-helpers";
 
 /**
  * Maker — 제조/하드웨어 전문 투자 심사역 에이전트.
@@ -17,6 +22,15 @@ export class ManufacturingAgent extends BaseAgent {
     sectionKey: SectionKey
   ): Promise<GenerationResult> {
     switch (sectionKey) {
+      case SectionKey.INVESTMENT_OVERVIEW:
+        return this.run(
+          input,
+          OVERVIEW_SECTION,
+          buildInvestmentOverviewPrompt(
+            input,
+            SECTOR_OVERVIEW_FLAVOR.MANUFACTURING
+          )
+        );
       case SectionKey.PRODUCT_TECHNOLOGY:
         return this.generateProductionCapability(input);
       case SectionKey.MARKET_ANALYSIS:

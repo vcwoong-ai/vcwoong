@@ -97,6 +97,20 @@ export function evaluateSection(
     score -= 5;
   }
 
+  if (sectionKey === "OPINION_SUMMARY") {
+    const hasLabel =
+      /투자\s*권고|조건부\s*투자|추가\s*검토|투자\s*보류/.test(content);
+    if (!hasLabel) {
+      issues.push("투자 의견 라벨 없음 (권고/조건부/추가검토/보류)");
+      score -= 12;
+    }
+  }
+
+  if (sectionKey === "INVESTMENT_TERMS" && tables === 0) {
+    warnings.push("투자조건 표 없음 — 구조 가독성 저하");
+    score -= 4;
+  }
+
   score = Math.max(0, Math.min(100, score));
 
   return {

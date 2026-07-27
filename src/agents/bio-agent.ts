@@ -10,6 +10,11 @@ import {
   type BioExternalData,
 } from "@/lib/bio/external-data";
 import { buildBioAppendix } from "@/lib/bio/appendix";
+import {
+  buildInvestmentOverviewPrompt,
+  OVERVIEW_SECTION,
+  SECTOR_OVERVIEW_FLAVOR,
+} from "./overview-helpers";
 
 /**
  * Dr. Cell — 바이오/헬스케어 전문 투자 심사역 에이전트.
@@ -62,6 +67,8 @@ export class BioAgent extends BaseAgent {
     }
 
     switch (sectionKey) {
+      case SectionKey.INVESTMENT_OVERVIEW:
+        return this.generateBioOverview(input);
       case SectionKey.PRODUCT_TECHNOLOGY:
         return this.generateBioPipeline(input);
       case SectionKey.VALUATION:
@@ -75,6 +82,25 @@ export class BioAgent extends BaseAgent {
       default:
         return super.generateSection(input, sectionKey);
     }
+  }
+
+  private async generateBioOverview(
+    input: AgentInput
+  ): Promise<GenerationResult> {
+    const flavor = SECTOR_OVERVIEW_FLAVOR.BIO;
+    const systemPrompt = getSystemPrompt(AgentType.BIO, DealSector.BIO);
+    const userPrompt = buildInvestmentOverviewPrompt(input, flavor);
+    const result = await generateText([{ role: "user", content: userPrompt }], {
+      systemPrompt,
+      maxTokens: 4096,
+      temperature: 0.35,
+    });
+    return {
+      sectionKey: OVERVIEW_SECTION,
+      content: result.content,
+      tokensUsed: result.inputTokens + result.outputTokens,
+      modelUsed: result.usedModel,
+    };
   }
 
   // ──────────────────────────────────────────────────

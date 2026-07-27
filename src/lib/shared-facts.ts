@@ -10,6 +10,8 @@ export interface SharedDealFacts {
   valuation?: number;
   metrics: Record<string, string>;
   clinicalPhase?: string;
+  /** 투자 수단·지분 등 텀시트성 팩트 */
+  terms: Record<string, string>;
   summaryLines: string[];
 }
 
@@ -52,6 +54,22 @@ const PHASE_PATTERNS: Array<{ label: string; re: RegExp }> = [
   { label: "NDA/BLA", re: /NDA|BLA|허가\s*신청/i },
 ];
 
+const TERM_PATTERNS: Array<{ key: string; re: RegExp }> = [
+  { key: "투자수단", re: /\b(RCPS|SAFE|CB|보통주|우선주|전환사채)\b/i },
+  {
+    key: "지분율",
+    re: /지분(?:율)?[^\d\n]{0,8}?([\d.]+)\s*%/,
+  },
+  {
+    key: "청산우선",
+    re: /청산우선[^\n]{0,40}?(1x|2x|Non-participating|Participating)/i,
+  },
+  {
+    key: "희석방지",
+    re: /(Broad-based|Weighted\s*Average|Full\s*Ratchet|Anti-?dilution)/i,
+  },
+];
+
 export function extractSharedFacts(input: {
   companyName: string;
   sector: string;
@@ -81,6 +99,13 @@ export function extractSharedFacts(input: {
     }
   }
 
+  const terms: Record<string, string> = {};
+  for (const { key, re } of TERM_PATTERNS) {
+    const m = re.exec(text);
+    if (!m) continue;
+    terms[key] = (m[1] ? `${key}: ${m[1]}` : m[0]).trim();
+  }
+
   const summaryLines: string[] = [
     `기업: ${input.companyName}`,
     `섹터: ${input.sector}`,
@@ -94,6 +119,9 @@ export function extractSharedFacts(input: {
   for (const [k, v] of Object.entries(metrics)) {
     summaryLines.push(`${k}: ${v}`);
   }
+  for (const [k, v] of Object.entries(terms)) {
+    summaryLines.push(`${k}: ${v}`);
+  }
 
   return {
     companyName: input.companyName,
@@ -103,6 +131,7 @@ export function extractSharedFacts(input: {
     valuation: input.valuation,
     metrics,
     clinicalPhase,
+    terms,
     summaryLines,
   };
 }
@@ -114,6 +143,6 @@ export function formatSharedFactsForPrompt(facts: SharedDealFacts): string {
     "",
     "규칙:",
     "- 위 수치가 없으면 '확인 필요'로 쓰고 임의 숫자를 만들지 말 것",
-    "- 이전 섹션과 라운드/밸류/ARR/GMV/감축량/임상단계가 달라지면 안 됨",
+    "- 이전 섹션과 라운드/밸류/ARR/GMV/감축량/임상단계/텀시트 핵심이 달라지면 안 됨",
   ].join("\n");
 }

@@ -76,6 +76,19 @@ function main() {
     "라운드 포함"
   );
 
+  const termsFacts = extractSharedFacts({
+    companyName: "텀시트Co",
+    sector: "IT",
+    documents: [
+      {
+        name: "ts.md",
+        parsedText: "투자 수단 RCPS, 지분율 12.5%, 청산우선 1x Non-participating",
+      },
+    ],
+  });
+  assert(Boolean(termsFacts.terms.투자수단), "투자수단 추출");
+  assert(Boolean(termsFacts.terms.지분율), "지분율 추출");
+
   const consistent = checkFactConsistency(
     "Series B 100억원 Post 800. Phase II. ARR 50억 NRR 110%. " +
       "가".repeat(100),

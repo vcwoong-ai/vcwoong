@@ -136,6 +136,11 @@ export function ReportPageClient({ report }: { report: Report }) {
   const [startError, setStartError] = useState<string | null>(null);
   const [pageStatus, setPageStatus] = useState(report.status);
   const [qualityRefreshKey, setQualityRefreshKey] = useState(0);
+  const [improveRequest, setImproveRequest] = useState<{
+    sectionKey: string;
+    qualityIssues: string[];
+    token: number;
+  } | null>(null);
 
   const handleReload = useCallback(() => window.location.reload(), []);
 
@@ -291,6 +296,13 @@ export function ReportPageClient({ report }: { report: Report }) {
         <ReportQualityPanel
           reportId={report.id}
           refreshKey={qualityRefreshKey}
+          onImproveSection={(sectionKey, qualityIssues) =>
+            setImproveRequest({
+              sectionKey,
+              qualityIssues,
+              token: Date.now(),
+            })
+          }
         />
       )}
 
@@ -308,6 +320,8 @@ export function ReportPageClient({ report }: { report: Report }) {
         onSectionRegenerated={() =>
           setQualityRefreshKey((k) => k + 1)
         }
+        improveRequest={improveRequest}
+        onImproveHandled={() => setImproveRequest(null)}
       />
     </div>
   );

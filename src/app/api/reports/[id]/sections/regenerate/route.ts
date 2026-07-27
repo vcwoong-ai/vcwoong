@@ -14,6 +14,10 @@ import { checkQuota } from "@/lib/quotas";
 
 const bodySchema = z.object({
   sectionKey: z.nativeEnum(SectionKey),
+  /** 사용자가 직접 넣는 재생성 포커스 */
+  focusNote: z.string().max(800).optional(),
+  /** 품질 패널에서 넘긴 이슈/경고 */
+  qualityIssues: z.array(z.string().max(200)).max(12).optional(),
 });
 
 export async function POST(
@@ -52,7 +56,6 @@ export async function POST(
       );
     }
 
-    // 섹션 재생성은 전체 보고서 생성만큼 쿼터를 소모하지 않음 — soft check only
     const quota = await checkQuota(session.user.id, "report");
     if (!quota.allowed && report.status === "PENDING") {
       return NextResponse.json({ error: quota.message }, { status: 429 });
@@ -71,12 +74,26 @@ export async function POST(
 
     const prior = report.sections
       .filter((s) => s.sectionKey !== body.sectionKey && s.content)
-      .slice(-3)
-      .map(
-        (s) =>
-          `- ${s.title}: ${s.content.replace(/\s+/g, " ").trim().slice(0, 200)}`
-      )
+      .slice(-4)
+      .map((s) => {
+        const nums = (s.content.match(/[\d,.]+(?:억|조|%|원)?/g) ?? [])
+          .slice(0, 5)
+          .join(", ");
+        return `- ${s.title}: ${s.content.replace(/\s+/g, " ").trim().slice(0, 180)}${
+          nums ? ` [수치: ${nums}]` : ""
+        }`;
+      })
       .join("\n");
+
+    const qualityGuide =
+      body.qualityIssues && body.qualityIssues.length > 0
+        ? `## 품질 개선 포커스 (반드시 반영)\n${body.qualityIssues
+            .map((i) => `- ${i}`)
+            .join("\n")}`
+        : "";
+    const focusGuide = body.focusNote?.trim()
+      ? `## 사용자 지시\n${body.focusNote.trim()}`
+      : "";
 
     const agent = getAgent(report.agentType, deal.sector);
     const result = await agent.generateSection(
@@ -92,7 +109,10 @@ export async function POST(
         additionalContext: [
           factsBlock,
           prior ? `## 다른 섹션 요약\n${prior}` : "",
+          qualityGuide,
+          focusGuide,
           "이 요청은 단일 섹션 재생성입니다. 다른 섹션과 수치가 일치해야 합니다.",
+          "이전 초안의 약점(짧음/출처 없음/표 없음/팩트 누락)을 고치세요.",
         ]
           .filter(Boolean)
           .join("\n\n"),

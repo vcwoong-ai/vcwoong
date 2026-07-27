@@ -4,6 +4,11 @@ import { generateText } from "@/lib/claude";
 import { getSystemPrompt } from "@/prompts/system-prompts";
 import { GenerationResult } from "@/types";
 import { formatSaaSAnalysisForPrompt } from "@/lib/it/saas-extract";
+import {
+  buildInvestmentOverviewPrompt,
+  OVERVIEW_SECTION,
+  SECTOR_OVERVIEW_FLAVOR,
+} from "./overview-helpers";
 
 /**
  * IT/Software/Platform specialized investment agent.
@@ -19,6 +24,12 @@ export class ITAgent extends BaseAgent {
     sectionKey: SectionKey
   ): Promise<GenerationResult> {
     switch (sectionKey) {
+      case SectionKey.INVESTMENT_OVERVIEW:
+        return this.run(
+          input,
+          OVERVIEW_SECTION,
+          buildInvestmentOverviewPrompt(input, SECTOR_OVERVIEW_FLAVOR.IT)
+        );
       case SectionKey.PRODUCT_TECHNOLOGY:
         return this.generateITProduct(input);
       case SectionKey.MARKET_ANALYSIS:

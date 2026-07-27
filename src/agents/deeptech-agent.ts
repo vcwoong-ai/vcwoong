@@ -4,6 +4,11 @@ import { generateText } from "@/lib/claude";
 import { getSystemPrompt } from "@/prompts/system-prompts";
 import { GenerationResult } from "@/types";
 import { formatDeepTechAnalysisForPrompt } from "@/lib/deeptech/infra-extract";
+import {
+  buildInvestmentOverviewPrompt,
+  OVERVIEW_SECTION,
+  SECTOR_OVERVIEW_FLAVOR,
+} from "./overview-helpers";
 
 /**
  * Neuron — AI/딥테크 전문 투자 심사역 에이전트.
@@ -18,6 +23,12 @@ export class DeepTechAgent extends BaseAgent {
     sectionKey: SectionKey
   ): Promise<GenerationResult> {
     switch (sectionKey) {
+      case SectionKey.INVESTMENT_OVERVIEW:
+        return this.run(
+          input,
+          OVERVIEW_SECTION,
+          buildInvestmentOverviewPrompt(input, SECTOR_OVERVIEW_FLAVOR.DEEPTECH)
+        );
       case SectionKey.PRODUCT_TECHNOLOGY:
         return this.generateTechAssessment(input);
       case SectionKey.MARKET_ANALYSIS:

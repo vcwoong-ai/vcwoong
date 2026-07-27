@@ -3,6 +3,11 @@ import { BaseAgent, AgentInput } from "./base-agent";
 import { generateText } from "@/lib/claude";
 import { getSystemPrompt } from "@/prompts/system-prompts";
 import { GenerationResult } from "@/types";
+import {
+  buildInvestmentOverviewPrompt,
+  OVERVIEW_SECTION,
+  SECTOR_OVERVIEW_FLAVOR,
+} from "./overview-helpers";
 
 /**
  * Story — 콘텐츠/엔터테인먼트 전문 투자 심사역 에이전트.
@@ -17,6 +22,12 @@ export class ContentAgent extends BaseAgent {
     sectionKey: SectionKey
   ): Promise<GenerationResult> {
     switch (sectionKey) {
+      case SectionKey.INVESTMENT_OVERVIEW:
+        return this.run(
+          input,
+          OVERVIEW_SECTION,
+          buildInvestmentOverviewPrompt(input, SECTOR_OVERVIEW_FLAVOR.CONTENT)
+        );
       case SectionKey.PRODUCT_TECHNOLOGY:
         return this.generateIPAssessment(input);
       case SectionKey.MARKET_ANALYSIS:
