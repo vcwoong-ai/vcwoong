@@ -4,6 +4,7 @@ import { z } from "zod";
 import { SectionKey, SectionStatus } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { dealScope } from "@/lib/team";
 import { getAgent } from "@/agents";
 import {
   extractSharedFacts,
@@ -40,7 +41,7 @@ export async function POST(
     const scoreThreshold = body.scoreThreshold ?? 70;
 
     const report = await prisma.report.findFirst({
-      where: { id: params.id, deal: { userId: session.user.id } },
+      where: { id: params.id, ...(await dealScope(session.user.id)) },
       include: {
         deal: {
           include: {

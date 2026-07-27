@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { z } from "zod";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getAccessScope, ownedOrShared } from "@/lib/team";
 import { AgentType, ReportStatus } from "@prisma/client";
 import { inferAgentType } from "@/agents";
 import { generateSectionsAsync } from "@/lib/report-generation";
@@ -24,7 +25,7 @@ export async function GET(
   }
 
   const deal = await prisma.deal.findFirst({
-    where: { id: params.id, userId: session.user.id },
+    where: { id: params.id, ...ownedOrShared(await getAccessScope(session.user.id)) },
   });
   if (!deal) {
     return NextResponse.json({ error: "딜을 찾을 수 없습니다" }, { status: 404 });
@@ -51,7 +52,7 @@ export async function POST(
   }
 
   const deal = await prisma.deal.findFirst({
-    where: { id: params.id, userId: session.user.id },
+    where: { id: params.id, ...ownedOrShared(await getAccessScope(session.user.id)) },
     include: {
       documents: {
         select: { name: true, parsedText: true },

@@ -4,6 +4,7 @@ import { SectionKey } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { readFileByUrl } from "@/lib/storage";
+import { dealScope, getAccessScope, ownedOrShared } from "@/lib/team";
 import { analyzeDocxOutline } from "@/lib/template/template-reconstructor";
 import { analyzePptxOutline } from "@/lib/template/pptx-reconstructor";
 import type { TemplateSectionMap } from "@/lib/template/template-mapper";
@@ -32,7 +33,7 @@ export async function GET(
   }
 
   const template = await prisma.template.findFirst({
-    where: { id: params.id, userId: session.user.id },
+    where: { id: params.id, ...ownedOrShared(await getAccessScope(session.user.id)) },
   });
   if (!template) {
     return NextResponse.json({ error: "양식을 찾을 수 없습니다" }, { status: 404 });
@@ -65,7 +66,7 @@ export async function GET(
   const reportId = request.nextUrl.searchParams.get("reportId");
   const report = reportId
     ? await prisma.report.findFirst({
-        where: { id: reportId, deal: { userId: session.user.id } },
+        where: { id: reportId, ...(await dealScope(session.user.id)) },
         include: {
           deal: { select: { companyName: true } },
           sections: { orderBy: { order: "asc" } },

@@ -4,6 +4,7 @@ import { z } from "zod";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { DealSector, DealStage } from "@prisma/client";
+import { getAccessScope, ownedOrShared } from "@/lib/team";
 
 const createDealSchema = z.object({
   name: z.string().min(1, "딜 이름을 입력해주세요"),
@@ -29,18 +30,29 @@ export async function GET(request: NextRequest) {
   const stage = searchParams.get("stage") as DealStage | null;
   const search = searchParams.get("search");
 
+  const scope = await getAccessScope(session.user.id);
+
   const where = {
-    userId: session.user.id,
-    ...(sector ? { sector } : {}),
-    ...(stage ? { stage } : {}),
-    ...(search
-      ? {
-          OR: [
-            { name: { contains: search, mode: "insensitive" as const } },
-            { companyName: { contains: search, mode: "insensitive" as const } },
-          ],
-        }
-      : {}),
+    AND: [
+      ownedOrShared(scope),
+      ...(sector ? [{ sector }] : []),
+      ...(stage ? [{ stage }] : []),
+      ...(search
+        ? [
+            {
+              OR: [
+                { name: { contains: search, mode: "insensitive" as const } },
+                {
+                  companyName: {
+                    contains: search,
+                    mode: "insensitive" as const,
+                  },
+                },
+              ],
+            },
+          ]
+        : []),
+    ],
   };
 
   const [deals, total] = await Promise.all([

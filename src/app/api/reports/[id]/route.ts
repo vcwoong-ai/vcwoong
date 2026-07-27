@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { z } from "zod";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { dealScope } from "@/lib/team";
 import { ReportStatus, SectionStatus } from "@prisma/client";
 
 const patchSchema = z.object({
@@ -22,7 +23,7 @@ export async function GET(
   const report = await prisma.report.findFirst({
     where: {
       id: params.id,
-      deal: { userId: session.user.id },
+      ...(await dealScope(session.user.id)),
     },
     include: {
       deal: true,
@@ -52,7 +53,7 @@ export async function PATCH(
   const report = await prisma.report.findFirst({
     where: {
       id: params.id,
-      deal: { userId: session.user.id },
+      ...(await dealScope(session.user.id)),
     },
   });
 

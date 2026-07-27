@@ -4,6 +4,7 @@ import { z } from "zod";
 import { ReportStatus } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { dealScope } from "@/lib/team";
 import { generateReportDOCX } from "@/lib/docx-export";
 import { generateTemplateBasedDOCX } from "@/lib/template/template-generator";
 import { reconstructDOCX } from "@/lib/template/template-reconstructor";
@@ -31,7 +32,7 @@ export async function POST(
   }
 
   const report = await prisma.report.findFirst({
-    where: { id: params.id, deal: { userId: session.user.id } },
+    where: { id: params.id, ...(await dealScope(session.user.id)) },
     include: {
       deal: true,
       template: true,

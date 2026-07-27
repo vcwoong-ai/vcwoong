@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getAccessScope, ownedOrShared } from "@/lib/team";
 import { parseDocument } from "@/lib/document-parser";
 import { uploadFile } from "@/lib/storage";
 import { DocumentType } from "@prisma/client";
@@ -43,7 +44,7 @@ export async function POST(request: NextRequest) {
 
     // Verify deal ownership
     const deal = await prisma.deal.findFirst({
-      where: { id: dealId, userId: session.user.id },
+      where: { id: dealId, ...ownedOrShared(await getAccessScope(session.user.id)) },
     });
     if (!deal) {
       return NextResponse.json(

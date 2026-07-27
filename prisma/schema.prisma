@@ -83,12 +83,37 @@ model User {
 model Team {
   id        String   @id @default(cuid())
   name      String
+  /// 팀을 만든 사용자 — 멤버 초대·제외 권한을 가진다
+  ownerId   String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   users     User[]
   deals     Deal[]
   templates Template[]
+  invites   TeamInvite[]
+}
+
+/// 팀 초대 — 코드를 받은 사용자가 직접 합류한다
+model TeamInvite {
+  id        String       @id @default(cuid())
+  teamId    String
+  email     String
+  code      String       @unique
+  status    InviteStatus @default(PENDING)
+  invitedBy String
+  expiresAt DateTime
+  createdAt DateTime     @default(now())
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([teamId])
+}
+
+enum InviteStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
 }
 
 model Deal {

@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { dealScope } from "@/lib/team";
 import { getProgress } from "@/lib/generation-progress";
 
 /**
@@ -22,7 +23,7 @@ export async function GET(
   const reportId = params.id;
 
   const owned = await prisma.report.findFirst({
-    where: { id: reportId, deal: { userId: session.user.id } },
+    where: { id: reportId, ...(await dealScope(session.user.id)) },
     select: { id: true },
   });
   if (!owned) {

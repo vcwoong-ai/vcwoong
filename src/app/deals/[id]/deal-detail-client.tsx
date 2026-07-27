@@ -19,6 +19,7 @@ import {
   Calendar,
   Sparkles,
   LayoutTemplate,
+  Users,
 } from "lucide-react";
 import { EditDealDialog } from "@/components/deals/edit-deal-dialog";
 import { ReportWizard } from "@/components/reports/report-wizard";
@@ -36,6 +37,8 @@ interface DealWithRelations {
   id: string;
   name: string;
   companyName: string;
+  userId: string;
+  teamId: string | null;
   sector: DealSector;
   stage: DealStage;
   investRound: string | null;
@@ -151,9 +154,13 @@ interface TemplateOption {
 export function DealDetailClient({
   deal,
   demoMode = false,
+  currentUserId,
+  hasTeam = false,
 }: {
   deal: DealWithRelations;
   demoMode?: boolean;
+  currentUserId?: string;
+  hasTeam?: boolean;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -168,7 +175,31 @@ export function DealDetailClient({
   );
   const [wizardOpen, setWizardOpen] = useState(false);
   const [loadingFixture, setLoadingFixture] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const eventSourceRef = useRef<EventSource | null>(null);
+
+  const isOwner = currentUserId === deal.userId;
+  const isShared = deal.teamId !== null;
+
+  const toggleShare = async () => {
+    setSharing(true);
+    try {
+      const res = await fetch(`/api/deals/${deal.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ shared: !isShared }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error ?? "공유 설정 변경 실패");
+      }
+      router.refresh();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "공유 설정 변경 실패");
+    } finally {
+      setSharing(false);
+    }
+  };
 
   // 사용 가능한 템플릿 로드
   const loadTemplates = useCallback(async () => {
@@ -325,6 +356,16 @@ export function DealDetailClient({
           <div className="flex items-center gap-2 mb-2">
             <Badge variant="outline">{deal.sector}</Badge>
             <Badge variant="secondary">{deal.stage}</Badge>
+            {isShared && (
+              <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100">
+                <Users className="w-3 h-3 mr-1" />팀 공유 중
+              </Badge>
+            )}
+            {!isOwner && currentUserId && (
+              <Badge variant="outline" className="text-gray-500">
+                팀원이 공유한 딜
+              </Badge>
+            )}
           </div>
           <h1 className="text-2xl font-bold text-gray-900">{deal.companyName}</h1>
           <p className="text-gray-500">{deal.name}</p>
@@ -333,6 +374,16 @@ export function DealDetailClient({
           )}
         </div>
         <div className="flex flex-wrap gap-2 items-center">
+          {isOwner && hasTeam && (
+            <Button variant="outline" onClick={toggleShare} disabled={sharing} size="sm">
+              {sharing ? (
+                <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+              ) : (
+                <Users className="w-3.5 h-3.5 mr-1.5" />
+              )}
+              {isShared ? "공유 해제" : "팀에 공유"}
+            </Button>
+          )}
           <EditDealDialog deal={deal} />
           {deal.documents.length > 0 && (
             <>

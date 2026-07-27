@@ -8,7 +8,8 @@ export type PlanFeature =
   | "portfolio"
   | "sourcing"
   | "templateEngine"
-  | "bioExternalData";
+  | "bioExternalData"
+  | "teamCollaboration";
 
 export const FEATURE_LABEL: Record<PlanFeature, string> = {
   lpReporting: "LP 리포팅",
@@ -16,17 +17,25 @@ export const FEATURE_LABEL: Record<PlanFeature, string> = {
   sourcing: "딜소싱 인박스",
   templateEngine: "양식 재현 엔진",
   bioExternalData: "PubMed·FDA 외부 데이터",
+  teamCollaboration: "팀 협업",
 };
 
 const FEATURES: Record<PlanKey, PlanFeature[]> = {
   free: ["sourcing"],
   solo: ["sourcing", "portfolio"],
-  sector_pro: ["sourcing", "portfolio", "templateEngine"],
-  multi: ["sourcing", "portfolio", "templateEngine", "lpReporting"],
+  sector_pro: ["sourcing", "portfolio", "templateEngine", "teamCollaboration"],
+  multi: [
+    "sourcing",
+    "portfolio",
+    "templateEngine",
+    "teamCollaboration",
+    "lpReporting",
+  ],
   full: [
     "sourcing",
     "portfolio",
     "templateEngine",
+    "teamCollaboration",
     "lpReporting",
     "bioExternalData",
   ],
@@ -34,6 +43,7 @@ const FEATURES: Record<PlanKey, PlanFeature[]> = {
     "sourcing",
     "portfolio",
     "templateEngine",
+    "teamCollaboration",
     "lpReporting",
     "bioExternalData",
   ],
@@ -88,8 +98,8 @@ export const PUBLIC_PLANS: PublicPlan[] = [
     features: [
       `월 ${PLAN_LIMITS.sector_pro.reports}건 보고서`,
       `양식 ${PLAN_LIMITS.sector_pro.templates}개`,
-      "회사 양식 재현 엔진",
-      "약한 섹션 일괄 개선",
+      "회사 양식 1:1 재현 엔진",
+      "팀 협업 (딜·양식 공유)",
     ],
   },
   {

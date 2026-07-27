@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getAccessScope, ownedOrShared } from "@/lib/team";
 import { generateText, isAIConfigured } from "@/lib/claude";
 
 const SECTOR_LABELS: Record<string, string> = {
@@ -48,7 +49,7 @@ export async function POST(
   }
 
   const deal = await prisma.deal.findFirst({
-    where: { id: params.id, userId: session.user.id },
+    where: { id: params.id, ...ownedOrShared(await getAccessScope(session.user.id)) },
     include: {
       documents: { select: { name: true, parsedText: true } },
     },

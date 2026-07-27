@@ -40,7 +40,7 @@
 | 사후관리 | `/portfolio` MOIC·DPI·TVPI, 분기 KPI 시계열, 마일스톤, AI 분기 노트, 알림 |
 | LP 리포팅 | `/lp-report` 펀드 지표·섹터 배분 실계산, 분기 리포트 생성·저장, DOCX 내보내기 |
 
-데이터 모델: `Fund` → `PortfolioCompany` → `CompanyKPI` / `Milestone` / `PortfolioUpdate`, `LpReport`, `InboundDeal`
+데이터 모델: `Fund` → `PortfolioCompany` → `CompanyKPI` / `Milestone` / `PortfolioUpdate`, `LpReport`, `InboundDeal`, `Team` / `TeamInvite`
 
 ## 4. 셀프서브 가격
 
@@ -51,7 +51,22 @@
 | 월 한도 (보고서·양식) | `src/lib/quotas.ts` 에서 강제 |
 | 기능 게이트 | `requireFeature()` — LP 리포팅·포트폴리오 402 응답 |
 | 구독 해지 | `POST /api/payments/cancel` + 설정 화면 버튼 |
-| 미구현 | 팀 협업(Team 모델 미사용), 연간 결제 |
+| 팀 협업 | `/team` — 팀 생성·초대코드·멤버 관리, 딜/양식 공유 (Sector Pro+) |
+| 미구현 | 연간 결제 |
+
+### 팀 협업 접근 규칙
+
+`src/lib/team.ts`의 `ownedOrShared()` / `dealScope()`를 모든 조회 경로에 적용한다.
+
+| 동작 | 소유자 | 팀원 |
+|------|--------|------|
+| 공유된 딜·양식 조회 | O | O |
+| 딜 내용 편집 | O | O |
+| 공유 설정 변경 | O | X (403) |
+| 삭제 | O | X |
+| 초대·멤버 제외 | 팀 소유자만 | X (403) |
+
+팀원 제외·탈퇴·해산 시 해당 사용자가 공유한 딜·양식은 자동으로 공유 해제된다.
 
 ## 내보내기
 
@@ -75,4 +90,6 @@ npm run test:all           # quality + fixtures + routing + email + template (AP
 
 ## 남은 우선순위
 
-1. 팀 협업 — `Team` 모델 활성화, 딜·양식 공유
+1. 연간 결제 플랜
+2. 딜소싱 메일함 자동 연동 (현재는 붙여넣기 방식)
+3. LP 리포트 양식 재현 (현재 IC 보고서만 지원)

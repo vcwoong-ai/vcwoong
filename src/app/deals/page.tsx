@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getAccessScope, ownedOrShared } from "@/lib/team";
 import { AppLayout } from "@/components/layout/app-layout";
 import { DealsPageClient } from "./deals-page-client";
 
@@ -10,7 +11,7 @@ export default async function DealsPage() {
   if (!session?.user?.id) redirect("/login");
 
   const deals = await prisma.deal.findMany({
-    where: { userId: session.user.id },
+    where: ownedOrShared(await getAccessScope(session.user.id)),
     include: {
       documents: { select: { id: true } },
       reports: {

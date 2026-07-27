@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { dealScope } from "@/lib/team";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -36,7 +37,7 @@ export default async function ReportsPage() {
   if (!session?.user?.id) redirect("/login");
 
   const reports = await prisma.report.findMany({
-    where: { deal: { userId: session.user.id } },
+    where: await dealScope(session.user.id),
     include: {
       deal: { select: { id: true, companyName: true, sector: true } },
       sections: { select: { id: true, status: true } },

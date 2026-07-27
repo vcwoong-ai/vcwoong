@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getAccessScope, ownedOrShared } from "@/lib/team";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -20,7 +21,7 @@ export default async function NewReportPage() {
   if (!session?.user?.id) redirect("/login");
 
   const deals = await prisma.deal.findMany({
-    where: { userId: session.user.id, status: "ACTIVE" },
+    where: { ...ownedOrShared(await getAccessScope(session.user.id)), status: "ACTIVE" },
     orderBy: { updatedAt: "desc" },
     include: {
       documents: { select: { id: true } },

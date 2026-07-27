@@ -4,6 +4,7 @@ import { z } from "zod";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { DealSector, DealStage, DealStatus } from "@prisma/client";
+import { getAccessScope, ownedOrShared } from "@/lib/team";
 
 const updateDealSchema = z.object({
   name: z.string().min(1).optional(),
@@ -15,11 +16,14 @@ const updateDealSchema = z.object({
   investAmount: z.number().positive().optional(),
   investRound: z.string().optional(),
   valuation: z.number().positive().optional(),
+  /** 팀 공유 토글 — 소유자만 바꿀 수 있다 */
+  shared: z.boolean().optional(),
 });
 
 async function getAuthorizedDeal(dealId: string, userId: string) {
+  const scope = await getAccessScope(userId);
   const deal = await prisma.deal.findFirst({
-    where: { id: dealId, userId },
+    where: { id: dealId, ...ownedOrShared(scope) },
     include: {
       documents: true,
       reports: {
@@ -56,8 +60,9 @@ export async function PATCH(
     return NextResponse.json({ error: "인증이 필요합니다" }, { status: 401 });
   }
 
+  const scope = await getAccessScope(session.user.id);
   const deal = await prisma.deal.findFirst({
-    where: { id: params.id, userId: session.user.id },
+    where: { id: params.id, ...ownedOrShared(scope) },
   });
   if (!deal) {
     return NextResponse.json({ error: "딜을 찾을 수 없습니다" }, { status: 404 });
@@ -65,11 +70,27 @@ export async function PATCH(
 
   try {
     const body = await request.json();
-    const validated = updateDealSchema.parse(body);
+    const { shared, ...validated } = updateDealSchema.parse(body);
+
+    if (shared !== undefined && deal.userId !== session.user.id) {
+      return NextResponse.json(
+        { error: "딜 소유자만 공유 설정을 바꿀 수 있습니다" },
+        { status: 403 }
+      );
+    }
+    if (shared === true && !scope.teamId) {
+      return NextResponse.json(
+        { error: "먼저 팀을 만들거나 팀에 합류하세요" },
+        { status: 400 }
+      );
+    }
 
     const updated = await prisma.deal.update({
       where: { id: params.id },
-      data: validated,
+      data: {
+        ...validated,
+        ...(shared === undefined ? {} : { teamId: shared ? scope.teamId : null }),
+      },
     });
 
     return NextResponse.json({ data: updated });

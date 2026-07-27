@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { z } from "zod";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { dealScope } from "@/lib/team";
 import { SectionStatus } from "@prisma/client";
 
 const updateSectionSchema = z.object({
@@ -24,7 +25,7 @@ export async function PATCH(
   const report = await prisma.report.findFirst({
     where: {
       id: params.id,
-      deal: { userId: session.user.id },
+      ...(await dealScope(session.user.id)),
     },
   });
 

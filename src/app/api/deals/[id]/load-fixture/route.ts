@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getAccessScope, ownedOrShared } from "@/lib/team";
 import { DocumentType } from "@prisma/client";
 import { readFileSync } from "fs";
 import { resolve } from "path";
@@ -27,7 +28,7 @@ export async function POST(
 
   try {
     const deal = await prisma.deal.findFirst({
-      where: { id: params.id, userId: session.user.id },
+      where: { id: params.id, ...ownedOrShared(await getAccessScope(session.user.id)) },
     });
     if (!deal) {
       return NextResponse.json(
@@ -133,7 +134,7 @@ export async function GET(
   }
 
   const deal = await prisma.deal.findFirst({
-    where: { id: params.id, userId: session.user.id },
+    where: { id: params.id, ...ownedOrShared(await getAccessScope(session.user.id)) },
     select: { id: true, sector: true },
   });
   if (!deal) {

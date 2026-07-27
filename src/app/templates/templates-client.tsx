@@ -20,6 +20,7 @@ import {
   ChevronDown,
   ChevronUp,
   Columns2,
+  Users,
 } from "lucide-react";
 
 interface Template {
@@ -32,6 +33,8 @@ interface Template {
   status: "PENDING" | "ANALYZING" | "READY" | "ERROR";
   structure: Record<string, unknown> | null;
   sectionMap: Record<string, unknown> | null;
+  userId: string;
+  teamId: string | null;
   createdAt: string;
 }
 
@@ -50,12 +53,23 @@ function formatFileSize(bytes: number): string {
 interface TemplateCardProps {
   template: Template;
   onDelete: (id: string) => void;
+  onToggleShare: (id: string, shared: boolean) => void;
+  currentUserId?: string;
+  hasTeam: boolean;
 }
 
-function TemplateCard({ template, onDelete }: TemplateCardProps) {
+function TemplateCard({
+  template,
+  onDelete,
+  onToggleShare,
+  currentUserId,
+  hasTeam,
+}: TemplateCardProps) {
   const [expanded, setExpanded] = useState(false);
   const statusCfg = STATUS_CONFIG[template.status];
   const StatusIcon = statusCfg.icon;
+  const isOwner = currentUserId === template.userId;
+  const isShared = template.teamId !== null;
 
   const sections = (template.structure as { sections?: Array<{ title: string; level: number }> })?.sections ?? [];
   const mappings = (template.sectionMap as { mappings?: Array<{ templateSection: string; sectionKey: string | null; confidence: number }> })?.mappings ?? [];
@@ -77,6 +91,14 @@ function TemplateCard({ template, onDelete }: TemplateCardProps) {
                   {statusCfg.label}
                 </span>
                 <Badge variant="outline" className="text-xs">{template.fileType}</Badge>
+                {isShared && (
+                  <Badge className="text-xs bg-blue-100 text-blue-700 hover:bg-blue-100">
+                    <Users className="w-3 h-3 mr-1" />팀 공유
+                  </Badge>
+                )}
+                {!isOwner && currentUserId && (
+                  <span className="text-xs text-gray-400">팀원 공유</span>
+                )}
               </div>
               <p className="text-xs text-gray-500 mt-0.5">
                 {template.originalName} · {formatFileSize(template.fileSize)}
@@ -109,14 +131,27 @@ function TemplateCard({ template, onDelete }: TemplateCardProps) {
                 상세
               </Button>
             )}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onDelete(template.id)}
-              className="text-red-400 hover:text-red-600 hover:bg-red-50"
-            >
-              <Trash2 className="w-4 h-4" />
-            </Button>
+            {isOwner && hasTeam && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onToggleShare(template.id, !isShared)}
+                className="text-xs text-gray-500"
+              >
+                <Users className="w-3.5 h-3.5 mr-1" />
+                {isShared ? "공유 해제" : "팀 공유"}
+              </Button>
+            )}
+            {isOwner && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onDelete(template.id)}
+                className="text-red-400 hover:text-red-600 hover:bg-red-50"
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            )}
           </div>
         </div>
 
@@ -150,7 +185,15 @@ function TemplateCard({ template, onDelete }: TemplateCardProps) {
   );
 }
 
-export function TemplatesClient({ templates: initialTemplates }: { templates: Template[] }) {
+export function TemplatesClient({
+  templates: initialTemplates,
+  currentUserId,
+  hasTeam = false,
+}: {
+  templates: Template[];
+  currentUserId?: string;
+  hasTeam?: boolean;
+}) {
   const [templates, setTemplates] = useState(initialTemplates);
   const [uploading, setUploading] = useState(false);
   const [templateName, setTemplateName] = useState("");
@@ -214,6 +257,20 @@ export function TemplatesClient({ templates: initialTemplates }: { templates: Te
       setTemplates((prev) => prev.map((t) => (t.id === id ? data : t)));
       if (data.status === "READY" || data.status === "ERROR") break;
     }
+  };
+
+  const handleToggleShare = async (id: string, shared: boolean) => {
+    const res = await fetch(`/api/templates/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ shared }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      return setError(err.error ?? "공유 설정 변경 실패");
+    }
+    const { data } = await res.json();
+    setTemplates((prev) => prev.map((t) => (t.id === id ? { ...t, ...data } : t)));
   };
 
   const handleDelete = async (id: string) => {
@@ -325,7 +382,14 @@ export function TemplatesClient({ templates: initialTemplates }: { templates: Te
         ) : (
           <div className="space-y-3">
             {templates.map((t) => (
-              <TemplateCard key={t.id} template={t} onDelete={handleDelete} />
+              <TemplateCard
+                key={t.id}
+                template={t}
+                onDelete={handleDelete}
+                onToggleShare={handleToggleShare}
+                currentUserId={currentUserId}
+                hasTeam={hasTeam}
+              />
             ))}
           </div>
         )}

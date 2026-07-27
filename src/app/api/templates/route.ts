@@ -8,6 +8,7 @@ import { uploadFile } from "@/lib/storage";
 import { parseTemplate } from "@/lib/template/template-parser";
 import { mapTemplateSections } from "@/lib/template/template-mapper";
 import { checkQuota } from "@/lib/quotas";
+import { getAccessScope, ownedOrShared } from "@/lib/team";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -15,8 +16,9 @@ export async function GET() {
     return NextResponse.json({ error: "인증이 필요합니다" }, { status: 401 });
   }
 
+  const scope = await getAccessScope(session.user.id);
   const templates = await prisma.template.findMany({
-    where: { userId: session.user.id },
+    where: ownedOrShared(scope),
     orderBy: { createdAt: "desc" },
   });
 

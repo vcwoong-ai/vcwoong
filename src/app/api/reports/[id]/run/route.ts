@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { dealScope } from "@/lib/team";
 import { ReportStatus } from "@prisma/client";
 import { generateSectionsAsync } from "@/lib/report-generation";
 import { checkQuota } from "@/lib/quotas";
@@ -18,7 +19,7 @@ export async function POST(
   const report = await prisma.report.findFirst({
     where: {
       id: params.id,
-      deal: { userId: session.user.id },
+      ...(await dealScope(session.user.id)),
     },
     include: {
       deal: {

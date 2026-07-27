@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import { redirect, notFound } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { dealScope } from "@/lib/team";
 import { PrintReportClient } from "./print-report-client";
 
 /**
@@ -17,7 +18,7 @@ export default async function ReportPrintPage({
   if (!session?.user?.id) redirect("/login");
 
   const report = await prisma.report.findFirst({
-    where: { id: params.id, deal: { userId: session.user.id } },
+    where: { id: params.id, ...(await dealScope(session.user.id)) },
     include: {
       deal: { select: { companyName: true, sector: true, investRound: true } },
       sections: { orderBy: { order: "asc" } },

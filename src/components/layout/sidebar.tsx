@@ -16,6 +16,7 @@ import {
   LayoutTemplate,
   LineChart,
   Sparkles,
+  Users,
 } from "lucide-react";
 
 const navItems = [
@@ -63,6 +64,11 @@ const navItems = [
     label: "파일 업로드",
     href: "/upload",
     icon: Upload,
+  },
+  {
+    label: "팀",
+    href: "/team",
+    icon: Users,
   },
   {
     label: "설정",
