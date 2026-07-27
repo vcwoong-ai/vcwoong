@@ -45,7 +45,11 @@ export async function GET(
 
       // Poll every 400ms, max 5 minutes
       const maxAttempts = 750;
+      // 서버리스/개발 환경에서는 라우트마다 모듈 인스턴스가 달라 메모리 진행
+      // 상태가 비어 있을 수 있다. 이때는 DB 상태를 주기적으로 확인한다.
+      const dbCheckEvery = 5; // 약 2초
       let attempts = 0;
+      let finished = false;
 
       while (attempts < maxAttempts) {
         const progress = getProgress(reportId);
@@ -53,38 +57,54 @@ export async function GET(
         if (progress) {
           send(progress);
           if (progress.status === "completed" || progress.status === "error") {
+            finished = true;
             break;
           }
-        } else if (attempts > 10) {
-          // 메모리에 진행 상태가 없으면 DB 상태로 판정 (다중 인스턴스/재시작 대비)
+        } else if (attempts > 5 && attempts % dbCheckEvery === 0) {
           const current = await prisma.report.findUnique({
             where: { id: reportId },
             select: { status: true, _count: { select: { sections: true } } },
           });
 
-          if (!current || current.status === "GENERATING") {
+          if (!current) {
             send({
               status: "error",
               completed: 0,
               total: 0,
-              error:
-                "생성 진행 상태를 확인할 수 없습니다. 잠시 후 새로고침해 주세요.",
+              error: "보고서를 찾을 수 없습니다.",
             });
-          } else {
+            finished = true;
+            break;
+          }
+
+          if (current.status !== "GENERATING") {
+            // 섹션이 저장되고 상태가 바뀌었으면 실제 완료
             send({
-              status: "completed",
+              status: current._count.sections > 0 ? "completed" : "error",
               completed: current._count.sections,
               total: current._count.sections,
+              ...(current._count.sections === 0
+                ? { error: "생성된 섹션이 없습니다. 다시 시도해 주세요." }
+                : {}),
             });
+            finished = true;
+            break;
           }
-          break;
+
+          // 아직 생성 중 — 하트비트만 보내고 계속 기다린다
+          send({
+            status: "generating",
+            completed: current._count.sections,
+            total: 0,
+            currentSection: "AI 분석 진행 중",
+          });
         }
 
         await new Promise((r) => setTimeout(r, 400));
         attempts++;
       }
 
-      if (attempts >= maxAttempts) {
+      if (!finished) {
         send({
           status: "error",
           completed: 0,
