@@ -4,6 +4,10 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateReportDOCX } from "@/lib/docx-export";
 import { generateTemplateBasedDOCX } from "@/lib/template/template-generator";
+import { reconstructDOCX } from "@/lib/template/template-reconstructor";
+import { readStoredFile } from "@/lib/storage";
+import { hasFeature } from "@/lib/plans";
+import { getUserPlanKey } from "@/lib/subscription";
 import { ReportStatus } from "@prisma/client";
 import type { TemplateSectionMap } from "@/lib/template/template-mapper";
 
@@ -37,14 +41,53 @@ export async function POST(
   }
 
   try {
-    let buffer: Buffer;
+    let buffer: Buffer | null = null;
+    // 어떤 경로로 만들어졌는지 클라이언트가 알 수 있게 헤더로 알린다
+    let mode = "default";
 
-    // 템플릿이 연결된 경우 → 템플릿 기반 생성
-    if (report.template?.sectionMap && report.template.status === "READY") {
-      buffer = await generateTemplateBasedDOCX(
-        report.sections,
-        report.template.sectionMap as unknown as TemplateSectionMap,
-        {
+    const templateReady =
+      report.template?.sectionMap && report.template.status === "READY";
+    const canUseEngine =
+      templateReady && hasFeature(await getUserPlanKey(session.user.id), "templateEngine");
+
+    if (canUseEngine && report.template) {
+      const sectionMap = report.template
+        .sectionMap as unknown as TemplateSectionMap;
+
+      // 1순위: 원본 파일에 본문만 갈아끼워 서식을 1:1로 유지
+      if (report.template.fileType === "DOCX") {
+        const original = await readStoredFile(report.template.fileUrl);
+        if (original) {
+          try {
+            const result = await reconstructDOCX({
+              originalBuffer: original,
+              sectionMap,
+              reportSections: report.sections.map((s) => ({
+                sectionKey: s.sectionKey,
+                title: s.title,
+                content: s.content,
+              })),
+              replacements: {
+                기업명: report.deal.companyName,
+                회사명: report.deal.companyName,
+                작성일: new Date().toLocaleDateString("ko-KR"),
+                투자라운드: report.deal.investRound ?? "",
+              },
+            });
+            buffer = result.buffer;
+            mode = `reconstructed:${result.filledSections}/${result.detectedHeadings}`;
+          } catch (err) {
+            console.warn(
+              "[Export] 양식 재현 실패 — 템플릿 생성기로 폴백:",
+              err instanceof Error ? err.message : err
+            );
+          }
+        }
+      }
+
+      // 2순위: 섹션 순서만 반영한 신규 DOCX
+      if (!buffer) {
+        buffer = await generateTemplateBasedDOCX(report.sections, sectionMap, {
           companyName: report.deal.companyName,
           dealInfo: {
             investRound: report.deal.investRound,
@@ -53,10 +96,13 @@ export async function POST(
             sector: report.deal.sector,
           },
           reportDate: new Date(),
-        }
-      );
-    } else {
-      // 기본 DOCX 생성
+        });
+        mode = "template-ordered";
+      }
+    }
+
+    // 3순위: 기본 양식
+    if (!buffer) {
       buffer = await generateReportDOCX(
         report as Parameters<typeof generateReportDOCX>[0]
       );
@@ -72,9 +118,11 @@ export async function POST(
     return new NextResponse(new Uint8Array(buffer), {
       status: 200,
       headers: {
-        "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "Content-Type":
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
         "Content-Length": buffer.length.toString(),
+        "X-Export-Mode": mode,
       },
     });
   } catch (error) {

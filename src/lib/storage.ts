@@ -44,6 +44,35 @@ export async function uploadFile(
   return `/uploads/${key.replace(/\//g, "_")}`;
 }
 
+/**
+ * 저장된 파일을 다시 읽는다 (양식 재현 시 원본 DOCX 필요).
+ * 읽지 못하면 null을 반환해 호출부가 폴백하도록 한다.
+ */
+export async function readStoredFile(
+  urlOrKey: string
+): Promise<Buffer | null> {
+  try {
+    if (storageMode === "s3" && s3Client) {
+      // 전체 URL로 저장돼 있으면 키만 떼어낸다
+      const key = urlOrKey.startsWith("http")
+        ? new URL(urlOrKey).pathname.replace(/^\//, "")
+        : urlOrKey;
+      const res = await s3Client.send(
+        new GetObjectCommand({ Bucket: bucket, Key: key })
+      );
+      const bytes = await res.Body?.transformToByteArray();
+      return bytes ? Buffer.from(bytes) : null;
+    }
+
+    // 로컬: uploadFile이 반환한 "/uploads/<name>" 형태를 되돌린다
+    const name = urlOrKey.replace(/^\/uploads\//, "").replace(/\//g, "_");
+    const filePath = path.join(process.cwd(), uploadDir, name);
+    return await fs.readFile(filePath);
+  } catch {
+    return null;
+  }
+}
+
 export async function getFileUrl(key: string): Promise<string> {
   if (storageMode === "s3" && s3Client) {
     const command = new GetObjectCommand({ Bucket: bucket, Key: key });

@@ -8,6 +8,7 @@ import { uploadFile } from "@/lib/storage";
 import { parseTemplate } from "@/lib/template/template-parser";
 import { mapTemplateSections } from "@/lib/template/template-mapper";
 import { checkQuota } from "@/lib/quotas";
+import { randomUUID } from "crypto";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -60,8 +61,13 @@ export async function POST(request: NextRequest) {
   const ext = file.name.split(".").pop()?.toLowerCase() ?? "docx";
   const fileType: TemplateFileType = ext === "pptx" || ext === "ppt" ? "PPTX" : "DOCX";
 
-  // 1. 파일 저장
-  const fileUrl = await uploadFile(buffer, file.name, file.type || "application/octet-stream");
+  // 1. 파일 저장 — 파일명만 쓰면 다른 사용자의 동명 양식을 덮어쓰므로 고유 키를 만든다
+  const storageKey = `templates/${randomUUID()}.${ext}`;
+  const fileUrl = await uploadFile(
+    buffer,
+    storageKey,
+    file.type || "application/octet-stream"
+  );
 
   // 2. 구조 파싱 (비동기 처리)
   const template = await prisma.template.create({

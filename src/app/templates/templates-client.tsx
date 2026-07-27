@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useDropzone } from "react-dropzone";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -43,6 +43,121 @@ const STATUS_CONFIG = {
 function formatFileSize(bytes: number): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)}KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+}
+
+interface PreviewBlock {
+  kind: "heading" | "body" | "table";
+  text: string;
+  sectionKey: string | null;
+  willReplace: boolean;
+}
+
+interface PreviewData {
+  supported: boolean;
+  reason: string | null;
+  matchedSections?: number;
+  blocks: PreviewBlock[];
+}
+
+/**
+ * 원본 양식에서 어떤 부분이 생성 본문으로 교체되는지 보여준다.
+ * 회색 = 원본 유지, 파랑 = AI 본문으로 교체.
+ */
+function ReproductionPreview({ templateId }: { templateId: string }) {
+  const [data, setData] = useState<PreviewData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    fetch(`/api/templates/${templateId}/preview`)
+      .then(async (r) => {
+        if (!r.ok) throw new Error("미리보기 실패");
+        return r.json();
+      })
+      .then((res) => {
+        if (!cancelled) setData(res.data);
+      })
+      .catch(() => {
+        if (!cancelled) setData(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [templateId]);
+
+  if (loading) {
+    return (
+      <div className="mt-3 flex items-center gap-2 text-xs text-gray-400">
+        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+        원본 양식 분석 중...
+      </div>
+    );
+  }
+  if (!data) return null;
+
+  return (
+    <div className="mt-3 border rounded-lg overflow-hidden">
+      <div
+        className={`px-3 py-2 text-xs font-medium flex items-center gap-2 ${
+          data.supported
+            ? "bg-green-50 text-green-800"
+            : "bg-amber-50 text-amber-800"
+        }`}
+      >
+        <Sparkles className="w-3.5 h-3.5" />
+        {data.supported
+          ? `1:1 재현 가능 — 원본 파일에 본문만 채웁니다 (섹션 ${data.matchedSections}개)`
+          : data.reason}
+      </div>
+
+      {data.blocks.length > 0 && (
+        <>
+          <div className="max-h-64 overflow-y-auto divide-y bg-white">
+            {data.blocks.map((b, i) => (
+              <div
+                key={i}
+                className={`px-3 py-1.5 text-xs flex items-start gap-2 ${
+                  b.willReplace ? "bg-blue-50/60" : ""
+                }`}
+              >
+                <span
+                  className={`mt-1 w-1.5 h-1.5 rounded-full shrink-0 ${
+                    b.willReplace ? "bg-blue-500" : "bg-gray-300"
+                  }`}
+                />
+                <span
+                  className={
+                    b.kind === "heading"
+                      ? "font-semibold text-gray-800"
+                      : "text-gray-500"
+                  }
+                >
+                  {b.text || "(빈 단락)"}
+                </span>
+                {b.sectionKey && (
+                  <span className="ml-auto text-[10px] text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded shrink-0">
+                    {b.sectionKey}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+          <div className="px-3 py-2 bg-gray-50 text-[11px] text-gray-500 flex items-center gap-3">
+            <span className="flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-gray-300" /> 원본 유지
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-500" /> AI 본문으로 교체
+            </span>
+          </div>
+        </>
+      )}
+    </div>
+  );
 }
 
 interface TemplateCardProps {
@@ -135,6 +250,8 @@ function TemplateCard({ template, onDelete }: TemplateCardProps) {
             </div>
           </div>
         )}
+
+        {expanded && <ReproductionPreview templateId={template.id} />}
       </CardContent>
     </Card>
   );
