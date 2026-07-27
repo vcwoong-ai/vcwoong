@@ -91,6 +91,14 @@ export function markdownToBlocks(markdown: string): ContentBlock[] {
       continue;
     }
 
+    // 인용(>)은 Word에 표기할 방법이 마땅치 않아 일반 문단으로 낮춘다
+    const quote = /^>\s?(.*)$/.exec(line);
+    if (quote) {
+      const inner = clean(quote[1]);
+      if (inner) out.push({ type: "para", text: inner });
+      continue;
+    }
+
     const bullet = /^[-*]\s+(.*)$/.exec(line);
     if (bullet) {
       out.push({ type: "bullet", text: clean(bullet[1]) });

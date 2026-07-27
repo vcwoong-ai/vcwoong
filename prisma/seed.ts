@@ -15,14 +15,37 @@ const prisma = new PrismaClient();
 async function main() {
   console.log("Seeding database...");
 
-  // Create demo user
+  const DEMO_EMAIL = "demo@axiom.kr";
+  // 리브랜딩 이전 데모 계정 — 남아 있으면 이메일만 옮겨 기존 데이터를 살린다
+  const LEGACY_DEMO_EMAILS = ["demo@vcwoong.kr", "demo@dealsync.kr"];
+
   const passwordHash = await bcrypt.hash("Demo1234!", 12);
+
+  const current = await prisma.user.findUnique({ where: { email: DEMO_EMAIL } });
+  const legacy = current
+    ? null
+    : await prisma.user.findFirst({
+        where: { email: { in: LEGACY_DEMO_EMAILS } },
+      });
+
+  if (legacy) {
+    await prisma.user.update({
+      where: { id: legacy.id },
+      data: { email: DEMO_EMAIL },
+    });
+    console.log(`Migrated legacy demo account ${legacy.email} -> ${DEMO_EMAIL}`);
+  }
+
   const user = await prisma.user.upsert({
-    where: { email: "demo@axiom.kr" },
+    where: { email: DEMO_EMAIL },
     // 데모 계정은 모든 기능을 체험할 수 있도록 최상위 플랜으로 둔다
-    update: { subscriptionPlan: "FULL", subscriptionStatus: "ACTIVE" },
+    update: {
+      passwordHash,
+      subscriptionPlan: "FULL",
+      subscriptionStatus: "ACTIVE",
+    },
     create: {
-      email: "demo@axiom.kr",
+      email: DEMO_EMAIL,
       name: "김심사",
       passwordHash,
       role: UserRole.ANALYST,
@@ -31,12 +54,35 @@ async function main() {
     },
   });
 
-  console.log(`Created demo user: ${user.email}`);
+  // 이전 시드 실행으로 다른 계정에 붙어 있던 샘플 데이터를 현재 데모 계정으로 모은다
+  const orphanIds = (
+    await prisma.user.findMany({
+      where: { email: { in: LEGACY_DEMO_EMAILS } },
+      select: { id: true },
+    })
+  ).map((u) => u.id);
+  if (orphanIds.length > 0) {
+    await prisma.deal.updateMany({
+      where: { userId: { in: orphanIds } },
+      data: { userId: user.id },
+    });
+    await prisma.portfolioCompany.updateMany({
+      where: { userId: { in: orphanIds } },
+      data: { userId: user.id },
+    });
+    await prisma.fund.updateMany({
+      where: { userId: { in: orphanIds } },
+      data: { userId: user.id },
+    });
+    console.log(`Reattached sample data from ${orphanIds.length} legacy account(s)`);
+  }
+
+  console.log(`Demo user ready: ${user.email}`);
 
   // Create sample deals
   const bioDeal = await prisma.deal.upsert({
     where: { id: "seed-bio-deal-001" },
-    update: {},
+    update: { userId: user.id },
     create: {
       id: "seed-bio-deal-001",
       name: "헬스케어AI Inc. Series B 투자 검토",
@@ -54,7 +100,7 @@ async function main() {
 
   const itDeal = await prisma.deal.upsert({
     where: { id: "seed-it-deal-001" },
-    update: {},
+    update: { userId: user.id },
     create: {
       id: "seed-it-deal-001",
       name: "DataFlow SaaS Series A 투자 검토",
@@ -72,7 +118,7 @@ async function main() {
 
   const climateDeal = await prisma.deal.upsert({
     where: { id: "seed-climate-deal-001" },
-    update: {},
+    update: { userId: user.id },
     create: {
       id: "seed-climate-deal-001",
       name: "GreenLoop Series A 투자 검토",
@@ -90,7 +136,7 @@ async function main() {
 
   const consumerDeal = await prisma.deal.upsert({
     where: { id: "seed-consumer-deal-001" },
-    update: {},
+    update: { userId: user.id },
     create: {
       id: "seed-consumer-deal-001",
       name: "BloomLab Series A 투자 검토",
@@ -108,7 +154,7 @@ async function main() {
 
   const fintechDeal = await prisma.deal.upsert({
     where: { id: "seed-fintech-deal-001" },
-    update: {},
+    update: { userId: user.id },
     create: {
       id: "seed-fintech-deal-001",
       name: "VaultPay Series B 투자 검토",
@@ -329,7 +375,7 @@ async function main() {
   // ── 풀사이클: 펀드 + 포트폴리오 사후관리 ──
   const fund = await prisma.fund.upsert({
     where: { id: "seed-fund-001" },
-    update: {},
+    update: { userId: user.id },
     create: {
       id: "seed-fund-001",
       name: "Axiom 1호 벤처투자조합",
@@ -407,7 +453,7 @@ async function main() {
     const { kpis, milestones, ...company } = p;
     await prisma.portfolioCompany.upsert({
       where: { id: p.id },
-      update: {},
+      update: { userId: user.id, fundId: fund.id },
       create: {
         ...company,
         realizedAmount: company.realizedAmount ?? 0,
