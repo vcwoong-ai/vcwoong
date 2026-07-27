@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   Briefcase,
   FileText,
+  Inbox,
   Upload,
   Settings,
   ChevronRight,
@@ -22,6 +23,11 @@ const navItems = [
     label: "대시보드",
     href: "/dashboard",
     icon: LayoutDashboard,
+  },
+  {
+    label: "딜소싱",
+    href: "/sourcing",
+    icon: Inbox,
   },
   {
     label: "딜 관리",
