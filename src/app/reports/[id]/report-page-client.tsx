@@ -141,6 +141,8 @@ export function ReportPageClient({ report }: { report: Report }) {
     qualityIssues: string[];
     token: number;
   } | null>(null);
+  const [batchImproving, setBatchImproving] = useState(false);
+  const [batchNote, setBatchNote] = useState<string | null>(null);
 
   const handleReload = useCallback(() => window.location.reload(), []);
 
@@ -296,6 +298,7 @@ export function ReportPageClient({ report }: { report: Report }) {
         <ReportQualityPanel
           reportId={report.id}
           refreshKey={qualityRefreshKey}
+          batchImproving={batchImproving}
           onImproveSection={(sectionKey, qualityIssues) =>
             setImproveRequest({
               sectionKey,
@@ -303,7 +306,49 @@ export function ReportPageClient({ report }: { report: Report }) {
               token: Date.now(),
             })
           }
+          onBatchImprove={async () => {
+            if (
+              !confirm(
+                "품질 70점 미만 섹션(최대 3개)을 이슈 반영해 다시 생성할까요?"
+              )
+            ) {
+              return;
+            }
+            setBatchImproving(true);
+            setBatchNote(null);
+            try {
+              const res = await fetch(
+                `/api/reports/${report.id}/improve-weak`,
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ maxSections: 3, scoreThreshold: 70 }),
+                }
+              );
+              if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error ?? "일괄 개선 실패");
+              }
+              const { data } = await res.json();
+              setBatchNote(
+                data.message ??
+                  `개선 ${data.improved?.length ?? 0}개 · ${data.beforeScore} → ${data.afterScore}점`
+              );
+              setQualityRefreshKey((k) => k + 1);
+              handleReload();
+            } catch (e) {
+              alert(e instanceof Error ? e.message : "일괄 개선 실패");
+            } finally {
+              setBatchImproving(false);
+            }
+          }}
         />
+      )}
+
+      {batchNote && (
+        <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">
+          {batchNote}
+        </div>
       )}
 
       <ReportEditor

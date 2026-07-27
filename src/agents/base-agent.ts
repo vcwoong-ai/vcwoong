@@ -7,6 +7,12 @@ import {
 } from "@/prompts/section-prompts";
 import { GenerationResult } from "@/types";
 import { SECTION_META } from "@/types";
+import {
+  buildCompanyOverviewPrompt,
+  COMPANY_SECTION,
+  flavorKeyForSector,
+  SECTOR_COMPANY_FLAVOR,
+} from "./overview-helpers";
 
 /** IR 문서당 컨텍스트 길이 (품질↑ — 재무표·파이프라인 누락 방지) */
 const DOC_CONTEXT_CHARS = 8000;
@@ -55,6 +61,25 @@ export abstract class BaseAgent {
     sectionKey: SectionKey
   ): Promise<GenerationResult> {
     const systemPrompt = getSystemPrompt(this.agentType, this.sector);
+
+    // 모든 에이전트 공통: 회사개요는 섹터 특화 프롬프트 사용
+    if (sectionKey === COMPANY_SECTION) {
+      const key = flavorKeyForSector(this.sector ?? input.sector);
+      const flavor =
+        SECTOR_COMPANY_FLAVOR[key] ?? SECTOR_COMPANY_FLAVOR.GENERAL;
+      const userPrompt = buildCompanyOverviewPrompt(input, flavor);
+      const result = await generateText(
+        [{ role: "user", content: userPrompt }],
+        { systemPrompt, maxTokens: 4096, temperature: 0.35 }
+      );
+      return {
+        sectionKey,
+        content: result.content,
+        tokensUsed: result.inputTokens + result.outputTokens,
+        modelUsed: result.usedModel,
+      };
+    }
+
     const documentContext = this.buildDocumentContext(input.documents);
 
     const promptContext: SectionPromptContext = {

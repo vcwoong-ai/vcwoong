@@ -25,12 +25,17 @@ export function ReportQualityPanel({
   reportId,
   refreshKey = 0,
   onImproveSection,
+  onBatchImprove,
+  batchImproving = false,
 }: {
   reportId: string;
   /** 섹션 재생성 후 증가시켜 품질 점수를 다시 불러온다 */
   refreshKey?: number;
   /** 낮은 점수 섹션 클릭 시 품질 이슈를 넣어 재생성 */
   onImproveSection?: (sectionKey: string, qualityIssues: string[]) => void;
+  /** 약한 섹션 일괄 개선 */
+  onBatchImprove?: () => void;
+  batchImproving?: boolean;
 }) {
   const [data, setData] = useState<QualitySummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -79,7 +84,24 @@ export function ReportQualityPanel({
           <ShieldCheck className="w-4 h-4" />
           자동 품질 점수
         </div>
-        <Badge variant="secondary">{data.overallScore}/100</Badge>
+        <div className="flex items-center gap-2">
+          {onBatchImprove && (
+            <button
+              type="button"
+              onClick={onBatchImprove}
+              disabled={batchImproving}
+              className="inline-flex items-center gap-1 rounded border border-current/20 bg-white/50 px-2 py-1 text-[11px] font-medium hover:bg-white/80 disabled:opacity-50"
+            >
+              {batchImproving ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <RefreshCw className="w-3 h-3" />
+              )}
+              약한 섹션 일괄 개선
+            </button>
+          )}
+          <Badge variant="secondary">{data.overallScore}/100</Badge>
+        </div>
       </div>
 
       {data.suggestions[0] && (
