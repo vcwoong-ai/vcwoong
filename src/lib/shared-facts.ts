@@ -14,13 +14,33 @@ export interface SharedDealFacts {
 }
 
 const METRIC_PATTERNS: Array<{ key: string; re: RegExp }> = [
-  { key: "ARR", re: /ARR[:\s]*[₩$]?\s*([\d,.]+)\s*(억|백만|만|M|K|원)?/i },
-  { key: "NRR", re: /NRR[:\s]*([\d.]+)\s*%?/i },
-  { key: "MRR", re: /MRR[:\s]*[₩$]?\s*([\d,.]+)/i },
-  { key: "LTV/CAC", re: /LTV\s*[/／]\s*CAC[:\s]*([\d.]+)/i },
-  { key: "Churn", re: /(?:Churn|이탈률)[:\s]*([\d.]+)\s*%?/i },
-  { key: "TPV", re: /TPV[:\s]*[₩$]?\s*([\d,.]+)/i },
-  { key: "Take Rate", re: /Take\s*Rate[:\s]*([\d.]+)\s*%?/i },
+  // 금액성 지표는 단위(조/억)를 요구해 FY24 등 연도 오탐을 피한다
+  { key: "ARR", re: /ARR[^\n]{0,24}?([\d,.]+)\s*(억|백만|만|M|K)/i },
+  { key: "NRR", re: /NRR[^\d\n]{0,8}?([\d.]+)\s*%?/i },
+  { key: "MRR", re: /MRR[^\n]{0,24}?([\d,.]+)\s*(억|백만|만|M|K|원)?/i },
+  { key: "LTV/CAC", re: /LTV\s*[/／]\s*CAC[^\d\n]{0,8}?([\d.]+)/i },
+  { key: "Churn", re: /(?:Churn|이탈률)[^\d\n]{0,8}?([\d.]+)\s*%?/i },
+  { key: "TPV", re: /TPV[^\n]{0,28}?([\d,.]+)\s*(조|억)/i },
+  { key: "Take Rate", re: /Take\s*Rate[^\d\n]{0,8}?([\d.]+)\s*%?/i },
+  { key: "GMV", re: /GMV[^\n]{0,28}?([\d,.]+)\s*(조|억)/i },
+  { key: "AOV", re: /AOV[^\d\n]{0,8}?([\d,.]+)\s*(원)?/i },
+  { key: "CAC", re: /(?:^|[^/\w])CAC[^\d\n]{0,8}?([\d,.]+)/im },
+  {
+    key: "LTV",
+    re: /(?:^|[^/\w])LTV(?!\s*[/／]\s*CAC)[^\d\n]{0,8}?([\d,.]+)/im,
+  },
+  { key: "ROAS", re: /ROAS[^\d\n]{0,8}?([\d.]+)\s*x?/i },
+  { key: "재구매율", re: /재구매율[^\d\n]{0,8}?([\d.]+)\s*%?/i },
+  {
+    key: "감축량",
+    re: /(?:감축|tCO2e|tCO₂e)[^\d\n]{0,20}?([\d,.]+)\s*(tCO2e|tCO₂e|톤)?/i,
+  },
+  { key: "EBITDA", re: /EBITDA[^\d\n]{0,12}?([\d,.]+)\s*%?/i },
+  {
+    key: "Gross Margin",
+    re: /(?:Gross\s*Margin|매출총이익률)[^\d\n]{0,8}?([\d.]+)\s*%?/i,
+  },
+  { key: "CAPA", re: /CAPA[^\d\n]{0,16}?([\d,.]+)/i },
   { key: "직원수", re: /(?:임직원|직원)\s*([\d,]+)\s*명/ },
 ];
 
@@ -48,7 +68,9 @@ export function extractSharedFacts(input: {
   const metrics: Record<string, string> = {};
   for (const { key, re } of METRIC_PATTERNS) {
     const m = re.exec(text);
-    if (m) metrics[key] = m[0].trim();
+    if (!m) continue;
+    const value = [m[1], m[2]].filter(Boolean).join("").trim();
+    metrics[key] = value ? `${key}: ${value}` : m[0].trim();
   }
 
   let clinicalPhase: string | undefined;
@@ -92,6 +114,6 @@ export function formatSharedFactsForPrompt(facts: SharedDealFacts): string {
     "",
     "규칙:",
     "- 위 수치가 없으면 '확인 필요'로 쓰고 임의 숫자를 만들지 말 것",
-    "- 이전 섹션과 라운드/밸류/ARR/임상단계가 달라지면 안 됨",
+    "- 이전 섹션과 라운드/밸류/ARR/GMV/감축량/임상단계가 달라지면 안 됨",
   ].join("\n");
 }

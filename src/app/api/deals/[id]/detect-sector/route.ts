@@ -21,18 +21,20 @@ function detectSectorByKeyword(text: string): { sector: string; reason: string }
   const lower = text.toLowerCase();
   if (/임상|신약|바이오|헬스케어|제약|의료기기|pipeline|clinical|drug|pharma/.test(lower))
     return { sector: "BIO", reason: "임상/신약 관련 키워드 감지" };
-  if (/llm|gpt|ai|machine learning|딥러닝|인공지능|반도체|로봇|양자/.test(lower))
+  if (/esg|탄소|기후|재생에너지|cbam|k-ets|tco2e|넷제로|폐열|순환경제/.test(lower))
+    return { sector: "CLIMATE", reason: "기후/ESG 키워드 감지" };
+  if (/결제|payment|tpv|핀테크|인슈어|대출|은행|금융|take rate/.test(lower))
+    return { sector: "FINTECH", reason: "핀테크/금융 키워드 감지" };
+  if (/소비재|d2c|gmv|aov|roas|재구매|뷰티|패션|자체몰|sku/.test(lower))
+    return { sector: "CONSUMER", reason: "소비재/D2C 키워드 감지" };
+  if (/콘텐츠|엔터|아티스트|팬덤|드라마|영화|게임|웹툰|ott|스트리밍/.test(lower))
+    return { sector: "CONTENT", reason: "콘텐츠/엔터 키워드 감지" };
+  if (/제조|공장|bom|capex|생산|부품|oem|odm|capa/.test(lower))
+    return { sector: "MANUFACTURING", reason: "제조/하드웨어 키워드 감지" };
+  if (/llm|gpt|machine learning|딥러닝|인공지능|반도체|로봇|양자|gpu/.test(lower))
     return { sector: "DEEPTECH", reason: "AI/딥테크 키워드 감지" };
   if (/saas|arr|mrr|구독|클라우드|플랫폼|api|소프트웨어/.test(lower))
     return { sector: "IT", reason: "SaaS/소프트웨어 키워드 감지" };
-  if (/결제|payment|tpv|핀테크|인슈어|대출|은행|금융/.test(lower))
-    return { sector: "FINTECH", reason: "핀테크/금융 키워드 감지" };
-  if (/제조|공장|bom|capex|생산|부품|소재|하드웨어/.test(lower))
-    return { sector: "MANUFACTURING", reason: "제조/하드웨어 키워드 감지" };
-  if (/콘텐츠|엔터|ip|아티스트|팬덤|드라마|영화|게임|웹툰/.test(lower))
-    return { sector: "CONTENT", reason: "콘텐츠/엔터 키워드 감지" };
-  if (/esg|탄소|기후|환경|재생에너지|solar/.test(lower))
-    return { sector: "CLIMATE", reason: "기후/ESG 키워드 감지" };
   return { sector: "GENERAL", reason: "명확한 섹터 특정 불가" };
 }
 

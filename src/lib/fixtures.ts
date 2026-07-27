@@ -80,6 +80,17 @@ export const GOLDEN_FIXTURES: GoldenFixture[] = [
     investAmount: 45,
     valuation: 200,
   },
+  {
+    id: "fintech",
+    sector: DealSector.FINTECH,
+    label: "핀테크 · VaultPay",
+    companyName: "VaultPay",
+    fileName: "fintech-vaultpay-ir.md",
+    relativePath: "docs/fixtures/fintech-vaultpay-ir.md",
+    investRound: "Series B",
+    investAmount: 120,
+    valuation: 900,
+  },
 ];
 
 export function fixtureForSector(sector: DealSector): GoldenFixture | undefined {

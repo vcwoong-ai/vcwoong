@@ -16,6 +16,8 @@ Supabase/Vercel과 무관하게 **로컬에서 보고서 품질을 올리는** �
 | IT Agent | 제품/시장/재무/밸류/리스크 5섹션 특화 |
 | Vault / Neuron / Maker / Story | 동일 5섹션 특화 |
 | Climate / Consumer | 5섹션 특화 + 섹터 우선 라우팅 |
+| 공유 팩트 확장 | GMV/AOV/ROAS/감축량/EBITDA 등 |
+| 섹터 감지 | CONSUMER·CLIMATE 키워드 분리 (콘텐츠와 구분) |
 | General Agent | 전용 시스템 프롬프트 |
 | 섹션 재생성 | 보고서 편집기에서 섹션별 AI 재생성 → 품질 점수 자동 새로고침 |
 | 골든 IR 1클릭 | 딜 상세 → 문서 탭 → 「골든 IR 로드」 |

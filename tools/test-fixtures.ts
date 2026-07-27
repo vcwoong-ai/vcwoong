@@ -10,10 +10,17 @@ import { GOLDEN_FIXTURES } from "../src/lib/fixtures";
 
 const EXTRA_EXPECT: Record<
   string,
-  { expectPhase?: string; expectArr?: boolean }
+  {
+    expectPhase?: string;
+    expectArr?: boolean;
+    expectMetric?: string;
+  }
 > = {
   bio: { expectPhase: "Phase II" },
   it: { expectArr: true },
+  consumer: { expectMetric: "GMV" },
+  fintech: { expectMetric: "TPV" },
+  climate: { expectMetric: "감축량" },
 };
 
 function assert(cond: boolean, msg: string) {
@@ -47,6 +54,12 @@ function main() {
     if (expect.expectArr) {
       assert(Boolean(facts.metrics.ARR), `${f.relativePath}: ARR expected`);
       assert(Boolean(facts.metrics.NRR), `${f.relativePath}: NRR expected`);
+    }
+    if (expect.expectMetric) {
+      assert(
+        Boolean(facts.metrics[expect.expectMetric]),
+        `${f.relativePath}: metric ${expect.expectMetric} expected, got ${Object.keys(facts.metrics).join(",")}`
+      );
     }
 
     assert(text.length > 200, `${f.relativePath}: fixture too short`);

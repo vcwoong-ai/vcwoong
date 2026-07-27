@@ -67,7 +67,63 @@ async function main() {
     },
   });
 
-  console.log(`Created sample deals: ${bioDeal.companyName}, ${itDeal.companyName}`);
+  const climateDeal = await prisma.deal.upsert({
+    where: { id: "seed-climate-deal-001" },
+    update: {},
+    create: {
+      id: "seed-climate-deal-001",
+      name: "GreenLoop Series A 투자 검토",
+      companyName: "GreenLoop",
+      sector: DealSector.CLIMATE,
+      stage: DealStage.DEEP_DIVE,
+      investRound: "Series A",
+      investAmount: 60,
+      valuation: 280,
+      description:
+        "산업 폐열 회수 + 탄소 크레딧 MRV 플랫폼. 파일럿 3곳, 연간 감축 42,000 tCO2e.",
+      userId: user.id,
+    },
+  });
+
+  const consumerDeal = await prisma.deal.upsert({
+    where: { id: "seed-consumer-deal-001" },
+    update: {},
+    create: {
+      id: "seed-consumer-deal-001",
+      name: "BloomLab Series A 투자 검토",
+      companyName: "BloomLab",
+      sector: DealSector.CONSUMER,
+      stage: DealStage.SCREENING,
+      investRound: "Series A",
+      investAmount: 45,
+      valuation: 200,
+      description:
+        "클린뷰티 D2C. GMV 210억, 재구매율 38%, ROAS 3.4x.",
+      userId: user.id,
+    },
+  });
+
+  const fintechDeal = await prisma.deal.upsert({
+    where: { id: "seed-fintech-deal-001" },
+    update: {},
+    create: {
+      id: "seed-fintech-deal-001",
+      name: "VaultPay Series B 투자 검토",
+      companyName: "VaultPay",
+      sector: DealSector.FINTECH,
+      stage: DealStage.IC_PREP,
+      investRound: "Series B",
+      investAmount: 120,
+      valuation: 900,
+      description:
+        "B2B 결제·정산 인프라. TPV 2.8조, Take Rate 0.28%.",
+      userId: user.id,
+    },
+  });
+
+  console.log(
+    `Created sample deals: ${bioDeal.companyName}, ${itDeal.companyName}, ${climateDeal.companyName}, ${consumerDeal.companyName}, ${fintechDeal.companyName}`
+  );
 
   // Create sample documents (with parsed text) so the report pipeline can run
   const sampleDocs = [
@@ -107,6 +163,33 @@ async function main() {
       type: "FINANCIAL" as const,
       parsedText:
         "FY24 매출 26억원(YoY +180%), 매출총이익률 82%, 영업손실 -12억원. 현금보유 35억원, 월 번 레이트 1.5억원, 런웨이 약 23개월.",
+    },
+    {
+      id: "seed-doc-climate-ir",
+      dealId: climateDeal.id,
+      name: "GreenLoop_IR.md",
+      type: "IR_DECK" as const,
+      parsedText:
+        "GreenLoop는 산업 폐열 회수 하드웨어와 탄소 크레딧 MRV SaaS를 제공. TRL 7, 파일럿 화학 플랜트 3곳, 연간 감축 42,000 tCO2e. " +
+        "Series A 60억원, Post-money 280억원. FY24 매출 38억원(+95% YoY), 매출총이익률 48%, 보조금 비중 18%, 런웨이 16개월. ISO 14064, Verra VCS 준비.",
+    },
+    {
+      id: "seed-doc-consumer-ir",
+      dealId: consumerDeal.id,
+      name: "BloomLab_IR.md",
+      type: "IR_DECK" as const,
+      parsedText:
+        "BloomLab은 클린뷰티 D2C 브랜드. GMV FY24 210억원(+72% YoY), Net Revenue 168억원, AOV 48,000원, 재구매율 38%. " +
+        "CAC 22,000원, LTV 95,000원, ROAS 3.4x. 채널: D2C 55% / 마켓플레이스 35% / 해외 10%. Series A 45억원, Post-money 200억원.",
+    },
+    {
+      id: "seed-doc-fintech-ir",
+      dealId: fintechDeal.id,
+      name: "VaultPay_IR.md",
+      type: "IR_DECK" as const,
+      parsedText:
+        "VaultPay는 B2B 결제·정산 인프라. TPV FY24 2.8조원(+65% YoY), Take Rate 0.28%, 가맹점 18,000. " +
+        "전자금융업 등록 완료. Series B 120억원, Post-money 900억원. 매출 780억원, 영업이익률 8%, 런웨이 22개월.",
     },
   ];
 
