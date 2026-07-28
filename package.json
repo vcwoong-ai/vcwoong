@@ -22,7 +22,8 @@
     "test:template": "tsx tools/test-template.ts",
     "test:email": "tsx tools/test-email-parser.ts",
     "test:pptx-template": "tsx tools/test-pptx-template.ts",
-    "test:all": "npm run test:quality && npm run test:fixtures && npm run test:routing && npm run test:template && npm run test:email && npm run test:pptx-template",
+    "test:permissions": "tsx tools/test-permissions.ts",
+    "test:all": "npm run test:quality && npm run test:fixtures && npm run test:routing && npm run test:template && npm run test:email && npm run test:pptx-template && npm run test:permissions",
     "postinstall": "prisma generate"
   },
   "dependencies": {

@@ -8,6 +8,11 @@ import { Check, CreditCard, Loader2 } from "lucide-react";
 import { PLANS } from "@/lib/subscription";
 import type { PlanKey } from "@/lib/quotas";
 import { brandCustomerKey } from "@/lib/brand";
+import {
+  PUBLIC_PLANS,
+  monthlyEquivalent,
+  type BillingCycle,
+} from "@/lib/plans";
 
 interface SubscriptionPlansProps {
   userId: string;
@@ -33,6 +38,7 @@ export function SubscriptionPlans({
   const [loadingPlan, setLoadingPlan] = useState<PlanKey | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [canceling, setCanceling] = useState(false);
+  const [cycle, setCycle] = useState<BillingCycle>("monthly");
 
   async function handleCancel() {
     if (!confirm("구독을 해지하고 Free 플랜으로 전환할까요?")) return;
@@ -54,8 +60,12 @@ export function SubscriptionPlans({
   useEffect(() => {
     const payment = searchParams.get("payment");
     const plan = searchParams.get("plan");
+    const paidCycle = searchParams.get("cycle");
     if (payment === "success" && plan) {
-      setMessage(`${PLANS[plan as PlanKey]?.name ?? plan} 플랜이 활성화되었습니다.`);
+      const cycleNote = paidCycle === "yearly" ? " (연간)" : "";
+      setMessage(
+        `${PLANS[plan as PlanKey]?.name ?? plan} 플랜${cycleNote}이 활성화되었습니다.`
+      );
     } else if (payment === "fail") {
       setMessage(
         searchParams.get("message") ?? "결제에 실패했습니다. 다시 시도해 주세요."
@@ -89,7 +99,7 @@ export function SubscriptionPlans({
 
       await tossPayments.requestBillingAuth("카드", {
         customerKey,
-        successUrl: `${window.location.origin}/api/payments/success?plan=${planKey}`,
+        successUrl: `${window.location.origin}/api/payments/success?plan=${planKey}&cycle=${cycle}`,
         failUrl: `${window.location.origin}/api/payments/fail`,
       });
     } catch (error) {
@@ -113,6 +123,30 @@ export function SubscriptionPlans({
           {message}
         </div>
       )}
+
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-gray-500">결제 주기</span>
+        <div className="inline-flex rounded-lg border p-0.5">
+          <button
+            type="button"
+            onClick={() => setCycle("monthly")}
+            className={`text-xs px-3 py-1.5 rounded-md ${
+              cycle === "monthly" ? "bg-gray-900 text-white" : "text-gray-600"
+            }`}
+          >
+            월간
+          </button>
+          <button
+            type="button"
+            onClick={() => setCycle("yearly")}
+            className={`text-xs px-3 py-1.5 rounded-md ${
+              cycle === "yearly" ? "bg-gray-900 text-white" : "text-gray-600"
+            }`}
+          >
+            연간 · 2개월 무료
+          </button>
+        </div>
+      </div>
 
       {hasBillingKey && (
         <p className="text-sm text-muted-foreground flex items-center gap-2">
@@ -143,9 +177,18 @@ export function SubscriptionPlans({
       <div className="grid gap-3 sm:grid-cols-2">
         {PLAN_ORDER.map((key) => {
           const plan = PLANS[key];
+          const pub = PUBLIC_PLANS.find((p) => p.key === key);
           const isCurrent = key === currentPlan;
           const isUpgrade =
             PLAN_ORDER.indexOf(key) > PLAN_ORDER.indexOf(currentPlan);
+          const displayPrice =
+            cycle === "yearly" && pub
+              ? pub.yearlyPrice
+              : plan.price;
+          const equiv =
+            cycle === "yearly" && pub && pub.price > 0
+              ? monthlyEquivalent(pub, "yearly")
+              : null;
 
           return (
             <div
@@ -158,10 +201,17 @@ export function SubscriptionPlans({
                 <div>
                   <h4 className="font-semibold">{plan.name}</h4>
                   <p className="text-lg font-bold mt-1">
-                    {plan.price === 0
+                    {displayPrice === 0
                       ? "무료"
-                      : `₩${plan.price.toLocaleString()}/월`}
+                      : cycle === "yearly"
+                        ? `₩${displayPrice.toLocaleString()}/년`
+                        : `₩${displayPrice.toLocaleString()}/월`}
                   </p>
+                  {equiv != null && (
+                    <p className="text-xs text-green-700 mt-0.5">
+                      월 환산 ₩{equiv.toLocaleString()} (2개월 무료)
+                    </p>
+                  )}
                 </div>
                 {isCurrent && <Badge>현재 플랜</Badge>}
               </div>
@@ -187,6 +237,8 @@ export function SubscriptionPlans({
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                       처리 중...
                     </>
+                  ) : cycle === "yearly" ? (
+                    "연간 업그레이드"
                   ) : (
                     "업그레이드"
                   )}

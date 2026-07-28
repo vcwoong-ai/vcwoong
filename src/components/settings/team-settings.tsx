@@ -120,6 +120,24 @@ export function TeamSettings({
     }
   };
 
+  const changeRole = async (memberId: string, role: string) => {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/team/members/role", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: memberId, role }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "역할 변경 실패");
+      await load();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "역할 변경 실패");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const removeMember = async (memberId: string) => {
     if (!confirm("팀에서 제거하시겠습니까?")) return;
     setBusy(true);
@@ -198,8 +216,11 @@ export function TeamSettings({
         </Button>
       </div>
 
-      <div className="text-xs text-gray-500">
-        공유 딜 {team._count.deals}건 · 공유 양식 {team._count.templates}개
+      <div className="text-xs text-gray-500 space-y-1">
+        <p>공유 딜 {team._count.deals}건 · 공유 양식 {team._count.templates}개</p>
+        <p>
+          권한: 심사역=조회 · 파트너=편집 · 관리자=멤버/역할 관리 · 삭제·공유는 소유자만
+        </p>
       </div>
 
       <div className="space-y-2">
@@ -219,7 +240,20 @@ export function TeamSettings({
                   {ROLE_LABEL[m.role] ?? m.role}
                 </Badge>
               </div>
-              {(m.id === userId || m.id !== userId) && (
+              <div className="flex items-center gap-2">
+                {m.id !== userId && (
+                  <select
+                    className="text-xs border rounded px-1.5 py-1 bg-white"
+                    value={m.role}
+                    disabled={busy}
+                    onChange={(e) => changeRole(m.id, e.target.value)}
+                    title="역할 변경 (관리자)"
+                  >
+                    <option value="ANALYST">심사역 (조회)</option>
+                    <option value="PARTNER">파트너 (편집)</option>
+                    <option value="ADMIN">관리자</option>
+                  </select>
+                )}
                 <Button
                   variant="ghost"
                   size="sm"
@@ -235,7 +269,7 @@ export function TeamSettings({
                     "제거"
                   )}
                 </Button>
-              )}
+              </div>
             </div>
           ))}
         </div>

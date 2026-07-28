@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import {
+  getUserTeamContext,
+  templateReadWhere,
+  templateOwnerWhere,
+  permissionDeniedMessage,
+} from "@/lib/team-access";
 
 export async function GET(
   request: NextRequest,
@@ -12,8 +18,9 @@ export async function GET(
     return NextResponse.json({ error: "인증이 필요합니다" }, { status: 401 });
   }
 
+  const { teamId } = await getUserTeamContext(session.user.id);
   const template = await prisma.template.findFirst({
-    where: { id: params.id, userId: session.user.id },
+    where: { id: params.id, ...templateReadWhere(session.user.id, teamId) },
   });
 
   if (!template) {
@@ -33,11 +40,14 @@ export async function DELETE(
   }
 
   const template = await prisma.template.findFirst({
-    where: { id: params.id, userId: session.user.id },
+    where: { id: params.id, ...templateOwnerWhere(session.user.id) },
   });
 
   if (!template) {
-    return NextResponse.json({ error: "템플릿을 찾을 수 없습니다" }, { status: 404 });
+    return NextResponse.json(
+      { error: permissionDeniedMessage("delete") },
+      { status: 403 }
+    );
   }
 
   await prisma.template.delete({ where: { id: params.id } });
