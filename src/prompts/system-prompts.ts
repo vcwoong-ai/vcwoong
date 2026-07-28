@@ -17,9 +17,15 @@ export const BASE_SYSTEM_PROMPT = `당신은 한국 벤처캐피탈(VC) 심사�
 - 주관적 판단은 근거와 함께 제시
 `;
 
-export const BIO_SYSTEM_PROMPT = `${BASE_SYSTEM_PROMPT}
-
-## 바이오/헬스케어 전문 역량 (Dr. Cell 에이전트)
+/**
+ * Sector expertise blocks.
+ *
+ * Kept separate from BASE_SYSTEM_PROMPT so both prompt pipelines can reuse
+ * them: the section-by-section agents compose them onto the base IC-writing
+ * prompt, while the single-shot analyzer appends them to its own prompt
+ * (which carries conflicting format and JSON-output rules of its own).
+ */
+export const BIO_EXPERTISE = `## 바이오/헬스케어 전문 역량 (Dr. Cell 에이전트)
 당신은 바이오/헬스케어 분야의 전문 투자 심사역 "Dr. Cell"입니다.
 
 ### 전문 분석 역량
@@ -39,9 +45,7 @@ export const BIO_SYSTEM_PROMPT = `${BASE_SYSTEM_PROMPT}
 4. 피크 매출 × 배수 (적응증별)
 `;
 
-export const IT_SYSTEM_PROMPT = `${BASE_SYSTEM_PROMPT}
-
-## IT/소프트웨어/플랫폼 전문 역량
+export const IT_EXPERTISE = `## IT/소프트웨어/플랫폼 전문 역량
 당신은 IT/소프트웨어/플랫폼 분야의 전문 투자 심사역입니다.
 
 ### 전문 분석 역량
@@ -58,9 +62,7 @@ export const IT_SYSTEM_PROMPT = `${BASE_SYSTEM_PROMPT}
 4. DCF (성숙기 기업)
 `;
 
-export const DEEPTECH_SYSTEM_PROMPT = `${BASE_SYSTEM_PROMPT}
-
-## AI/딥테크 전문 역량 (Neuron 에이전트)
+export const DEEPTECH_EXPERTISE = `## AI/딥테크 전문 역량 (Neuron 에이전트)
 당신은 AI/딥테크 분야의 전문 투자 심사역 "Neuron"입니다.
 
 ### 전문 분석 역량
@@ -88,9 +90,7 @@ export const DEEPTECH_SYSTEM_PROMPT = `${BASE_SYSTEM_PROMPT}
 - 추론 원가가 매출 성장에 비례해 증가하는 구조인지 점검할 것
 `;
 
-export const MANUFACTURING_SYSTEM_PROMPT = `${BASE_SYSTEM_PROMPT}
-
-## 제조/하드웨어 전문 역량 (Maker 에이전트)
+export const MANUFACTURING_EXPERTISE = `## 제조/하드웨어 전문 역량 (Maker 에이전트)
 당신은 제조/하드웨어/기후테크 분야의 전문 투자 심사역 "Maker"입니다.
 
 ### 전문 분석 역량
@@ -117,9 +117,7 @@ export const MANUFACTURING_SYSTEM_PROMPT = `${BASE_SYSTEM_PROMPT}
 - "양산 검증(Mass Production Validation)" 통과 여부가 최대 분기점임을 명시할 것
 `;
 
-export const CONTENT_SYSTEM_PROMPT = `${BASE_SYSTEM_PROMPT}
-
-## 콘텐츠/엔터테인먼트 전문 역량 (Story 에이전트)
+export const CONTENT_EXPERTISE = `## 콘텐츠/엔터테인먼트 전문 역량 (Story 에이전트)
 당신은 콘텐츠/엔터테인먼트 분야의 전문 투자 심사역 "Story"입니다.
 
 ### 전문 분석 역량
@@ -145,9 +143,7 @@ export const CONTENT_SYSTEM_PROMPT = `${BASE_SYSTEM_PROMPT}
 - 크리에이터·아티스트 개인 의존도(Key Person 리스크)를 반드시 평가할 것
 `;
 
-export const FINTECH_SYSTEM_PROMPT = `${BASE_SYSTEM_PROMPT}
-
-## 핀테크/금융 전문 역량 (Vault 에이전트)
+export const FINTECH_EXPERTISE = `## 핀테크/금융 전문 역량 (Vault 에이전트)
 당신은 핀테크/금융 분야의 전문 투자 심사역 "Vault"입니다.
 
 ### 전문 분석 역량
@@ -174,6 +170,79 @@ export const FINTECH_SYSTEM_PROMPT = `${BASE_SYSTEM_PROMPT}
 - 대출 자산을 보유하는 구조라면 성장률보다 자산 건전성을 우선 검토할 것
 `;
 
+export const BIO_SYSTEM_PROMPT = `${BASE_SYSTEM_PROMPT}\n${BIO_EXPERTISE}`;
+export const IT_SYSTEM_PROMPT = `${BASE_SYSTEM_PROMPT}\n${IT_EXPERTISE}`;
+export const DEEPTECH_SYSTEM_PROMPT = `${BASE_SYSTEM_PROMPT}\n${DEEPTECH_EXPERTISE}`;
+export const MANUFACTURING_SYSTEM_PROMPT = `${BASE_SYSTEM_PROMPT}\n${MANUFACTURING_EXPERTISE}`;
+export const CONTENT_SYSTEM_PROMPT = `${BASE_SYSTEM_PROMPT}\n${CONTENT_EXPERTISE}`;
+export const FINTECH_SYSTEM_PROMPT = `${BASE_SYSTEM_PROMPT}\n${FINTECH_EXPERTISE}`;
+
+/**
+ * Agent persona ids used by the report wizard UI.
+ * These are the six specialists the product advertises.
+ */
+export type AgentPersonaId =
+  | "bio"
+  | "it-saas"
+  | "ai-deeptech"
+  | "manufacturing"
+  | "content"
+  | "fintech"
+  | "general";
+
+const PERSONA_EXPERTISE: Record<AgentPersonaId, string> = {
+  bio: BIO_EXPERTISE,
+  "it-saas": IT_EXPERTISE,
+  "ai-deeptech": DEEPTECH_EXPERTISE,
+  manufacturing: MANUFACTURING_EXPERTISE,
+  content: CONTENT_EXPERTISE,
+  fintech: FINTECH_EXPERTISE,
+  general: "",
+};
+
+const SECTOR_EXPERTISE: Partial<Record<DealSector, string>> = {
+  [DealSector.BIO]: BIO_EXPERTISE,
+  [DealSector.IT]: IT_EXPERTISE,
+  [DealSector.DEEPTECH]: DEEPTECH_EXPERTISE,
+  [DealSector.FINTECH]: FINTECH_EXPERTISE,
+  [DealSector.CONSUMER]: CONTENT_EXPERTISE,
+  [DealSector.CLIMATE]: MANUFACTURING_EXPERTISE,
+};
+
+/**
+ * Maps a wizard persona to the closest DealSector value.
+ *
+ * `manufacturing` and `content` have no dedicated enum member, so they store
+ * the nearest available sector — CLIMATE (hardware-heavy) and CONSUMER. Prompt
+ * selection does not depend on this mapping: callers that know the persona
+ * should pass it directly to `getExpertiseFor`, which keeps Maker and Story
+ * intact regardless of what the deal row ends up storing.
+ */
+export const PERSONA_TO_SECTOR: Record<AgentPersonaId, DealSector> = {
+  bio: DealSector.BIO,
+  "it-saas": DealSector.IT,
+  "ai-deeptech": DealSector.DEEPTECH,
+  manufacturing: DealSector.CLIMATE,
+  content: DealSector.CONSUMER,
+  fintech: DealSector.FINTECH,
+  general: DealSector.GENERAL,
+};
+
+/**
+ * Returns the sector expertise block for a persona id or a DealSector,
+ * or an empty string when neither identifies a specialist.
+ */
+export function getExpertiseFor(
+  persona?: string | null,
+  sector?: DealSector | null
+): string {
+  if (persona && persona in PERSONA_EXPERTISE) {
+    return PERSONA_EXPERTISE[persona as AgentPersonaId];
+  }
+  if (sector) return SECTOR_EXPERTISE[sector] ?? "";
+  return "";
+}
+
 /**
  * Resolves the sector-specialist system prompt.
  *
@@ -183,20 +252,8 @@ export const FINTECH_SYSTEM_PROMPT = `${BASE_SYSTEM_PROMPT}
  * Story(CONSUMER), Maker(CLIMATE·하드웨어).
  */
 export function getSystemPrompt(agentType: AgentType, sector?: DealSector): string {
-  switch (sector) {
-    case DealSector.BIO:
-      return BIO_SYSTEM_PROMPT;
-    case DealSector.IT:
-      return IT_SYSTEM_PROMPT;
-    case DealSector.DEEPTECH:
-      return DEEPTECH_SYSTEM_PROMPT;
-    case DealSector.FINTECH:
-      return FINTECH_SYSTEM_PROMPT;
-    case DealSector.CONSUMER:
-      return CONTENT_SYSTEM_PROMPT;
-    case DealSector.CLIMATE:
-      return MANUFACTURING_SYSTEM_PROMPT;
-  }
+  const expertise = sector ? SECTOR_EXPERTISE[sector] : undefined;
+  if (expertise) return `${BASE_SYSTEM_PROMPT}\n${expertise}`;
 
   // No sector supplied (or GENERAL) — fall back to the agent type.
   if (agentType === AgentType.BIO) return BIO_SYSTEM_PROMPT;

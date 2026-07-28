@@ -313,7 +313,12 @@ export function StepGenerate({
         const res = await fetch("/api/agents/general/analyze", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ documentContext, companyName, sector: sectorName }),
+          body: JSON.stringify({
+            documentContext,
+            companyName,
+            sector: sectorName,
+            persona: primaryAgent,
+          }),
         });
         if (!res.ok) {
           const err = await res.json();

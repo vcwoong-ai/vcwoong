@@ -1,4 +1,5 @@
 import { generateText } from "@/lib/claude";
+import { getExpertiseFor } from "@/prompts/system-prompts";
 
 const GENERAL_AGENT_PROMPT = `당신은 DealSync의 VC 투자심사 AI 에이전트입니다.
 10년 이상 경력의 한국 VC 심사역 관점에서 투자심사보고서를 작성합니다.
@@ -48,8 +49,16 @@ export type GeneralAnalysisResult = {
 export async function runGeneralAnalysis(
   documentContext: string,
   companyName: string,
-  sector: string = "일반"
+  sector: string = "일반",
+  persona?: string
 ): Promise<GeneralAnalysisResult> {
+  // Layer the sector specialist's expertise on top of the shared analyst
+  // prompt so Neuron/Maker/Story/Vault deals are not analysed generically.
+  const expertise = getExpertiseFor(persona);
+  const systemPrompt = expertise
+    ? `${GENERAL_AGENT_PROMPT}\n\n${expertise}`
+    : GENERAL_AGENT_PROMPT;
+
   const result = await generateText(
     [
       {
@@ -107,7 +116,7 @@ JSON으로만 응답:
       },
     ],
     {
-      systemPrompt: GENERAL_AGENT_PROMPT,
+      systemPrompt,
       maxTokens: 10000,
     }
   );

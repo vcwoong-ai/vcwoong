@@ -7,6 +7,8 @@ import { WizardProgress } from "@/components/reports/wizard/wizard-progress";
 import { StepUpload, type UploadedItem } from "@/components/reports/wizard/step-upload";
 import { StepSectorTemplate } from "@/components/reports/wizard/step-sector-template";
 import { StepGenerate } from "@/components/reports/wizard/step-generate";
+import { DealSector } from "@prisma/client";
+import { PERSONA_TO_SECTOR, type AgentPersonaId } from "@/prompts/system-prompts";
 
 const WIZARD_STEPS = ["자료 업로드", "섹터 선택", "보고서 생성"];
 
@@ -21,29 +23,35 @@ function NewReportContent() {
   const [selectedAgents, setSelectedAgents] = useState<string[]>(["bio"]);
   const [dealId, setDealId] = useState<string | undefined>();
 
-  async function handleStep1Next() {
-    // Create deal and upload files
+  function handleStep1Next() {
+    // The deal is created in step 2, once the sector is actually known.
+    setStep(2);
+  }
+
+  async function handleStep2Next() {
+    const sector =
+      PERSONA_TO_SECTOR[selectedAgents[0] as AgentPersonaId] ?? DealSector.GENERAL;
+
     try {
-      const res = await fetch("/api/deals", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: companyName,
-          companyName,
-          sector: "BIO",
-        }),
-      });
-      const data = await res.json();
-      if (data.data?.id) {
-        setDealId(data.data.id);
+      if (dealId) {
+        // Agent selection may have changed after the deal was created.
+        await fetch(`/api/deals/${dealId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sector }),
+        });
+      } else {
+        const res = await fetch("/api/deals", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: companyName, companyName, sector }),
+        });
+        const data = await res.json();
+        if (data.data?.id) setDealId(data.data.id);
       }
     } catch {
       // Continue even if deal creation fails in demo mode
     }
-    setStep(2);
-  }
-
-  function handleStep2Next() {
     setStep(3);
   }
 

@@ -8,6 +8,7 @@ const schema = z.object({
   documentContext: z.string().min(1),
   companyName: z.string().min(1),
   sector: z.string().optional(),
+  persona: z.string().optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -25,7 +26,8 @@ export async function POST(req: NextRequest) {
   const result = await runGeneralAnalysis(
     parsed.data.documentContext,
     parsed.data.companyName,
-    parsed.data.sector
+    parsed.data.sector,
+    parsed.data.persona
   );
   return NextResponse.json({ data: result });
 }
