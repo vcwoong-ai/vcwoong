@@ -61,7 +61,10 @@ export async function POST(
   });
 
   if (!deal) {
-    return NextResponse.json({ error: "딜을 찾을 수 없습니다" }, { status: 404 });
+    return NextResponse.json(
+      { error: permissionDeniedMessage("edit") },
+      { status: 403 }
+    );
   }
 
   if (!deal.documents.length) {
