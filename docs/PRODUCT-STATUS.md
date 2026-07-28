@@ -76,7 +76,7 @@
 |------|-----------|-----------|
 | DOCX | O | O |
 | PDF | O (브라우저 인쇄 뷰 `/reports/[id]/print`) | O (`/lp-report/[id]/print`) |
-| PPTX | O (`?format=pptx`) | X (인쇄 PDF·DOCX로 대체) |
+| PPTX | O (`?format=pptx`) | O (`?format=pptx`) |
 
 > 한글 PDF는 폰트 임베딩(15MB+)이 필요해 브라우저 "PDF로 저장"을 사용합니다.
 

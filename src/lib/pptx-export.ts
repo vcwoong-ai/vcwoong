@@ -168,3 +168,47 @@ export async function generateReportPPTX(
 
   return zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
 }
+
+/** 마크다운 LP 리포트를 ## 헤딩 기준으로 슬라이드 분할 */
+export function markdownToPptxSections(
+  markdown: string
+): Array<{ title: string; content: string }> {
+  const trimmed = markdown.trim();
+  if (!trimmed) return [{ title: "내용", content: "" }];
+
+  const chunks = trimmed.split(/^#{1,3}\s+/m).filter((c) => c.trim());
+  if (chunks.length <= 1 && !/^#{1,3}\s+/m.test(trimmed)) {
+    return [{ title: "요약", content: trimmed }];
+  }
+
+  const sections: Array<{ title: string; content: string }> = [];
+  // split removes the heading marker; first chunk may be preface
+  let offset = 0;
+  if (!trimmed.match(/^#{1,3}\s+/)) {
+    const preface = chunks[0]?.trim();
+    if (preface) sections.push({ title: "서문", content: preface });
+    offset = 1;
+  }
+
+  for (let i = offset; i < chunks.length; i++) {
+    const block = chunks[i];
+    const nl = block.indexOf("\n");
+    const title = (nl === -1 ? block : block.slice(0, nl)).trim() || `섹션 ${i + 1}`;
+    const content = (nl === -1 ? "" : block.slice(nl + 1)).trim();
+    sections.push({ title: title.slice(0, 80), content });
+  }
+
+  return sections.length > 0 ? sections : [{ title: "요약", content: trimmed }];
+}
+
+export async function generateMarkdownPPTX(opts: {
+  title: string;
+  subtitle?: string;
+  markdown: string;
+}): Promise<Buffer> {
+  const sections = markdownToPptxSections(opts.markdown);
+  return generateReportPPTX(sections, {
+    companyName: opts.title,
+    reportDate: new Date(),
+  });
+}

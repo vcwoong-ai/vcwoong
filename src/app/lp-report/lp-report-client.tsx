@@ -135,6 +135,27 @@ export function LPReportClient({
     }
   };
 
+  const exportPptx = async (reportId: string, title: string) => {
+    setExportingId(`pptx-${reportId}`);
+    try {
+      const res = await fetch(`/api/lp-report/${reportId}/export?format=pptx`, {
+        method: "POST",
+      });
+      if (!res.ok) throw new Error("PPTX 내보내기 실패");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${title}.pptx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "PPTX 내보내기 실패");
+    } finally {
+      setExportingId(null);
+    }
+  };
+
   if (funds.length === 0 || showCreate) {
     if (!canEdit && funds.length === 0) {
       return (
@@ -356,7 +377,7 @@ export function LPReportClient({
                     variant="outline"
                     size="sm"
                     onClick={() => exportDocx(r.id, r.title)}
-                    disabled={exportingId === r.id}
+                    disabled={exportingId === r.id || exportingId === `pptx-${r.id}`}
                   >
                   {exportingId === r.id ? (
                     <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
@@ -364,6 +385,19 @@ export function LPReportClient({
                     <Download className="w-3.5 h-3.5 mr-1.5" />
                   )}
                   DOCX
+                </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => exportPptx(r.id, r.title)}
+                    disabled={exportingId === r.id || exportingId === `pptx-${r.id}`}
+                  >
+                  {exportingId === `pptx-${r.id}` ? (
+                    <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                  ) : (
+                    <Download className="w-3.5 h-3.5 mr-1.5" />
+                  )}
+                  PPTX
                 </Button>
                 </div>
               </CardHeader>

@@ -239,12 +239,29 @@ function TemplateCard({
   canUseTeam,
 }: TemplateCardProps) {
   const [expanded, setExpanded] = useState(false);
+  const [qaBusy, setQaBusy] = useState(false);
+  const [qaScore, setQaScore] = useState<number | null>(null);
   const statusCfg = STATUS_CONFIG[template.status];
   const StatusIcon = statusCfg.icon;
+  const isOwner = template.userId === currentUserId;
 
   const sections = (template.structure as { sections?: Array<{ title: string; level: number }> })?.sections ?? [];
   const mappings = (template.sectionMap as { mappings?: Array<{ templateSection: string; sectionKey: string | null; confidence: number }> })?.mappings ?? [];
   const coverageRate = (template.sectionMap as { coverageRate?: number })?.coverageRate ?? 0;
+
+  const runQuickQa = async () => {
+    setQaBusy(true);
+    try {
+      const res = await fetch(`/api/templates/${template.id}/qa`, { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "QA 실패");
+      setQaScore(json.data?.score ?? json.data?.qaScore ?? null);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "구조 QA 실패");
+    } finally {
+      setQaBusy(false);
+    }
+  };
 
   return (
     <Card className="hover:shadow-sm transition-shadow">
@@ -262,6 +279,11 @@ function TemplateCard({
                   {statusCfg.label}
                 </span>
                 <Badge variant="outline" className="text-xs">{template.fileType}</Badge>
+                {qaScore != null && (
+                  <Badge variant="secondary" className="text-xs">
+                    구조 QA {qaScore}%
+                  </Badge>
+                )}
               </div>
               <p className="text-xs text-gray-500 mt-0.5">
                 {template.originalName} · {formatFileSize(template.fileSize)}
@@ -280,9 +302,26 @@ function TemplateCard({
               resourceId={template.id}
               teamId={userTeamId}
               shared={Boolean(template.teamId)}
-              isOwner={template.userId === currentUserId}
+              isOwner={isOwner}
               canUseTeam={canUseTeam}
             />
+            {template.status === "READY" && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={runQuickQa}
+                disabled={qaBusy}
+                className="text-xs"
+                title="원본 대비 구조 보존 점수"
+              >
+                {qaBusy ? (
+                  <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+                ) : (
+                  <Sparkles className="w-3.5 h-3.5 mr-1" />
+                )}
+                QA
+              </Button>
+            )}
             {template.status === "READY" && sections.length > 0 && (
               <Button
                 variant="ghost"
@@ -294,6 +333,7 @@ function TemplateCard({
                 상세
               </Button>
             )}
+            {isOwner && (
             <Button
               variant="ghost"
               size="sm"
@@ -302,6 +342,7 @@ function TemplateCard({
             >
               <Trash2 className="w-4 h-4" />
             </Button>
+            )}
           </div>
         </div>
 

@@ -9,14 +9,16 @@ import {
   getUserTeamContext,
   portfolioReadWhere,
   fundReadWhere,
-  dealReadWhere,
+  dealWriteWhere,
+  canEditShared,
 } from "@/lib/team-access";
 
 export default async function PortfolioPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/login");
 
-  const { teamId } = await getUserTeamContext(session.user.id);
+  const { teamId, role } = await getUserTeamContext(session.user.id);
+  const canEdit = canEditShared(role);
 
   const [companies, funds, closedDeals] = await Promise.all([
     prisma.portfolioCompany.findMany({
@@ -34,9 +36,10 @@ export default async function PortfolioPage() {
       orderBy: { vintageYear: "desc" },
       select: { id: true, name: true, vintageYear: true, fundSize: true },
     }),
+    // 승격 가능 딜 — 편집 권한이 있는 범위만 (심사역은 공유 딜 승격 불가)
     prisma.deal.findMany({
       where: {
-        ...dealReadWhere(session.user.id, teamId),
+        ...dealWriteWhere(session.user.id, teamId, role),
         stage: { in: ["IC_REVIEW", "CLOSED"] },
         portfolio: null,
       },
@@ -62,6 +65,7 @@ export default async function PortfolioPage() {
         promotableDeals={JSON.parse(JSON.stringify(closedDeals))}
         metrics={metrics}
         alerts={JSON.parse(JSON.stringify(alerts))}
+        canEdit={canEdit}
       />
     </AppLayout>
   );

@@ -13,6 +13,7 @@ import {
   ArrowRight,
   Cpu,
   BarChart3,
+  AlertTriangle,
 } from "lucide-react";
 import Link from "next/link";
 import { DealStage, ReportStatus, DealSector } from "@prisma/client";
@@ -22,7 +23,9 @@ import {
   getUserTeamContext,
   dealReadWhere,
   reportReadWhere,
+  portfolioReadWhere,
 } from "@/lib/team-access";
+import { buildAlerts } from "@/lib/portfolio";
 
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
@@ -32,6 +35,7 @@ export default async function DashboardPage() {
   const { teamId } = await getUserTeamContext(userId);
   const dealScope = dealReadWhere(userId, teamId);
   const reportScope = reportReadWhere(userId, teamId);
+  const portfolioScope = portfolioReadWhere(userId, teamId);
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
   const [
@@ -44,6 +48,7 @@ export default async function DashboardPage() {
     usageLogs,
     dealsBySector,
     dealsByStage,
+    portfolioCompanies,
   ] = await Promise.all([
     prisma.deal.count({ where: dealScope }),
     prisma.deal.count({
@@ -77,7 +82,6 @@ export default async function DashboardPage() {
       take: 5,
       include: { deal: { select: { companyName: true } } },
     }),
-    // 최근 30일 토큰 사용량 (일별) — 본인 사용량
     prisma.usageLog.findMany({
       where: { userId, createdAt: { gte: thirtyDaysAgo } },
       select: { createdAt: true, totalTokens: true, agentType: true },
@@ -93,7 +97,17 @@ export default async function DashboardPage() {
       where: dealScope,
       _count: true,
     }),
+    prisma.portfolioCompany.findMany({
+      where: portfolioScope,
+      include: {
+        kpis: { orderBy: { period: "asc" } },
+        milestones: { orderBy: { dueDate: "asc" } },
+        updates: { orderBy: { period: "desc" }, take: 1 },
+      },
+    }),
   ]);
+
+  const portfolioAlerts = buildAlerts(portfolioCompanies).slice(0, 5);
 
   const stageLabel: Record<DealStage, string> = {
     SCREENING: "스크리닝", DEEP_DIVE: "딥다이브", IC_PREP: "IC 준비",
@@ -161,6 +175,44 @@ export default async function DashboardPage() {
         </div>
 
         <DashboardQuickActions />
+
+        {portfolioAlerts.length > 0 && (
+          <Card className="border-amber-200 bg-amber-50/40">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-600" />
+                  사후관리 알림
+                </CardTitle>
+                <Link
+                  href="/portfolio"
+                  className="text-sm text-blue-600 hover:underline flex items-center gap-1"
+                >
+                  포트폴리오 <ArrowRight className="w-3 h-3" />
+                </Link>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {portfolioAlerts.map((a, i) => (
+                <Link
+                  key={`${a.companyId}-${i}`}
+                  href={`/portfolio/${a.companyId}`}
+                  className="flex items-start gap-2 text-sm rounded-lg px-2 py-1.5 hover:bg-white/80"
+                >
+                  <span
+                    className={`mt-1.5 w-1.5 h-1.5 rounded-full shrink-0 ${
+                      a.severity === "high" ? "bg-red-500" : "bg-amber-500"
+                    }`}
+                  />
+                  <span>
+                    <span className="font-medium text-gray-900">{a.companyName}</span>
+                    <span className="text-gray-600"> — {a.message}</span>
+                  </span>
+                </Link>
+              ))}
+            </CardContent>
+          </Card>
+        )}
 
         {/* 통계 카드 */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">

@@ -10,8 +10,16 @@ import {
   dealOwnerWhere,
   reportWriteWhere,
   fundReadWhere,
+  fundWriteWhere,
   inboundWriteWhere,
+  inboundReadWhere,
+  inboundOwnerWhere,
+  portfolioReadWhere,
+  portfolioWriteWhere,
+  portfolioOwnerWhere,
+  lpReportReadWhere,
 } from "../src/lib/team-access";
+import { markdownToPptxSections } from "../src/lib/pptx-export";
 import {
   yearlyPriceFromMonthly,
   monthlyEquivalent,
@@ -106,7 +114,46 @@ async function main() {
       JSON.stringify({ userId: "u2" }),
     "analyst inbound write = own only"
   );
+  assert(
+    Array.isArray((portfolioReadWhere("u1", "t1") as { OR?: unknown }).OR),
+    "portfolio read includes team"
+  );
+  assert(
+    JSON.stringify(portfolioWriteWhere("u2", "t1", "ANALYST")) ===
+      JSON.stringify({ userId: "u2" }),
+    "analyst portfolio write = own only"
+  );
+  assert(
+    JSON.stringify(portfolioOwnerWhere("u1")) ===
+      JSON.stringify({ userId: "u1" }),
+    "portfolio owner"
+  );
+  assert(
+    Array.isArray((fundWriteWhere("u1", "t1", "PARTNER") as { OR?: unknown }).OR),
+    "partner fund write includes team"
+  );
+  assert(
+    Array.isArray((inboundReadWhere("u1", "t1") as { OR?: unknown }).OR),
+    "inbound read includes team"
+  );
+  assert(
+    JSON.stringify(inboundOwnerWhere("u1")) === JSON.stringify({ userId: "u1" }),
+    "inbound owner"
+  );
+  assert(
+    JSON.stringify(lpReportReadWhere("u1", "t1")) ===
+      JSON.stringify({ fund: fundReadWhere("u1", "t1") }),
+    "lp report follows fund read"
+  );
   console.log("✅ 팀 역할별 권한");
+
+  // LP PPTX 섹션 분할
+  const pptxSections = markdownToPptxSections(
+    "## 펀드 개요\n- TVPI 1.4x\n\n## 하이라이트\n- 메디랩스 성장\n"
+  );
+  assert(pptxSections.length >= 2, "markdown splits to slides");
+  assert(pptxSections[0].title.includes("펀드"), "first heading title");
+  console.log("✅ LP PPTX 마크다운 분할");
 
   // 연간 요금
   assert(yearlyPriceFromMonthly(99000) === 990000, "solo yearly");
