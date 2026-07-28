@@ -1,12 +1,15 @@
-import { AgentType } from "@prisma/client";
+import { AgentType, DealSector } from "@prisma/client";
 import { BaseAgent } from "./base-agent";
 
 /**
- * General investment agent for non-specialized sectors.
- * Handles GENERAL, CONSUMER, DEEPTECH, CLIMATE sectors.
+ * Investment agent for sectors outside the BIO/IT specialists.
+ *
+ * The sector is forwarded so the prompt layer can still pick a specialist
+ * voice — Neuron(DEEPTECH), Story(CONSUMER), Maker(CLIMATE) — and only a
+ * genuinely unclassified deal falls back to the generalist prompt.
  */
 export class GeneralAgent extends BaseAgent {
-  constructor() {
-    super(AgentType.GENERAL);
+  constructor(sector?: DealSector) {
+    super(AgentType.GENERAL, sector);
   }
 }

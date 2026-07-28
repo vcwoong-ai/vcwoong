@@ -11,9 +11,11 @@ export { ITAgent } from "./it-agent";
 
 /**
  * Returns the appropriate agent based on sector and explicit agent type.
- * BIO sector → Dr. Cell (BioAgent)
- * IT/FINTECH sector → ITAgent
- * Everything else → GeneralAgent
+ *
+ * BioAgent and ITAgent add sector-specific enrichment beyond prompting
+ * (rNPV, FDA/PubMed lookups, SaaS metrics), so they are selected explicitly.
+ * Every other sector runs through GeneralAgent, which forwards the sector so
+ * the prompt layer can still apply its specialist voice.
  */
 export function getAgent(
   agentType: AgentType,
@@ -22,19 +24,14 @@ export function getAgent(
   if (agentType === AgentType.BIO || sector === DealSector.BIO) {
     return new BioAgent();
   }
-  if (
-    agentType === AgentType.IT ||
-    sector === DealSector.IT ||
-    sector === DealSector.FINTECH
-  ) {
+  if (agentType === AgentType.IT || sector === DealSector.IT) {
     return new ITAgent();
   }
-  return new GeneralAgent();
+  return new GeneralAgent(sector);
 }
 
 export function inferAgentType(sector: DealSector): AgentType {
   if (sector === DealSector.BIO) return AgentType.BIO;
-  if (sector === DealSector.IT || sector === DealSector.FINTECH)
-    return AgentType.IT;
+  if (sector === DealSector.IT) return AgentType.IT;
   return AgentType.GENERAL;
 }
