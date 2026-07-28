@@ -89,11 +89,19 @@ npm run test:all           # quality + fixtures + routing + template (API 키 �
 npm run test:template      # 양식 1:1 재현 서식 보존 검증
 ```
 
-데모: `demo@axiom.kr` / `Demo1234!` (FULL 플랜)
+데모 계정 (시드 후, FULL 플랜 · 동일 팀):
+
+| 계정 | 비밀번호 | 역할 |
+|------|----------|------|
+| `demo@axiom.kr` | `Demo1234!` | ADMIN (소유·공유 관리) |
+| `partner@axiom.kr` | `Partner1234!` | PARTNER (공유 딜 편집) |
+| `analyst@axiom.kr` | `Analyst1234!` | ANALYST (공유 딜 조회 전용) |
+
+샘플 딜은 팀에 공유되어 역할별 권한을 바로 확인할 수 있습니다.
 
 ## 남은 우선순위
 
 1. KIPRIS API 키 프로덕션 검증 (실키 연동)
-2. IMAP: `npm i imapflow` 후 실메일함 연동 검증
+2. IMAP 실메일함 연동 검증 (`imapflow` 의존성 포함)
 3. 픽셀 렌더 이미지 비교 (현재는 OOXML 구조 QA)
 4. 배포 (Vercel / Toss 라이브 키)

@@ -43,16 +43,74 @@ async function main() {
       passwordHash,
       subscriptionPlan: "FULL",
       subscriptionStatus: "ACTIVE",
+      role: UserRole.ADMIN,
     },
     create: {
       email: DEMO_EMAIL,
       name: "김심사",
       passwordHash,
-      role: UserRole.ANALYST,
+      role: UserRole.ADMIN,
       subscriptionPlan: "FULL",
       subscriptionStatus: "ACTIVE",
     },
   });
+
+  // 팀 데모 — 관리자(demo) + 파트너 + 심사역
+  let team = await prisma.team.findFirst({
+    where: { name: "Axiom 투자 1팀", users: { some: { id: user.id } } },
+  });
+  if (!team) {
+    team = await prisma.team.create({ data: { name: "Axiom 투자 1팀" } });
+  }
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { teamId: team.id, role: UserRole.ADMIN },
+  });
+
+  const partnerHash = await bcrypt.hash("Partner1234!", 12);
+  const analystHash = await bcrypt.hash("Analyst1234!", 12);
+
+  const partner = await prisma.user.upsert({
+    where: { email: "partner@axiom.kr" },
+    update: {
+      passwordHash: partnerHash,
+      teamId: team.id,
+      role: UserRole.PARTNER,
+      subscriptionPlan: "FULL",
+      subscriptionStatus: "ACTIVE",
+    },
+    create: {
+      email: "partner@axiom.kr",
+      name: "이파트너",
+      passwordHash: partnerHash,
+      role: UserRole.PARTNER,
+      teamId: team.id,
+      subscriptionPlan: "FULL",
+      subscriptionStatus: "ACTIVE",
+    },
+  });
+
+  const analyst = await prisma.user.upsert({
+    where: { email: "analyst@axiom.kr" },
+    update: {
+      passwordHash: analystHash,
+      teamId: team.id,
+      role: UserRole.ANALYST,
+      subscriptionPlan: "FULL",
+      subscriptionStatus: "ACTIVE",
+    },
+    create: {
+      email: "analyst@axiom.kr",
+      name: "박심사역",
+      passwordHash: analystHash,
+      role: UserRole.ANALYST,
+      teamId: team.id,
+      subscriptionPlan: "FULL",
+      subscriptionStatus: "ACTIVE",
+    },
+  });
+
+  console.log(`Team ready: ${team.name} (${partner.email}, ${analyst.email})`);
 
   // 이전 시드 실행으로 다른 계정에 붙어 있던 샘플 데이터를 현재 데모 계정으로 모은다
   const orphanIds = (
@@ -80,9 +138,12 @@ async function main() {
   console.log(`Demo user ready: ${user.email}`);
 
   // Create sample deals
+  // 샘플 딜은 팀에 공유해 partner/analyst 데모 계정으로 조회·역할 체험 가능하게 한다
+  const sharedDeal = { userId: user.id, teamId: team.id };
+
   const bioDeal = await prisma.deal.upsert({
     where: { id: "seed-bio-deal-001" },
-    update: { userId: user.id },
+    update: sharedDeal,
     create: {
       id: "seed-bio-deal-001",
       name: "헬스케어AI Inc. Series B 투자 검토",
@@ -94,13 +155,13 @@ async function main() {
       valuation: 800,
       description:
         "AI 기반 신약 개발 플랫폼 스타트업. Phase II 임상 진행 중인 항암 파이프라인 보유.",
-      userId: user.id,
+      ...sharedDeal,
     },
   });
 
   const itDeal = await prisma.deal.upsert({
     where: { id: "seed-it-deal-001" },
-    update: { userId: user.id },
+    update: sharedDeal,
     create: {
       id: "seed-it-deal-001",
       name: "DataFlow SaaS Series A 투자 검토",
@@ -112,13 +173,13 @@ async function main() {
       valuation: 300,
       description:
         "B2B 데이터 파이프라인 자동화 SaaS. ARR $2M, NRR 130%, 월 15% 성장.",
-      userId: user.id,
+      ...sharedDeal,
     },
   });
 
   const climateDeal = await prisma.deal.upsert({
     where: { id: "seed-climate-deal-001" },
-    update: { userId: user.id },
+    update: sharedDeal,
     create: {
       id: "seed-climate-deal-001",
       name: "GreenLoop Series A 투자 검토",
@@ -130,13 +191,13 @@ async function main() {
       valuation: 280,
       description:
         "산업 폐열 회수 + 탄소 크레딧 MRV 플랫폼. 파일럿 3곳, 연간 감축 42,000 tCO2e.",
-      userId: user.id,
+      ...sharedDeal,
     },
   });
 
   const consumerDeal = await prisma.deal.upsert({
     where: { id: "seed-consumer-deal-001" },
-    update: { userId: user.id },
+    update: sharedDeal,
     create: {
       id: "seed-consumer-deal-001",
       name: "BloomLab Series A 투자 검토",
@@ -148,13 +209,13 @@ async function main() {
       valuation: 200,
       description:
         "클린뷰티 D2C. GMV 210억, 재구매율 38%, ROAS 3.4x.",
-      userId: user.id,
+      ...sharedDeal,
     },
   });
 
   const fintechDeal = await prisma.deal.upsert({
     where: { id: "seed-fintech-deal-001" },
-    update: { userId: user.id },
+    update: sharedDeal,
     create: {
       id: "seed-fintech-deal-001",
       name: "VaultPay Series B 투자 검토",
@@ -166,7 +227,7 @@ async function main() {
       valuation: 900,
       description:
         "B2B 결제·정산 인프라. TPV 2.8조, Take Rate 0.28%.",
-      userId: user.id,
+      ...sharedDeal,
     },
   });
 

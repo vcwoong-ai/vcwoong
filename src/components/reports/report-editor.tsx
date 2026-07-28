@@ -54,6 +54,8 @@ interface ReportEditorProps {
     token: number;
   } | null;
   onImproveHandled?: () => void;
+  /** 조회 전용 (팀 심사역 등) */
+  readOnly?: boolean;
 }
 
 export function ReportEditor({
@@ -71,6 +73,7 @@ export function ReportEditor({
   onSectionRegenerated,
   improveRequest,
   onImproveHandled,
+  readOnly = false,
 }: ReportEditorProps) {
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState("");
@@ -327,7 +330,7 @@ export function ReportEditor({
               재생성
             </Button>
           )}
-          {!isFinal && !allApproved && (
+          {!isFinal && !allApproved && !readOnly && (
             <Button
               variant="outline"
               onClick={approveAll}
@@ -419,7 +422,7 @@ export function ReportEditor({
                     <span className="text-xs text-gray-400">
                       {charWidth.toLocaleString()}자
                     </span>
-                    {!isEditing && (
+                    {!isEditing && !readOnly && (
                       <>
                         <Button
                           variant="ghost"

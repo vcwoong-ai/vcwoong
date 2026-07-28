@@ -10,6 +10,25 @@ import { Search, LayoutGrid, Kanban } from "lucide-react";
 import { DealStage, DealSector } from "@prisma/client";
 import { cn } from "@/lib/utils";
 
+function canEditDealLocal(opts: {
+  ownerUserId: string;
+  resourceTeamId: string | null;
+  currentUserId: string;
+  currentTeamId: string | null;
+  role: string;
+}): boolean {
+  if (opts.ownerUserId === opts.currentUserId) return true;
+  if (
+    opts.resourceTeamId &&
+    opts.currentTeamId &&
+    opts.resourceTeamId === opts.currentTeamId &&
+    (opts.role === "ADMIN" || opts.role === "PARTNER")
+  ) {
+    return true;
+  }
+  return false;
+}
+
 interface Deal {
   id: string;
   name: string;
@@ -21,11 +40,23 @@ interface Deal {
   investAmount: number | null;
   valuation: number | null;
   updatedAt: string;
+  userId: string;
+  teamId: string | null;
   documents: Array<{ id: string }>;
   reports: Array<{ id: string; status: string }>;
 }
 
-export function DealsPageClient({ deals: initialDeals }: { deals: Deal[] }) {
+export function DealsPageClient({
+  deals: initialDeals,
+  currentUserId,
+  currentTeamId,
+  role,
+}: {
+  deals: Deal[];
+  currentUserId: string;
+  currentTeamId: string | null;
+  role: string;
+}) {
   const [view, setView] = useState<"grid" | "kanban">("grid");
   const [search, setSearch] = useState("");
 
@@ -35,12 +66,22 @@ export function DealsPageClient({ deals: initialDeals }: { deals: Deal[] }) {
       d.name.toLowerCase().includes(search.toLowerCase())
   );
 
+  const canEditDeal = (deal: { userId?: string; teamId?: string | null }) =>
+    canEditDealLocal({
+      ownerUserId: deal.userId ?? "",
+      resourceTeamId: deal.teamId ?? null,
+      currentUserId,
+      currentTeamId,
+      role,
+    });
+
   const handleStageChange = async (dealId: string, newStage: DealStage) => {
-    await fetch(`/api/deals/${dealId}`, {
+    const res = await fetch(`/api/deals/${dealId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ stage: newStage }),
     });
+    if (!res.ok) throw new Error("단계 변경 실패");
   };
 
   return (
@@ -105,9 +146,15 @@ export function DealsPageClient({ deals: initialDeals }: { deals: Deal[] }) {
         /* Kanban 뷰 */
         <div>
           <p className="text-xs text-gray-400 mb-4">
-            💡 카드를 드래그해서 단계를 변경할 수 있습니다
+            {role === "ANALYST"
+              ? "공유 딜은 조회만 가능합니다. 본인 소유 딜은 드래그로 단계를 변경할 수 있습니다."
+              : "카드를 드래그해서 단계를 변경할 수 있습니다"}
           </p>
-          <DealKanban deals={filtered} onStageChange={handleStageChange} />
+          <DealKanban
+            deals={filtered}
+            onStageChange={handleStageChange}
+            canEditDeal={canEditDeal}
+          />
         </div>
       )}
     </div>

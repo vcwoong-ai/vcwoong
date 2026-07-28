@@ -20,6 +20,7 @@ interface DealCardProps {
     investAmount: number | null;
     valuation: number | null;
     updatedAt: Date | string;
+    teamId?: string | null;
     documents: Array<{ id: string }>;
     reports: Array<{ id: string; status: string }>;
   };
@@ -73,6 +74,11 @@ export function DealCard({ deal }: DealCardProps) {
               <Badge variant={stageCfg.variant} className="text-xs">
                 {stageCfg.label}
               </Badge>
+              {deal.teamId && (
+                <Badge variant="secondary" className="text-xs">
+                  팀 공유
+                </Badge>
+              )}
             </div>
             <h3 className="font-semibold text-gray-900 truncate">
               {deal.companyName}

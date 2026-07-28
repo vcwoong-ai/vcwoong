@@ -71,6 +71,37 @@ export function reportReadWhere(
   return { deal: dealReadWhere(userId, teamId) };
 }
 
+export function reportWriteWhere(
+  userId: string,
+  teamId: string | null,
+  role: string
+): Prisma.ReportWhereInput {
+  return { deal: dealWriteWhere(userId, teamId, role) };
+}
+
+/**
+ * 본인 소유이거나 (팀 공유 + 편집 역할)이면 true.
+ * UI에서 버튼 비활성화용.
+ */
+export function canEditResource(opts: {
+  ownerUserId: string;
+  resourceTeamId: string | null;
+  currentUserId: string;
+  currentTeamId: string | null;
+  role: string;
+}): boolean {
+  if (opts.ownerUserId === opts.currentUserId) return true;
+  if (
+    opts.resourceTeamId &&
+    opts.currentTeamId &&
+    opts.resourceTeamId === opts.currentTeamId &&
+    canEditShared(opts.role)
+  ) {
+    return true;
+  }
+  return false;
+}
+
 /**
  * 편집 가능 범위.
  * - 본인 소유: 항상

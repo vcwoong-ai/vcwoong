@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getProgress } from "@/lib/generation-progress";
+import { getUserTeamContext, reportReadWhere } from "@/lib/team-access";
 
 /**
  * Server-Sent Events endpoint for report generation progress.
@@ -20,9 +21,10 @@ export async function GET(
   }
 
   const reportId = params.id;
+  const { teamId } = await getUserTeamContext(session.user.id);
 
   const owned = await prisma.report.findFirst({
-    where: { id: reportId, deal: { userId: session.user.id } },
+    where: { id: reportId, ...reportReadWhere(session.user.id, teamId) },
     select: { id: true },
   });
   if (!owned) {

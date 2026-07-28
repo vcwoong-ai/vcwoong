@@ -10,7 +10,7 @@ export default async function DealsPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/login");
 
-  const { teamId } = await getUserTeamContext(session.user.id);
+  const { teamId, role } = await getUserTeamContext(session.user.id);
 
   const deals = await prisma.deal.findMany({
     where: dealReadWhere(session.user.id, teamId),
@@ -26,7 +26,12 @@ export default async function DealsPage() {
 
   return (
     <AppLayout title="딜 관리">
-      <DealsPageClient deals={JSON.parse(JSON.stringify(deals))} />
+      <DealsPageClient
+        deals={JSON.parse(JSON.stringify(deals))}
+        currentUserId={session.user.id}
+        currentTeamId={teamId}
+        role={role}
+      />
     </AppLayout>
   );
 }

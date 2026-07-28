@@ -4,9 +4,11 @@
 import { SectionKey } from "@prisma/client";
 import {
   canEditShared,
+  canEditResource,
   dealWriteWhere,
   dealReadWhere,
   dealOwnerWhere,
+  reportWriteWhere,
 } from "../src/lib/team-access";
 import {
   yearlyPriceFromMonthly,
@@ -54,6 +56,42 @@ async function main() {
   assert(
     Array.isArray((dealReadWhere("u1", "t1") as { OR?: unknown }).OR),
     "read includes team"
+  );
+  assert(
+    canEditResource({
+      ownerUserId: "u1",
+      resourceTeamId: "t1",
+      currentUserId: "u1",
+      currentTeamId: "t1",
+      role: "ANALYST",
+    }),
+    "owner can edit"
+  );
+  assert(
+    !canEditResource({
+      ownerUserId: "u1",
+      resourceTeamId: "t1",
+      currentUserId: "u2",
+      currentTeamId: "t1",
+      role: "ANALYST",
+    }),
+    "analyst cannot edit shared"
+  );
+  assert(
+    canEditResource({
+      ownerUserId: "u1",
+      resourceTeamId: "t1",
+      currentUserId: "u2",
+      currentTeamId: "t1",
+      role: "PARTNER",
+    }),
+    "partner can edit shared"
+  );
+  const analystReportWrite = reportWriteWhere("u2", "t1", "ANALYST");
+  assert(
+    JSON.stringify(analystReportWrite) ===
+      JSON.stringify({ deal: { userId: "u2" } }),
+    "analyst report write = own deals only"
   );
   console.log("✅ 팀 역할별 권한");
 

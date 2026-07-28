@@ -158,7 +158,13 @@ function GeneratingView({
   );
 }
 
-export function ReportPageClient({ report }: { report: Report }) {
+export function ReportPageClient({
+  report,
+  canEdit = true,
+}: {
+  report: Report;
+  canEdit?: boolean;
+}) {
   const router = useRouter();
   const [isExporting, setIsExporting] = useState(false);
   const [isFinalizing, setIsFinalizing] = useState(false);
@@ -344,14 +350,19 @@ export function ReportPageClient({ report }: { report: Report }) {
           refreshKey={qualityRefreshKey}
           batchImproving={batchImproving}
           improvingSectionKey={improveRequest?.sectionKey ?? null}
-          onImproveSection={(sectionKey, qualityIssues) =>
-            setImproveRequest({
-              sectionKey,
-              qualityIssues,
-              token: Date.now(),
-            })
+          onImproveSection={
+            canEdit
+              ? (sectionKey, qualityIssues) =>
+                  setImproveRequest({
+                    sectionKey,
+                    qualityIssues,
+                    token: Date.now(),
+                  })
+              : undefined
           }
-          onBatchImprove={async () => {
+          onBatchImprove={
+            canEdit
+              ? async () => {
             if (
               !confirm(
                 "품질 70점 미만 섹션(최대 3개)을 이슈 반영해 다시 생성할까요?"
@@ -387,13 +398,22 @@ export function ReportPageClient({ report }: { report: Report }) {
             } finally {
               setBatchImproving(false);
             }
-          }}
+              }
+              : undefined
+          }
         />
       )}
 
       {batchNote && (
         <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">
           {batchNote}
+        </div>
+      )}
+
+      {!canEdit && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          조회 전용 — 섹션 편집·재생성·승인은 파트너·관리자 또는 딜 소유자만 가능합니다.
+          내보내기(DOCX/PPTX/PDF)는 가능합니다.
         </div>
       )}
 
@@ -405,14 +425,15 @@ export function ReportPageClient({ report }: { report: Report }) {
         onExportPptx={() => handleExport("pptx")}
         isExporting={isExporting}
         reportStatus={pageStatus}
-        onFinalize={handleFinalize}
+        onFinalize={canEdit ? handleFinalize : undefined}
         isFinalizing={isFinalizing}
-        onRegenerate={handleRegenerate}
+        onRegenerate={canEdit ? handleRegenerate : undefined}
         isRegenerating={isRegenerating}
+        readOnly={!canEdit}
         onSectionRegenerated={() =>
           setQualityRefreshKey((k) => k + 1)
         }
-        improveRequest={improveRequest}
+        improveRequest={canEdit ? improveRequest : null}
         onImproveHandled={() => setImproveRequest(null)}
       />
     </div>

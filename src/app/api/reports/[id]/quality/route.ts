@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { evaluateReport } from "@/lib/report-quality";
 import { extractSharedFacts } from "@/lib/shared-facts";
+import { getUserTeamContext, reportReadWhere } from "@/lib/team-access";
 
 export async function GET(
   _request: NextRequest,
@@ -14,8 +15,9 @@ export async function GET(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const { teamId } = await getUserTeamContext(session.user.id);
   const report = await prisma.report.findFirst({
-    where: { id: params.id, deal: { userId: session.user.id } },
+    where: { id: params.id, ...reportReadWhere(session.user.id, teamId) },
     include: {
       sections: { orderBy: { order: "asc" } },
       deal: {

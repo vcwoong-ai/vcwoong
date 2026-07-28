@@ -6,6 +6,11 @@ import { parseDocument } from "@/lib/document-parser";
 import { uploadFile } from "@/lib/storage";
 import { DocumentType } from "@prisma/client";
 import { randomUUID } from "crypto";
+import {
+  getUserTeamContext,
+  dealWriteWhere,
+  permissionDeniedMessage,
+} from "@/lib/team-access";
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 
@@ -41,14 +46,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "딜 ID가 필요합니다" }, { status: 400 });
     }
 
-    // Verify deal ownership
+    // Verify deal write access (owner or team editor)
+    const { teamId, role } = await getUserTeamContext(session.user.id);
     const deal = await prisma.deal.findFirst({
-      where: { id: dealId, userId: session.user.id },
+      where: { id: dealId, ...dealWriteWhere(session.user.id, teamId, role) },
     });
     if (!deal) {
       return NextResponse.json(
-        { error: "딜을 찾을 수 없습니다" },
-        { status: 404 }
+        { error: permissionDeniedMessage("edit") },
+        { status: 403 }
       );
     }
 
