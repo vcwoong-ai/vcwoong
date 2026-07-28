@@ -27,6 +27,8 @@ interface FundView {
   fundSize: number;
   paidIn: number;
   companyCount: number;
+  teamId?: string | null;
+  userId?: string;
   computed: LpReportComputed;
   reports: Array<{
     id: string;
@@ -37,7 +39,15 @@ interface FundView {
   }>;
 }
 
-export function LPReportClient({ funds }: { funds: FundView[] }) {
+export function LPReportClient({
+  funds,
+  canEdit = true,
+  currentUserId,
+}: {
+  funds: FundView[];
+  canEdit?: boolean;
+  currentUserId?: string;
+}) {
   const router = useRouter();
   const [selectedFundId, setSelectedFundId] = useState(funds[0]?.id ?? "");
   const [period, setPeriod] = useState(currentPeriod());
@@ -49,6 +59,9 @@ export function LPReportClient({ funds }: { funds: FundView[] }) {
   const [showCreate, setShowCreate] = useState(funds.length === 0);
 
   const fund = funds.find((f) => f.id === selectedFundId) ?? funds[0];
+  const canEditFund =
+    canEdit ||
+    (currentUserId != null && fund?.userId === currentUserId);
 
   const createFund = async () => {
     if (!newFundName.trim() || !Number(newFundSize)) {
@@ -123,6 +136,13 @@ export function LPReportClient({ funds }: { funds: FundView[] }) {
   };
 
   if (funds.length === 0 || showCreate) {
+    if (!canEdit && funds.length === 0) {
+      return (
+        <div className="py-16 text-center text-sm text-gray-500">
+          공유된 펀드가 없습니다. 관리자·파트너가 펀드를 등록하면 여기에 표시됩니다.
+        </div>
+      );
+    }
     return (
       <div className="max-w-lg mx-auto py-10">
         <Card>
@@ -215,10 +235,15 @@ export function LPReportClient({ funds }: { funds: FundView[] }) {
               ))}
             </SelectContent>
           </Select>
-          <Button variant="outline" onClick={() => setShowCreate(true)}>
+          <Button
+            variant="outline"
+            onClick={() => setShowCreate(true)}
+            disabled={!canEdit}
+          >
             <Plus className="w-4 h-4 mr-1" />
             펀드
           </Button>
+          {canEditFund ? (
           <Button
             onClick={generate}
             disabled={generating || fund.companyCount === 0}
@@ -231,8 +256,19 @@ export function LPReportClient({ funds }: { funds: FundView[] }) {
             )}
             {period} 리포트 생성
           </Button>
+          ) : (
+            <Badge variant="outline" className="text-amber-700 border-amber-300">
+              조회 전용
+            </Badge>
+          )}
         </div>
       </div>
+
+      {fund.teamId && (
+        <Badge variant="secondary" className="w-fit">
+          팀 공유 펀드
+        </Badge>
+      )}
 
       {fund.companyCount === 0 && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">

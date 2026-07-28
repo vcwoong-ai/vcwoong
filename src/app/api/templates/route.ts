@@ -73,6 +73,7 @@ export async function POST(request: NextRequest) {
   );
 
   // 2. 구조 파싱 (비동기 처리)
+  const { teamId } = await getUserTeamContext(session.user.id);
   const template = await prisma.template.create({
     data: {
       name: name || file.name.replace(/\.[^.]+$/, ""),
@@ -82,6 +83,7 @@ export async function POST(request: NextRequest) {
       fileSize: file.size,
       status: TemplateStatus.ANALYZING,
       userId: session.user.id,
+      teamId,
     },
   });
 

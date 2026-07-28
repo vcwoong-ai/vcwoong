@@ -76,7 +76,7 @@
 |------|-----------|-----------|
 | DOCX | O | O |
 | PDF | O (브라우저 인쇄 뷰 `/reports/[id]/print`) | O (`/lp-report/[id]/print`) |
-| PPTX | O (`?format=pptx`) | X |
+| PPTX | O (`?format=pptx`) | X (인쇄 PDF·DOCX로 대체) |
 
 > 한글 PDF는 폰트 임베딩(15MB+)이 필요해 브라우저 "PDF로 저장"을 사용합니다.
 
@@ -97,7 +97,7 @@ npm run test:template      # 양식 1:1 재현 서식 보존 검증
 | `partner@axiom.kr` | `Partner1234!` | PARTNER (공유 딜 편집) |
 | `analyst@axiom.kr` | `Analyst1234!` | ANALYST (공유 딜 조회 전용) |
 
-샘플 딜은 팀에 공유되어 역할별 권한을 바로 확인할 수 있습니다.
+샘플 딜·펀드·포트폴리오·인바운드는 팀에 공유되어 역할별 권한을 바로 확인할 수 있습니다.
 
 ## 남은 우선순위
 

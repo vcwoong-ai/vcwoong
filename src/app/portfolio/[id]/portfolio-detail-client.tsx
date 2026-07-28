@@ -351,6 +351,7 @@ export function PortfolioDetailClient({
 
         {/* KPI */}
         <TabsContent value="kpi" className="space-y-4">
+          {canEdit && (
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">분기 KPI 입력</CardTitle>
@@ -408,6 +409,7 @@ export function PortfolioDetailClient({
               </div>
             </CardContent>
           </Card>
+          )}
 
           {metricEntries.length === 0 ? (
             <Card>
@@ -475,6 +477,7 @@ export function PortfolioDetailClient({
 
         {/* 마일스톤 */}
         <TabsContent value="milestones" className="space-y-4">
+          {canEdit && (
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">마일스톤 추가</CardTitle>
@@ -504,6 +507,7 @@ export function PortfolioDetailClient({
               </div>
             </CardContent>
           </Card>
+          )}
 
           {company.milestones.length === 0 ? (
             <Card>
@@ -542,7 +546,7 @@ export function PortfolioDetailClient({
                         >
                           {MILESTONE_LABEL[m.status]}
                         </Badge>
-                        {m.status !== "DONE" && (
+                        {canEdit && m.status !== "DONE" && (
                           <Button
                             variant="ghost"
                             size="sm"
@@ -574,6 +578,7 @@ export function PortfolioDetailClient({
                   KPI 추이와 마일스톤을 바탕으로 요약·하이라이트·우려사항을 작성합니다.
                 </p>
               </div>
+              {canEdit && (
               <Button
                 onClick={generateUpdate}
                 disabled={generating}
@@ -586,6 +591,7 @@ export function PortfolioDetailClient({
                 )}
                 {currentPeriod()} 노트 생성
               </Button>
+              )}
             </CardContent>
           </Card>
 
@@ -641,6 +647,7 @@ export function PortfolioDetailClient({
                     type="number"
                     value={valuation}
                     onChange={(e) => setValuation(e.target.value)}
+                    disabled={!canEdit}
                   />
                 </div>
                 <div>
@@ -649,6 +656,7 @@ export function PortfolioDetailClient({
                     type="number"
                     value={realized}
                     onChange={(e) => setRealized(e.target.value)}
+                    disabled={!canEdit}
                   />
                 </div>
                 <div>
@@ -656,6 +664,7 @@ export function PortfolioDetailClient({
                   <Select
                     value={status}
                     onValueChange={(v) => setStatus(v as PortfolioStatus)}
+                    disabled={!canEdit}
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -678,6 +687,7 @@ export function PortfolioDetailClient({
                 </div>
               )}
 
+              {canEdit ? (
               <Button
                 onClick={saveBasics}
                 disabled={saving}
@@ -686,6 +696,9 @@ export function PortfolioDetailClient({
                 {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                 저장
               </Button>
+              ) : (
+                <p className="text-xs text-amber-700">조회 전용 — 평가·상태는 수정할 수 없습니다.</p>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

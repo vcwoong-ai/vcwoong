@@ -18,12 +18,20 @@ import Link from "next/link";
 import { DealStage, ReportStatus, DealSector } from "@prisma/client";
 import { DashboardCharts } from "./dashboard-charts";
 import { DashboardQuickActions } from "@/components/dashboard/quick-actions";
+import {
+  getUserTeamContext,
+  dealReadWhere,
+  reportReadWhere,
+} from "@/lib/team-access";
 
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/login");
 
   const userId = session.user.id;
+  const { teamId } = await getUserTeamContext(userId);
+  const dealScope = dealReadWhere(userId, teamId);
+  const reportScope = reportReadWhere(userId, teamId);
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
   const [
@@ -37,40 +45,52 @@ export default async function DashboardPage() {
     dealsBySector,
     dealsByStage,
   ] = await Promise.all([
-    prisma.deal.count({ where: { userId } }),
+    prisma.deal.count({ where: dealScope }),
     prisma.deal.count({
-      where: { userId, stage: { in: [DealStage.IC_PREP, DealStage.IC_REVIEW, DealStage.DEEP_DIVE] } },
+      where: {
+        AND: [
+          dealScope,
+          { stage: { in: [DealStage.IC_PREP, DealStage.IC_REVIEW, DealStage.DEEP_DIVE] } },
+        ],
+      },
     }),
-    prisma.report.count({ where: { deal: { userId } } }),
-    prisma.report.count({ where: { deal: { userId }, status: { in: [ReportStatus.FINAL, ReportStatus.EXPORTED] } } }),
+    prisma.report.count({ where: reportScope }),
+    prisma.report.count({
+      where: {
+        AND: [
+          reportScope,
+          { status: { in: [ReportStatus.FINAL, ReportStatus.EXPORTED] } },
+        ],
+      },
+    }),
     prisma.deal.findMany({
-      where: { userId },
+      where: dealScope,
       orderBy: { updatedAt: "desc" },
       take: 5,
       include: { reports: { orderBy: { createdAt: "desc" }, take: 1 } },
     }),
     prisma.report.findMany({
-      where: { deal: { userId }, status: { not: ReportStatus.PENDING } },
+      where: {
+        AND: [reportScope, { status: { not: ReportStatus.PENDING } }],
+      },
       orderBy: { createdAt: "desc" },
       take: 5,
       include: { deal: { select: { companyName: true } } },
     }),
-    // 최근 30일 토큰 사용량 (일별)
+    // 최근 30일 토큰 사용량 (일별) — 본인 사용량
     prisma.usageLog.findMany({
       where: { userId, createdAt: { gte: thirtyDaysAgo } },
       select: { createdAt: true, totalTokens: true, agentType: true },
       orderBy: { createdAt: "asc" },
     }),
-    // 섹터별 딜 수
     prisma.deal.groupBy({
       by: ["sector"],
-      where: { userId },
+      where: dealScope,
       _count: true,
     }),
-    // 단계별 딜 수
     prisma.deal.groupBy({
       by: ["stage"],
-      where: { userId },
+      where: dealScope,
       _count: true,
     }),
   ]);
@@ -130,9 +150,13 @@ export default async function DashboardPage() {
         <div className="flex items-start justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">
-              안녕하세요, {session.user.name} 심사역님 👋
+              안녕하세요, {session.user.name ?? "사용자"}님
             </h1>
-            <p className="text-gray-500 mt-1">오늘도 좋은 투자 딜을 발굴하세요.</p>
+            <p className="text-gray-500 mt-1">
+              {teamId
+                ? "팀 공유 딜·보고서를 포함한 현황입니다."
+                : "오늘도 좋은 투자 딜을 발굴하세요."}
+            </p>
           </div>
         </div>
 
@@ -191,7 +215,14 @@ export default async function DashboardPage() {
                       className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 transition-colors"
                     >
                       <div>
-                        <p className="font-medium text-sm text-gray-900">{deal.companyName}</p>
+                        <p className="font-medium text-sm text-gray-900 flex items-center gap-2">
+                          {deal.companyName}
+                          {deal.teamId && (
+                            <Badge variant="secondary" className="text-[10px]">
+                              팀
+                            </Badge>
+                          )}
+                        </p>
                         <p className="text-xs text-gray-500">{deal.name}</p>
                       </div>
                       <Badge variant="outline" className="text-xs">{stageLabel[deal.stage]}</Badge>

@@ -32,7 +32,15 @@ export async function GET() {
         select: { id: true, name: true, email: true, role: true },
         orderBy: { createdAt: "asc" },
       },
-      _count: { select: { deals: true, templates: true } },
+      _count: {
+        select: {
+          deals: true,
+          templates: true,
+          funds: true,
+          portfolioCompanies: true,
+          inboundDeals: true,
+        },
+      },
     },
   });
 

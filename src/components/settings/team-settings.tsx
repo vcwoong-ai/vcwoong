@@ -18,7 +18,13 @@ interface TeamData {
   id: string;
   name: string;
   users: TeamMember[];
-  _count: { deals: number; templates: number };
+  _count: {
+    deals: number;
+    templates: number;
+    funds: number;
+    portfolioCompanies: number;
+    inboundDeals: number;
+  };
 }
 
 const ROLE_LABEL: Record<string, string> = {
@@ -178,7 +184,7 @@ export function TeamSettings({
     return (
       <div className="space-y-4">
         <p className="text-sm text-gray-600">
-          팀을 만들면 딜·양식을 팀원과 공유할 수 있습니다.
+          팀을 만들면 딜·양식·펀드·포트폴리오·인바운드를 팀원과 공유할 수 있습니다.
         </p>
         <div className="space-y-2">
           <Label htmlFor="new-team-name">팀 이름</Label>
@@ -197,27 +203,46 @@ export function TeamSettings({
     );
   }
 
+  const me = team.users.find((u) => u.id === userId);
+  const canManage = me?.role === "ADMIN" || me?.role === "PARTNER";
+  const isAdmin = me?.role === "ADMIN";
+
   return (
     <div className="space-y-5">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-wrap">
         <Users className="w-4 h-4 text-gray-500" />
         <span className="font-medium">{team.name}</span>
         <Badge variant="secondary">{team.users.length}명</Badge>
+        {me && (
+          <Badge variant="outline" className="text-xs">
+            내 역할: {ROLE_LABEL[me.role] ?? me.role}
+          </Badge>
+        )}
       </div>
 
-      <div className="flex gap-2">
-        <Input
-          value={teamName}
-          onChange={(e) => setTeamName(e.target.value)}
-          className="max-w-xs"
-        />
-        <Button variant="outline" size="sm" onClick={renameTeam} disabled={busy}>
-          이름 변경
-        </Button>
-      </div>
+      {canManage ? (
+        <div className="flex gap-2">
+          <Input
+            value={teamName}
+            onChange={(e) => setTeamName(e.target.value)}
+            className="max-w-xs"
+          />
+          <Button variant="outline" size="sm" onClick={renameTeam} disabled={busy}>
+            이름 변경
+          </Button>
+        </div>
+      ) : (
+        <p className="text-xs text-amber-700">
+          심사역은 팀 설정·멤버 관리를 할 수 없습니다. 공유 리소스는 조회만 가능합니다.
+        </p>
+      )}
 
       <div className="text-xs text-gray-500 space-y-1">
-        <p>공유 딜 {team._count.deals}건 · 공유 양식 {team._count.templates}개</p>
+        <p>
+          공유 딜 {team._count.deals} · 양식 {team._count.templates} · 펀드{" "}
+          {team._count.funds ?? 0} · 포트폴리오 {team._count.portfolioCompanies ?? 0} ·
+          인바운드 {team._count.inboundDeals ?? 0}
+        </p>
         <p>
           권한: 심사역=조회 · 파트너=편집 · 관리자=멤버/역할 관리 · 삭제·공유는 소유자만
         </p>
@@ -241,7 +266,7 @@ export function TeamSettings({
                 </Badge>
               </div>
               <div className="flex items-center gap-2">
-                {m.id !== userId && (
+                {isAdmin && m.id !== userId && (
                   <select
                     className="text-xs border rounded px-1.5 py-1 bg-white"
                     value={m.role}
@@ -254,43 +279,47 @@ export function TeamSettings({
                     <option value="ADMIN">관리자</option>
                   </select>
                 )}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-gray-500"
-                  onClick={() => removeMember(m.id)}
-                  disabled={busy}
-                >
-                  {m.id === userId ? (
-                    <>
-                      <LogOut className="w-3 h-3 mr-1" /> 나가기
-                    </>
-                  ) : (
-                    "제거"
-                  )}
-                </Button>
+                {(isAdmin || m.id === userId) && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-gray-500"
+                    onClick={() => removeMember(m.id)}
+                    disabled={busy}
+                  >
+                    {m.id === userId ? (
+                      <>
+                        <LogOut className="w-3 h-3 mr-1" /> 나가기
+                      </>
+                    ) : (
+                      "제거"
+                    )}
+                  </Button>
+                )}
               </div>
             </div>
           ))}
         </div>
       </div>
 
-      <div className="space-y-2 pt-2 border-t">
-        <Label htmlFor="invite-email">멤버 초대 (가입된 이메일)</Label>
-        <div className="flex gap-2">
-          <Input
-            id="invite-email"
-            type="email"
-            value={inviteEmail}
-            onChange={(e) => setInviteEmail(e.target.value)}
-            placeholder="colleague@firm.com"
-          />
-          <Button onClick={inviteMember} disabled={busy}>
-            <UserPlus className="w-4 h-4 mr-1" />
-            초대
-          </Button>
+      {canManage && (
+        <div className="space-y-2 pt-2 border-t">
+          <Label htmlFor="invite-email">멤버 초대 (가입된 이메일)</Label>
+          <div className="flex gap-2">
+            <Input
+              id="invite-email"
+              type="email"
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+              placeholder="colleague@firm.com"
+            />
+            <Button onClick={inviteMember} disabled={busy}>
+              <UserPlus className="w-4 h-4 mr-1" />
+              초대
+            </Button>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

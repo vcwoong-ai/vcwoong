@@ -5,13 +5,17 @@ import { prisma } from "@/lib/prisma";
 import { AppLayout } from "@/components/layout/app-layout";
 import { LPReportClient } from "./lp-report-client";
 import { computeLpFigures } from "@/lib/lp-report";
-import { getUserTeamContext, fundReadWhere } from "@/lib/team-access";
+import {
+  getUserTeamContext,
+  fundReadWhere,
+  canEditShared,
+} from "@/lib/team-access";
 
 export default async function LPReportPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/login");
 
-  const { teamId } = await getUserTeamContext(session.user.id);
+  const { teamId, role } = await getUserTeamContext(session.user.id);
   const funds = await prisma.fund.findMany({
     where: fundReadWhere(session.user.id, teamId),
     include: {
@@ -34,6 +38,7 @@ export default async function LPReportPage() {
     fundSize: f.fundSize,
     paidIn: f.paidIn,
     teamId: f.teamId,
+    userId: f.userId,
     companyCount: f.companies.length,
     computed: computeLpFigures(
       {
@@ -56,7 +61,11 @@ export default async function LPReportPage() {
 
   return (
     <AppLayout title="LP 리포팅">
-      <LPReportClient funds={JSON.parse(JSON.stringify(view))} />
+      <LPReportClient
+        funds={JSON.parse(JSON.stringify(view))}
+        canEdit={canEditShared(role)}
+        currentUserId={session.user.id}
+      />
     </AppLayout>
   );
 }

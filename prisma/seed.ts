@@ -562,6 +562,31 @@ async function main() {
   console.log(
     `Created fund + ${portfolioSeed.length} portfolio companies with KPIs/milestones`
   );
+
+  // ── 딜소싱 인바운드 샘플 (팀 공유) ──
+  await prisma.inboundDeal.upsert({
+    where: { id: "seed-inbound-001" },
+    update: { userId: user.id, teamId: team.id },
+    create: {
+      id: "seed-inbound-001",
+      companyName: "뉴로칩스",
+      sector: DealSector.DEEPTECH,
+      source: "INBOUND",
+      contactName: "최창업",
+      contactEmail: "ceo@neurochips.kr",
+      summary:
+        "엣지 AI NPU 스타트업. 시리즈 A 70억원 유치 희망. 샘플 키트 3사 POC 진행 중.",
+      rawText:
+        "Subject: [IR] 뉴로칩스 Series A\n\n안녕하세요, 뉴로칩스 최창업입니다.\n엣지 디바이스용 NPU를 개발 중이며 Series A 70억원을 모집합니다.\n현재 샘플 키트 POC 3건 진행 중이고 ARR 목표는 18억원입니다.",
+      screeningScore: 78,
+      screeningNotes: "기술 차별성·POC 진행이 강점. 양산 파트너십 확인 필요.",
+      status: "QUALIFIED",
+      userId: user.id,
+      teamId: team.id,
+    },
+  });
+  console.log("Created sample inbound deal (team shared)");
+
   console.log("\nSeed completed successfully!");
   console.log("\nDemo credentials:");
   console.log("  Admin:   demo@axiom.kr / Demo1234!");
