@@ -85,9 +85,12 @@ model Team {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users     User[]
-  deals     Deal[]
-  templates Template[]
+  users              User[]
+  deals              Deal[]
+  templates          Template[]
+  funds              Fund[]
+  portfolioCompanies PortfolioCompany[]
+  inboundDeals       InboundDeal[]
 }
 
 model Deal {
@@ -336,10 +339,12 @@ model Fund {
   /// 운용 보수율 (%)
   managementFee Float    @default(2)
   userId        String
+  teamId        String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team      Team?              @relation(fields: [teamId], references: [id])
   companies PortfolioCompany[]
   lpReports LpReport[]
 }
@@ -366,10 +371,12 @@ model PortfolioCompany {
   status           PortfolioStatus @default(ACTIVE)
   notes            String?
   userId           String
+  teamId           String?
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
 
   user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team       Team?             @relation(fields: [teamId], references: [id])
   fund       Fund?             @relation(fields: [fundId], references: [id])
   deal       Deal?             @relation(fields: [dealId], references: [id])
   kpis       CompanyKPI[]
@@ -454,10 +461,12 @@ model InboundDeal {
   /// 심사 딜로 승격된 경우
   dealId         String?
   userId         String
+  teamId         String?
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team Team? @relation(fields: [teamId], references: [id])
 }
 
 enum PortfolioStatus {

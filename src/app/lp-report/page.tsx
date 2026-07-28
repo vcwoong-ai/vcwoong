@@ -5,13 +5,15 @@ import { prisma } from "@/lib/prisma";
 import { AppLayout } from "@/components/layout/app-layout";
 import { LPReportClient } from "./lp-report-client";
 import { computeLpFigures } from "@/lib/lp-report";
+import { getUserTeamContext, fundReadWhere } from "@/lib/team-access";
 
 export default async function LPReportPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/login");
 
+  const { teamId } = await getUserTeamContext(session.user.id);
   const funds = await prisma.fund.findMany({
-    where: { userId: session.user.id },
+    where: fundReadWhere(session.user.id, teamId),
     include: {
       companies: {
         include: {
@@ -31,6 +33,7 @@ export default async function LPReportPage() {
     vintageYear: f.vintageYear,
     fundSize: f.fundSize,
     paidIn: f.paidIn,
+    teamId: f.teamId,
     companyCount: f.companies.length,
     computed: computeLpFigures(
       {

@@ -13,7 +13,7 @@ export function TeamShareToggle({
   isOwner,
   canUseTeam,
 }: {
-  type: "deal" | "template";
+  type: "deal" | "template" | "fund" | "portfolio" | "inbound";
   resourceId: string;
   teamId: string | null;
   shared: boolean;

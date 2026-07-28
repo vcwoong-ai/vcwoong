@@ -4,6 +4,11 @@ import { InboundStatus } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { screenInboundDeal } from "@/lib/sourcing";
+import {
+  getUserTeamContext,
+  inboundWriteWhere,
+  permissionDeniedMessage,
+} from "@/lib/team-access";
 
 /** AI 1차 스크리닝 점수 산출 */
 export async function POST(
@@ -15,11 +20,18 @@ export async function POST(
     return NextResponse.json({ error: "인증이 필요합니다" }, { status: 401 });
   }
 
+  const { teamId, role } = await getUserTeamContext(session.user.id);
   const lead = await prisma.inboundDeal.findFirst({
-    where: { id: params.id, userId: session.user.id },
+    where: {
+      id: params.id,
+      ...inboundWriteWhere(session.user.id, teamId, role),
+    },
   });
   if (!lead) {
-    return NextResponse.json({ error: "찾을 수 없습니다" }, { status: 404 });
+    return NextResponse.json(
+      { error: permissionDeniedMessage("edit") },
+      { status: 403 }
+    );
   }
 
   try {

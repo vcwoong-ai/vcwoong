@@ -50,10 +50,10 @@
 
 | 단계 | 상태 |
 |------|------|
-| 딜소싱 | `/sourcing` 인박스, 메일 붙여넣기, Webhook, **폴링** (`/api/sourcing/poll`, 드롭폴더·IMAP) |
+| 딜소싱 | `/sourcing` 인박스, 메일 붙여넣기, Webhook, **폴링 UI** (`/api/sourcing/poll`), **팀 공유** |
 | 심사 | 딜 칸반, 문서 업로드·파싱, 10섹션 IC 보고서, 품질 점수, 섹션 재생성 |
-| 사후관리 | `/portfolio` MOIC·DPI·TVPI, 분기 KPI 시계열, 마일스톤, AI 분기 노트, 알림 |
-| LP 리포팅 | `/lp-report` 펀드 지표·섹터 배분 실계산, 분기 리포트 생성·저장, DOCX 내보내기 |
+| 사후관리 | `/portfolio` MOIC·DPI·TVPI, 분기 KPI 시계열, 마일스톤, AI 분기 노트, 알림 · **팀 공유** |
+| LP 리포팅 | `/lp-report` 펀드 지표·섹터 배분 실계산, 분기 리포트 생성·저장, DOCX 내보내기 · **팀 공유** |
 
 데이터 모델: `Fund` → `PortfolioCompany` → `CompanyKPI` / `Milestone` / `PortfolioUpdate`, `LpReport`, `InboundDeal`
 
@@ -66,7 +66,7 @@
 | 월 한도 (보고서·양식) | `src/lib/quotas.ts` 에서 강제 |
 | 기능 게이트 | `requireFeature()` — LP 리포팅·포트폴리오 402 응답 |
 | 구독 해지 | `POST /api/payments/cancel` + 설정 화면 버튼 |
-| **팀 협업** | **동작** — 역할별 권한 (심사역=조회, 파트너=편집, 관리자=역할관리) |
+| **팀 협업** | **동작** — 딜·양식·펀드·포트폴리오·인바운드 (심사역=조회, 파트너=편집) |
 | **연간 결제** | **동작** — 월간/연간 토글, 연간 시 2개월 무료 (월×10) |
 | 미구현 | — |
 

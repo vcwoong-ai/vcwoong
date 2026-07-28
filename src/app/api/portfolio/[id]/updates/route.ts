@@ -5,6 +5,11 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateText } from "@/lib/claude";
 import { comparePeriod, currentPeriod } from "@/lib/portfolio";
+import {
+  getUserTeamContext,
+  portfolioWriteWhere,
+  permissionDeniedMessage,
+} from "@/lib/team-access";
 
 const bodySchema = z.object({
   period: z.string().regex(/^\d{4}Q[1-4]$/).optional(),
@@ -24,15 +29,22 @@ export async function POST(
     return NextResponse.json({ error: "인증이 필요합니다" }, { status: 401 });
   }
 
+  const { teamId, role } = await getUserTeamContext(session.user.id);
   const company = await prisma.portfolioCompany.findFirst({
-    where: { id: params.id, userId: session.user.id },
+    where: {
+      id: params.id,
+      ...portfolioWriteWhere(session.user.id, teamId, role),
+    },
     include: {
       kpis: { orderBy: { period: "asc" } },
       milestones: { orderBy: { dueDate: "asc" } },
     },
   });
   if (!company) {
-    return NextResponse.json({ error: "찾을 수 없습니다" }, { status: 404 });
+    return NextResponse.json(
+      { error: permissionDeniedMessage("edit") },
+      { status: 403 }
+    );
   }
 
   const parsed = bodySchema.safeParse(await request.json().catch(() => ({})));

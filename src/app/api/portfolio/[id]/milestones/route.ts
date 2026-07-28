@@ -4,6 +4,11 @@ import { z } from "zod";
 import { MilestoneStatus } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import {
+  getUserTeamContext,
+  portfolioWriteWhere,
+  permissionDeniedMessage,
+} from "@/lib/team-access";
 
 const createSchema = z.object({
   title: z.string().min(1).max(160),
@@ -20,9 +25,10 @@ const patchSchema = z.object({
   note: z.string().max(600).nullable().optional(),
 });
 
-async function ownedCompany(userId: string, id: string) {
+async function writableCompany(userId: string, id: string) {
+  const { teamId, role } = await getUserTeamContext(userId);
   return prisma.portfolioCompany.findFirst({
-    where: { id, userId },
+    where: { id, ...portfolioWriteWhere(userId, teamId, role) },
     select: { id: true },
   });
 }
@@ -35,8 +41,11 @@ export async function POST(
   if (!session?.user?.id) {
     return NextResponse.json({ error: "인증이 필요합니다" }, { status: 401 });
   }
-  if (!(await ownedCompany(session.user.id, params.id))) {
-    return NextResponse.json({ error: "찾을 수 없습니다" }, { status: 404 });
+  if (!(await writableCompany(session.user.id, params.id))) {
+    return NextResponse.json(
+      { error: permissionDeniedMessage("edit") },
+      { status: 403 }
+    );
   }
 
   const parsed = createSchema.safeParse(await request.json().catch(() => null));
@@ -68,8 +77,11 @@ export async function PATCH(
   if (!session?.user?.id) {
     return NextResponse.json({ error: "인증이 필요합니다" }, { status: 401 });
   }
-  if (!(await ownedCompany(session.user.id, params.id))) {
-    return NextResponse.json({ error: "찾을 수 없습니다" }, { status: 404 });
+  if (!(await writableCompany(session.user.id, params.id))) {
+    return NextResponse.json(
+      { error: permissionDeniedMessage("edit") },
+      { status: 403 }
+    );
   }
 
   const parsed = patchSchema.safeParse(await request.json().catch(() => null));

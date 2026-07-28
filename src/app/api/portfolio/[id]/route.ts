@@ -4,6 +4,14 @@ import { z } from "zod";
 import { PortfolioStatus } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import {
+  getUserTeamContext,
+  portfolioReadWhere,
+  portfolioWriteWhere,
+  portfolioOwnerWhere,
+  fundWriteWhere,
+  permissionDeniedMessage,
+} from "@/lib/team-access";
 
 const updateSchema = z.object({
   currentValuation: z.number().positive().nullable().optional(),
@@ -14,13 +22,6 @@ const updateSchema = z.object({
   fundId: z.string().nullable().optional(),
 });
 
-async function requireOwned(reqUserId: string, id: string) {
-  return prisma.portfolioCompany.findFirst({
-    where: { id, userId: reqUserId },
-    select: { id: true },
-  });
-}
-
 export async function GET(
   _request: NextRequest,
   { params }: { params: { id: string } }
@@ -30,8 +31,9 @@ export async function GET(
     return NextResponse.json({ error: "인증이 필요합니다" }, { status: 401 });
   }
 
+  const { teamId } = await getUserTeamContext(session.user.id);
   const company = await prisma.portfolioCompany.findFirst({
-    where: { id: params.id, userId: session.user.id },
+    where: { id: params.id, ...portfolioReadWhere(session.user.id, teamId) },
     include: {
       kpis: { orderBy: { period: "asc" } },
       milestones: { orderBy: { dueDate: "asc" } },
@@ -57,9 +59,19 @@ export async function PATCH(
     return NextResponse.json({ error: "인증이 필요합니다" }, { status: 401 });
   }
 
-  const owned = await requireOwned(session.user.id, params.id);
-  if (!owned) {
-    return NextResponse.json({ error: "찾을 수 없습니다" }, { status: 404 });
+  const { teamId, role } = await getUserTeamContext(session.user.id);
+  const writable = await prisma.portfolioCompany.findFirst({
+    where: {
+      id: params.id,
+      ...portfolioWriteWhere(session.user.id, teamId, role),
+    },
+    select: { id: true },
+  });
+  if (!writable) {
+    return NextResponse.json(
+      { error: permissionDeniedMessage("edit") },
+      { status: 403 }
+    );
   }
 
   const parsed = updateSchema.safeParse(
@@ -74,7 +86,10 @@ export async function PATCH(
 
   if (parsed.data.fundId) {
     const fund = await prisma.fund.findFirst({
-      where: { id: parsed.data.fundId, userId: session.user.id },
+      where: {
+        id: parsed.data.fundId,
+        ...fundWriteWhere(session.user.id, teamId, role),
+      },
       select: { id: true },
     });
     if (!fund) {
@@ -99,9 +114,15 @@ export async function DELETE(
     return NextResponse.json({ error: "인증이 필요합니다" }, { status: 401 });
   }
 
-  const owned = await requireOwned(session.user.id, params.id);
+  const owned = await prisma.portfolioCompany.findFirst({
+    where: { id: params.id, ...portfolioOwnerWhere(session.user.id) },
+    select: { id: true },
+  });
   if (!owned) {
-    return NextResponse.json({ error: "찾을 수 없습니다" }, { status: 404 });
+    return NextResponse.json(
+      { error: permissionDeniedMessage("delete") },
+      { status: 403 }
+    );
   }
 
   await prisma.portfolioCompany.delete({ where: { id: params.id } });

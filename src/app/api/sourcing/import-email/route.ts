@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { parseInboundEmail } from "@/lib/email-parser";
 import { guessSector } from "@/lib/sourcing";
+import { getUserTeamContext } from "@/lib/team-access";
 
 const bodySchema = z.object({
   rawEmail: z.string().min(20, "이메일 내용이 너무 짧습니다"),
@@ -29,10 +30,12 @@ export async function POST(request: NextRequest) {
       "미확인 기업";
 
     const sector = guessSector(parsed.rawText);
+    const { teamId } = await getUserTeamContext(session.user.id);
 
     const lead = await prisma.inboundDeal.create({
       data: {
         userId: session.user.id,
+        teamId,
         companyName,
         sector,
         source: "INBOUND",

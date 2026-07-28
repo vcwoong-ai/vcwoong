@@ -5,6 +5,7 @@ import { DealSector, DealSourceType, InboundStatus } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { guessSector } from "@/lib/sourcing";
+import { getUserTeamContext, inboundReadWhere } from "@/lib/team-access";
 
 const createSchema = z.object({
   companyName: z.string().min(1).max(120),
@@ -14,6 +15,7 @@ const createSchema = z.object({
   contactEmail: z.string().email().optional().or(z.literal("")),
   summary: z.string().max(4000).optional(),
   rawText: z.string().max(20000).optional(),
+  shareWithTeam: z.boolean().optional(),
 });
 
 export async function GET(request: NextRequest) {
@@ -22,6 +24,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "인증이 필요합니다" }, { status: 401 });
   }
 
+  const { teamId } = await getUserTeamContext(session.user.id);
   const statusParam = request.nextUrl.searchParams.get("status");
   const status =
     statusParam && statusParam in InboundStatus
@@ -29,7 +32,10 @@ export async function GET(request: NextRequest) {
       : undefined;
 
   const leads = await prisma.inboundDeal.findMany({
-    where: { userId: session.user.id, ...(status ? { status } : {}) },
+    where: {
+      ...inboundReadWhere(session.user.id, teamId),
+      ...(status ? { status } : {}),
+    },
     orderBy: [{ screeningScore: "desc" }, { createdAt: "desc" }],
   });
 
@@ -50,6 +56,9 @@ export async function POST(request: NextRequest) {
     );
   }
   const body = parsed.data;
+  const { teamId } = await getUserTeamContext(session.user.id);
+  const shareTeamId =
+    body.shareWithTeam !== false && teamId ? teamId : null;
 
   const lead = await prisma.inboundDeal.create({
     data: {
@@ -64,6 +73,7 @@ export async function POST(request: NextRequest) {
       rawText: body.rawText || null,
       status: InboundStatus.NEW,
       userId: session.user.id,
+      teamId: shareTeamId,
     },
   });
 

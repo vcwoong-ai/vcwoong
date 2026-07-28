@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateMarkdownDOCX } from "@/lib/docx-export";
+import { getUserTeamContext, lpReportReadWhere } from "@/lib/team-access";
 
 /** LP 리포트를 DOCX로 내려받는다 */
 export async function POST(
@@ -14,8 +15,9 @@ export async function POST(
     return NextResponse.json({ error: "인증이 필요합니다" }, { status: 401 });
   }
 
+  const { teamId } = await getUserTeamContext(session.user.id);
   const report = await prisma.lpReport.findFirst({
-    where: { id: params.id, fund: { userId: session.user.id } },
+    where: { id: params.id, ...lpReportReadWhere(session.user.id, teamId) },
     include: { fund: { select: { name: true } } },
   });
 

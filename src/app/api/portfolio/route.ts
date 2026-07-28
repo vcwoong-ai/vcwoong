@@ -6,6 +6,12 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { requireFeature } from "@/lib/plan-gates";
 import { calculatePortfolioMetrics } from "@/lib/portfolio";
+import {
+  getUserTeamContext,
+  portfolioReadWhere,
+  fundWriteWhere,
+  dealWriteWhere,
+} from "@/lib/team-access";
 
 const createSchema = z.object({
   companyName: z.string().min(1).max(120),
@@ -19,6 +25,8 @@ const createSchema = z.object({
   /// 심사 딜에서 승격하는 경우
   dealId: z.string().optional(),
   notes: z.string().max(2000).optional(),
+  /// 생성 시 팀에 공유
+  shareWithTeam: z.boolean().optional(),
 });
 
 export async function GET() {
@@ -27,8 +35,10 @@ export async function GET() {
     return NextResponse.json({ error: "인증이 필요합니다" }, { status: 401 });
   }
 
+  const { teamId } = await getUserTeamContext(session.user.id);
+
   const companies = await prisma.portfolioCompany.findMany({
-    where: { userId: session.user.id },
+    where: portfolioReadWhere(session.user.id, teamId),
     include: {
       kpis: true,
       milestones: { orderBy: { dueDate: "asc" } },
@@ -65,10 +75,11 @@ export async function POST(request: NextRequest) {
     );
   }
   const body = parsed.data;
+  const { teamId, role } = await getUserTeamContext(session.user.id);
 
   if (body.fundId) {
     const fund = await prisma.fund.findFirst({
-      where: { id: body.fundId, userId: session.user.id },
+      where: { id: body.fundId, ...fundWriteWhere(session.user.id, teamId, role) },
       select: { id: true },
     });
     if (!fund) {
@@ -78,8 +89,8 @@ export async function POST(request: NextRequest) {
 
   if (body.dealId) {
     const deal = await prisma.deal.findFirst({
-      where: { id: body.dealId, userId: session.user.id },
-      select: { id: true },
+      where: { id: body.dealId, ...dealWriteWhere(session.user.id, teamId, role) },
+      select: { id: true, teamId: true },
     });
     if (!deal) {
       return NextResponse.json({ error: "딜을 찾을 수 없습니다" }, { status: 404 });
@@ -96,6 +107,9 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  const shareTeamId =
+    body.shareWithTeam !== false && teamId ? teamId : null;
+
   const company = await prisma.portfolioCompany.create({
     data: {
       companyName: body.companyName,
@@ -108,6 +122,7 @@ export async function POST(request: NextRequest) {
       status: PortfolioStatus.ACTIVE,
       notes: body.notes,
       userId: session.user.id,
+      teamId: shareTeamId,
       ...(body.fundId ? { fundId: body.fundId } : {}),
       ...(body.dealId ? { dealId: body.dealId } : {}),
     },

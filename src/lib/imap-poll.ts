@@ -37,9 +37,15 @@ async function importRawEmail(
   });
   if (existing) return null;
 
+  const owner = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { teamId: true },
+  });
+
   const lead = await prisma.inboundDeal.create({
     data: {
       userId,
+      teamId: owner?.teamId ?? null,
       companyName,
       sector: guessSector(parsed.rawText),
       source: "INBOUND",

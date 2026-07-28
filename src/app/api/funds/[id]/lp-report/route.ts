@@ -11,6 +11,12 @@ import {
   generateLpNarrative,
   renderLpMarkdown,
 } from "@/lib/lp-report";
+import {
+  getUserTeamContext,
+  fundWriteWhere,
+  fundReadWhere,
+  permissionDeniedMessage,
+} from "@/lib/team-access";
 
 const bodySchema = z.object({
   period: z.string().regex(/^\d{4}Q[1-4]$/).optional(),
@@ -29,8 +35,9 @@ export async function POST(
   const locked = await requireFeature(session.user.id, "lpReporting");
   if (locked) return locked;
 
+  const { teamId, role } = await getUserTeamContext(session.user.id);
   const fund = await prisma.fund.findFirst({
-    where: { id: params.id, userId: session.user.id },
+    where: { id: params.id, ...fundWriteWhere(session.user.id, teamId, role) },
     include: {
       companies: {
         include: {
@@ -43,7 +50,10 @@ export async function POST(
   });
 
   if (!fund) {
-    return NextResponse.json({ error: "펀드를 찾을 수 없습니다" }, { status: 404 });
+    return NextResponse.json(
+      { error: permissionDeniedMessage("edit") },
+      { status: 403 }
+    );
   }
 
   if (fund.companies.length === 0) {
@@ -131,8 +141,9 @@ export async function GET(
     return NextResponse.json({ error: "인증이 필요합니다" }, { status: 401 });
   }
 
+  const { teamId } = await getUserTeamContext(session.user.id);
   const fund = await prisma.fund.findFirst({
-    where: { id: params.id, userId: session.user.id },
+    where: { id: params.id, ...fundReadWhere(session.user.id, teamId) },
     select: { id: true },
   });
   if (!fund) {

@@ -138,6 +138,89 @@ export function templateOwnerWhere(userId: string): Prisma.TemplateWhereInput {
   return { userId };
 }
 
+export function fundReadWhere(
+  userId: string,
+  teamId: string | null
+): Prisma.FundWhereInput {
+  if (teamId) {
+    return { OR: [{ userId }, { teamId }] };
+  }
+  return { userId };
+}
+
+export function fundWriteWhere(
+  userId: string,
+  teamId: string | null,
+  role: string
+): Prisma.FundWhereInput {
+  if (teamId && canEditShared(role)) {
+    return { OR: [{ userId }, { teamId }] };
+  }
+  return { userId };
+}
+
+export function fundOwnerWhere(userId: string): Prisma.FundWhereInput {
+  return { userId };
+}
+
+export function portfolioReadWhere(
+  userId: string,
+  teamId: string | null
+): Prisma.PortfolioCompanyWhereInput {
+  if (teamId) {
+    return { OR: [{ userId }, { teamId }] };
+  }
+  return { userId };
+}
+
+export function portfolioWriteWhere(
+  userId: string,
+  teamId: string | null,
+  role: string
+): Prisma.PortfolioCompanyWhereInput {
+  if (teamId && canEditShared(role)) {
+    return { OR: [{ userId }, { teamId }] };
+  }
+  return { userId };
+}
+
+export function portfolioOwnerWhere(userId: string): Prisma.PortfolioCompanyWhereInput {
+  return { userId };
+}
+
+export function inboundReadWhere(
+  userId: string,
+  teamId: string | null
+): Prisma.InboundDealWhereInput {
+  if (teamId) {
+    return { OR: [{ userId }, { teamId }] };
+  }
+  return { userId };
+}
+
+export function inboundWriteWhere(
+  userId: string,
+  teamId: string | null,
+  role: string
+): Prisma.InboundDealWhereInput {
+  if (teamId && canEditShared(role)) {
+    return { OR: [{ userId }, { teamId }] };
+  }
+  return { userId };
+}
+
+export function inboundOwnerWhere(userId: string): Prisma.InboundDealWhereInput {
+  return { userId };
+}
+
+/** LP 리포트는 펀드 소유/공유를 따른다 */
+export function lpReportReadWhere(
+  userId: string,
+  teamId: string | null
+): Prisma.LpReportWhereInput {
+  return { fund: fundReadWhere(userId, teamId) };
+}
+
 export function permissionDeniedMessage(action: "edit" | "delete" | "share"): string {
   switch (action) {
     case "edit":

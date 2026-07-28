@@ -436,7 +436,7 @@ async function main() {
   // ── 풀사이클: 펀드 + 포트폴리오 사후관리 ──
   const fund = await prisma.fund.upsert({
     where: { id: "seed-fund-001" },
-    update: { userId: user.id },
+    update: { userId: user.id, teamId: team.id },
     create: {
       id: "seed-fund-001",
       name: "Axiom 1호 벤처투자조합",
@@ -445,6 +445,7 @@ async function main() {
       paidIn: 320,
       managementFee: 2.5,
       userId: user.id,
+      teamId: team.id,
     },
   });
 
@@ -514,12 +515,13 @@ async function main() {
     const { kpis, milestones, ...company } = p;
     await prisma.portfolioCompany.upsert({
       where: { id: p.id },
-      update: { userId: user.id, fundId: fund.id },
+      update: { userId: user.id, fundId: fund.id, teamId: team.id },
       create: {
         ...company,
         realizedAmount: company.realizedAmount ?? 0,
         fundId: fund.id,
         userId: user.id,
+        teamId: team.id,
       },
     });
     for (const k of kpis) {
@@ -562,8 +564,9 @@ async function main() {
   );
   console.log("\nSeed completed successfully!");
   console.log("\nDemo credentials:");
-  console.log("  Email: demo@axiom.kr");
-  console.log("  Password: Demo1234!");
+  console.log("  Admin:   demo@axiom.kr / Demo1234!");
+  console.log("  Partner: partner@axiom.kr / Partner1234!");
+  console.log("  Analyst: analyst@axiom.kr / Analyst1234!");
 }
 
 main()

@@ -4,6 +4,12 @@ import { z } from "zod";
 import { DealSector, InboundStatus } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import {
+  getUserTeamContext,
+  inboundWriteWhere,
+  inboundOwnerWhere,
+  permissionDeniedMessage,
+} from "@/lib/team-access";
 
 const patchSchema = z.object({
   status: z.nativeEnum(InboundStatus).optional(),
@@ -28,16 +34,23 @@ export async function PATCH(
     );
   }
 
+  const { teamId, role } = await getUserTeamContext(session.user.id);
   const updated = await prisma.inboundDeal.updateMany({
-    where: { id: params.id, userId: session.user.id },
+    where: {
+      id: params.id,
+      ...inboundWriteWhere(session.user.id, teamId, role),
+    },
     data: parsed.data,
   });
   if (updated.count === 0) {
-    return NextResponse.json({ error: "찾을 수 없습니다" }, { status: 404 });
+    return NextResponse.json(
+      { error: permissionDeniedMessage("edit") },
+      { status: 403 }
+    );
   }
 
   const lead = await prisma.inboundDeal.findFirst({
-    where: { id: params.id, userId: session.user.id },
+    where: { id: params.id },
   });
   return NextResponse.json({ data: lead });
 }
@@ -52,10 +65,13 @@ export async function DELETE(
   }
 
   const deleted = await prisma.inboundDeal.deleteMany({
-    where: { id: params.id, userId: session.user.id },
+    where: { id: params.id, ...inboundOwnerWhere(session.user.id) },
   });
   if (deleted.count === 0) {
-    return NextResponse.json({ error: "찾을 수 없습니다" }, { status: 404 });
+    return NextResponse.json(
+      { error: permissionDeniedMessage("delete") },
+      { status: 403 }
+    );
   }
   return NextResponse.json({ data: { id: params.id } });
 }

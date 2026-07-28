@@ -9,6 +9,8 @@ import {
   dealReadWhere,
   dealOwnerWhere,
   reportWriteWhere,
+  fundReadWhere,
+  inboundWriteWhere,
 } from "../src/lib/team-access";
 import {
   yearlyPriceFromMonthly,
@@ -92,6 +94,17 @@ async function main() {
     JSON.stringify(analystReportWrite) ===
       JSON.stringify({ deal: { userId: "u2" } }),
     "analyst report write = own deals only"
+  );
+  assert(
+    Array.isArray(
+      (fundReadWhere("u1", "t1") as { OR?: unknown }).OR
+    ),
+    "fund read includes team"
+  );
+  assert(
+    JSON.stringify(inboundWriteWhere("u2", "t1", "ANALYST")) ===
+      JSON.stringify({ userId: "u2" }),
+    "analyst inbound write = own only"
   );
   console.log("✅ 팀 역할별 권한");
 

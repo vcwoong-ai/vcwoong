@@ -49,6 +49,7 @@ export async function POST(request: NextRequest) {
     const lead = await prisma.inboundDeal.create({
       data: {
         userId: user.id,
+        teamId: user.teamId,
         companyName,
         sector: guessSector(parsed.rawText),
         source: "INBOUND",

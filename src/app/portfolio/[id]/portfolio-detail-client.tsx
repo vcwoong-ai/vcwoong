@@ -28,6 +28,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { TeamShareToggle } from "@/components/team/team-share-toggle";
 import {
   PORTFOLIO_STATUS_LABEL,
   PORTFOLIO_STATUS_TONE,
@@ -49,6 +50,8 @@ interface Company {
   currentValuation: number | null;
   realizedAmount: number;
   notes: string | null;
+  userId?: string;
+  teamId?: string | null;
   fund: { id: string; name: string } | null;
   deal: { id: string; name: string } | null;
   kpis: Array<{
@@ -91,7 +94,21 @@ const MILESTONE_LABEL: Record<MilestoneStatus, string> = {
 
 const COMMON_METRICS = ["ARR", "매출", "MAU", "런웨이", "고용", "현금"];
 
-export function PortfolioDetailClient({ company }: { company: Company }) {
+export function PortfolioDetailClient({
+  company,
+  canEdit = true,
+  isOwner = true,
+  userTeamId = null,
+  canUseTeam = false,
+  userRole = "ANALYST",
+}: {
+  company: Company;
+  canEdit?: boolean;
+  isOwner?: boolean;
+  userTeamId?: string | null;
+  canUseTeam?: boolean;
+  userRole?: string;
+}) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -243,7 +260,7 @@ export function PortfolioDetailClient({ company }: { company: Company }) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 flex-wrap">
         <Link href="/portfolio">
           <Button variant="ghost" size="sm">
             <ArrowLeft className="w-4 h-4 mr-1" />
@@ -258,6 +275,16 @@ export function PortfolioDetailClient({ company }: { company: Company }) {
         >
           {PORTFOLIO_STATUS_LABEL[status]}
         </span>
+        {company.teamId && (
+          <Badge variant="secondary" className="text-xs">
+            팀 공유
+          </Badge>
+        )}
+        {!canEdit && (
+          <Badge variant="outline" className="text-amber-700 border-amber-300">
+            조회 전용 ({userRole === "ANALYST" ? "심사역" : userRole})
+          </Badge>
+        )}
         {company.deal && (
           <Link
             href={`/deals/${company.deal.id}`}
@@ -266,6 +293,16 @@ export function PortfolioDetailClient({ company }: { company: Company }) {
             원본 딜 보기
           </Link>
         )}
+        <div className="ml-auto">
+          <TeamShareToggle
+            type="portfolio"
+            resourceId={company.id}
+            teamId={userTeamId}
+            shared={Boolean(company.teamId)}
+            isOwner={isOwner}
+            canUseTeam={canUseTeam}
+          />
+        </div>
       </div>
 
       <div>

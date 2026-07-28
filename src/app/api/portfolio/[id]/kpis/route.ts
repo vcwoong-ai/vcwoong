@@ -3,6 +3,11 @@ import { getServerSession } from "next-auth";
 import { z } from "zod";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import {
+  getUserTeamContext,
+  portfolioWriteWhere,
+  permissionDeniedMessage,
+} from "@/lib/team-access";
 
 const kpiSchema = z.object({
   period: z.string().regex(/^\d{4}Q[1-4]$/, "2025Q1 형식이어야 합니다"),
@@ -25,12 +30,19 @@ export async function POST(
     return NextResponse.json({ error: "인증이 필요합니다" }, { status: 401 });
   }
 
+  const { teamId, role } = await getUserTeamContext(session.user.id);
   const owned = await prisma.portfolioCompany.findFirst({
-    where: { id: params.id, userId: session.user.id },
+    where: {
+      id: params.id,
+      ...portfolioWriteWhere(session.user.id, teamId, role),
+    },
     select: { id: true },
   });
   if (!owned) {
-    return NextResponse.json({ error: "찾을 수 없습니다" }, { status: 404 });
+    return NextResponse.json(
+      { error: permissionDeniedMessage("edit") },
+      { status: 403 }
+    );
   }
 
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
