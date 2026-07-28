@@ -21,6 +21,7 @@ import {
   LayoutTemplate,
 } from "lucide-react";
 import { EditDealDialog } from "@/components/deals/edit-deal-dialog";
+import { TeamShareToggle } from "@/components/team/team-share-toggle";
 import { ReportWizard } from "@/components/reports/report-wizard";
 import {
   Select,
@@ -34,6 +35,8 @@ import { AgentType, DealSector, DealStage } from "@prisma/client";
 
 interface DealWithRelations {
   id: string;
+  userId: string;
+  teamId: string | null;
   name: string;
   companyName: string;
   sector: DealSector;
@@ -151,9 +154,15 @@ interface TemplateOption {
 export function DealDetailClient({
   deal,
   demoMode = false,
+  currentUserId,
+  userTeamId,
+  canUseTeam = false,
 }: {
   deal: DealWithRelations;
   demoMode?: boolean;
+  currentUserId: string;
+  userTeamId: string | null;
+  canUseTeam?: boolean;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -333,6 +342,14 @@ export function DealDetailClient({
           )}
         </div>
         <div className="flex flex-wrap gap-2 items-center">
+          <TeamShareToggle
+            type="deal"
+            resourceId={deal.id}
+            teamId={userTeamId}
+            shared={Boolean(deal.teamId)}
+            isOwner={deal.userId === currentUserId}
+            canUseTeam={canUseTeam}
+          />
           <EditDealDialog deal={deal} />
           {deal.documents.length > 0 && (
             <>

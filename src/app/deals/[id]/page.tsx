@@ -7,6 +7,8 @@ import { isAIConfigured } from "@/lib/claude";
 import { AppLayout } from "@/components/layout/app-layout";
 import { DealDetailClient } from "./deal-detail-client";
 import { getUserTeamContext, dealReadWhere } from "@/lib/team-access";
+import { getUserSubscription, enumToPlanKey } from "@/lib/subscription";
+import { hasFeature } from "@/lib/plans";
 
 export default async function DealDetailPage({
   params,
@@ -17,6 +19,10 @@ export default async function DealDetailPage({
   if (!session?.user?.id) redirect("/login");
 
   const { teamId } = await getUserTeamContext(session.user.id);
+  const subscription = await getUserSubscription(session.user.id);
+  const currentPlan = subscription
+    ? enumToPlanKey(subscription.subscriptionPlan)
+    : "free";
 
   const deal = await prisma.deal.findFirst({
     where: { id: params.id, ...dealReadWhere(session.user.id, teamId) },
@@ -37,6 +43,9 @@ export default async function DealDetailPage({
         <DealDetailClient
           deal={JSON.parse(JSON.stringify(deal))}
           demoMode={!isAIConfigured()}
+          currentUserId={session.user.id}
+          userTeamId={teamId}
+          canUseTeam={hasFeature(currentPlan, "teamCollaboration")}
         />
       </Suspense>
     </AppLayout>

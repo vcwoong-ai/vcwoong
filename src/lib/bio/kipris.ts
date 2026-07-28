@@ -79,37 +79,90 @@ function parsePatentItems(xml: string): KiprisPatent[] {
  */
 export async function searchKiprisPatents(
   query: string,
-  maxResults = 5
+  maxResults = 5,
+  documentText?: string
 ): Promise<KiprisPatent[]> {
-  if (!API_KEY) {
-    console.log("[KIPRIS] API 키 없음 — 검색 건너뜀");
-    return [];
+  if (API_KEY) {
+    try {
+      const url =
+        `${BASE}/patUtiModInfoSearchSevice/applicantNameSearchInfo` +
+        `?applicant=${encodeURIComponent(query)}` +
+        `&numOfRows=${maxResults}&pageNo=1&ServiceKey=${API_KEY}`;
+
+      const xml = await fetchXml(url);
+      const patents = parsePatentItems(xml);
+      if (patents.length > 0) return patents.slice(0, maxResults);
+
+      const keywordUrl =
+        `${BASE}/patUtiModInfoSearchSevice/freeSearch` +
+        `?word=${encodeURIComponent(query)}` +
+        `&numOfRows=${maxResults}&pageNo=1&ServiceKey=${API_KEY}`;
+
+      const keywordXml = await fetchXml(keywordUrl);
+      return parsePatentItems(keywordXml).slice(0, maxResults);
+    } catch (err) {
+      console.warn("[KIPRIS] 검색 실패:", err instanceof Error ? err.message : err);
+    }
+  } else {
+    console.log("[KIPRIS] API 키 없음 — IR 문서에서 특허 정보 추출 시도");
   }
 
-  try {
-    // 출원인명 검색 서비스
-    const url =
-      `${BASE}/patUtiModInfoSearchSevice/applicantNameSearchInfo` +
-      `?applicant=${encodeURIComponent(query)}` +
-      `&numOfRows=${maxResults}&pageNo=1&ServiceKey=${API_KEY}`;
-
-    const xml = await fetchXml(url);
-    const patents = parsePatentItems(xml);
-
-    if (patents.length > 0) return patents.slice(0, maxResults);
-
-    // 폴백: 키워드 검색
-    const keywordUrl =
-      `${BASE}/patUtiModInfoSearchSevice/freeSearch` +
-      `?word=${encodeURIComponent(query)}` +
-      `&numOfRows=${maxResults}&pageNo=1&ServiceKey=${API_KEY}`;
-
-    const keywordXml = await fetchXml(keywordUrl);
-    return parsePatentItems(keywordXml).slice(0, maxResults);
-  } catch (err) {
-    console.warn("[KIPRIS] 검색 실패:", err instanceof Error ? err.message : err);
-    return [];
+  if (documentText) {
+    return extractPatentsFromDocument(documentText, query).slice(0, maxResults);
   }
+  return [];
+}
+
+/** API 키 없을 때 IR/제출 자료 텍스트에서 특허 언급 추출 */
+export function extractPatentsFromDocument(
+  text: string,
+  companyName: string
+): KiprisPatent[] {
+  const patents: KiprisPatent[] = [];
+  const seen = new Set<string>();
+
+  const linePatterns = [
+    /(?:발명의\s*명칭|invention)[:\s]*([^\n.]{4,80})/gi,
+    /특허\s*(?:출원)?(?:번호)?[:\s]*([0-9]{2}-?[0-9]{4,}-?[0-9]{4,})/gi,
+    /출원번호[:\s]*([0-9-]{8,})/gi,
+  ];
+
+  for (const pattern of linePatterns) {
+    let m: RegExpExecArray | null;
+    while ((m = pattern.exec(text)) !== null) {
+      const value = m[1]?.trim();
+      if (!value || seen.has(value)) continue;
+      seen.add(value);
+
+      const isNumber = /^[0-9-]+$/.test(value);
+      patents.push({
+        applicationNumber: isNumber ? value : `(IR) ${value.slice(0, 20)}`,
+        inventionTitle: isNumber ? `(IR 자료) ${companyName} 관련 특허` : value,
+        applicantName: companyName,
+        applicationDate: "",
+        registerStatus: "IR 자료 추출",
+        ipc: "",
+        url: "",
+      });
+    }
+  }
+
+  const portfolioMatch = text.match(
+    /(?:특허\s*포트폴리오|patent\s*portfolio)[:\s]*(\d+)\s*(?:건|개|items?)/i
+  );
+  if (portfolioMatch && patents.length === 0) {
+    patents.push({
+      applicationNumber: "IR-summary",
+      inventionTitle: `특허 포트폴리오 ${portfolioMatch[1]}건 (IR 자료)`,
+      applicantName: companyName,
+      applicationDate: "",
+      registerStatus: "IR 자료",
+      ipc: "",
+      url: "",
+    });
+  }
+
+  return patents;
 }
 
 export function formatKiprisForPrompt(patents: KiprisPatent[]): string {

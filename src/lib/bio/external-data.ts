@@ -103,7 +103,7 @@ export async function fetchBioExternalData(
     searchPubMed(`${indication} clinical trial phase 2 3`, 5),
     searchClinicalTrials(`${indication} ${drugKeyword}`, 5),
     searchFdaDrugsByIndication(indication.split(" ")[0], 5),
-    searchKiprisPatents(companyName.replace(/주식회사|㈜|\(주\)/g, "").trim(), 5),
+    searchKiprisPatents(companyName.replace(/주식회사|㈜|\(주\)/g, "").trim(), 5, documentText),
   ]).then((results) =>
     results.map((r) => (r.status === "fulfilled" ? r.value : []))
   ) as [

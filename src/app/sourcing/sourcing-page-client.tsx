@@ -212,6 +212,7 @@ export function SourcingPageClient({ leads }: { leads: Lead[] }) {
           <h1 className="text-2xl font-bold text-gray-900">딜소싱 인박스</h1>
           <p className="text-sm text-gray-500 mt-1">
             인바운드 딜을 모아 AI로 1차 선별하고 심사 파이프라인으로 넘깁니다.
+            외부 연동: <code className="text-xs bg-gray-100 px-1 rounded">POST /api/sourcing/webhook</code>
           </p>
         </div>
         <Button

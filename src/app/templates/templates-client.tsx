@@ -19,9 +19,12 @@ import {
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
+import { TeamShareToggle } from "@/components/team/team-share-toggle";
 
 interface Template {
   id: string;
+  userId: string;
+  teamId: string | null;
   name: string;
   description: string | null;
   fileType: "DOCX" | "PPTX";
@@ -56,6 +59,10 @@ interface PreviewData {
   supported: boolean;
   reason: string | null;
   matchedSections?: number;
+  preserveBlocks?: number;
+  replaceBlocks?: number;
+  qaScore?: number;
+  fileType?: string;
   blocks: PreviewBlock[];
 }
 
@@ -110,7 +117,9 @@ function ReproductionPreview({ templateId }: { templateId: string }) {
       >
         <Sparkles className="w-3.5 h-3.5" />
         {data.supported
-          ? `1:1 재현 가능 — 원본 파일에 본문만 채웁니다 (섹션 ${data.matchedSections}개)`
+          ? `1:1 재현 가능 — ${data.fileType ?? "DOCX"} 원본에 본문만 채움 (섹션 ${data.matchedSections}개${
+              data.qaScore != null ? ` · 서식 보존 ${data.qaScore}%` : ""
+            })`
           : data.reason}
       </div>
 
@@ -163,9 +172,18 @@ function ReproductionPreview({ templateId }: { templateId: string }) {
 interface TemplateCardProps {
   template: Template;
   onDelete: (id: string) => void;
+  currentUserId: string;
+  userTeamId: string | null;
+  canUseTeam: boolean;
 }
 
-function TemplateCard({ template, onDelete }: TemplateCardProps) {
+function TemplateCard({
+  template,
+  onDelete,
+  currentUserId,
+  userTeamId,
+  canUseTeam,
+}: TemplateCardProps) {
   const [expanded, setExpanded] = useState(false);
   const statusCfg = STATUS_CONFIG[template.status];
   const StatusIcon = statusCfg.icon;
@@ -203,6 +221,14 @@ function TemplateCard({ template, onDelete }: TemplateCardProps) {
           </div>
 
           <div className="flex items-center gap-2 flex-shrink-0">
+            <TeamShareToggle
+              type="template"
+              resourceId={template.id}
+              teamId={userTeamId}
+              shared={Boolean(template.teamId)}
+              isOwner={template.userId === currentUserId}
+              canUseTeam={canUseTeam}
+            />
             {template.status === "READY" && sections.length > 0 && (
               <Button
                 variant="ghost"
@@ -257,7 +283,17 @@ function TemplateCard({ template, onDelete }: TemplateCardProps) {
   );
 }
 
-export function TemplatesClient({ templates: initialTemplates }: { templates: Template[] }) {
+export function TemplatesClient({
+  templates: initialTemplates,
+  currentUserId,
+  userTeamId,
+  canUseTeam,
+}: {
+  templates: Template[];
+  currentUserId: string;
+  userTeamId: string | null;
+  canUseTeam: boolean;
+}) {
   const [templates, setTemplates] = useState(initialTemplates);
   const [uploading, setUploading] = useState(false);
   const [templateName, setTemplateName] = useState("");
@@ -429,7 +465,14 @@ export function TemplatesClient({ templates: initialTemplates }: { templates: Te
         ) : (
           <div className="space-y-3">
             {templates.map((t) => (
-              <TemplateCard key={t.id} template={t} onDelete={handleDelete} />
+              <TemplateCard
+                key={t.id}
+                template={t}
+                onDelete={handleDelete}
+                currentUserId={currentUserId}
+                userTeamId={userTeamId}
+                canUseTeam={canUseTeam}
+              />
             ))}
           </div>
         )}
