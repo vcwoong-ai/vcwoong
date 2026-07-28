@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { isAIConfigured } from "@/lib/claude";
 import { AppLayout } from "@/components/layout/app-layout";
 import { DealDetailClient } from "./deal-detail-client";
+import { getUserTeamContext, dealReadWhere } from "@/lib/team-access";
 
 export default async function DealDetailPage({
   params,
@@ -15,8 +16,10 @@ export default async function DealDetailPage({
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/login");
 
+  const { teamId } = await getUserTeamContext(session.user.id);
+
   const deal = await prisma.deal.findFirst({
-    where: { id: params.id, userId: session.user.id },
+    where: { id: params.id, ...dealReadWhere(session.user.id, teamId) },
     include: {
       documents: true,
       reports: {

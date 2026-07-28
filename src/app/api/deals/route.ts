@@ -4,6 +4,7 @@ import { z } from "zod";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { DealSector, DealStage } from "@prisma/client";
+import { getUserTeamContext, dealReadWhere } from "@/lib/team-access";
 
 const createDealSchema = z.object({
   name: z.string().min(1, "딜 이름을 입력해주세요"),
@@ -29,8 +30,10 @@ export async function GET(request: NextRequest) {
   const stage = searchParams.get("stage") as DealStage | null;
   const search = searchParams.get("search");
 
+  const { teamId } = await getUserTeamContext(session.user.id);
+
   const where = {
-    userId: session.user.id,
+    ...dealReadWhere(session.user.id, teamId),
     ...(sector ? { sector } : {}),
     ...(stage ? { stage } : {}),
     ...(search

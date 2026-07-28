@@ -16,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Download, Loader2, Plus, Sparkles, Wallet } from "lucide-react";
+import { Download, Loader2, Plus, Sparkles, Wallet, Printer } from "lucide-react";
 import { currentPeriod, recentPeriods } from "@/lib/portfolio";
 import type { LpReportComputed } from "@/lib/lp-report";
 
@@ -309,12 +309,19 @@ export function LPReportClient({ funds }: { funds: FundView[] }) {
                     {r.period}
                   </Badge>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => exportDocx(r.id, r.title)}
-                  disabled={exportingId === r.id}
-                >
+                <div className="flex items-center gap-2">
+                  <a href={`/lp-report/${r.id}/print`} target="_blank" rel="noreferrer">
+                    <Button variant="outline" size="sm">
+                      <Printer className="w-3.5 h-3.5 mr-1.5" />
+                      PDF
+                    </Button>
+                  </a>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => exportDocx(r.id, r.title)}
+                    disabled={exportingId === r.id}
+                  >
                   {exportingId === r.id ? (
                     <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
                   ) : (
@@ -322,6 +329,7 @@ export function LPReportClient({ funds }: { funds: FundView[] }) {
                   )}
                   DOCX
                 </Button>
+                </div>
               </CardHeader>
               <CardContent>
                 <Markdown content={r.content} />

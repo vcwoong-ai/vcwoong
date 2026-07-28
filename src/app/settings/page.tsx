@@ -15,6 +15,9 @@ import {
   getUserSubscription,
   enumToPlanKey,
 } from "@/lib/subscription";
+import { hasFeature } from "@/lib/plans";
+import { TeamSettings } from "@/components/settings/team-settings";
+import { Users } from "lucide-react";
 
 export default async function SettingsPage() {
   const session = await getServerSession(authOptions);
@@ -56,6 +59,22 @@ export default async function SettingsPage() {
               </div>
             </div>
             <ProfileForm currentName={session.user.name ?? ""} />
+          </CardContent>
+        </Card>
+
+        {/* Team */}
+        <Card id="team">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Users className="w-4 h-4" />
+              팀 협업
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <TeamSettings
+              userId={session.user.id}
+              canUseTeam={hasFeature(currentPlan, "teamCollaboration")}
+            />
           </CardContent>
         </Card>
 

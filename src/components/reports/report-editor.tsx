@@ -38,6 +38,7 @@ interface ReportEditorProps {
   sections: Section[];
   dealName: string;
   onExport?: () => void;
+  onExportPptx?: () => void;
   isExporting?: boolean;
   reportStatus?: string;
   onFinalize?: () => void;
@@ -60,6 +61,7 @@ export function ReportEditor({
   sections,
   dealName,
   onExport,
+  onExportPptx,
   isExporting,
   reportStatus,
   onFinalize,
@@ -364,8 +366,17 @@ export function ReportEditor({
             ) : (
               <Download className="w-4 h-4 mr-2" />
             )}
-            DOCX 내보내기
+            DOCX
           </Button>
+          {onExportPptx && (
+            <Button
+              variant="outline"
+              onClick={onExportPptx}
+              disabled={isExporting}
+            >
+              PPTX
+            </Button>
+          )}
         </div>
       </div>
 

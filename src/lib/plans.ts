@@ -8,27 +8,30 @@ export type PlanFeature =
   | "portfolio"
   | "sourcing"
   | "templateEngine"
-  | "bioExternalData";
+  | "bioExternalData"
+  | "teamCollaboration";
 
 export const FEATURE_LABEL: Record<PlanFeature, string> = {
   lpReporting: "LP 리포팅",
   portfolio: "포트폴리오 사후관리",
   sourcing: "딜소싱 인박스",
   templateEngine: "양식 재현 엔진",
-  bioExternalData: "PubMed·FDA 외부 데이터",
+  bioExternalData: "PubMed·FDA·KIPRIS 외부 데이터",
+  teamCollaboration: "팀 협업 (딜·양식 공유)",
 };
 
 const FEATURES: Record<PlanKey, PlanFeature[]> = {
   free: ["sourcing"],
   solo: ["sourcing", "portfolio"],
   sector_pro: ["sourcing", "portfolio", "templateEngine"],
-  multi: ["sourcing", "portfolio", "templateEngine", "lpReporting"],
+  multi: ["sourcing", "portfolio", "templateEngine", "lpReporting", "teamCollaboration"],
   full: [
     "sourcing",
     "portfolio",
     "templateEngine",
     "lpReporting",
     "bioExternalData",
+    "teamCollaboration",
   ],
   bio_premium: [
     "sourcing",
@@ -36,6 +39,7 @@ const FEATURES: Record<PlanKey, PlanFeature[]> = {
     "templateEngine",
     "lpReporting",
     "bioExternalData",
+    "teamCollaboration",
   ],
 };
 
@@ -102,6 +106,7 @@ export const PUBLIC_PLANS: PublicPlan[] = [
       `월 ${PLAN_LIMITS.multi.reports}건 보고서`,
       `양식 ${PLAN_LIMITS.multi.templates}개`,
       "LP 리포팅 (펀드 지표·DOCX)",
+      "팀 협업 · 딜·양식 공유",
       "펀드 다중 관리",
     ],
   },

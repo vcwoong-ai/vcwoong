@@ -240,19 +240,26 @@ export function ReportPageClient({ report }: { report: Report }) {
     className: "bg-gray-100 text-gray-600",
   };
 
-  const handleExport = async () => {
+  const handleExport = async (format: "docx" | "pptx" = "docx") => {
     setIsExporting(true);
     try {
-      const response = await fetch(`/api/reports/${report.id}/export`, { method: "POST" });
+      const response = await fetch(
+        `/api/reports/${report.id}/export?format=${format}`,
+        { method: "POST" }
+      );
       if (!response.ok) {
         const err = await response.json();
         throw new Error(err.error ?? "보내기 실패");
       }
       const blob = await response.blob();
       const contentDisposition = response.headers.get("content-disposition");
+      const defaultName =
+        format === "pptx"
+          ? `${report.deal.companyName}_투자심의보고서.pptx`
+          : `${report.deal.companyName}_투자심의보고서.docx`;
       const filename = contentDisposition
-        ? decodeURIComponent(contentDisposition.split("filename*=UTF-8''")[1] ?? "투자심의보고서.docx")
-        : `${report.deal.companyName}_투자심의보고서.docx`;
+        ? decodeURIComponent(contentDisposition.split("filename*=UTF-8''")[1] ?? defaultName)
+        : defaultName;
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -394,7 +401,8 @@ export function ReportPageClient({ report }: { report: Report }) {
         reportId={report.id}
         sections={report.sections}
         dealName={`${report.deal.companyName} 투자심의보고서`}
-        onExport={handleExport}
+        onExport={() => handleExport("docx")}
+        onExportPptx={() => handleExport("pptx")}
         isExporting={isExporting}
         reportStatus={pageStatus}
         onFinalize={handleFinalize}

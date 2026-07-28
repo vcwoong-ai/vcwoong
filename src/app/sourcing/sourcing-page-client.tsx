@@ -20,6 +20,7 @@ import {
   ArrowUpRight,
   Inbox,
   Loader2,
+  Mail,
   Plus,
   Sparkles,
   Trash2,
@@ -70,6 +71,7 @@ const STATUS_FILTERS: Array<InboundStatus | "ALL"> = [
 export function SourcingPageClient({ leads }: { leads: Lead[] }) {
   const router = useRouter();
   const [showForm, setShowForm] = useState(leads.length === 0);
+  const [formMode, setFormMode] = useState<"manual" | "email">("manual");
   const [filter, setFilter] = useState<InboundStatus | "ALL">("ALL");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -78,6 +80,7 @@ export function SourcingPageClient({ leads }: { leads: Lead[] }) {
   const [source, setSource] = useState<DealSourceType>("INBOUND");
   const [contactEmail, setContactEmail] = useState("");
   const [summary, setSummary] = useState("");
+  const [rawEmail, setRawEmail] = useState("");
 
   const visible =
     filter === "ALL" ? leads : leads.filter((l) => l.status === filter);
@@ -114,6 +117,31 @@ export function SourcingPageClient({ leads }: { leads: Lead[] }) {
       router.refresh();
     } catch (e) {
       alert(e instanceof Error ? e.message : "등록 실패");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const importEmail = async () => {
+    if (rawEmail.trim().length < 20) return alert("이메일 원문을 붙여넣으세요");
+    setSaving(true);
+    try {
+      const res = await fetch("/api/sourcing/import-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rawEmail: rawEmail.trim() }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "파싱 실패");
+      setRawEmail("");
+      setShowForm(false);
+      alert(
+        `등록됨: ${json.parsed?.companyName ?? json.data?.companyName}` +
+          (json.parsed?.contactEmail ? ` (${json.parsed.contactEmail})` : "")
+      );
+      router.refresh();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "메일 파싱 실패");
     } finally {
       setSaving(false);
     }
@@ -214,9 +242,52 @@ export function SourcingPageClient({ leads }: { leads: Lead[] }) {
       {showForm && (
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">인바운드 딜 등록</CardTitle>
+            <div className="flex items-center justify-between gap-3">
+              <CardTitle className="text-base">인바운드 딜 등록</CardTitle>
+              <div className="flex gap-1">
+                <Button
+                  variant={formMode === "manual" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setFormMode("manual")}
+                >
+                  <Plus className="w-3.5 h-3.5 mr-1" />
+                  수동
+                </Button>
+                <Button
+                  variant={formMode === "email" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setFormMode("email")}
+                >
+                  <Mail className="w-3.5 h-3.5 mr-1" />
+                  메일 붙여넣기
+                </Button>
+              </div>
+            </div>
           </CardHeader>
           <CardContent className="space-y-3">
+            {formMode === "email" ? (
+              <>
+                <p className="text-xs text-gray-500">
+                  .eml 파일 내용 또는 Outlook/Gmail에서 복사한 이메일 원문을
+                  붙여넣으면 기업명·연락처·요약을 자동 추출합니다.
+                </p>
+                <Textarea
+                  value={rawEmail}
+                  onChange={(e) => setRawEmail(e.target.value)}
+                  rows={12}
+                  placeholder={"From: founder@startup.com\nSubject: [스타트업] Series A IR\n\n..."}
+                />
+                <Button
+                  onClick={importEmail}
+                  disabled={saving}
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                  메일에서 딜 등록
+                </Button>
+              </>
+            ) : (
+              <>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div>
                 <Label htmlFor="src-name">기업명</Label>
@@ -278,6 +349,8 @@ export function SourcingPageClient({ leads }: { leads: Lead[] }) {
                 등록
               </Button>
             </div>
+              </>
+            )}
           </CardContent>
         </Card>
       )}
