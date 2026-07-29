@@ -43,16 +43,74 @@ async function main() {
       passwordHash,
       subscriptionPlan: "FULL",
       subscriptionStatus: "ACTIVE",
+      role: UserRole.ADMIN,
     },
     create: {
       email: DEMO_EMAIL,
       name: "김심사",
       passwordHash,
-      role: UserRole.ANALYST,
+      role: UserRole.ADMIN,
       subscriptionPlan: "FULL",
       subscriptionStatus: "ACTIVE",
     },
   });
+
+  // 팀 데모 — 관리자(demo) + 파트너 + 심사역
+  let team = await prisma.team.findFirst({
+    where: { name: "Axiom 투자 1팀", users: { some: { id: user.id } } },
+  });
+  if (!team) {
+    team = await prisma.team.create({ data: { name: "Axiom 투자 1팀" } });
+  }
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { teamId: team.id, role: UserRole.ADMIN },
+  });
+
+  const partnerHash = await bcrypt.hash("Partner1234!", 12);
+  const analystHash = await bcrypt.hash("Analyst1234!", 12);
+
+  const partner = await prisma.user.upsert({
+    where: { email: "partner@axiom.kr" },
+    update: {
+      passwordHash: partnerHash,
+      teamId: team.id,
+      role: UserRole.PARTNER,
+      subscriptionPlan: "FULL",
+      subscriptionStatus: "ACTIVE",
+    },
+    create: {
+      email: "partner@axiom.kr",
+      name: "이파트너",
+      passwordHash: partnerHash,
+      role: UserRole.PARTNER,
+      teamId: team.id,
+      subscriptionPlan: "FULL",
+      subscriptionStatus: "ACTIVE",
+    },
+  });
+
+  const analyst = await prisma.user.upsert({
+    where: { email: "analyst@axiom.kr" },
+    update: {
+      passwordHash: analystHash,
+      teamId: team.id,
+      role: UserRole.ANALYST,
+      subscriptionPlan: "FULL",
+      subscriptionStatus: "ACTIVE",
+    },
+    create: {
+      email: "analyst@axiom.kr",
+      name: "박심사역",
+      passwordHash: analystHash,
+      role: UserRole.ANALYST,
+      teamId: team.id,
+      subscriptionPlan: "FULL",
+      subscriptionStatus: "ACTIVE",
+    },
+  });
+
+  console.log(`Team ready: ${team.name} (${partner.email}, ${analyst.email})`);
 
   // 이전 시드 실행으로 다른 계정에 붙어 있던 샘플 데이터를 현재 데모 계정으로 모은다
   const orphanIds = (
@@ -80,9 +138,12 @@ async function main() {
   console.log(`Demo user ready: ${user.email}`);
 
   // Create sample deals
+  // 샘플 딜은 팀에 공유해 partner/analyst 데모 계정으로 조회·역할 체험 가능하게 한다
+  const sharedDeal = { userId: user.id, teamId: team.id };
+
   const bioDeal = await prisma.deal.upsert({
     where: { id: "seed-bio-deal-001" },
-    update: { userId: user.id },
+    update: sharedDeal,
     create: {
       id: "seed-bio-deal-001",
       name: "헬스케어AI Inc. Series B 투자 검토",
@@ -94,13 +155,13 @@ async function main() {
       valuation: 800,
       description:
         "AI 기반 신약 개발 플랫폼 스타트업. Phase II 임상 진행 중인 항암 파이프라인 보유.",
-      userId: user.id,
+      ...sharedDeal,
     },
   });
 
   const itDeal = await prisma.deal.upsert({
     where: { id: "seed-it-deal-001" },
-    update: { userId: user.id },
+    update: sharedDeal,
     create: {
       id: "seed-it-deal-001",
       name: "DataFlow SaaS Series A 투자 검토",
@@ -112,13 +173,13 @@ async function main() {
       valuation: 300,
       description:
         "B2B 데이터 파이프라인 자동화 SaaS. ARR $2M, NRR 130%, 월 15% 성장.",
-      userId: user.id,
+      ...sharedDeal,
     },
   });
 
   const climateDeal = await prisma.deal.upsert({
     where: { id: "seed-climate-deal-001" },
-    update: { userId: user.id },
+    update: sharedDeal,
     create: {
       id: "seed-climate-deal-001",
       name: "GreenLoop Series A 투자 검토",
@@ -130,13 +191,13 @@ async function main() {
       valuation: 280,
       description:
         "산업 폐열 회수 + 탄소 크레딧 MRV 플랫폼. 파일럿 3곳, 연간 감축 42,000 tCO2e.",
-      userId: user.id,
+      ...sharedDeal,
     },
   });
 
   const consumerDeal = await prisma.deal.upsert({
     where: { id: "seed-consumer-deal-001" },
-    update: { userId: user.id },
+    update: sharedDeal,
     create: {
       id: "seed-consumer-deal-001",
       name: "BloomLab Series A 투자 검토",
@@ -148,13 +209,13 @@ async function main() {
       valuation: 200,
       description:
         "클린뷰티 D2C. GMV 210억, 재구매율 38%, ROAS 3.4x.",
-      userId: user.id,
+      ...sharedDeal,
     },
   });
 
   const fintechDeal = await prisma.deal.upsert({
     where: { id: "seed-fintech-deal-001" },
-    update: { userId: user.id },
+    update: sharedDeal,
     create: {
       id: "seed-fintech-deal-001",
       name: "VaultPay Series B 투자 검토",
@@ -166,7 +227,7 @@ async function main() {
       valuation: 900,
       description:
         "B2B 결제·정산 인프라. TPV 2.8조, Take Rate 0.28%.",
-      userId: user.id,
+      ...sharedDeal,
     },
   });
 
@@ -375,7 +436,7 @@ async function main() {
   // ── 풀사이클: 펀드 + 포트폴리오 사후관리 ──
   const fund = await prisma.fund.upsert({
     where: { id: "seed-fund-001" },
-    update: { userId: user.id },
+    update: { userId: user.id, teamId: team.id },
     create: {
       id: "seed-fund-001",
       name: "Axiom 1호 벤처투자조합",
@@ -384,6 +445,7 @@ async function main() {
       paidIn: 320,
       managementFee: 2.5,
       userId: user.id,
+      teamId: team.id,
     },
   });
 
@@ -453,12 +515,13 @@ async function main() {
     const { kpis, milestones, ...company } = p;
     await prisma.portfolioCompany.upsert({
       where: { id: p.id },
-      update: { userId: user.id, fundId: fund.id },
+      update: { userId: user.id, fundId: fund.id, teamId: team.id },
       create: {
         ...company,
         realizedAmount: company.realizedAmount ?? 0,
         fundId: fund.id,
         userId: user.id,
+        teamId: team.id,
       },
     });
     for (const k of kpis) {
@@ -499,10 +562,36 @@ async function main() {
   console.log(
     `Created fund + ${portfolioSeed.length} portfolio companies with KPIs/milestones`
   );
+
+  // ── 딜소싱 인바운드 샘플 (팀 공유) ──
+  await prisma.inboundDeal.upsert({
+    where: { id: "seed-inbound-001" },
+    update: { userId: user.id, teamId: team.id },
+    create: {
+      id: "seed-inbound-001",
+      companyName: "뉴로칩스",
+      sector: DealSector.DEEPTECH,
+      source: "INBOUND",
+      contactName: "최창업",
+      contactEmail: "ceo@neurochips.kr",
+      summary:
+        "엣지 AI NPU 스타트업. 시리즈 A 70억원 유치 희망. 샘플 키트 3사 POC 진행 중.",
+      rawText:
+        "Subject: [IR] 뉴로칩스 Series A\n\n안녕하세요, 뉴로칩스 최창업입니다.\n엣지 디바이스용 NPU를 개발 중이며 Series A 70억원을 모집합니다.\n현재 샘플 키트 POC 3건 진행 중이고 ARR 목표는 18억원입니다.",
+      screeningScore: 78,
+      screeningNotes: "기술 차별성·POC 진행이 강점. 양산 파트너십 확인 필요.",
+      status: "QUALIFIED",
+      userId: user.id,
+      teamId: team.id,
+    },
+  });
+  console.log("Created sample inbound deal (team shared)");
+
   console.log("\nSeed completed successfully!");
   console.log("\nDemo credentials:");
-  console.log("  Email: demo@axiom.kr");
-  console.log("  Password: Demo1234!");
+  console.log("  Admin:   demo@axiom.kr / Demo1234!");
+  console.log("  Partner: partner@axiom.kr / Partner1234!");
+  console.log("  Analyst: analyst@axiom.kr / Analyst1234!");
 }
 
 main()

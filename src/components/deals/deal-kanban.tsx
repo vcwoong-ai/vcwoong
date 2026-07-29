@@ -16,6 +16,8 @@ interface DealForKanban {
   investAmount: number | null;
   valuation: number | null;
   updatedAt: Date | string;
+  teamId?: string | null;
+  userId?: string;
   documents: Array<{ id: string }>;
   reports: Array<{ id: string; status: string }>;
 }
@@ -50,26 +52,39 @@ const SECTOR_LABEL: Record<DealSector, string> = {
 interface DealKanbanProps {
   deals: DealForKanban[];
   onStageChange: (dealId: string, newStage: DealStage) => Promise<void>;
+  /** 딜별 편집 가능 여부 — false면 드래그 비활성 */
+  canEditDeal?: (deal: DealForKanban) => boolean;
 }
 
-function DealMiniCard({ deal, onDragStart }: {
+function DealMiniCard({ deal, onDragStart, canDrag }: {
   deal: DealForKanban;
   onDragStart: (e: React.DragEvent) => void;
+  canDrag: boolean;
 }) {
   const latestReport = deal.reports[0];
   return (
     <div
-      draggable
-      onDragStart={onDragStart}
-      className="bg-white rounded-lg border border-gray-200 p-3 cursor-grab active:cursor-grabbing hover:shadow-sm transition-shadow group"
+      draggable={canDrag}
+      onDragStart={canDrag ? onDragStart : undefined}
+      className={cn(
+        "bg-white rounded-lg border border-gray-200 p-3 hover:shadow-sm transition-shadow group",
+        canDrag ? "cursor-grab active:cursor-grabbing" : "cursor-default"
+      )}
     >
       <div className="flex items-start gap-1.5">
-        <GripVertical className="w-3.5 h-3.5 text-gray-300 mt-0.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+        {canDrag && (
+          <GripVertical className="w-3.5 h-3.5 text-gray-300 mt-0.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+        )}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 mb-1 flex-wrap">
             <span className={cn("text-xs px-1.5 py-0.5 rounded font-medium", SECTOR_COLOR[deal.sector])}>
               {SECTOR_LABEL[deal.sector]}
             </span>
+            {deal.teamId && (
+              <span className="text-xs px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">
+                팀
+              </span>
+            )}
             {latestReport && (
               <span className={cn(
                 "text-xs px-1.5 py-0.5 rounded",
@@ -107,7 +122,7 @@ function DealMiniCard({ deal, onDragStart }: {
   );
 }
 
-export function DealKanban({ deals, onStageChange }: DealKanbanProps) {
+export function DealKanban({ deals, onStageChange, canEditDeal }: DealKanbanProps) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOverStage, setDragOverStage] = useState<DealStage | null>(null);
   const [localDeals, setLocalDeals] = useState(deals);
@@ -134,6 +149,11 @@ export function DealKanban({ deals, onStageChange }: DealKanbanProps) {
 
     const deal = localDeals.find((d) => d.id === draggingId);
     if (!deal || deal.stage === newStage) {
+      setDraggingId(null);
+      setDragOverStage(null);
+      return;
+    }
+    if (canEditDeal && !canEditDeal(deal)) {
       setDraggingId(null);
       setDragOverStage(null);
       return;
@@ -193,6 +213,7 @@ export function DealKanban({ deals, onStageChange }: DealKanbanProps) {
                 <DealMiniCard
                   key={deal.id}
                   deal={deal}
+                  canDrag={!canEditDeal || canEditDeal(deal)}
                   onDragStart={(e) => handleDragStart(e, deal.id)}
                 />
               ))}

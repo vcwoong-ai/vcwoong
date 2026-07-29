@@ -8,7 +8,7 @@
  * 헤딩을 찾지 못하는 등 재현이 불가능하면 호출부가 기존 생성기로 폴백한다.
  */
 
-import type { SectionKey } from "@prisma/client";
+import { SectionKey } from "@prisma/client";
 import {
   buildEmptyParagraph,
   buildParagraph,
@@ -21,6 +21,30 @@ import {
   type ParagraphProto,
 } from "./docx-xml";
 import type { TemplateSectionMap } from "./template-mapper";
+
+/**
+ * 매핑표에 없는 헤딩도 텍스트 키워드로 SectionKey를 추정한다.
+ * 업로드 시 섹션 매핑이 불완전해도 흔한 IC 보고서 제목은 자동으로 잡힌다.
+ */
+const KEYWORD_FALLBACK: Array<{ pattern: RegExp; key: SectionKey }> = [
+  { pattern: /투자\s*(개요|요약)|investment\s*overview/i, key: SectionKey.INVESTMENT_OVERVIEW },
+  { pattern: /회사\s*(개요|소개|현황)|기업\s*(개요|소개)|company\s*overview/i, key: SectionKey.COMPANY_OVERVIEW },
+  { pattern: /제품|기술|서비스|파이프라인|product|technology/i, key: SectionKey.PRODUCT_TECHNOLOGY },
+  { pattern: /시장|경쟁|market/i, key: SectionKey.MARKET_ANALYSIS },
+  { pattern: /재무|손익|매출|financial/i, key: SectionKey.FINANCIAL_STATUS },
+  { pattern: /밸류에이션|기업가치|valuation|가치\s*평가/i, key: SectionKey.VALUATION },
+  { pattern: /리스크|위험|risk/i, key: SectionKey.RISK_ANALYSIS },
+  { pattern: /투자\s*조건|term\s*sheet|조건/i, key: SectionKey.INVESTMENT_TERMS },
+  { pattern: /의견|결론|종합|opinion|conclusion/i, key: SectionKey.OPINION_SUMMARY },
+  { pattern: /별첨|부록|appendix|참고/i, key: SectionKey.APPENDIX },
+];
+
+function resolveByKeyword(headingText: string): SectionKey | null {
+  for (const { pattern, key } of KEYWORD_FALLBACK) {
+    if (pattern.test(headingText)) return key;
+  }
+  return null;
+}
 
 export interface ReconstructInput {
   /** 사용자가 업로드한 원본 DOCX */
@@ -41,6 +65,8 @@ export interface ReconstructResult {
   detectedHeadings: number;
   /** 매핑됐지만 원본에서 헤딩을 못 찾은 섹션 */
   missedSections: string[];
+  /** 생성됐지만 원본에 대응 헤딩이 없어 문서 끝에 덧붙인 섹션 (내용 유실 방지) */
+  appendedSections: string[];
 }
 
 export class ReconstructError extends Error {}
@@ -173,11 +199,18 @@ function buildHeadingIndex(
         }
       });
     }
-    if (!key || used.has(key)) return;
 
     // 헤딩 스타일이 없더라도 매핑표에 있는 짧은 줄이면 제목으로 본다
     const looksLikeHeading = b.headingLevel !== null || b.text.length <= 40;
     if (!looksLikeHeading) return;
+
+    if (!key && b.headingLevel !== null) {
+      // 매핑표에 없어도 흔히 쓰는 제목 키워드면 잡는다 (섹션맵이 불완전한 경우 대비).
+      // 단, 실제 헤딩 스타일(outline/Heading N)이 있는 블록만 — 그렇지 않으면
+      // "...기술한다" 같은 본문 문장이 "기술" 키워드에 우연히 걸려 헤딩으로 오인될 수 있다.
+      key = resolveByKeyword(b.text) ?? undefined;
+    }
+    if (!key || used.has(key)) return;
 
     used.add(key);
     result.set(idx, key);
@@ -218,7 +251,7 @@ export async function reconstructDOCX(
   }
 
   const blocks = splitBlocks(parts.body);
-  const proto = pickBodyProto(blocks);
+  const globalProto = pickBodyProto(blocks);
   const headingMap = buildHeadingIndex(blocks, input.sectionMap);
 
   if (headingMap.size === 0) {
@@ -233,6 +266,7 @@ export async function reconstructDOCX(
   const headingIdx = new Set(headingMap.keys());
   const replacedRanges: Array<{ from: number; to: number; xml: string }> = [];
   const missedSections: string[] = [];
+  const consumedKeys = new Set<string>();
   let filledSections = 0;
 
   headingMap.forEach((key, idx) => {
@@ -242,11 +276,15 @@ export async function reconstructDOCX(
       return;
     }
     const end = findSectionEnd(blocks, idx, headingIdx);
+    // 서식은 이 섹션의 원본 본문 범위에서 우선 빌려오고, 없으면 문서 전체 기준을 쓴다
+    const localProto = pickBodyProto(blocks.slice(idx + 1, end));
+    const proto = localProto.pPr || localProto.rPr ? localProto : globalProto;
     replacedRanges.push({
       from: idx + 1,
       to: end,
       xml: renderContent(proto, section.content) + buildEmptyParagraph(proto),
     });
+    consumedKeys.add(key);
     filledSections += 1;
   });
 
@@ -262,6 +300,20 @@ export async function reconstructDOCX(
 
   replacedRanges.sort((a, b) => a.from - b.from);
 
+  // 원본에 자리가 없어 통째로 유실될 뻔한 섹션은 문서 끝(sectPr 앞)에 덧붙인다
+  const appendedSections: string[] = [];
+  const leftovers = input.reportSections.filter((s) => !consumedKeys.has(s.sectionKey));
+  let tailXml = "";
+  for (const s of leftovers) {
+    tailXml +=
+      buildParagraph(globalProto, s.title, { bold: true }) +
+      renderContent(globalProto, s.content) +
+      buildEmptyParagraph(globalProto);
+    appendedSections.push(s.sectionKey);
+  }
+
+  const sectPrBlockIdx = blocks.findIndex((b) => b.kind === "sectPr");
+
   let rebuilt = "";
   let cursor = 0;
   for (const r of replacedRanges) {
@@ -269,7 +321,11 @@ export async function reconstructDOCX(
     rebuilt += r.xml;
     cursor = r.to;
   }
-  for (let i = cursor; i < blocks.length; i++) rebuilt += blocks[i].xml;
+  for (let i = cursor; i < blocks.length; i++) {
+    if (tailXml && i === sectPrBlockIdx) rebuilt += tailXml;
+    rebuilt += blocks[i].xml;
+  }
+  if (tailXml && sectPrBlockIdx === -1) rebuilt += tailXml;
 
   // 플레이스홀더 치환 (표지의 {{기업명}} 등)
   let finalXml = parts.before + rebuilt + parts.after;
@@ -288,6 +344,7 @@ export async function reconstructDOCX(
     filledSections,
     detectedHeadings: headingMap.size,
     missedSections: missedSections.filter((v, i) => missedSections.indexOf(v) === i),
+    appendedSections,
   };
 }
 

@@ -19,9 +19,12 @@ import {
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
+import { TeamShareToggle } from "@/components/team/team-share-toggle";
 
 interface Template {
   id: string;
+  userId: string;
+  teamId: string | null;
   name: string;
   description: string | null;
   fileType: "DOCX" | "PPTX";
@@ -56,6 +59,10 @@ interface PreviewData {
   supported: boolean;
   reason: string | null;
   matchedSections?: number;
+  preserveBlocks?: number;
+  replaceBlocks?: number;
+  qaScore?: number;
+  fileType?: string;
   blocks: PreviewBlock[];
 }
 
@@ -66,6 +73,12 @@ interface PreviewData {
 function ReproductionPreview({ templateId }: { templateId: string }) {
   const [data, setData] = useState<PreviewData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [qaBusy, setQaBusy] = useState(false);
+  const [qaResult, setQaResult] = useState<{
+    score: number;
+    checks: Array<{ name: string; pass: boolean; detail: string }>;
+    filledSections?: number;
+  } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -89,6 +102,21 @@ function ReproductionPreview({ templateId }: { templateId: string }) {
     };
   }, [templateId]);
 
+  const runStructureQa = async () => {
+    setQaBusy(true);
+    setQaResult(null);
+    try {
+      const res = await fetch(`/api/templates/${templateId}/qa`, { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "QA 실패");
+      setQaResult(json.data);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "구조 QA 실패");
+    } finally {
+      setQaBusy(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="mt-3 flex items-center gap-2 text-xs text-gray-400">
@@ -110,7 +138,9 @@ function ReproductionPreview({ templateId }: { templateId: string }) {
       >
         <Sparkles className="w-3.5 h-3.5" />
         {data.supported
-          ? `1:1 재현 가능 — 원본 파일에 본문만 채웁니다 (섹션 ${data.matchedSections}개)`
+          ? `1:1 재현 가능 — ${data.fileType ?? "DOCX"} 원본에 본문만 채움 (섹션 ${data.matchedSections}개${
+              data.qaScore != null ? ` · 서식 보존 ${data.qaScore}%` : ""
+            })`
           : data.reason}
       </div>
 
@@ -146,15 +176,48 @@ function ReproductionPreview({ templateId }: { templateId: string }) {
               </div>
             ))}
           </div>
-          <div className="px-3 py-2 bg-gray-50 text-[11px] text-gray-500 flex items-center gap-3">
+          <div className="px-3 py-2 bg-gray-50 text-[11px] text-gray-500 flex items-center gap-3 flex-wrap">
             <span className="flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-gray-300" /> 원본 유지
             </span>
             <span className="flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-blue-500" /> AI 본문으로 교체
             </span>
+            {data.supported && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="ml-auto h-7 text-xs"
+                onClick={runStructureQa}
+                disabled={qaBusy}
+              >
+                {qaBusy ? (
+                  <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                ) : null}
+                원본 대비 구조 QA
+              </Button>
+            )}
           </div>
         </>
+      )}
+
+      {qaResult && (
+        <div className="px-3 py-2 border-t bg-white text-xs space-y-1">
+          <p className="font-medium text-gray-800">
+            구조 QA 점수 {qaResult.score}/100
+            {qaResult.filledSections != null
+              ? ` · ${qaResult.filledSections}개 섹션 채움`
+              : ""}
+          </p>
+          {qaResult.checks.map((c) => (
+            <p
+              key={c.name}
+              className={c.pass ? "text-green-700" : "text-amber-700"}
+            >
+              {c.pass ? "✓" : "✗"} {c.name}: {c.detail}
+            </p>
+          ))}
+        </div>
       )}
     </div>
   );
@@ -163,16 +226,42 @@ function ReproductionPreview({ templateId }: { templateId: string }) {
 interface TemplateCardProps {
   template: Template;
   onDelete: (id: string) => void;
+  currentUserId: string;
+  userTeamId: string | null;
+  canUseTeam: boolean;
 }
 
-function TemplateCard({ template, onDelete }: TemplateCardProps) {
+function TemplateCard({
+  template,
+  onDelete,
+  currentUserId,
+  userTeamId,
+  canUseTeam,
+}: TemplateCardProps) {
   const [expanded, setExpanded] = useState(false);
+  const [qaBusy, setQaBusy] = useState(false);
+  const [qaScore, setQaScore] = useState<number | null>(null);
   const statusCfg = STATUS_CONFIG[template.status];
   const StatusIcon = statusCfg.icon;
+  const isOwner = template.userId === currentUserId;
 
   const sections = (template.structure as { sections?: Array<{ title: string; level: number }> })?.sections ?? [];
   const mappings = (template.sectionMap as { mappings?: Array<{ templateSection: string; sectionKey: string | null; confidence: number }> })?.mappings ?? [];
   const coverageRate = (template.sectionMap as { coverageRate?: number })?.coverageRate ?? 0;
+
+  const runQuickQa = async () => {
+    setQaBusy(true);
+    try {
+      const res = await fetch(`/api/templates/${template.id}/qa`, { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "QA 실패");
+      setQaScore(json.data?.score ?? json.data?.qaScore ?? null);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "구조 QA 실패");
+    } finally {
+      setQaBusy(false);
+    }
+  };
 
   return (
     <Card className="hover:shadow-sm transition-shadow">
@@ -190,6 +279,11 @@ function TemplateCard({ template, onDelete }: TemplateCardProps) {
                   {statusCfg.label}
                 </span>
                 <Badge variant="outline" className="text-xs">{template.fileType}</Badge>
+                {qaScore != null && (
+                  <Badge variant="secondary" className="text-xs">
+                    구조 QA {qaScore}%
+                  </Badge>
+                )}
               </div>
               <p className="text-xs text-gray-500 mt-0.5">
                 {template.originalName} · {formatFileSize(template.fileSize)}
@@ -203,6 +297,31 @@ function TemplateCard({ template, onDelete }: TemplateCardProps) {
           </div>
 
           <div className="flex items-center gap-2 flex-shrink-0">
+            <TeamShareToggle
+              type="template"
+              resourceId={template.id}
+              teamId={userTeamId}
+              shared={Boolean(template.teamId)}
+              isOwner={isOwner}
+              canUseTeam={canUseTeam}
+            />
+            {template.status === "READY" && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={runQuickQa}
+                disabled={qaBusy}
+                className="text-xs"
+                title="원본 대비 구조 보존 점수"
+              >
+                {qaBusy ? (
+                  <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+                ) : (
+                  <Sparkles className="w-3.5 h-3.5 mr-1" />
+                )}
+                QA
+              </Button>
+            )}
             {template.status === "READY" && sections.length > 0 && (
               <Button
                 variant="ghost"
@@ -214,6 +333,7 @@ function TemplateCard({ template, onDelete }: TemplateCardProps) {
                 상세
               </Button>
             )}
+            {isOwner && (
             <Button
               variant="ghost"
               size="sm"
@@ -222,6 +342,7 @@ function TemplateCard({ template, onDelete }: TemplateCardProps) {
             >
               <Trash2 className="w-4 h-4" />
             </Button>
+            )}
           </div>
         </div>
 
@@ -257,7 +378,17 @@ function TemplateCard({ template, onDelete }: TemplateCardProps) {
   );
 }
 
-export function TemplatesClient({ templates: initialTemplates }: { templates: Template[] }) {
+export function TemplatesClient({
+  templates: initialTemplates,
+  currentUserId,
+  userTeamId,
+  canUseTeam,
+}: {
+  templates: Template[];
+  currentUserId: string;
+  userTeamId: string | null;
+  canUseTeam: boolean;
+}) {
   const [templates, setTemplates] = useState(initialTemplates);
   const [uploading, setUploading] = useState(false);
   const [templateName, setTemplateName] = useState("");
@@ -429,7 +560,14 @@ export function TemplatesClient({ templates: initialTemplates }: { templates: Te
         ) : (
           <div className="space-y-3">
             {templates.map((t) => (
-              <TemplateCard key={t.id} template={t} onDelete={handleDelete} />
+              <TemplateCard
+                key={t.id}
+                template={t}
+                onDelete={handleDelete}
+                currentUserId={currentUserId}
+                userTeamId={userTeamId}
+                canUseTeam={canUseTeam}
+              />
             ))}
           </div>
         )}

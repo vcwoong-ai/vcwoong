@@ -1,8 +1,7 @@
 import { SubscriptionPlan } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { BRAND } from "@/lib/brand";
-
-const TOSS_API = "https://api.tosspayments.com/v1";
+import { yearlyPriceFromMonthly, type BillingCycle } from "@/lib/plans";
 
 export const PLAN_PRICES: Record<string, number> = {
   solo: 99000,
@@ -19,6 +18,14 @@ export const PLAN_NAMES: Record<string, string> = {
   full: "Full-Stack",
   bio_premium: "Bio Premium",
 };
+
+export function planAmount(planKey: string, cycle: BillingCycle = "monthly"): number {
+  const monthly = PLAN_PRICES[planKey];
+  if (!monthly) throw new Error("Invalid plan");
+  return cycle === "yearly" ? yearlyPriceFromMonthly(monthly) : monthly;
+}
+
+const TOSS_API = "https://api.tosspayments.com/v1";
 
 function getAuthHeader(): string | null {
   const secretKey = process.env.TOSS_SECRET_KEY;
@@ -55,14 +62,15 @@ export async function chargeBilling(
   billingKey: string,
   customerKey: string,
   planKey: string,
-  orderId: string
+  orderId: string,
+  cycle: BillingCycle = "monthly"
 ) {
   const auth = getAuthHeader();
   if (!auth) throw new Error("Toss secret key not configured");
 
-  const amount = PLAN_PRICES[planKey];
-  if (!amount) throw new Error("Invalid plan");
+  const amount = planAmount(planKey, cycle);
 
+  const cycleLabel = cycle === "yearly" ? "연간" : "월간";
   const res = await fetch(`${TOSS_API}/billing/${billingKey}`, {
     method: "POST",
     headers: {
@@ -73,7 +81,7 @@ export async function chargeBilling(
       customerKey,
       amount,
       orderId,
-      orderName: `${BRAND.name} ${PLAN_NAMES[planKey] ?? planKey} 구독`,
+      orderName: `${BRAND.name} ${PLAN_NAMES[planKey] ?? planKey} ${cycleLabel} 구독`,
     }),
   });
   const data = await res.json();

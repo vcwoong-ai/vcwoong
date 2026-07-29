@@ -9,6 +9,7 @@ import { parseTemplate } from "@/lib/template/template-parser";
 import { mapTemplateSections } from "@/lib/template/template-mapper";
 import { checkQuota } from "@/lib/quotas";
 import { randomUUID } from "crypto";
+import { getUserTeamContext, templateReadWhere } from "@/lib/team-access";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -16,8 +17,10 @@ export async function GET() {
     return NextResponse.json({ error: "인증이 필요합니다" }, { status: 401 });
   }
 
+  const { teamId } = await getUserTeamContext(session.user.id);
+
   const templates = await prisma.template.findMany({
-    where: { userId: session.user.id },
+    where: templateReadWhere(session.user.id, teamId),
     orderBy: { createdAt: "desc" },
   });
 
@@ -70,6 +73,7 @@ export async function POST(request: NextRequest) {
   );
 
   // 2. 구조 파싱 (비동기 처리)
+  const { teamId } = await getUserTeamContext(session.user.id);
   const template = await prisma.template.create({
     data: {
       name: name || file.name.replace(/\.[^.]+$/, ""),
@@ -79,6 +83,7 @@ export async function POST(request: NextRequest) {
       fileSize: file.size,
       status: TemplateStatus.ANALYZING,
       userId: session.user.id,
+      teamId,
     },
   });
 

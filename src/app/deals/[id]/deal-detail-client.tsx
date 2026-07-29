@@ -21,6 +21,7 @@ import {
   LayoutTemplate,
 } from "lucide-react";
 import { EditDealDialog } from "@/components/deals/edit-deal-dialog";
+import { TeamShareToggle } from "@/components/team/team-share-toggle";
 import { ReportWizard } from "@/components/reports/report-wizard";
 import {
   Select,
@@ -34,6 +35,8 @@ import { AgentType, DealSector, DealStage } from "@prisma/client";
 
 interface DealWithRelations {
   id: string;
+  userId: string;
+  teamId: string | null;
   name: string;
   companyName: string;
   sector: DealSector;
@@ -151,9 +154,19 @@ interface TemplateOption {
 export function DealDetailClient({
   deal,
   demoMode = false,
+  currentUserId,
+  userTeamId,
+  canUseTeam = false,
+  canEdit = true,
+  userRole = "ANALYST",
 }: {
   deal: DealWithRelations;
   demoMode?: boolean;
+  currentUserId: string;
+  userTeamId: string | null;
+  canUseTeam?: boolean;
+  canEdit?: boolean;
+  userRole?: string;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -325,6 +338,16 @@ export function DealDetailClient({
           <div className="flex items-center gap-2 mb-2">
             <Badge variant="outline">{deal.sector}</Badge>
             <Badge variant="secondary">{deal.stage}</Badge>
+            {deal.teamId && (
+              <Badge variant="secondary" className="gap-1">
+                팀 공유
+              </Badge>
+            )}
+            {!canEdit && (
+              <Badge variant="outline" className="text-amber-700 border-amber-300">
+                조회 전용 ({userRole === "ANALYST" ? "심사역" : userRole})
+              </Badge>
+            )}
           </div>
           <h1 className="text-2xl font-bold text-gray-900">{deal.companyName}</h1>
           <p className="text-gray-500">{deal.name}</p>
@@ -333,8 +356,16 @@ export function DealDetailClient({
           )}
         </div>
         <div className="flex flex-wrap gap-2 items-center">
-          <EditDealDialog deal={deal} />
-          {deal.documents.length > 0 && (
+          <TeamShareToggle
+            type="deal"
+            resourceId={deal.id}
+            teamId={userTeamId}
+            shared={Boolean(deal.teamId)}
+            isOwner={deal.userId === currentUserId}
+            canUseTeam={canUseTeam}
+          />
+          {canEdit && <EditDealDialog deal={deal} />}
+          {canEdit && deal.documents.length > 0 && (
             <>
               {/* 템플릿 선택 */}
               {templates.length > 0 && (
@@ -375,6 +406,11 @@ export function DealDetailClient({
                 AI 보고서 생성
               </Button>
             </>
+          )}
+          {!canEdit && (
+            <p className="text-xs text-gray-500">
+              편집·생성은 파트너·관리자 또는 딜 소유자만 가능합니다.
+            </p>
           )}
         </div>
       </div>
@@ -464,6 +500,7 @@ export function DealDetailClient({
           <Card>
             <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
               <CardTitle className="text-base">문서 업로드</CardTitle>
+              {canEdit && (
               <Button
                 variant="outline"
                 size="sm"
@@ -478,8 +515,11 @@ export function DealDetailClient({
                 )}
                 골든 IR 로드
               </Button>
+              )}
             </CardHeader>
             <CardContent className="space-y-3">
+              {canEdit ? (
+                <>
               <p className="text-xs text-gray-500">
                 연습용: 딜 섹터에 맞는 골든 IR 마크다운을 문서에 추가합니다.
               </p>
@@ -491,6 +531,12 @@ export function DealDetailClient({
                   router.refresh();
                 }}
               />
+                </>
+              ) : (
+                <p className="text-xs text-amber-700">
+                  조회 전용 — 문서 업로드·골든 IR 로드는 편집 권한이 필요합니다.
+                </p>
+              )}
             </CardContent>
           </Card>
 

@@ -12,6 +12,11 @@ import {
 import { evaluateSection } from "@/lib/report-quality";
 import { checkQuota } from "@/lib/quotas";
 import { buildPriorSectionSummary } from "@/lib/section-context";
+import {
+  getUserTeamContext,
+  reportWriteWhere,
+  permissionDeniedMessage,
+} from "@/lib/team-access";
 
 const bodySchema = z.object({
   sectionKey: z.nativeEnum(SectionKey),
@@ -33,8 +38,9 @@ export async function POST(
   try {
     const body = bodySchema.parse(await request.json());
 
+    const { teamId, role } = await getUserTeamContext(session.user.id);
     const report = await prisma.report.findFirst({
-      where: { id: params.id, deal: { userId: session.user.id } },
+      where: { id: params.id, ...reportWriteWhere(session.user.id, teamId, role) },
       include: {
         deal: {
           include: {
@@ -52,8 +58,8 @@ export async function POST(
 
     if (!report) {
       return NextResponse.json(
-        { error: "보고서를 찾을 수 없습니다" },
-        { status: 404 }
+        { error: permissionDeniedMessage("edit") },
+        { status: 403 }
       );
     }
 

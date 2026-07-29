@@ -5,6 +5,11 @@ import { prisma } from "@/lib/prisma";
 import { ReportStatus } from "@prisma/client";
 import { generateSectionsAsync } from "@/lib/report-generation";
 import { checkQuota } from "@/lib/quotas";
+import {
+  getUserTeamContext,
+  reportWriteWhere,
+  permissionDeniedMessage,
+} from "@/lib/team-access";
 
 export async function POST(
   _request: NextRequest,
@@ -15,10 +20,11 @@ export async function POST(
     return NextResponse.json({ error: "인증이 필요합니다" }, { status: 401 });
   }
 
+  const { teamId, role } = await getUserTeamContext(session.user.id);
   const report = await prisma.report.findFirst({
     where: {
       id: params.id,
-      deal: { userId: session.user.id },
+      ...reportWriteWhere(session.user.id, teamId, role),
     },
     include: {
       deal: {
@@ -30,7 +36,7 @@ export async function POST(
   });
 
   if (!report) {
-    return NextResponse.json({ error: "보고서를 찾을 수 없습니다" }, { status: 404 });
+    return NextResponse.json({ error: permissionDeniedMessage("edit") }, { status: 403 });
   }
 
   if (report.status === ReportStatus.GENERATING) {

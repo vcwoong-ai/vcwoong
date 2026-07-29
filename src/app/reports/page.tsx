@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { FileText, Clock, ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { ReportStatus } from "@prisma/client";
+import { getUserTeamContext, reportReadWhere } from "@/lib/team-access";
 
 const STATUS_DISPLAY: Record<
   ReportStatus,
@@ -35,10 +36,13 @@ export default async function ReportsPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/login");
 
+  const { teamId } = await getUserTeamContext(session.user.id);
   const reports = await prisma.report.findMany({
-    where: { deal: { userId: session.user.id } },
+    where: reportReadWhere(session.user.id, teamId),
     include: {
-      deal: { select: { id: true, companyName: true, sector: true } },
+      deal: {
+        select: { id: true, companyName: true, sector: true, teamId: true },
+      },
       sections: { select: { id: true, status: true } },
     },
     orderBy: { createdAt: "desc" },
@@ -111,6 +115,11 @@ export default async function ReportsPage() {
                             <Badge variant="outline" className="text-xs flex-shrink-0">
                               {AGENT_LABEL[report.agentType] ?? report.agentType}
                             </Badge>
+                            {report.deal.teamId && (
+                              <Badge variant="secondary" className="text-xs flex-shrink-0">
+                                팀
+                              </Badge>
+                            )}
                           </div>
                           <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-2">
                             <Clock className="w-3 h-3" />

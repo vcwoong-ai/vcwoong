@@ -16,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Download, Loader2, Plus, Sparkles, Wallet } from "lucide-react";
+import { Download, Loader2, Plus, Sparkles, Wallet, Printer } from "lucide-react";
 import { currentPeriod, recentPeriods } from "@/lib/portfolio";
 import type { LpReportComputed } from "@/lib/lp-report";
 
@@ -27,6 +27,8 @@ interface FundView {
   fundSize: number;
   paidIn: number;
   companyCount: number;
+  teamId?: string | null;
+  userId?: string;
   computed: LpReportComputed;
   reports: Array<{
     id: string;
@@ -37,7 +39,15 @@ interface FundView {
   }>;
 }
 
-export function LPReportClient({ funds }: { funds: FundView[] }) {
+export function LPReportClient({
+  funds,
+  canEdit = true,
+  currentUserId,
+}: {
+  funds: FundView[];
+  canEdit?: boolean;
+  currentUserId?: string;
+}) {
   const router = useRouter();
   const [selectedFundId, setSelectedFundId] = useState(funds[0]?.id ?? "");
   const [period, setPeriod] = useState(currentPeriod());
@@ -49,6 +59,9 @@ export function LPReportClient({ funds }: { funds: FundView[] }) {
   const [showCreate, setShowCreate] = useState(funds.length === 0);
 
   const fund = funds.find((f) => f.id === selectedFundId) ?? funds[0];
+  const canEditFund =
+    canEdit ||
+    (currentUserId != null && fund?.userId === currentUserId);
 
   const createFund = async () => {
     if (!newFundName.trim() || !Number(newFundSize)) {
@@ -122,7 +135,35 @@ export function LPReportClient({ funds }: { funds: FundView[] }) {
     }
   };
 
+  const exportPptx = async (reportId: string, title: string) => {
+    setExportingId(`pptx-${reportId}`);
+    try {
+      const res = await fetch(`/api/lp-report/${reportId}/export?format=pptx`, {
+        method: "POST",
+      });
+      if (!res.ok) throw new Error("PPTX 내보내기 실패");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${title}.pptx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "PPTX 내보내기 실패");
+    } finally {
+      setExportingId(null);
+    }
+  };
+
   if (funds.length === 0 || showCreate) {
+    if (!canEdit && funds.length === 0) {
+      return (
+        <div className="py-16 text-center text-sm text-gray-500">
+          공유된 펀드가 없습니다. 관리자·파트너가 펀드를 등록하면 여기에 표시됩니다.
+        </div>
+      );
+    }
     return (
       <div className="max-w-lg mx-auto py-10">
         <Card>
@@ -215,10 +256,15 @@ export function LPReportClient({ funds }: { funds: FundView[] }) {
               ))}
             </SelectContent>
           </Select>
-          <Button variant="outline" onClick={() => setShowCreate(true)}>
+          <Button
+            variant="outline"
+            onClick={() => setShowCreate(true)}
+            disabled={!canEdit}
+          >
             <Plus className="w-4 h-4 mr-1" />
             펀드
           </Button>
+          {canEditFund ? (
           <Button
             onClick={generate}
             disabled={generating || fund.companyCount === 0}
@@ -231,8 +277,19 @@ export function LPReportClient({ funds }: { funds: FundView[] }) {
             )}
             {period} 리포트 생성
           </Button>
+          ) : (
+            <Badge variant="outline" className="text-amber-700 border-amber-300">
+              조회 전용
+            </Badge>
+          )}
         </div>
       </div>
+
+      {fund.teamId && (
+        <Badge variant="secondary" className="w-fit">
+          팀 공유 펀드
+        </Badge>
+      )}
 
       {fund.companyCount === 0 && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -309,12 +366,19 @@ export function LPReportClient({ funds }: { funds: FundView[] }) {
                     {r.period}
                   </Badge>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => exportDocx(r.id, r.title)}
-                  disabled={exportingId === r.id}
-                >
+                <div className="flex items-center gap-2">
+                  <a href={`/lp-report/${r.id}/print`} target="_blank" rel="noreferrer">
+                    <Button variant="outline" size="sm">
+                      <Printer className="w-3.5 h-3.5 mr-1.5" />
+                      PDF
+                    </Button>
+                  </a>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => exportDocx(r.id, r.title)}
+                    disabled={exportingId === r.id || exportingId === `pptx-${r.id}`}
+                  >
                   {exportingId === r.id ? (
                     <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
                   ) : (
@@ -322,6 +386,20 @@ export function LPReportClient({ funds }: { funds: FundView[] }) {
                   )}
                   DOCX
                 </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => exportPptx(r.id, r.title)}
+                    disabled={exportingId === r.id || exportingId === `pptx-${r.id}`}
+                  >
+                  {exportingId === `pptx-${r.id}` ? (
+                    <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                  ) : (
+                    <Download className="w-3.5 h-3.5 mr-1.5" />
+                  )}
+                  PPTX
+                </Button>
+                </div>
               </CardHeader>
               <CardContent>
                 <Markdown content={r.content} />

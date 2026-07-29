@@ -83,12 +83,14 @@ export function PortfolioPageClient({
   promotableDeals,
   metrics,
   alerts,
+  canEdit = true,
 }: {
   companies: PortfolioCompanyView[];
   funds: Array<{ id: string; name: string; vintageYear: number; fundSize: number }>;
   promotableDeals: PromotableDeal[];
   metrics: PortfolioMetrics;
   alerts: PortfolioAlert[];
+  canEdit?: boolean;
 }) {
   const router = useRouter();
   const [promoteOpen, setPromoteOpen] = useState(false);
@@ -104,6 +106,7 @@ export function PortfolioPageClient({
 
   return (
     <div className="space-y-6">
+      {canEdit && (
       <PromoteDealDialog
         open={promoteOpen}
         deals={promotableDeals}
@@ -116,6 +119,7 @@ export function PortfolioPageClient({
           setTimeout(() => setRefreshing(false), 1200);
         }}
       />
+      )}
 
       <div className="flex items-start justify-between gap-4">
         <div>
@@ -124,6 +128,7 @@ export function PortfolioPageClient({
             투자 집행 이후 KPI·마일스톤·분기 노트를 추적합니다.
           </p>
         </div>
+        {canEdit ? (
         <Button
           onClick={() => setPromoteOpen(true)}
           className="bg-blue-600 hover:bg-blue-700"
@@ -136,6 +141,11 @@ export function PortfolioPageClient({
           )}
           포트폴리오사 추가
         </Button>
+        ) : (
+          <Badge variant="outline" className="text-amber-700 border-amber-300">
+            조회 전용
+          </Badge>
+        )}
       </div>
 
       {/* 펀드 지표 요약 */}

@@ -13,17 +13,29 @@ import {
   ArrowRight,
   Cpu,
   BarChart3,
+  AlertTriangle,
 } from "lucide-react";
 import Link from "next/link";
 import { DealStage, ReportStatus, DealSector } from "@prisma/client";
 import { DashboardCharts } from "./dashboard-charts";
 import { DashboardQuickActions } from "@/components/dashboard/quick-actions";
+import {
+  getUserTeamContext,
+  dealReadWhere,
+  reportReadWhere,
+  portfolioReadWhere,
+} from "@/lib/team-access";
+import { buildAlerts } from "@/lib/portfolio";
 
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/login");
 
   const userId = session.user.id;
+  const { teamId } = await getUserTeamContext(userId);
+  const dealScope = dealReadWhere(userId, teamId);
+  const reportScope = reportReadWhere(userId, teamId);
+  const portfolioScope = portfolioReadWhere(userId, teamId);
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
   const [
@@ -36,44 +48,66 @@ export default async function DashboardPage() {
     usageLogs,
     dealsBySector,
     dealsByStage,
+    portfolioCompanies,
   ] = await Promise.all([
-    prisma.deal.count({ where: { userId } }),
+    prisma.deal.count({ where: dealScope }),
     prisma.deal.count({
-      where: { userId, stage: { in: [DealStage.IC_PREP, DealStage.IC_REVIEW, DealStage.DEEP_DIVE] } },
+      where: {
+        AND: [
+          dealScope,
+          { stage: { in: [DealStage.IC_PREP, DealStage.IC_REVIEW, DealStage.DEEP_DIVE] } },
+        ],
+      },
     }),
-    prisma.report.count({ where: { deal: { userId } } }),
-    prisma.report.count({ where: { deal: { userId }, status: { in: [ReportStatus.FINAL, ReportStatus.EXPORTED] } } }),
+    prisma.report.count({ where: reportScope }),
+    prisma.report.count({
+      where: {
+        AND: [
+          reportScope,
+          { status: { in: [ReportStatus.FINAL, ReportStatus.EXPORTED] } },
+        ],
+      },
+    }),
     prisma.deal.findMany({
-      where: { userId },
+      where: dealScope,
       orderBy: { updatedAt: "desc" },
       take: 5,
       include: { reports: { orderBy: { createdAt: "desc" }, take: 1 } },
     }),
     prisma.report.findMany({
-      where: { deal: { userId }, status: { not: ReportStatus.PENDING } },
+      where: {
+        AND: [reportScope, { status: { not: ReportStatus.PENDING } }],
+      },
       orderBy: { createdAt: "desc" },
       take: 5,
       include: { deal: { select: { companyName: true } } },
     }),
-    // 최근 30일 토큰 사용량 (일별)
     prisma.usageLog.findMany({
       where: { userId, createdAt: { gte: thirtyDaysAgo } },
       select: { createdAt: true, totalTokens: true, agentType: true },
       orderBy: { createdAt: "asc" },
     }),
-    // 섹터별 딜 수
     prisma.deal.groupBy({
       by: ["sector"],
-      where: { userId },
+      where: dealScope,
       _count: true,
     }),
-    // 단계별 딜 수
     prisma.deal.groupBy({
       by: ["stage"],
-      where: { userId },
+      where: dealScope,
       _count: true,
     }),
+    prisma.portfolioCompany.findMany({
+      where: portfolioScope,
+      include: {
+        kpis: { orderBy: { period: "asc" } },
+        milestones: { orderBy: { dueDate: "asc" } },
+        updates: { orderBy: { period: "desc" }, take: 1 },
+      },
+    }),
   ]);
+
+  const portfolioAlerts = buildAlerts(portfolioCompanies).slice(0, 5);
 
   const stageLabel: Record<DealStage, string> = {
     SCREENING: "스크리닝", DEEP_DIVE: "딥다이브", IC_PREP: "IC 준비",
@@ -130,13 +164,55 @@ export default async function DashboardPage() {
         <div className="flex items-start justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">
-              안녕하세요, {session.user.name} 심사역님 👋
+              안녕하세요, {session.user.name ?? "사용자"}님
             </h1>
-            <p className="text-gray-500 mt-1">오늘도 좋은 투자 딜을 발굴하세요.</p>
+            <p className="text-gray-500 mt-1">
+              {teamId
+                ? "팀 공유 딜·보고서를 포함한 현황입니다."
+                : "오늘도 좋은 투자 딜을 발굴하세요."}
+            </p>
           </div>
         </div>
 
         <DashboardQuickActions />
+
+        {portfolioAlerts.length > 0 && (
+          <Card className="border-amber-200 bg-amber-50/40">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-600" />
+                  사후관리 알림
+                </CardTitle>
+                <Link
+                  href="/portfolio"
+                  className="text-sm text-blue-600 hover:underline flex items-center gap-1"
+                >
+                  포트폴리오 <ArrowRight className="w-3 h-3" />
+                </Link>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {portfolioAlerts.map((a, i) => (
+                <Link
+                  key={`${a.companyId}-${i}`}
+                  href={`/portfolio/${a.companyId}`}
+                  className="flex items-start gap-2 text-sm rounded-lg px-2 py-1.5 hover:bg-white/80"
+                >
+                  <span
+                    className={`mt-1.5 w-1.5 h-1.5 rounded-full shrink-0 ${
+                      a.severity === "high" ? "bg-red-500" : "bg-amber-500"
+                    }`}
+                  />
+                  <span>
+                    <span className="font-medium text-gray-900">{a.companyName}</span>
+                    <span className="text-gray-600"> — {a.message}</span>
+                  </span>
+                </Link>
+              ))}
+            </CardContent>
+          </Card>
+        )}
 
         {/* 통계 카드 */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -191,7 +267,14 @@ export default async function DashboardPage() {
                       className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 transition-colors"
                     >
                       <div>
-                        <p className="font-medium text-sm text-gray-900">{deal.companyName}</p>
+                        <p className="font-medium text-sm text-gray-900 flex items-center gap-2">
+                          {deal.companyName}
+                          {deal.teamId && (
+                            <Badge variant="secondary" className="text-[10px]">
+                              팀
+                            </Badge>
+                          )}
+                        </p>
                         <p className="text-xs text-gray-500">{deal.name}</p>
                       </div>
                       <Badge variant="outline" className="text-xs">{stageLabel[deal.stage]}</Badge>

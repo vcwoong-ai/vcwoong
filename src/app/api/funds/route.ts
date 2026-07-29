@@ -4,6 +4,7 @@ import { z } from "zod";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { calculatePortfolioMetrics } from "@/lib/portfolio";
+import { getUserTeamContext, fundReadWhere } from "@/lib/team-access";
 
 const createSchema = z.object({
   name: z.string().min(1).max(120),
@@ -11,6 +12,7 @@ const createSchema = z.object({
   fundSize: z.number().positive(),
   paidIn: z.number().min(0).optional(),
   managementFee: z.number().min(0).max(10).optional(),
+  shareWithTeam: z.boolean().optional(),
 });
 
 export async function GET() {
@@ -19,8 +21,9 @@ export async function GET() {
     return NextResponse.json({ error: "인증이 필요합니다" }, { status: 401 });
   }
 
+  const { teamId } = await getUserTeamContext(session.user.id);
   const funds = await prisma.fund.findMany({
-    where: { userId: session.user.id },
+    where: fundReadWhere(session.user.id, teamId),
     include: { companies: true },
     orderBy: { vintageYear: "desc" },
   });
@@ -33,6 +36,7 @@ export async function GET() {
       fundSize: f.fundSize,
       paidIn: f.paidIn,
       managementFee: f.managementFee,
+      teamId: f.teamId,
       companyCount: f.companies.length,
       metrics: calculatePortfolioMetrics(f.companies),
     })),
@@ -53,12 +57,19 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const { teamId } = await getUserTeamContext(session.user.id);
+  const shareTeamId =
+    parsed.data.shareWithTeam !== false && teamId ? teamId : null;
+
   const fund = await prisma.fund.create({
     data: {
-      ...parsed.data,
+      name: parsed.data.name,
+      vintageYear: parsed.data.vintageYear,
+      fundSize: parsed.data.fundSize,
       paidIn: parsed.data.paidIn ?? 0,
       managementFee: parsed.data.managementFee ?? 2,
       userId: session.user.id,
+      teamId: shareTeamId,
     },
   });
 

@@ -7,11 +7,13 @@
 import { searchPubMed, formatPubMedForPrompt } from "./pubmed";
 import { searchClinicalTrials, formatClinicalTrialsForPrompt } from "./clinical-trials";
 import { searchFdaDrugsByIndication, formatFdaForPrompt } from "./openfda";
+import { searchKiprisPatents, formatKiprisForPrompt } from "./kipris";
 
 export interface BioExternalData {
   pubmedArticles: Awaited<ReturnType<typeof searchPubMed>>;
   clinicalTrials: Awaited<ReturnType<typeof searchClinicalTrials>>;
   fdaDrugs: Awaited<ReturnType<typeof searchFdaDrugsByIndication>>;
+  kiprisPatents: Awaited<ReturnType<typeof searchKiprisPatents>>;
   indication: string;
   companyQuery: string;
 }
@@ -97,23 +99,25 @@ export async function fetchBioExternalData(
   console.log(`[BioData] 키워드: indication="${indication}", drug="${drugKeyword}"`);
 
   // 병렬 조회 (실패해도 빈 배열 반환)
-  const [pubmedArticles, clinicalTrials, fdaDrugs] = await Promise.allSettled([
+  const [pubmedArticles, clinicalTrials, fdaDrugs, kiprisPatents] = await Promise.allSettled([
     searchPubMed(`${indication} clinical trial phase 2 3`, 5),
     searchClinicalTrials(`${indication} ${drugKeyword}`, 5),
     searchFdaDrugsByIndication(indication.split(" ")[0], 5),
+    searchKiprisPatents(companyName.replace(/주식회사|㈜|\(주\)/g, "").trim(), 5, documentText),
   ]).then((results) =>
     results.map((r) => (r.status === "fulfilled" ? r.value : []))
   ) as [
     Awaited<ReturnType<typeof searchPubMed>>,
     Awaited<ReturnType<typeof searchClinicalTrials>>,
     Awaited<ReturnType<typeof searchFdaDrugsByIndication>>,
+    Awaited<ReturnType<typeof searchKiprisPatents>>,
   ];
 
   console.log(
-    `[BioData] PubMed ${pubmedArticles.length}건 | ClinicalTrials ${clinicalTrials.length}건 | FDA ${fdaDrugs.length}건`
+    `[BioData] PubMed ${pubmedArticles.length}건 | ClinicalTrials ${clinicalTrials.length}건 | FDA ${fdaDrugs.length}건 | KIPRIS ${kiprisPatents.length}건`
   );
 
-  return { pubmedArticles, clinicalTrials, fdaDrugs, indication, companyQuery };
+  return { pubmedArticles, clinicalTrials, fdaDrugs, kiprisPatents, indication, companyQuery };
 }
 
 /** 외부 데이터를 프롬프트 주입용 단일 텍스트로 조합 */
@@ -128,6 +132,9 @@ export function formatExternalDataForPrompt(data: BioExternalData): string {
   }
   if (data.fdaDrugs.length > 0) {
     sections.push(formatFdaForPrompt(data.fdaDrugs, data.indication));
+  }
+  if (data.kiprisPatents.length > 0) {
+    sections.push(formatKiprisForPrompt(data.kiprisPatents));
   }
 
   if (sections.length === 0) return "";

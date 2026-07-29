@@ -8,27 +8,30 @@ export type PlanFeature =
   | "portfolio"
   | "sourcing"
   | "templateEngine"
-  | "bioExternalData";
+  | "bioExternalData"
+  | "teamCollaboration";
 
 export const FEATURE_LABEL: Record<PlanFeature, string> = {
   lpReporting: "LP 리포팅",
   portfolio: "포트폴리오 사후관리",
   sourcing: "딜소싱 인박스",
   templateEngine: "양식 재현 엔진",
-  bioExternalData: "PubMed·FDA 외부 데이터",
+  bioExternalData: "PubMed·FDA·KIPRIS 외부 데이터",
+  teamCollaboration: "팀 협업 (딜·양식 공유)",
 };
 
 const FEATURES: Record<PlanKey, PlanFeature[]> = {
   free: ["sourcing"],
   solo: ["sourcing", "portfolio"],
   sector_pro: ["sourcing", "portfolio", "templateEngine"],
-  multi: ["sourcing", "portfolio", "templateEngine", "lpReporting"],
+  multi: ["sourcing", "portfolio", "templateEngine", "lpReporting", "teamCollaboration"],
   full: [
     "sourcing",
     "portfolio",
     "templateEngine",
     "lpReporting",
     "bioExternalData",
+    "teamCollaboration",
   ],
   bio_premium: [
     "sourcing",
@@ -36,18 +39,40 @@ const FEATURES: Record<PlanKey, PlanFeature[]> = {
     "templateEngine",
     "lpReporting",
     "bioExternalData",
+    "teamCollaboration",
   ],
 };
 
 /** 공개 가격표 — 랜딩과 설정이 같은 정의를 쓰도록 단일 소스로 관리한다 */
+export type BillingCycle = "monthly" | "yearly";
+
+/** 연간 결제 시 월 환산 할인율 (2개월 무료 ≈ 16.7%) */
+export const YEARLY_DISCOUNT = 2 / 12;
+
 export interface PublicPlan {
   key: PlanKey;
   enumValue: SubscriptionPlan;
   name: string;
   price: number;
+  /** 연간 일시납 (월가 × 10 = 2개월 무료) */
+  yearlyPrice: number;
   tagline: string;
   highlight?: boolean;
   features: string[];
+}
+
+export function yearlyPriceFromMonthly(monthly: number): number {
+  if (monthly === 0) return 0;
+  return monthly * 10;
+}
+
+export function priceForCycle(plan: PublicPlan, cycle: BillingCycle): number {
+  return cycle === "yearly" ? plan.yearlyPrice : plan.price;
+}
+
+export function monthlyEquivalent(plan: PublicPlan, cycle: BillingCycle): number {
+  if (cycle === "monthly") return plan.price;
+  return Math.round(plan.yearlyPrice / 12);
 }
 
 export const PUBLIC_PLANS: PublicPlan[] = [
@@ -56,6 +81,7 @@ export const PUBLIC_PLANS: PublicPlan[] = [
     enumValue: SubscriptionPlan.FREE,
     name: "Free",
     price: 0,
+    yearlyPrice: 0,
     tagline: "제품을 직접 써보고 판단하세요",
     features: [
       `월 ${PLAN_LIMITS.free.reports}건 보고서`,
@@ -70,6 +96,7 @@ export const PUBLIC_PLANS: PublicPlan[] = [
     enumValue: SubscriptionPlan.SOLO,
     name: "Solo",
     price: 99000,
+    yearlyPrice: yearlyPriceFromMonthly(99000),
     tagline: "1인 심사역 · 단일 섹터 집중",
     features: [
       `월 ${PLAN_LIMITS.solo.reports}건 보고서`,
@@ -83,6 +110,7 @@ export const PUBLIC_PLANS: PublicPlan[] = [
     enumValue: SubscriptionPlan.SECTOR_PRO,
     name: "Sector Pro",
     price: 290000,
+    yearlyPrice: yearlyPriceFromMonthly(290000),
     tagline: "섹터 전담 심사 조직",
     highlight: true,
     features: [
@@ -97,11 +125,13 @@ export const PUBLIC_PLANS: PublicPlan[] = [
     enumValue: SubscriptionPlan.MULTI,
     name: "Multi-Sector",
     price: 790000,
+    yearlyPrice: yearlyPriceFromMonthly(790000),
     tagline: "멀티 섹터 운용사",
     features: [
       `월 ${PLAN_LIMITS.multi.reports}건 보고서`,
       `양식 ${PLAN_LIMITS.multi.templates}개`,
       "LP 리포팅 (펀드 지표·DOCX)",
+      "팀 협업 · 딜·양식 공유",
       "펀드 다중 관리",
     ],
   },
@@ -110,6 +140,7 @@ export const PUBLIC_PLANS: PublicPlan[] = [
     enumValue: SubscriptionPlan.FULL,
     name: "Full-Stack",
     price: 1490000,
+    yearlyPrice: yearlyPriceFromMonthly(1490000),
     tagline: "풀사이클 전면 도입",
     features: [
       `월 ${PLAN_LIMITS.full.reports}건 보고서`,
@@ -123,6 +154,7 @@ export const PUBLIC_PLANS: PublicPlan[] = [
     enumValue: SubscriptionPlan.BIO_PREMIUM,
     name: "Bio Premium",
     price: 1990000,
+    yearlyPrice: yearlyPriceFromMonthly(1990000),
     tagline: "바이오 특화 심사 조직",
     features: [
       `월 ${PLAN_LIMITS.bio_premium.reports}건 보고서`,

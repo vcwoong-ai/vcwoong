@@ -4,6 +4,12 @@ import { z } from "zod";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ReportStatus, SectionStatus } from "@prisma/client";
+import {
+  getUserTeamContext,
+  reportReadWhere,
+  reportWriteWhere,
+  permissionDeniedMessage,
+} from "@/lib/team-access";
 
 const patchSchema = z.object({
   status: z.nativeEnum(ReportStatus).optional(),
@@ -19,10 +25,11 @@ export async function GET(
     return NextResponse.json({ error: "인증이 필요합니다" }, { status: 401 });
   }
 
+  const { teamId } = await getUserTeamContext(session.user.id);
   const report = await prisma.report.findFirst({
     where: {
       id: params.id,
-      deal: { userId: session.user.id },
+      ...reportReadWhere(session.user.id, teamId),
     },
     include: {
       deal: true,
@@ -49,17 +56,18 @@ export async function PATCH(
     return NextResponse.json({ error: "인증이 필요합니다" }, { status: 401 });
   }
 
+  const { teamId, role } = await getUserTeamContext(session.user.id);
   const report = await prisma.report.findFirst({
     where: {
       id: params.id,
-      deal: { userId: session.user.id },
+      ...reportWriteWhere(session.user.id, teamId, role),
     },
   });
 
   if (!report) {
     return NextResponse.json(
-      { error: "보고서를 찾을 수 없습니다" },
-      { status: 404 }
+      { error: permissionDeniedMessage("edit") },
+      { status: 403 }
     );
   }
 

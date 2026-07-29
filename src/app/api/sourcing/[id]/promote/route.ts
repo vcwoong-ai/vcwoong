@@ -3,6 +3,11 @@ import { getServerSession } from "next-auth";
 import { DealStage, DocumentType, InboundStatus } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import {
+  getUserTeamContext,
+  inboundWriteWhere,
+  permissionDeniedMessage,
+} from "@/lib/team-access";
 
 /** 인바운드 딜을 심사 파이프라인의 딜로 승격한다 */
 export async function POST(
@@ -14,11 +19,18 @@ export async function POST(
     return NextResponse.json({ error: "인증이 필요합니다" }, { status: 401 });
   }
 
+  const { teamId, role } = await getUserTeamContext(session.user.id);
   const lead = await prisma.inboundDeal.findFirst({
-    where: { id: params.id, userId: session.user.id },
+    where: {
+      id: params.id,
+      ...inboundWriteWhere(session.user.id, teamId, role),
+    },
   });
   if (!lead) {
-    return NextResponse.json({ error: "찾을 수 없습니다" }, { status: 404 });
+    return NextResponse.json(
+      { error: permissionDeniedMessage("edit") },
+      { status: 403 }
+    );
   }
   if (lead.dealId) {
     return NextResponse.json(
@@ -35,6 +47,7 @@ export async function POST(
       stage: DealStage.SCREENING,
       description: lead.summary,
       userId: session.user.id,
+      teamId: lead.teamId,
     },
   });
 

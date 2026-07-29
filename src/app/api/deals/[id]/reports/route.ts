@@ -7,6 +7,7 @@ import { AgentType, ReportStatus } from "@prisma/client";
 import { inferAgentType } from "@/agents";
 import { generateSectionsAsync } from "@/lib/report-generation";
 import { checkQuota } from "@/lib/quotas";
+import { getUserTeamContext, dealWriteWhere, templateReadWhere, permissionDeniedMessage } from "@/lib/team-access";
 
 const createReportSchema = z.object({
   agentType: z.nativeEnum(AgentType).optional(),
@@ -23,11 +24,16 @@ export async function GET(
     return NextResponse.json({ error: "인증이 필요합니다" }, { status: 401 });
   }
 
+  const { teamId, role } = await getUserTeamContext(session.user.id);
+
   const deal = await prisma.deal.findFirst({
-    where: { id: params.id, userId: session.user.id },
+    where: { id: params.id, ...dealWriteWhere(session.user.id, teamId, role) },
   });
   if (!deal) {
-    return NextResponse.json({ error: "딜을 찾을 수 없습니다" }, { status: 404 });
+    return NextResponse.json(
+      { error: permissionDeniedMessage("edit") },
+      { status: 403 }
+    );
   }
 
   const reports = await prisma.report.findMany({
@@ -50,8 +56,10 @@ export async function POST(
     return NextResponse.json({ error: "인증이 필요합니다" }, { status: 401 });
   }
 
+  const { teamId, role } = await getUserTeamContext(session.user.id);
+
   const deal = await prisma.deal.findFirst({
-    where: { id: params.id, userId: session.user.id },
+    where: { id: params.id, ...dealWriteWhere(session.user.id, teamId, role) },
     include: {
       documents: {
         select: { name: true, parsedText: true },
@@ -59,7 +67,10 @@ export async function POST(
     },
   });
   if (!deal) {
-    return NextResponse.json({ error: "딜을 찾을 수 없습니다" }, { status: 404 });
+    return NextResponse.json(
+      { error: permissionDeniedMessage("edit") },
+      { status: 403 }
+    );
   }
 
   const quota = await checkQuota(session.user.id, "report");
@@ -93,7 +104,7 @@ export async function POST(
 
     if (validated.templateId) {
       const template = await prisma.template.findFirst({
-        where: { id: validated.templateId, userId: session.user.id },
+        where: { id: validated.templateId, ...templateReadWhere(session.user.id, teamId) },
         select: { id: true },
       });
       if (!template) {

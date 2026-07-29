@@ -7,6 +7,12 @@ import { readFileSync } from "fs";
 import { resolve } from "path";
 import { z } from "zod";
 import { fixtureForSector, GOLDEN_FIXTURES } from "@/lib/fixtures";
+import {
+  getUserTeamContext,
+  dealWriteWhere,
+  dealReadWhere,
+  permissionDeniedMessage,
+} from "@/lib/team-access";
 
 const bodySchema = z.object({
   fixtureId: z.string().optional(),
@@ -26,13 +32,14 @@ export async function POST(
   }
 
   try {
+    const { teamId, role } = await getUserTeamContext(session.user.id);
     const deal = await prisma.deal.findFirst({
-      where: { id: params.id, userId: session.user.id },
+      where: { id: params.id, ...dealWriteWhere(session.user.id, teamId, role) },
     });
     if (!deal) {
       return NextResponse.json(
-        { error: "딜을 찾을 수 없습니다" },
-        { status: 404 }
+        { error: permissionDeniedMessage("edit") },
+        { status: 403 }
       );
     }
 
@@ -132,8 +139,9 @@ export async function GET(
     return NextResponse.json({ error: "인증이 필요합니다" }, { status: 401 });
   }
 
+  const { teamId } = await getUserTeamContext(session.user.id);
   const deal = await prisma.deal.findFirst({
-    where: { id: params.id, userId: session.user.id },
+    where: { id: params.id, ...dealReadWhere(session.user.id, teamId) },
     select: { id: true, sector: true },
   });
   if (!deal) {

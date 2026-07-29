@@ -3,6 +3,7 @@ import { redirect, notFound } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { PrintReportClient } from "./print-report-client";
+import { getUserTeamContext, reportReadWhere } from "@/lib/team-access";
 
 /**
  * 인쇄 전용 보고서 뷰.
@@ -16,8 +17,10 @@ export default async function ReportPrintPage({
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/login");
 
+  const { teamId } = await getUserTeamContext(session.user.id);
+
   const report = await prisma.report.findFirst({
-    where: { id: params.id, deal: { userId: session.user.id } },
+    where: { id: params.id, ...reportReadWhere(session.user.id, teamId) },
     include: {
       deal: { select: { companyName: true, sector: true, investRound: true } },
       sections: { orderBy: { order: "asc" } },

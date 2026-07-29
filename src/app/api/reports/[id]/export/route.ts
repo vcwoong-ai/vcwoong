@@ -3,13 +3,16 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateReportDOCX } from "@/lib/docx-export";
+import { generateReportPPTX } from "@/lib/pptx-export";
 import { generateTemplateBasedDOCX } from "@/lib/template/template-generator";
 import { reconstructDOCX } from "@/lib/template/template-reconstructor";
+import { reconstructPPTX } from "@/lib/template/pptx-reconstructor";
 import { readStoredFile } from "@/lib/storage";
 import { hasFeature } from "@/lib/plans";
 import { getUserPlanKey } from "@/lib/subscription";
 import { ReportStatus } from "@prisma/client";
 import type { TemplateSectionMap } from "@/lib/template/template-mapper";
+import { getUserTeamContext, reportReadWhere } from "@/lib/team-access";
 
 export async function POST(
   request: NextRequest,
@@ -20,8 +23,11 @@ export async function POST(
     return NextResponse.json({ error: "인증이 필요합니다" }, { status: 401 });
   }
 
+  const { teamId } = await getUserTeamContext(session.user.id);
+  const format = new URL(request.url).searchParams.get("format") ?? "docx";
+
   const report = await prisma.report.findFirst({
-    where: { id: params.id, deal: { userId: session.user.id } },
+    where: { id: params.id, ...reportReadWhere(session.user.id, teamId) },
     include: {
       deal: true,
       template: true,
@@ -41,6 +47,75 @@ export async function POST(
   }
 
   try {
+    // PPTX 내보내기
+    if (format === "pptx") {
+      let pptxBuffer: Buffer | null = null;
+      let pptxMode = "pptx-generated";
+
+      const templateReady =
+        report.template?.sectionMap && report.template.status === "READY";
+      const canUseEngine =
+        templateReady &&
+        hasFeature(await getUserPlanKey(session.user.id), "templateEngine");
+
+      if (canUseEngine && report.template?.fileType === "PPTX") {
+        const original = await readStoredFile(report.template.fileUrl);
+        if (original) {
+          try {
+            const sectionMap = report.template
+              .sectionMap as unknown as TemplateSectionMap;
+            const result = await reconstructPPTX({
+              originalBuffer: original,
+              sectionMap,
+              reportSections: report.sections.map((s) => ({
+                sectionKey: s.sectionKey,
+                title: s.title,
+                content: s.content,
+              })),
+              replacements: {
+                기업명: report.deal.companyName,
+                회사명: report.deal.companyName,
+                작성일: new Date().toLocaleDateString("ko-KR"),
+                투자라운드: report.deal.investRound ?? "",
+              },
+            });
+            pptxBuffer = result.buffer;
+            pptxMode = `pptx-reconstructed:${result.filledSections}/${result.detectedHeadings}`;
+          } catch (err) {
+            console.warn(
+              "[Export] PPTX 재현 실패 — 신규 생성으로 폴백:",
+              err instanceof Error ? err.message : err
+            );
+          }
+        }
+      }
+
+      const buffer =
+        pptxBuffer ??
+        (await generateReportPPTX(report.sections, {
+          companyName: report.deal.companyName,
+          reportDate: new Date(),
+        }));
+
+      await prisma.report.update({
+        where: { id: params.id },
+        data: { status: ReportStatus.EXPORTED },
+      });
+
+      const filename = `${report.deal.companyName}_투자심의보고서_${new Date().toISOString().slice(0, 10)}.pptx`;
+
+      return new NextResponse(new Uint8Array(buffer), {
+        status: 200,
+        headers: {
+          "Content-Type":
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+          "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
+          "Content-Length": buffer.length.toString(),
+          "X-Export-Mode": pptxMode,
+        },
+      });
+    }
+
     let buffer: Buffer | null = null;
     // 어떤 경로로 만들어졌는지 클라이언트가 알 수 있게 헤더로 알린다
     let mode = "default";

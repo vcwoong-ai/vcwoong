@@ -20,7 +20,9 @@ import {
   ArrowUpRight,
   Inbox,
   Loader2,
+  Mail,
   Plus,
+  RefreshCw,
   Sparkles,
   Trash2,
 } from "lucide-react";
@@ -46,6 +48,8 @@ interface Lead {
   status: InboundStatus;
   dealId: string | null;
   createdAt: string;
+  userId?: string;
+  teamId?: string | null;
 }
 
 const SOURCES: DealSourceType[] = [
@@ -67,17 +71,30 @@ const STATUS_FILTERS: Array<InboundStatus | "ALL"> = [
   "REJECTED",
 ];
 
-export function SourcingPageClient({ leads }: { leads: Lead[] }) {
+export function SourcingPageClient({
+  leads,
+  currentUserId,
+  canEditShared = true,
+  role = "ANALYST",
+}: {
+  leads: Lead[];
+  currentUserId?: string;
+  canEditShared?: boolean;
+  role?: string;
+}) {
   const router = useRouter();
   const [showForm, setShowForm] = useState(leads.length === 0);
+  const [formMode, setFormMode] = useState<"manual" | "email">("manual");
   const [filter, setFilter] = useState<InboundStatus | "ALL">("ALL");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [polling, setPolling] = useState(false);
 
   const [companyName, setCompanyName] = useState("");
   const [source, setSource] = useState<DealSourceType>("INBOUND");
   const [contactEmail, setContactEmail] = useState("");
   const [summary, setSummary] = useState("");
+  const [rawEmail, setRawEmail] = useState("");
 
   const visible =
     filter === "ALL" ? leads : leads.filter((l) => l.status === filter);
@@ -114,6 +131,31 @@ export function SourcingPageClient({ leads }: { leads: Lead[] }) {
       router.refresh();
     } catch (e) {
       alert(e instanceof Error ? e.message : "등록 실패");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const importEmail = async () => {
+    if (rawEmail.trim().length < 20) return alert("이메일 원문을 붙여넣으세요");
+    setSaving(true);
+    try {
+      const res = await fetch("/api/sourcing/import-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rawEmail: rawEmail.trim() }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "파싱 실패");
+      setRawEmail("");
+      setShowForm(false);
+      alert(
+        `등록됨: ${json.parsed?.companyName ?? json.data?.companyName}` +
+          (json.parsed?.contactEmail ? ` (${json.parsed.contactEmail})` : "")
+      );
+      router.refresh();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "메일 파싱 실패");
     } finally {
       setSaving(false);
     }
@@ -177,6 +219,32 @@ export function SourcingPageClient({ leads }: { leads: Lead[] }) {
     }
   };
 
+  const pollInbox = async () => {
+    setPolling(true);
+    try {
+      const res = await fetch("/api/sourcing/poll", { method: "POST" });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error ?? "폴링 실패");
+      const imported = json.data?.imported ?? 0;
+      alert(
+        imported > 0
+          ? `${imported}건의 메일을 인박스로 가져왔습니다`
+          : "새로 가져온 메일이 없습니다 (드롭폴더·IMAP 설정 확인)"
+      );
+      router.refresh();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "폴링 실패");
+    } finally {
+      setPolling(false);
+    }
+  };
+
+  const canMutateLead = (lead: Lead) => {
+    if (!currentUserId) return canEditShared;
+    if (lead.userId === currentUserId) return true;
+    return Boolean(lead.teamId) && canEditShared;
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -184,15 +252,31 @@ export function SourcingPageClient({ leads }: { leads: Lead[] }) {
           <h1 className="text-2xl font-bold text-gray-900">딜소싱 인박스</h1>
           <p className="text-sm text-gray-500 mt-1">
             인바운드 딜을 모아 AI로 1차 선별하고 심사 파이프라인으로 넘깁니다.
+            외부 연동: <code className="text-xs bg-gray-100 px-1 rounded">POST /api/sourcing/webhook</code>
           </p>
+          {role === "ANALYST" && (
+            <p className="text-xs text-amber-700 mt-1">
+              심사역 계정 — 팀 공유 인바운드는 조회만 가능합니다.
+            </p>
+          )}
         </div>
-        <Button
-          onClick={() => setShowForm((v) => !v)}
-          className="bg-blue-600 hover:bg-blue-700"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          딜 추가
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={pollInbox} disabled={polling}>
+            {polling ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <RefreshCw className="w-4 h-4 mr-2" />
+            )}
+            메일함 폴링
+          </Button>
+          <Button
+            onClick={() => setShowForm((v) => !v)}
+            className="bg-blue-600 hover:bg-blue-700"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            딜 추가
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -214,9 +298,52 @@ export function SourcingPageClient({ leads }: { leads: Lead[] }) {
       {showForm && (
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">인바운드 딜 등록</CardTitle>
+            <div className="flex items-center justify-between gap-3">
+              <CardTitle className="text-base">인바운드 딜 등록</CardTitle>
+              <div className="flex gap-1">
+                <Button
+                  variant={formMode === "manual" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setFormMode("manual")}
+                >
+                  <Plus className="w-3.5 h-3.5 mr-1" />
+                  수동
+                </Button>
+                <Button
+                  variant={formMode === "email" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setFormMode("email")}
+                >
+                  <Mail className="w-3.5 h-3.5 mr-1" />
+                  메일 붙여넣기
+                </Button>
+              </div>
+            </div>
           </CardHeader>
           <CardContent className="space-y-3">
+            {formMode === "email" ? (
+              <>
+                <p className="text-xs text-gray-500">
+                  .eml 파일 내용 또는 Outlook/Gmail에서 복사한 이메일 원문을
+                  붙여넣으면 기업명·연락처·요약을 자동 추출합니다.
+                </p>
+                <Textarea
+                  value={rawEmail}
+                  onChange={(e) => setRawEmail(e.target.value)}
+                  rows={12}
+                  placeholder={"From: founder@startup.com\nSubject: [스타트업] Series A IR\n\n..."}
+                />
+                <Button
+                  onClick={importEmail}
+                  disabled={saving}
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                  메일에서 딜 등록
+                </Button>
+              </>
+            ) : (
+              <>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div>
                 <Label htmlFor="src-name">기업명</Label>
@@ -278,6 +405,8 @@ export function SourcingPageClient({ leads }: { leads: Lead[] }) {
                 등록
               </Button>
             </div>
+              </>
+            )}
           </CardContent>
         </Card>
       )}
@@ -335,6 +464,11 @@ export function SourcingPageClient({ leads }: { leads: Lead[] }) {
                       <span className="text-xs text-gray-400">
                         {SOURCE_LABEL[l.source]}
                       </span>
+                      {l.teamId && (
+                        <Badge variant="secondary" className="text-xs">
+                          팀
+                        </Badge>
+                      )}
                     </div>
 
                     {l.summary && (
@@ -350,7 +484,7 @@ export function SourcingPageClient({ leads }: { leads: Lead[] }) {
                     )}
 
                     <div className="flex items-center gap-2 mt-2 flex-wrap">
-                      {l.status !== "PROMOTED" && (
+                      {l.status !== "PROMOTED" && canMutateLead(l) && (
                         <>
                           <Button
                             variant="outline"
@@ -384,6 +518,9 @@ export function SourcingPageClient({ leads }: { leads: Lead[] }) {
                           </Button>
                         </>
                       )}
+                      {l.status !== "PROMOTED" && !canMutateLead(l) && (
+                        <span className="text-xs text-amber-700">조회 전용</span>
+                      )}
                       {l.dealId && (
                         <Link href={`/deals/${l.dealId}`}>
                           <Button variant="outline" size="sm">
@@ -392,6 +529,7 @@ export function SourcingPageClient({ leads }: { leads: Lead[] }) {
                           </Button>
                         </Link>
                       )}
+                      {currentUserId && l.userId === currentUserId && (
                       <Button
                         variant="ghost"
                         size="sm"
@@ -401,6 +539,7 @@ export function SourcingPageClient({ leads }: { leads: Lead[] }) {
                       >
                         <Trash2 className="w-3 h-3" />
                       </Button>
+                      )}
                     </div>
                   </div>
 

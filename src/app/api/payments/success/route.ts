@@ -6,10 +6,10 @@ import {
   chargeBilling,
   recordPayment,
   isTossConfigured,
+  planAmount,
 } from "@/lib/payments/toss";
 import {
   activateSubscription,
-  getPlanByKey,
   planParamToEnum,
 } from "@/lib/subscription";
 import type { PlanKey } from "@/lib/quotas";
@@ -24,6 +24,7 @@ export async function GET(request: NextRequest) {
   const authKey = searchParams.get("authKey");
   const customerKey = searchParams.get("customerKey");
   const planKey = searchParams.get("plan") as PlanKey | null;
+  const cycle = searchParams.get("cycle") === "yearly" ? "yearly" : "monthly";
 
   if (!authKey || !customerKey || !planKey) {
     return NextResponse.redirect(
@@ -31,8 +32,15 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const plan = getPlanByKey(planKey);
-  if (!plan || plan.price === 0) {
+  let amount: number;
+  try {
+    amount = planAmount(planKey, cycle);
+  } catch {
+    return NextResponse.redirect(
+      new URL("/settings?payment=invalid_plan", request.url)
+    );
+  }
+  if (amount === 0) {
     return NextResponse.redirect(
       new URL("/settings?payment=invalid_plan", request.url)
     );
@@ -46,12 +54,13 @@ export async function GET(request: NextRequest) {
 
   try {
     const billing = await issueBillingKey(authKey, customerKey);
-    const orderId = `sub-${session.user.id}-${Date.now()}`;
+    const orderId = `sub-${session.user.id}-${cycle}-${Date.now()}`;
     const charge = await chargeBilling(
       billing.billingKey,
       customerKey,
       planKey,
-      orderId
+      orderId,
+      cycle
     );
 
     await recordPayment(
@@ -69,7 +78,10 @@ export async function GET(request: NextRequest) {
     );
 
     return NextResponse.redirect(
-      new URL(`/settings?payment=success&plan=${planKey}`, request.url)
+      new URL(
+        `/settings?payment=success&plan=${planKey}&cycle=${cycle}`,
+        request.url
+      )
     );
   } catch (error) {
     console.error("Payment success handler error:", error);

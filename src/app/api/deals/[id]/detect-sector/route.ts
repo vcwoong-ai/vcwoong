@@ -3,6 +3,11 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateText, isAIConfigured } from "@/lib/claude";
+import {
+  getUserTeamContext,
+  dealWriteWhere,
+  permissionDeniedMessage,
+} from "@/lib/team-access";
 
 const SECTOR_LABELS: Record<string, string> = {
   BIO: "바이오/헬스케어",
@@ -47,15 +52,19 @@ export async function POST(
     return NextResponse.json({ error: "인증이 필요합니다" }, { status: 401 });
   }
 
+  const { teamId, role } = await getUserTeamContext(session.user.id);
   const deal = await prisma.deal.findFirst({
-    where: { id: params.id, userId: session.user.id },
+    where: { id: params.id, ...dealWriteWhere(session.user.id, teamId, role) },
     include: {
       documents: { select: { name: true, parsedText: true } },
     },
   });
 
   if (!deal) {
-    return NextResponse.json({ error: "딜을 찾을 수 없습니다" }, { status: 404 });
+    return NextResponse.json(
+      { error: permissionDeniedMessage("edit") },
+      { status: 403 }
+    );
   }
 
   if (!deal.documents.length) {

@@ -4,6 +4,7 @@ import { z } from "zod";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { DealSector, DealStage, DealStatus } from "@prisma/client";
+import { getUserTeamContext, dealReadWhere, dealWriteWhere, dealOwnerWhere, permissionDeniedMessage } from "@/lib/team-access";
 
 const updateDealSchema = z.object({
   name: z.string().min(1).optional(),
@@ -17,9 +18,9 @@ const updateDealSchema = z.object({
   valuation: z.number().positive().optional(),
 });
 
-async function getAuthorizedDeal(dealId: string, userId: string) {
+async function getAuthorizedDeal(dealId: string, userId: string, teamId: string | null) {
   const deal = await prisma.deal.findFirst({
-    where: { id: dealId, userId },
+    where: { id: dealId, ...dealReadWhere(userId, teamId) },
     include: {
       documents: true,
       reports: {
@@ -39,7 +40,8 @@ export async function GET(
     return NextResponse.json({ error: "인증이 필요합니다" }, { status: 401 });
   }
 
-  const deal = await getAuthorizedDeal(params.id, session.user.id);
+  const { teamId } = await getUserTeamContext(session.user.id);
+  const deal = await getAuthorizedDeal(params.id, session.user.id, teamId);
   if (!deal) {
     return NextResponse.json({ error: "딜을 찾을 수 없습니다" }, { status: 404 });
   }
@@ -56,11 +58,16 @@ export async function PATCH(
     return NextResponse.json({ error: "인증이 필요합니다" }, { status: 401 });
   }
 
+  const { teamId, role } = await getUserTeamContext(session.user.id);
+
   const deal = await prisma.deal.findFirst({
-    where: { id: params.id, userId: session.user.id },
+    where: { id: params.id, ...dealWriteWhere(session.user.id, teamId, role) },
   });
   if (!deal) {
-    return NextResponse.json({ error: "딜을 찾을 수 없습니다" }, { status: 404 });
+    return NextResponse.json(
+      { error: permissionDeniedMessage("edit") },
+      { status: 403 }
+    );
   }
 
   try {
@@ -98,10 +105,13 @@ export async function DELETE(
   }
 
   const deal = await prisma.deal.findFirst({
-    where: { id: params.id, userId: session.user.id },
+    where: { id: params.id, ...dealOwnerWhere(session.user.id) },
   });
   if (!deal) {
-    return NextResponse.json({ error: "딜을 찾을 수 없습니다" }, { status: 404 });
+    return NextResponse.json(
+      { error: permissionDeniedMessage("delete") },
+      { status: 403 }
+    );
   }
 
   await prisma.deal.delete({ where: { id: params.id } });

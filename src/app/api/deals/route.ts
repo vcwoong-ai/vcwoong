@@ -4,6 +4,7 @@ import { z } from "zod";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { DealSector, DealStage } from "@prisma/client";
+import { getUserTeamContext, dealReadWhere } from "@/lib/team-access";
 
 const createDealSchema = z.object({
   name: z.string().min(1, "딜 이름을 입력해주세요"),
@@ -14,6 +15,7 @@ const createDealSchema = z.object({
   investAmount: z.number().positive().optional(),
   investRound: z.string().optional(),
   valuation: z.number().positive().optional(),
+  shareWithTeam: z.boolean().optional(),
 });
 
 export async function GET(request: NextRequest) {
@@ -29,18 +31,29 @@ export async function GET(request: NextRequest) {
   const stage = searchParams.get("stage") as DealStage | null;
   const search = searchParams.get("search");
 
+  const { teamId } = await getUserTeamContext(session.user.id);
+
   const where = {
-    userId: session.user.id,
-    ...(sector ? { sector } : {}),
-    ...(stage ? { stage } : {}),
-    ...(search
-      ? {
-          OR: [
-            { name: { contains: search, mode: "insensitive" as const } },
-            { companyName: { contains: search, mode: "insensitive" as const } },
-          ],
-        }
-      : {}),
+    AND: [
+      dealReadWhere(session.user.id, teamId),
+      ...(sector ? [{ sector }] : []),
+      ...(stage ? [{ stage }] : []),
+      ...(search
+        ? [
+            {
+              OR: [
+                { name: { contains: search, mode: "insensitive" as const } },
+                {
+                  companyName: {
+                    contains: search,
+                    mode: "insensitive" as const,
+                  },
+                },
+              ],
+            },
+          ]
+        : []),
+    ],
   };
 
   const [deals, total] = await Promise.all([
@@ -75,11 +88,16 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const validated = createDealSchema.parse(body);
+    const { shareWithTeam, ...dealData } = validated;
+    const { teamId } = await getUserTeamContext(session.user.id);
+    const shareTeamId =
+      shareWithTeam !== false && teamId ? teamId : null;
 
     const deal = await prisma.deal.create({
       data: {
-        ...validated,
+        ...dealData,
         userId: session.user.id,
+        teamId: shareTeamId,
       },
     });
 
