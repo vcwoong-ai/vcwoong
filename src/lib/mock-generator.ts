@@ -61,8 +61,8 @@ function extractFacts(prompt: string): PromptFacts {
 }
 
 const DEMO_NOTICE =
-  "> ⚙️ **데모 모드** — Anthropic API 키가 설정되지 않아 샘플 콘텐츠로 생성되었습니다. " +
-  "실제 API 키를 `.env.local`에 입력하면 동일한 흐름으로 실제 AI가 본문을 작성합니다.\n\n";
+  "> ⚙️ **데모 모드** — AI API 키(`ANTHROPIC_API_KEY` 또는 `OPENROUTER_API_KEY`)가 설정되지 않아 " +
+  "샘플 콘텐츠로 생성되었습니다. 둘 중 하나를 `.env.local`에 입력하면 동일한 흐름으로 실제 AI가 본문을 작성합니다.\n\n";
 
 function sectionBody(f: PromptFacts): string {
   const c = f.companyName;
