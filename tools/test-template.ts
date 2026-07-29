@@ -224,11 +224,67 @@ async function main() {
   console.log("\n✅ 원본 폰트·색상·헤더/푸터·styles.xml 보존");
   console.log("✅ 안내문 제거 + 생성 본문 삽입 + 표 변환 + 플레이스홀더 치환");
 
-  // ── 폴백 검증: 매핑 안 되는 문서면 에러를 던져야 한다 ──
+  // ── 유실 방지 검증: 원본에 대응 헤딩이 없는 AI 섹션도 문서 끝에 남아야 한다 ──
+  const withExtra = await reconstructDOCX({
+    originalBuffer: original,
+    sectionMap,
+    reportSections: [
+      ...reportSections,
+      {
+        sectionKey: SectionKey.PRODUCT_TECHNOLOGY,
+        title: "제품/기술",
+        content: "자체 개발한 항체 스크리닝 플랫폼을 보유함.",
+      },
+    ],
+  });
+  const withExtraXml = await readDocXml(withExtra.buffer);
+  assert(
+    withExtra.appendedSections.includes(SectionKey.PRODUCT_TECHNOLOGY),
+    "원본에 없는 섹션이 appendedSections에 기록되지 않음"
+  );
+  assert(
+    withExtraXml.includes("자체 개발한 항체 스크리닝 플랫폼을 보유함"),
+    "원본에 대응 헤딩이 없는 섹션 내용이 유실됨"
+  );
+  console.log("✅ 원본에 없는 섹션도 문서 끝에 덧붙여져 유실되지 않음");
+
+  // ── 키워드 폴백 검증: 섹션맵이 엉뚱해도 실제 헤딩 스타일 + 흔한 제목 키워드로 복구되어야 한다 ──
+  const rescued = await reconstructDOCX({
+    originalBuffer: original,
+    sectionMap: {
+      mappings: [
+        { templateSection: "존재하지않는제목", sectionKey: SectionKey.APPENDIX, confidence: 1 },
+      ],
+      unmappedSections: [],
+      coverageRate: 0,
+    },
+    reportSections,
+  });
+  assert(
+    rescued.filledSections === 4,
+    `섹션맵이 틀려도 키워드로 4개 복구 기대, got ${rescued.filledSections}`
+  );
+  console.log("✅ 섹션맵이 불완전해도 헤딩 키워드로 매칭 복구");
+
+  // ── 폴백 검증: 진짜 헤딩 스타일도, 매핑도, 키워드도 전혀 없는 문서면 에러를 던져야 한다 ──
+  const headinglessDoc = await Packer.toBuffer(
+    new Document({
+      sections: [
+        {
+          properties: {},
+          children: [
+            new Paragraph({ children: [new TextRun({ text: "그냥 평범한 안내 문단입니다." })] }),
+            new Paragraph({ children: [new TextRun({ text: "헤딩 스타일이 전혀 없는 문서." })] }),
+          ],
+        },
+      ],
+    })
+  );
+
   let threw = false;
   try {
     await reconstructDOCX({
-      originalBuffer: original,
+      originalBuffer: headinglessDoc,
       sectionMap: {
         mappings: [
           { templateSection: "존재하지않는제목", sectionKey: SectionKey.APPENDIX, confidence: 1 },
