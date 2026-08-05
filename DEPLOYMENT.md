@@ -56,8 +56,21 @@ npx prisma db seed   # demo@axiom.kr / Demo1234!
 | 변수 | 용도 |
 |------|------|
 | `OPENROUTER_API_KEY` / `GEMINI_API_KEY` | AI 보고서 |
-| `STORAGE_MODE=s3` + AWS_* | Vercel 파일 업로드 |
 | `NEXT_PUBLIC_TOSS_CLIENT_KEY` / `TOSS_SECRET_KEY` | 구독 결제 |
+
+→ **Redeploy**
+
+## 3-1. 파일 업로드 (Vercel Blob — 필수)
+
+Vercel 서버리스 함수는 요청 본문이 **4.5MB를 넘으면 플랫폼 단에서 차단**하고,
+배포 파일시스템은 읽기 전용이라 `STORAGE_MODE` 미설정(로컬 저장) 상태로는
+프로덕션에서 파일 업로드가 동작하지 않습니다. IR 덱처럼 큰 파일은 브라우저에서
+Vercel Blob으로 직접 업로드하도록 되어 있으므로, Blob 스토어 연결이 필요합니다.
+
+1. Vercel 프로젝트 → **Storage → Connect Store → Blob** → 생성
+2. 연결하면 `BLOB_READ_WRITE_TOKEN`이 자동으로 환경변수에 주입됩니다(별도 설정 불필요)
+3. `storage.ts`가 이 토큰이 있으면 자동으로 Vercel Blob을 사용합니다
+   (AWS S3를 쓰고 싶다면 `STORAGE_MODE=s3` + `AWS_*`로 명시적으로 오버라이드 가능)
 
 → **Redeploy**
 

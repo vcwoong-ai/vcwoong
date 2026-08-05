@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { parseDocument } from "@/lib/document-parser";
-import { uploadFile } from "@/lib/storage";
+import { uploadFile, readStoredFile } from "@/lib/storage";
 import { DocumentType } from "@prisma/client";
 import { randomUUID } from "crypto";
 import {
@@ -30,6 +30,12 @@ export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: "인증이 필요합니다" }, { status: 401 });
+  }
+
+  // 4.5MB를 넘는 파일은 브라우저에서 Vercel Blob으로 직접 업로드된 뒤,
+  // 여기엔 blobUrl만 JSON으로 전달돼 문서 레코드 생성 + 텍스트 파싱만 수행한다.
+  if ((request.headers.get("content-type") ?? "").includes("application/json")) {
+    return finalizeBlobUpload(request, session.user.id);
   }
 
   try {
@@ -104,6 +110,73 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ data: document }, { status: 201 });
   } catch (error) {
     console.error("Upload error:", error);
+    return NextResponse.json(
+      { error: "파일 업로드 중 오류가 발생했습니다" },
+      { status: 500 }
+    );
+  }
+}
+
+async function finalizeBlobUpload(request: NextRequest, userId: string) {
+  try {
+    const { blobUrl, dealId, fileName, mimeType, fileSize, documentType } =
+      (await request.json()) as {
+        blobUrl?: string;
+        dealId?: string;
+        fileName?: string;
+        mimeType?: string;
+        fileSize?: number;
+        documentType?: DocumentType;
+      };
+
+    if (!blobUrl || !dealId || !fileName) {
+      return NextResponse.json({ error: "잘못된 요청입니다" }, { status: 400 });
+    }
+
+    const { teamId, role } = await getUserTeamContext(userId);
+    const deal = await prisma.deal.findFirst({
+      where: { id: dealId, ...dealWriteWhere(userId, teamId, role) },
+    });
+    if (!deal) {
+      return NextResponse.json(
+        { error: permissionDeniedMessage("edit") },
+        { status: 403 }
+      );
+    }
+
+    const mime = mimeType ?? "application/octet-stream";
+    let parsedText: string | undefined;
+    let metadata: Record<string, unknown> = {};
+
+    try {
+      const buffer = await readStoredFile(blobUrl);
+      if (buffer) {
+        const parsed = await parseDocument(buffer, mime, fileName);
+        parsedText = parsed.text;
+        metadata = parsed.metadata as Record<string, unknown>;
+      }
+    } catch (parseError) {
+      console.warn("Document parsing failed:", parseError);
+    }
+
+    const docType = documentType ?? MIME_TYPE_MAP[mime] ?? DocumentType.OTHER;
+
+    const document = await prisma.document.create({
+      data: {
+        dealId,
+        name: fileName,
+        type: docType,
+        url: blobUrl,
+        size: fileSize ?? 0,
+        mimeType: mime,
+        parsedText,
+        metadata: metadata as import("@prisma/client").Prisma.InputJsonValue,
+      },
+    });
+
+    return NextResponse.json({ data: document }, { status: 201 });
+  } catch (error) {
+    console.error("Upload finalize error:", error);
     return NextResponse.json(
       { error: "파일 업로드 중 오류가 발생했습니다" },
       { status: 500 }

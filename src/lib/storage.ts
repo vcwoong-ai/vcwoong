@@ -1,9 +1,14 @@
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { put as blobPut, del as blobDel } from "@vercel/blob";
 import path from "path";
 import fs from "fs/promises";
 
-const storageMode = process.env.STORAGE_MODE ?? "local";
+// STORAGE_MODE을 명시하지 않아도 Vercel Blob 스토어가 연결돼 있으면
+// (BLOB_READ_WRITE_TOKEN 자동 주입) 그쪽을 기본으로 쓴다. Vercel 서버리스는
+// 배포 파일시스템이 읽기 전용이라 "local" 모드는 로컬 개발 전용이다.
+const storageMode =
+  process.env.STORAGE_MODE ?? (process.env.BLOB_READ_WRITE_TOKEN ? "vercel-blob" : "local");
 
 const s3Client =
   storageMode === "s3"
@@ -24,6 +29,15 @@ export async function uploadFile(
   key: string,
   mimeType: string
 ): Promise<string> {
+  if (storageMode === "vercel-blob") {
+    const blob = await blobPut(key, buffer, {
+      access: "public",
+      contentType: mimeType,
+      addRandomSuffix: false,
+    });
+    return blob.url;
+  }
+
   if (storageMode === "s3" && s3Client) {
     await s3Client.send(
       new PutObjectCommand({
@@ -52,6 +66,12 @@ export async function readStoredFile(
   urlOrKey: string
 ): Promise<Buffer | null> {
   try {
+    if (storageMode === "vercel-blob" || urlOrKey.includes(".blob.vercel-storage.com")) {
+      const res = await fetch(urlOrKey);
+      if (!res.ok) return null;
+      return Buffer.from(await res.arrayBuffer());
+    }
+
     if (storageMode === "s3" && s3Client) {
       // 전체 URL로 저장돼 있으면 키만 떼어낸다
       const key = urlOrKey.startsWith("http")
@@ -74,6 +94,10 @@ export async function readStoredFile(
 }
 
 export async function getFileUrl(key: string): Promise<string> {
+  if (storageMode === "vercel-blob") {
+    // uploadFile이 이미 공개 URL을 반환하므로 key 자체가 URL이다.
+    return key;
+  }
   if (storageMode === "s3" && s3Client) {
     const command = new GetObjectCommand({ Bucket: bucket, Key: key });
     return getSignedUrl(s3Client, command, { expiresIn: 3600 });
@@ -82,6 +106,10 @@ export async function getFileUrl(key: string): Promise<string> {
 }
 
 export async function deleteFile(key: string): Promise<void> {
+  if (storageMode === "vercel-blob") {
+    await blobDel(key);
+    return;
+  }
   if (storageMode === "s3" && s3Client) {
     await s3Client.send(
       new DeleteObjectCommand({ Bucket: bucket, Key: key })

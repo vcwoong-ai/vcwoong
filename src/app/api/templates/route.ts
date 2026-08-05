@@ -4,7 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { TemplateFileType, TemplateStatus } from "@prisma/client";
-import { uploadFile } from "@/lib/storage";
+import { uploadFile, readStoredFile } from "@/lib/storage";
 import { parseTemplate } from "@/lib/template/template-parser";
 import { mapTemplateSections } from "@/lib/template/template-mapper";
 import { checkQuota } from "@/lib/quotas";
@@ -31,6 +31,12 @@ export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: "인증이 필요합니다" }, { status: 401 });
+  }
+
+  // 4.5MB를 넘는 파일은 브라우저에서 Vercel Blob으로 직접 업로드된 뒤,
+  // 여기엔 blobUrl만 JSON으로 전달돼 템플릿 레코드 생성 + 구조 분석만 수행한다.
+  if ((request.headers.get("content-type") ?? "").includes("application/json")) {
+    return finalizeBlobTemplate(request, session.user.id);
   }
 
   const formData = await request.formData();
@@ -89,6 +95,60 @@ export async function POST(request: NextRequest) {
 
   // 백그라운드에서 분석 실행
   analyzeTemplateAsync(template.id, buffer, file.name, file.type);
+
+  return NextResponse.json({ data: template }, { status: 201 });
+}
+
+async function finalizeBlobTemplate(request: NextRequest, userId: string) {
+  const { blobUrl, fileName, mimeType, fileSize, name } =
+    (await request.json()) as {
+      blobUrl?: string;
+      fileName?: string;
+      mimeType?: string;
+      fileSize?: number;
+      name?: string;
+    };
+
+  if (!blobUrl || !fileName) {
+    return NextResponse.json({ error: "잘못된 요청입니다" }, { status: 400 });
+  }
+
+  const quota = await checkQuota(userId, "template");
+  if (!quota.allowed) {
+    return NextResponse.json({ error: quota.message }, { status: 429 });
+  }
+
+  const ext = fileName.split(".").pop()?.toLowerCase() ?? "docx";
+  const fileType: TemplateFileType = ext === "pptx" || ext === "ppt" ? "PPTX" : "DOCX";
+
+  const { teamId } = await getUserTeamContext(userId);
+  const template = await prisma.template.create({
+    data: {
+      name: name || fileName.replace(/\.[^.]+$/, ""),
+      originalName: fileName,
+      fileType,
+      fileUrl: blobUrl,
+      fileSize: fileSize ?? 0,
+      status: TemplateStatus.ANALYZING,
+      userId,
+      teamId,
+    },
+  });
+
+  const buffer = await readStoredFile(blobUrl);
+  if (buffer) {
+    analyzeTemplateAsync(
+      template.id,
+      buffer,
+      fileName,
+      mimeType ?? "application/octet-stream"
+    );
+  } else {
+    await prisma.template.update({
+      where: { id: template.id },
+      data: { status: TemplateStatus.ERROR },
+    });
+  }
 
   return NextResponse.json({ data: template }, { status: 201 });
 }

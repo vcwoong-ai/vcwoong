@@ -2,6 +2,11 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { useDropzone } from "react-dropzone";
+import { upload } from "@vercel/blob/client";
+
+// Vercel 서버리스 함수는 요청 본문이 4.5MB를 넘으면 플랫폼 단에서 차단하므로,
+// 이보다 큰 파일은 브라우저에서 Vercel Blob으로 직접 업로드한다.
+const DIRECT_UPLOAD_THRESHOLD = 4 * 1024 * 1024;
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -419,11 +424,37 @@ export function TemplatesClient({
     setError("");
 
     try {
-      const formData = new FormData();
-      formData.append("file", dragFile);
-      formData.append("name", templateName || dragFile.name);
+      let res: Response;
 
-      const res = await fetch("/api/templates", { method: "POST", body: formData });
+      if (dragFile.size > DIRECT_UPLOAD_THRESHOLD) {
+        // 큰 파일: 서버를 거치지 않고 브라우저에서 Blob으로 직접 업로드
+        const ext = dragFile.name.split(".").pop() ?? "bin";
+        const pathname = `templates/${crypto.randomUUID()}.${ext}`;
+
+        const blob = await upload(pathname, dragFile, {
+          access: "public",
+          handleUploadUrl: "/api/templates/blob-token",
+        });
+
+        res = await fetch("/api/templates", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            blobUrl: blob.url,
+            fileName: dragFile.name,
+            mimeType: dragFile.type,
+            fileSize: dragFile.size,
+            name: templateName || dragFile.name,
+          }),
+        });
+      } else {
+        const formData = new FormData();
+        formData.append("file", dragFile);
+        formData.append("name", templateName || dragFile.name);
+
+        res = await fetch("/api/templates", { method: "POST", body: formData });
+      }
+
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err.error ?? "업로드 실패");

@@ -2,10 +2,15 @@
 
 import { useState, useCallback, useRef } from "react";
 import { useDropzone } from "react-dropzone";
+import { upload } from "@vercel/blob/client";
 import { Upload, File, X, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+
+// Vercel 서버리스 함수는 요청 본문이 4.5MB를 넘으면 플랫폼 단에서 차단하므로,
+// 이보다 큰 파일은 브라우저에서 Vercel Blob으로 직접 업로드한다.
+const DIRECT_UPLOAD_THRESHOLD = 4 * 1024 * 1024;
 
 interface UploadedFile {
   file: File;
@@ -51,26 +56,61 @@ export function FileUploader({ dealId, onUploadComplete }: FileUploaderProps) {
     );
 
     try {
-      const formData = new FormData();
-      formData.append("file", uploadedFile.file);
-      formData.append("dealId", dealIdRef.current);
+      let response: Response;
 
-      const progressInterval = setInterval(() => {
-        setFiles((prev) =>
-          prev.map((f) =>
-            f.file === uploadedFile.file && f.progress < 80
-              ? { ...f, progress: f.progress + 15 }
-              : f
-          )
-        );
-      }, 500);
+      if (uploadedFile.file.size > DIRECT_UPLOAD_THRESHOLD) {
+        // 큰 파일: 서버를 거치지 않고 브라우저에서 Blob으로 직접 업로드
+        const ext = uploadedFile.file.name.split(".").pop() ?? "bin";
+        const pathname = `deals/${dealIdRef.current}/${crypto.randomUUID()}.${ext}`;
 
-      const response = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
-      });
+        const blob = await upload(pathname, uploadedFile.file, {
+          access: "public",
+          handleUploadUrl: "/api/upload/blob-token",
+          clientPayload: JSON.stringify({ dealId: dealIdRef.current }),
+          onUploadProgress: ({ percentage }) => {
+            setFiles((prev) =>
+              prev.map((f) =>
+                f.file === uploadedFile.file
+                  ? { ...f, progress: Math.min(90, percentage) }
+                  : f
+              )
+            );
+          },
+        });
 
-      clearInterval(progressInterval);
+        response = await fetch("/api/upload", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            blobUrl: blob.url,
+            dealId: dealIdRef.current,
+            fileName: uploadedFile.file.name,
+            mimeType: uploadedFile.file.type,
+            fileSize: uploadedFile.file.size,
+          }),
+        });
+      } else {
+        const formData = new FormData();
+        formData.append("file", uploadedFile.file);
+        formData.append("dealId", dealIdRef.current);
+
+        const progressInterval = setInterval(() => {
+          setFiles((prev) =>
+            prev.map((f) =>
+              f.file === uploadedFile.file && f.progress < 80
+                ? { ...f, progress: f.progress + 15 }
+                : f
+            )
+          );
+        }, 500);
+
+        response = await fetch("/api/upload", {
+          method: "POST",
+          body: formData,
+        });
+
+        clearInterval(progressInterval);
+      }
 
       if (!response.ok) {
         const err = await response.json();
