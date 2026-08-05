@@ -1,9 +1,9 @@
 /**
- * AI provider abstraction — Gemini-first + OpenRouter fallback.
+ * AI provider abstraction — DeepSeek(OpenRouter)-first + Gemini fallback.
  *
  * 호출 우선순위:
- *   1. AI_MODEL (기본: gemini-2.5-flash — GEMINI_API_KEY 있을 때)
- *      Gemini 없으면 OpenRouter 무료 모델
+ *   1. AI_MODEL (기본: deepseek/deepseek-v4-flash — OPENROUTER_API_KEY 있을 때)
+ *      OpenRouter 없으면 GEMINI_API_KEY 있을 때 gemini-2.5-flash
  *   2. 429/5xx → AI_FALLBACK_MODEL 로 전환
  *
  * 라우팅:
@@ -17,6 +17,8 @@ import { BRAND } from "./brand";
 
 function resolveDefaultModel(): string {
   if (process.env.AI_MODEL?.trim()) return process.env.AI_MODEL.trim();
+  const openrouter = process.env.OPENROUTER_API_KEY?.trim() ?? "";
+  if (openrouter.startsWith("sk-or-")) return "deepseek/deepseek-v4-flash";
   const gemini = process.env.GEMINI_API_KEY?.trim() ?? "";
   if (gemini.startsWith("AIza")) return "gemini-2.5-flash";
   return "meta-llama/llama-3.3-70b-instruct:free";
