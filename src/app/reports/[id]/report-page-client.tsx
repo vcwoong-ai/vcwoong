@@ -250,7 +250,7 @@ export function ReportPageClient({
     setIsExporting(true);
     try {
       const response = await fetch(
-        `/api/reports/${report.id}/export?format=${format}`,
+        `/api/reports/${report.id}/export/${format}`,
         { method: "POST" }
       );
       if (!response.ok) {
