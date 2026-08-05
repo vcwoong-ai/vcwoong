@@ -40,6 +40,18 @@ CREATE TYPE "SectionStatus" AS ENUM ('DRAFT', 'REVIEWED', 'APPROVED');
 -- CreateEnum
 CREATE TYPE "SectionKey" AS ENUM ('INVESTMENT_OVERVIEW', 'COMPANY_OVERVIEW', 'PRODUCT_TECHNOLOGY', 'MARKET_ANALYSIS', 'FINANCIAL_STATUS', 'VALUATION', 'RISK_ANALYSIS', 'INVESTMENT_TERMS', 'OPINION_SUMMARY', 'APPENDIX');
 
+-- CreateEnum
+CREATE TYPE "PortfolioStatus" AS ENUM ('ACTIVE', 'WATCH', 'RISK', 'EXITED', 'WRITTEN_OFF');
+
+-- CreateEnum
+CREATE TYPE "MilestoneStatus" AS ENUM ('PLANNED', 'IN_PROGRESS', 'DONE', 'DELAYED');
+
+-- CreateEnum
+CREATE TYPE "DealSourceType" AS ENUM ('INBOUND', 'REFERRAL', 'DEMO_DAY', 'ACCELERATOR', 'OUTREACH', 'PARTNER', 'OTHER');
+
+-- CreateEnum
+CREATE TYPE "InboundStatus" AS ENUM ('NEW', 'REVIEWING', 'QUALIFIED', 'PROMOTED', 'REJECTED');
+
 -- CreateTable
 CREATE TABLE "Account" (
     "id" TEXT NOT NULL,
@@ -222,6 +234,122 @@ CREATE TABLE "UsageLog" (
     CONSTRAINT "UsageLog_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "Fund" (
+    "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "vintageYear" INTEGER NOT NULL,
+    "fundSize" DOUBLE PRECISION NOT NULL,
+    "paidIn" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "managementFee" DOUBLE PRECISION NOT NULL DEFAULT 2,
+    "userId" TEXT NOT NULL,
+    "teamId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Fund_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "PortfolioCompany" (
+    "id" TEXT NOT NULL,
+    "dealId" TEXT,
+    "fundId" TEXT,
+    "companyName" TEXT NOT NULL,
+    "sector" "DealSector" NOT NULL,
+    "investedAt" TIMESTAMP(3) NOT NULL,
+    "investAmount" DOUBLE PRECISION NOT NULL,
+    "ownershipPercent" DOUBLE PRECISION NOT NULL,
+    "entryValuation" DOUBLE PRECISION NOT NULL,
+    "currentValuation" DOUBLE PRECISION,
+    "realizedAmount" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "status" "PortfolioStatus" NOT NULL DEFAULT 'ACTIVE',
+    "notes" TEXT,
+    "userId" TEXT NOT NULL,
+    "teamId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "PortfolioCompany_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "CompanyKPI" (
+    "id" TEXT NOT NULL,
+    "companyId" TEXT NOT NULL,
+    "period" TEXT NOT NULL,
+    "metric" TEXT NOT NULL,
+    "value" DOUBLE PRECISION NOT NULL,
+    "unit" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "CompanyKPI_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Milestone" (
+    "id" TEXT NOT NULL,
+    "companyId" TEXT NOT NULL,
+    "title" TEXT NOT NULL,
+    "dueDate" TIMESTAMP(3) NOT NULL,
+    "status" "MilestoneStatus" NOT NULL DEFAULT 'PLANNED',
+    "note" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Milestone_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "PortfolioUpdate" (
+    "id" TEXT NOT NULL,
+    "companyId" TEXT NOT NULL,
+    "period" TEXT NOT NULL,
+    "summary" TEXT NOT NULL,
+    "highlights" TEXT,
+    "concerns" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "PortfolioUpdate_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "LpReport" (
+    "id" TEXT NOT NULL,
+    "fundId" TEXT NOT NULL,
+    "period" TEXT NOT NULL,
+    "title" TEXT NOT NULL,
+    "content" TEXT NOT NULL,
+    "metrics" JSONB,
+    "status" "ReportStatus" NOT NULL DEFAULT 'DRAFT',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "LpReport_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "InboundDeal" (
+    "id" TEXT NOT NULL,
+    "companyName" TEXT NOT NULL,
+    "sector" "DealSector" NOT NULL DEFAULT 'GENERAL',
+    "source" "DealSourceType" NOT NULL DEFAULT 'OTHER',
+    "contactName" TEXT,
+    "contactEmail" TEXT,
+    "summary" TEXT,
+    "rawText" TEXT,
+    "screeningScore" INTEGER,
+    "screeningNotes" TEXT,
+    "status" "InboundStatus" NOT NULL DEFAULT 'NEW',
+    "dealId" TEXT,
+    "userId" TEXT NOT NULL,
+    "teamId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "InboundDeal_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "Account_provider_providerAccountId_key" ON "Account"("provider", "providerAccountId");
 
@@ -236,6 +364,15 @@ CREATE UNIQUE INDEX "VerificationToken_identifier_token_key" ON "VerificationTok
 
 -- CreateIndex
 CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "PortfolioCompany_dealId_key" ON "PortfolioCompany"("dealId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "CompanyKPI_companyId_period_metric_key" ON "CompanyKPI"("companyId", "period", "metric");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "PortfolioUpdate_companyId_period_key" ON "PortfolioUpdate"("companyId", "period");
 
 -- AddForeignKey
 ALTER TABLE "Account" ADD CONSTRAINT "Account_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -275,4 +412,40 @@ ALTER TABLE "SubscriptionPayment" ADD CONSTRAINT "SubscriptionPayment_userId_fke
 
 -- AddForeignKey
 ALTER TABLE "UsageLog" ADD CONSTRAINT "UsageLog_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Fund" ADD CONSTRAINT "Fund_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Fund" ADD CONSTRAINT "Fund_teamId_fkey" FOREIGN KEY ("teamId") REFERENCES "Team"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PortfolioCompany" ADD CONSTRAINT "PortfolioCompany_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PortfolioCompany" ADD CONSTRAINT "PortfolioCompany_teamId_fkey" FOREIGN KEY ("teamId") REFERENCES "Team"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PortfolioCompany" ADD CONSTRAINT "PortfolioCompany_fundId_fkey" FOREIGN KEY ("fundId") REFERENCES "Fund"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PortfolioCompany" ADD CONSTRAINT "PortfolioCompany_dealId_fkey" FOREIGN KEY ("dealId") REFERENCES "Deal"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "CompanyKPI" ADD CONSTRAINT "CompanyKPI_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "PortfolioCompany"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Milestone" ADD CONSTRAINT "Milestone_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "PortfolioCompany"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PortfolioUpdate" ADD CONSTRAINT "PortfolioUpdate_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "PortfolioCompany"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "LpReport" ADD CONSTRAINT "LpReport_fundId_fkey" FOREIGN KEY ("fundId") REFERENCES "Fund"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "InboundDeal" ADD CONSTRAINT "InboundDeal_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "InboundDeal" ADD CONSTRAINT "InboundDeal_teamId_fkey" FOREIGN KEY ("teamId") REFERENCES "Team"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
