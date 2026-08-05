@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { MODEL, isAIConfigured } from "@/lib/claude";
 
 export async function GET() {
   const env = {
@@ -7,6 +8,10 @@ export async function GET() {
     hasDirectUrl: Boolean(process.env.DIRECT_URL),
     hasNextAuthSecret: Boolean(process.env.NEXTAUTH_SECRET),
     hasNextAuthUrl: Boolean(process.env.NEXTAUTH_URL),
+    hasOpenRouterKey: Boolean(process.env.OPENROUTER_API_KEY?.trim()),
+    hasGeminiKey: Boolean(process.env.GEMINI_API_KEY?.trim()),
+    aiConfigured: isAIConfigured(),
+    aiModel: MODEL,
   };
 
   let dbOk = false;
