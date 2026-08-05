@@ -5,34 +5,33 @@
 1. [vercel.com](https://vercel.com) → 프로젝트 **dealsync-jade** (GitHub `vcwoong-ai/vcwoong`)
 2. Build Command: `npm run vercel-build`
 
-## 2. Supabase PostgreSQL (DB — 권장)
+## 2. Neon PostgreSQL (DB — 권장)
 
-### 기존 프로젝트 사용 가능
-
-- Project ID: `jgmvqtmohoxcriobjjfk`
-- Region: Tokyo (`ap-northeast-1`)
+Vercel의 **Neon 통합(Storage → Neon)**을 쓰면 프로젝트 생성과 동시에
+`DATABASE_URL`/`DIRECT_URL`이 Vercel 환경변수로 자동 주입됩니다.
+직접 만들 경우 [neon.tech](https://neon.tech) → 프로젝트 생성 후 아래 절차를 따르세요.
 
 ### A. 테이블 생성 (1회)
 
-Supabase Dashboard → **SQL Editor** → `prisma/db-init.sql` 전체 실행
+Neon Console → **SQL Editor** → `prisma/db-init.sql` 전체 실행
 
 ### B. Connection string
 
-**Project Settings → Database → Connection string → URI**
+**Neon Dashboard → Connect** 에서 두 종류를 확인:
 
-| Supabase Mode | Vercel 변수 | 포트 |
-|---------------|-------------|------|
-| **Transaction** (pooler) | `DATABASE_URL` | 6543 |
-| **Session** (direct) | `DIRECT_URL` | 5432 |
+| Neon 연결 | Vercel 변수 |
+|-----------|-------------|
+| **Pooled connection** (`-pooler` 포함 호스트) | `DATABASE_URL` |
+| **Direct connection** (`-pooler` 없는 호스트) | `DIRECT_URL` |
 
-Transaction URI 예시:
+Pooled URI 예시:
 ```
-postgresql://postgres.jgmvqtmohoxcriobjjfk:[PASSWORD]@aws-0-ap-northeast-1.pooler.supabase.com:6543/postgres?pgbouncer=true
+postgresql://<user>:<password>@<project>-pooler.<region>.aws.neon.tech/<db>?sslmode=require
 ```
 
-Session URI 예시:
+Direct URI 예시:
 ```
-postgresql://postgres.jgmvqtmohoxcriobjjfk:[PASSWORD]@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres
+postgresql://<user>:<password>@<project>.<region>.aws.neon.tech/<db>?sslmode=require
 ```
 
 ### C. 로컬 (선택)
@@ -47,8 +46,8 @@ npx prisma db seed   # demo@axiom.kr / Demo1234!
 
 | 변수 | 값 |
 |------|-----|
-| `DATABASE_URL` | Supabase Transaction pooler |
-| `DIRECT_URL` | Supabase Session/direct |
+| `DATABASE_URL` | Neon pooled connection |
+| `DIRECT_URL` | Neon direct connection |
 | `NEXTAUTH_SECRET` | `openssl rand -base64 32` |
 | `NEXTAUTH_URL` | `https://dealsync-jade.vercel.app` |
 
@@ -72,10 +71,6 @@ https://dealsync-jade.vercel.app/api/payments/webhook
 
 - [ ] 사이트 500 없음
 - [ ] 회원가입/로그인
-- [ ] Supabase Table Editor → `User` 테이블
-
-## Neon 대신 Supabase?
-
-Neon(`neon-red-mountain`)은 Claude 쪽일 수 있음 → **Axiom은 Supabase `jgmvqtmohoxcriobjjfk` 사용**
+- [ ] Neon Table Editor → `User` 테이블
 
 📱 모바일 가이드: [`docs/MOBILE-SETUP.md`](docs/MOBILE-SETUP.md)
