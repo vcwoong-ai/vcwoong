@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { waitUntil } from "@vercel/functions";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -64,13 +65,18 @@ export async function POST(
     return NextResponse.json({ error: "이미 생성 중입니다" }, { status: 409 });
   }
 
-  void generateSectionsAsync(
-    report.id,
-    report.deal,
-    report.agentType,
-    undefined,
-    session.user.id
-  ).catch((err) => console.error("generateSectionsAsync failed:", err));
+  // 응답을 먼저 보낸 뒤에도 Vercel이 함수를 바로 얼리지 않도록 생성 작업의
+  // 수명을 연장한다. waitUntil 없이 fire-and-forget으로 두면 서버리스
+  // 인스턴스가 응답 직후 정지되면서 생성이 중간에 끊길 수 있다.
+  waitUntil(
+    generateSectionsAsync(
+      report.id,
+      report.deal,
+      report.agentType,
+      undefined,
+      session.user.id
+    ).catch((err) => console.error("generateSectionsAsync failed:", err))
+  );
 
   return NextResponse.json({ data: { id: report.id, status: "GENERATING" } });
 }

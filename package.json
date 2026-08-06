@@ -48,6 +48,7 @@
     "@radix-ui/react-toast": "^1.2.17",
     "@tosspayments/payment-sdk": "^1.9.3",
     "@vercel/blob": "^2.6.1",
+    "@vercel/functions": "^3.8.0",
     "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
