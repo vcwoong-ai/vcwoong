@@ -76,8 +76,11 @@ export async function generateSectionsAsync(
 
       if (existingContent !== undefined) {
         // 이전 시도에서 이미 만들어진 섹션 — 재사용하고 AI 호출은 건너뛴다.
+        console.log(`[Gen] report=${reportId} ${i + 1}/${total} ${meta.title} — 기존 섹션 재사용`);
         result = { sectionKey, content: existingContent, tokensUsed: 0 };
       } else {
+        console.log(`[Gen] report=${reportId} ${i + 1}/${total} ${meta.title} 생성 시작`);
+        const startedAt = Date.now();
         const continuity =
           priorSummaries.length > 0
             ? `\n## 이전 섹션 요약 (일관성 유지)\n${(
@@ -108,6 +111,11 @@ export async function generateSectionsAsync(
               .join("\n\n"),
           },
           sectionKey
+        );
+
+        console.log(
+          `[Gen] report=${reportId} ${i + 1}/${total} ${meta.title} 완료 ` +
+            `(${Math.round((Date.now() - startedAt) / 1000)}초, ${result.tokensUsed} tokens, ${result.modelUsed ?? "?"})`
         );
 
         // 섹션이 완성되는 즉시 저장한다 — 진행률 화면이 실시간으로 반영되고,

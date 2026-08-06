@@ -46,16 +46,30 @@ function isFreeModel(model: string): boolean {
   return model.endsWith(":free");
 }
 
+/**
+ * 단일 AI 호출 타임아웃(ms).
+ *
+ * 타임아웃이 없으면 업스트림이 응답을 주지 않을 때 호출이 무한정 매달리고,
+ * 섹션 루프가 통째로 멈춰 진행률이 0에서 고정된 채 함수 실행시간 제한까지
+ * 흘러가 버린다. 재시도 여유를 남기도록 넉넉하되 유한한 값으로 잡는다.
+ */
+const REQUEST_TIMEOUT_MS = Number(process.env.AI_REQUEST_TIMEOUT_MS ?? 120_000);
+
 function getClientForModel(model: string): OpenAI {
   if (isGeminiModel(model)) {
     return new OpenAI({
       baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
       apiKey: process.env.GEMINI_API_KEY ?? "",
+      timeout: REQUEST_TIMEOUT_MS,
+      // 재시도는 callWithFallback에서 직접 제어한다(폴백 모델 전환 포함).
+      maxRetries: 0,
     });
   }
   return new OpenAI({
     baseURL: "https://openrouter.ai/api/v1",
     apiKey: process.env.OPENROUTER_API_KEY ?? "",
+    timeout: REQUEST_TIMEOUT_MS,
+    maxRetries: 0,
     defaultHeaders: {
       "HTTP-Referer": process.env.NEXTAUTH_URL ?? "http://localhost:3000",
       "X-Title": BRAND.name,
@@ -120,16 +134,39 @@ async function callWithFallback(
   maxTokens: number,
   temperature?: number
 ): Promise<{ result: OpenAI.Chat.Completions.ChatCompletion; usedModel: string }> {
+  const describeError = (err: unknown) => {
+    const e = err as { status?: number; name?: string; message?: string };
+    return `${e?.name ?? "Error"}${e?.status ? ` ${e.status}` : ""}: ${e?.message ?? String(err)}`;
+  };
+
   const isRetryable = (err: unknown) => {
+    const e = err as { status?: number; name?: string };
+    if (e?.status === 429 || e?.status === 503 || e?.status === 502 || e?.status === 500) {
+      return true;
+    }
+    // 타임아웃·연결 실패도 재시도 대상 — 이걸 빼두면 업스트림이 응답하지
+    // 않을 때 폴백 모델로 넘어가지도 못하고 그대로 실패한다.
+    return (
+      e?.name === "APIConnectionTimeoutError" ||
+      e?.name === "APIConnectionError" ||
+      e?.name === "AbortError"
+    );
+  };
+
+  // 모델 ID 오타·미지원 모델(400/404)이나 키 문제(401/403)는 같은 모델로
+  // 재시도해봐야 소용없지만, 폴백 모델로는 살릴 수 있다. 이걸 구분하지 않으면
+  // 모델 ID 하나 잘못 넣었을 때 보고서 생성 전체가 죽는다.
+  const shouldTryFallback = (err: unknown) => {
     const s = (err as { status?: number })?.status;
-    return s === 429 || s === 503 || s === 502 || s === 500;
+    return isRetryable(err) || s === 400 || s === 401 || s === 403 || s === 404;
   };
 
   try {
     const result = await callOnce(model, messages, maxTokens, temperature);
     return { result, usedModel: model };
   } catch (err) {
-    if (!isRetryable(err)) throw err;
+    console.warn(`[AI] ${model} 1차 호출 실패 — ${describeError(err)}`);
+    if (!shouldTryFallback(err)) throw err;
     if (isFreeModel(model) && model !== FALLBACK_MODEL) {
       console.log(`[AI] 무료 모델 레이트리밋 → ${FALLBACK_MODEL}로 전환`);
     } else {
@@ -168,6 +205,7 @@ async function callWithFallback(
       return { result, usedModel: retryModel };
     } catch (err) {
       lastErr = err;
+      console.warn(`[AI] ${retryModel} 실패 — ${describeError(err)}`);
       if (!isRetryable(err)) break;
     }
   }
