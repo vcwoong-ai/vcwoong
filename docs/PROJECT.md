@@ -19,7 +19,7 @@
 
 ## 최근 업그레이드 (배포 제외)
 
-- Gemini-first 기본 모델 + temperature 전달
+- OpenRouter 단일 프로바이더 + temperature 전달
 - 공유 팩트·이전 섹션 요약을 통한 보고서 일관성
 - 자동 품질 점수 (`/api/reports/[id]/quality` + UI 패널)
 - BIO PoS 일치, IT 5섹션 특화, General 시스템 프롬프트

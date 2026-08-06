@@ -126,7 +126,7 @@ export default async function SettingsPage() {
               ))}
             </div>
             <p className="text-xs text-gray-400 mt-3">
-              * AI 모델: {MODEL} (OpenRouter / Gemini 멀티 프로바이더)
+              * AI 모델: {MODEL} (OpenRouter)
             </p>
           </CardContent>
         </Card>

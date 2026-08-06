@@ -57,7 +57,7 @@
 
 ## 나중에 (지금 X)
 
-- AI: OpenRouter / Gemini 키
+- AI: OpenRouter 키
 - 파일: AWS S3
 - 결제: Toss
 

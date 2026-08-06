@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { MODEL, isAIConfigured } from "@/lib/claude";
+import { MODEL, FALLBACK_MODEL, isAIConfigured } from "@/lib/claude";
 
 export async function GET() {
   const env = {
@@ -9,9 +9,9 @@ export async function GET() {
     hasNextAuthSecret: Boolean(process.env.NEXTAUTH_SECRET),
     hasNextAuthUrl: Boolean(process.env.NEXTAUTH_URL),
     hasOpenRouterKey: Boolean(process.env.OPENROUTER_API_KEY?.trim()),
-    hasGeminiKey: Boolean(process.env.GEMINI_API_KEY?.trim()),
     aiConfigured: isAIConfigured(),
     aiModel: MODEL,
+    aiFallbackModel: FALLBACK_MODEL,
   };
 
   let dbOk = false;
