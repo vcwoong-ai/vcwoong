@@ -39,6 +39,9 @@ export async function generateSectionsAsync(
     const results = [];
     const sectionKeys = SECTION_META.map((s) => s.key);
 
+    // 이전(멈춘) 시도에서 남은 부분 섹션이 있으면 지우고 새로 시작한다.
+    await prisma.reportSection.deleteMany({ where: { reportId } });
+
     const sharedFacts = extractSharedFacts({
       companyName: deal.companyName,
       sector: deal.sector,
@@ -91,6 +94,18 @@ export async function generateSectionsAsync(
         sectionKey
       );
       results.push(result);
+
+      // 섹션이 완성되는 즉시 저장한다 — 진행률 화면이 실시간으로 반영되고,
+      // 도중에 타임아웃/실패해도 이미 만든 섹션은 남아 다시 만들 필요가 없다.
+      await prisma.reportSection.create({
+        data: {
+          reportId,
+          sectionKey: result.sectionKey,
+          title: meta.title,
+          content: result.content,
+          order: meta.order,
+        },
+      });
 
       // 다음 섹션 일관성: 숫자·키워드를 남긴 요약
       const nums = (result.content.match(/[\d,.]+(?:억|조|%|원)?/g) ?? [])
@@ -156,33 +171,19 @@ export async function generateSectionsAsync(
         quality.factConsistency && quality.factConsistency.checked > 0
           ? ` · 팩트일치 ${quality.factConsistency.matched}/${quality.factConsistency.checked}`
           : "";
-      results[opinionIdx] = {
-        ...results[opinionIdx],
-        content:
-          results[opinionIdx].content +
-          `\n\n---\n*자동 품질 점수: ${quality.overallScore}/100` +
-          factNote +
-          (quality.suggestions[0] ? ` · ${quality.suggestions[0]}` : "") +
-          `*`,
-      };
-    }
+      const opinionContent =
+        results[opinionIdx].content +
+        `\n\n---\n*자동 품질 점수: ${quality.overallScore}/100` +
+        factNote +
+        (quality.suggestions[0] ? ` · ${quality.suggestions[0]}` : "") +
+        `*`;
 
-    // 삭제 후 생성 사이에 실패하면 본문이 통째로 사라지므로 트랜잭션으로 묶는다
-    await prisma.$transaction([
-      prisma.reportSection.deleteMany({ where: { reportId } }),
-      prisma.reportSection.createMany({
-        data: results.map((result) => {
-          const meta = SECTION_META.find((m) => m.key === result.sectionKey)!;
-          return {
-            reportId,
-            sectionKey: result.sectionKey,
-            title: meta.title,
-            content: result.content,
-            order: meta.order,
-          };
-        }),
-      }),
-    ]);
+      // 이미 저장된 의견종합 섹션에 품질 메모를 덧붙인다.
+      await prisma.reportSection.updateMany({
+        where: { reportId, sectionKey: "OPINION_SUMMARY" },
+        data: { content: opinionContent },
+      });
+    }
 
     await prisma.report.update({
       where: { id: reportId },
