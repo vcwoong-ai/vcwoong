@@ -1,6 +1,6 @@
 /**
  * 골든 IR 픽스처로 실제 에이전트 1섹션 생성 → 품질 점수 비교
- * Usage: npm run test:golden  (requires GEMINI_API_KEY in .env.local)
+ * Usage: npm run test:golden  (requires OPENROUTER_API_KEY in .env.local)
  */
 import { readFileSync } from "fs";
 import { resolve } from "path";
@@ -92,7 +92,7 @@ async function main() {
   console.log("\n=== Axiom 골든 샘플 (실제 에이전트) ===\n");
 
   if (!isAIConfigured()) {
-    console.log("❌ GEMINI_API_KEY (또는 OPENROUTER)가 없습니다.");
+    console.log("❌ OPENROUTER_API_KEY가 없습니다.");
     console.log("   .env.local에 키를 넣고 다시 실행하세요.\n");
     process.exit(1);
   }

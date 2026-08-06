@@ -1,45 +1,33 @@
 /**
- * AI provider abstraction — DeepSeek(OpenRouter)-first + Gemini fallback.
+ * AI provider abstraction — OpenRouter 단일 프로바이더.
  *
  * 호출 우선순위:
- *   1. AI_MODEL (기본: deepseek/deepseek-v4-flash-0731 — OPENROUTER_API_KEY 있을 때)
- *      OpenRouter 없으면 GEMINI_API_KEY 있을 때 gemini-2.5-flash
- *   2. 429/5xx → AI_FALLBACK_MODEL 로 전환
+ *   1. AI_MODEL (기본: deepseek/deepseek-v4-flash-0731)
+ *   2. 실패(429/5xx/타임아웃, 또는 모델 ID·인증 오류) → AI_FALLBACK_MODEL
  *
- * 라우팅:
- *   gemini-*  →  Google AI Studio (GEMINI_API_KEY)
- *   그 외      →  OpenRouter       (OPENROUTER_API_KEY)
+ * 모든 호출은 OpenRouter(OPENROUTER_API_KEY)로 나간다.
  */
 
 import OpenAI from "openai";
 import { generateMockContent } from "./mock-generator";
 import { BRAND } from "./brand";
 
+const DEFAULT_MODEL = "deepseek/deepseek-v4-flash-0731";
+/** 기본 모델이 죽었을 때를 대비한 OpenRouter 무료 모델 */
+const DEFAULT_FALLBACK_MODEL = "meta-llama/llama-3.3-70b-instruct:free";
+
 function resolveDefaultModel(): string {
-  if (process.env.AI_MODEL?.trim()) return process.env.AI_MODEL.trim();
-  const openrouter = process.env.OPENROUTER_API_KEY?.trim() ?? "";
-  if (openrouter.startsWith("sk-or-")) return "deepseek/deepseek-v4-flash-0731";
-  const gemini = process.env.GEMINI_API_KEY?.trim() ?? "";
-  if (gemini.startsWith("AIza")) return "gemini-2.5-flash";
-  return "meta-llama/llama-3.3-70b-instruct:free";
+  return process.env.AI_MODEL?.trim() || DEFAULT_MODEL;
 }
 
 export const MODEL = resolveDefaultModel();
 
 export const FALLBACK_MODEL =
-  process.env.AI_FALLBACK_MODEL ??
-  (MODEL.startsWith("gemini-")
-    ? "meta-llama/llama-3.3-70b-instruct:free"
-    : "gemini-2.5-flash");
+  process.env.AI_FALLBACK_MODEL?.trim() ||
+  (MODEL === DEFAULT_FALLBACK_MODEL ? DEFAULT_MODEL : DEFAULT_FALLBACK_MODEL);
 
-/** Gemini 2.5는 thinking 토큰을 내부 사용하므로 max_tokens를 더 높게 설정해야 함 */
-function getMaxTokens(model: string, requested?: number): number {
-  if (requested) return requested;
-  return model.startsWith("gemini-2.5") ? 8192 : 4096;
-}
-
-function isGeminiModel(model: string): boolean {
-  return model.startsWith("gemini-") || model.startsWith("models/gemini-");
+function getMaxTokens(_model: string, requested?: number): number {
+  return requested ?? 4096;
 }
 
 function isFreeModel(model: string): boolean {
@@ -53,22 +41,14 @@ function isFreeModel(model: string): boolean {
  * 섹션 루프가 통째로 멈춰 진행률이 0에서 고정된 채 함수 실행시간 제한까지
  * 흘러가 버린다. 재시도 여유를 남기도록 넉넉하되 유한한 값으로 잡는다.
  */
-const REQUEST_TIMEOUT_MS = Number(process.env.AI_REQUEST_TIMEOUT_MS ?? 120_000);
+const REQUEST_TIMEOUT_MS = Number(process.env.AI_REQUEST_TIMEOUT_MS ?? 150_000);
 
-function getClientForModel(model: string): OpenAI {
-  if (isGeminiModel(model)) {
-    return new OpenAI({
-      baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
-      apiKey: process.env.GEMINI_API_KEY ?? "",
-      timeout: REQUEST_TIMEOUT_MS,
-      // 재시도는 callWithFallback에서 직접 제어한다(폴백 모델 전환 포함).
-      maxRetries: 0,
-    });
-  }
+function getClient(): OpenAI {
   return new OpenAI({
     baseURL: "https://openrouter.ai/api/v1",
     apiKey: process.env.OPENROUTER_API_KEY ?? "",
     timeout: REQUEST_TIMEOUT_MS,
+    // 재시도는 callWithFallback에서 직접 제어한다(폴백 모델 전환 포함).
     maxRetries: 0,
     defaultHeaders: {
       "HTTP-Referer": process.env.NEXTAUTH_URL ?? "http://localhost:3000",
@@ -78,12 +58,8 @@ function getClientForModel(model: string): OpenAI {
 }
 
 export function isAIConfigured(): boolean {
-  const gemini = process.env.GEMINI_API_KEY?.trim() ?? "";
   const openrouter = process.env.OPENROUTER_API_KEY?.trim() ?? "";
-  return (
-    gemini.startsWith("AIza") ||
-    (openrouter.startsWith("sk-or-") && openrouter.length > 20)
-  );
+  return openrouter.startsWith("sk-or-") && openrouter.length > 20;
 }
 
 export interface ClaudeMessage {
@@ -112,7 +88,7 @@ async function callOnce(
   maxTokens: number,
   temperature?: number
 ): Promise<OpenAI.Chat.Completions.ChatCompletion> {
-  const client = getClientForModel(model);
+  const client = getClient();
   const result = await client.chat.completions.create({
     model,
     max_tokens: maxTokens,
@@ -174,24 +150,26 @@ async function callWithFallback(
     }
   }
 
-  // 폴백 모델이 설정되지 않았거나 키가 없으면 기본 모델만 재시도
+  // 폴백 모델이 같거나 키가 없으면 기본 모델로만 재시도
   const fallback = FALLBACK_MODEL;
   const canUseFallback =
     fallback !== model &&
-    ((isGeminiModel(fallback) &&
-      (process.env.GEMINI_API_KEY?.trim() ?? "").startsWith("AIza")) ||
-      (!isGeminiModel(fallback) &&
-        (process.env.OPENROUTER_API_KEY?.trim() ?? "").startsWith("sk-or-")));
+    (process.env.OPENROUTER_API_KEY?.trim() ?? "").startsWith("sk-or-");
 
   const retryModel = canUseFallback ? fallback : model;
   const fallbackTokens = getMaxTokens(retryModel, maxTokens);
   let lastErr: unknown;
 
-  for (let attempt = 0; attempt < 4; attempt++) {
+  // 섹션 10개를 순차 생성하는 구조라, 한 섹션이 재시도로 시간을 다 잡아먹으면
+  // 나머지 섹션이 실행조차 못 한다. 재시도 횟수·대기를 짧게 유지한다.
+  const MAX_ATTEMPTS = 3;
+  const BACKOFF_MS = [0, 5_000, 15_000];
+
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     if (attempt > 0) {
-      const waitMs = Math.min(15_000 * Math.pow(2, attempt - 1), 60_000);
+      const waitMs = BACKOFF_MS[attempt];
       console.log(
-        `[AI] ${retryModel} 재시도 ${attempt}/3, ${waitMs / 1000}초 대기...`
+        `[AI] ${retryModel} 재시도 ${attempt}/${MAX_ATTEMPTS - 1}, ${waitMs / 1000}초 대기...`
       );
       await sleep(waitMs);
     }

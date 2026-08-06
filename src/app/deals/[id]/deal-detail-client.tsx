@@ -322,12 +322,10 @@ export function DealDetailClient({
         <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           <Zap className="w-4 h-4 mt-0.5 flex-shrink-0" />
           <span>
-            <strong>데모 모드</strong> — Gemini API 키가 설정되지 않아 AI
-            샘플 콘텐츠로 동작합니다. <code className="text-xs">GEMINI_API_KEY</code>를
-            설정하면 실제 보고서가 생성됩니다.
+            <strong>데모 모드</strong> — OpenRouter API 키가 설정되지 않아
             보고서가 샘플 콘텐츠로 생성됩니다. 전체 흐름(생성·편집·내보내기)은
-            그대로 동작하며, <code>.env.local</code>에 실제 키를 입력하면 자동으로
-            실제 AI 생성으로 전환됩니다.
+            그대로 동작하며, <code className="text-xs">OPENROUTER_API_KEY</code>를
+            설정하면 자동으로 실제 AI 생성으로 전환됩니다.
           </span>
         </div>
       )}

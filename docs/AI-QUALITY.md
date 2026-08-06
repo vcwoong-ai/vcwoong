@@ -6,7 +6,7 @@ Supabase/Vercel과 무관하게 **로컬에서 보고서 품질을 올리는** �
 
 | 항목 | 내용 |
 |------|------|
-| Gemini-first | `GEMINI_API_KEY` 있으면 기본 `gemini-2.5-flash` |
+| OpenRouter 단일 | `OPENROUTER_API_KEY` + `AI_MODEL` (기본 DeepSeek V4 Flash) |
 | temperature | 생성 호출에 실제 전달 (JSON 0.3, 섹션 0.35) |
 | 문서 컨텍스트 | 3,000 → **8,000자**/문서 |
 | 공유 팩트 | ARR/임상단계 등 섹션 간 일관성 |
@@ -36,25 +36,25 @@ Supabase/Vercel과 무관하게 **로컬에서 보고서 품질을 올리는** �
 ```bash
 npm run test:all      # quality + fixtures + routing (API 키 불필요)
 npm run test:routing  # 에이전트 라우팅·섹션 컨텍스트 회귀
-npm run test:golden   # Gemini 실제 호출 (키 필요)
+npm run test:golden   # OpenRouter 실제 호출 (키 필요)
 ```
 | General Agent | 전용 시스템 프롬프트 |
 | 섹션 재생성 | 보고서 편집기에서 섹션별 AI 재생성 → 품질 점수 자동 새로고침 |
 | 골든 IR 1클릭 | 딜 상세 → 문서 탭 → 「골든 IR 로드」 |
-| 골든 비교 | `npm run test:golden` (Gemini) |
+| 골든 비교 | `npm run test:golden` (OpenRouter) |
 
 ## 로컬 실행
 
 ```bash
 # .env.local
-GEMINI_API_KEY=AIza...
-AI_MODEL=gemini-2.5-flash
+OPENROUTER_API_KEY=sk-or-...
+AI_MODEL=deepseek/deepseek-v4-flash-0731
 
 npm run db:setup:local
 npm run test:quality    # API 키 불필요
 npm run test:fixtures   # 골든 IR 추출 검증
-npm run test:golden     # Gemini로 1섹션 생성+품질 점수
-npm run test:ai         # Gemini 스모크
+npm run test:golden     # 실제 호출로 1섹션 생성+품질 점수
+npm run test:ai         # OpenRouter 스모크 (모델 ID 유효성 확인)
 npm run dev:local
 ```
 

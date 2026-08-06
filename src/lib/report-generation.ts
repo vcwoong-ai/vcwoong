@@ -24,6 +24,18 @@ export interface DealForGeneration {
   documents: Array<{ name: string; parsedText: string | null }>;
 }
 
+/**
+ * 한 번의 실행에서 섹션 생성에 쓸 수 있는 시간(ms).
+ *
+ * Vercel 함수는 maxDuration(800초)에서 강제 종료되는데, 그렇게 죽으면
+ * 상태 정리도 못 하고 GENERATING에 멈춘 채로 남는다. 그보다 일찍 스스로
+ * 멈춰서 만든 섹션까지 저장하고 상태를 정리하면, 사용자가 "다시 시도"를
+ * 눌렀을 때 남은 섹션만 이어서 만들 수 있다.
+ */
+const GENERATION_BUDGET_MS = Number(
+  process.env.REPORT_GENERATION_BUDGET_MS ?? 660_000
+);
+
 export async function generateSectionsAsync(
   reportId: string,
   deal: DealForGeneration,
@@ -32,6 +44,7 @@ export async function generateSectionsAsync(
   userId?: string
 ) {
   const total = SECTION_META.length;
+  const deadline = Date.now() + GENERATION_BUDGET_MS;
   initProgress(reportId, total);
 
   try {
@@ -79,6 +92,23 @@ export async function generateSectionsAsync(
         console.log(`[Gen] report=${reportId} ${i + 1}/${total} ${meta.title} — 기존 섹션 재사용`);
         result = { sectionKey, content: existingContent, tokensUsed: 0 };
       } else {
+        // 남은 예산이 없으면 강제 종료를 기다리지 말고 스스로 멈춘다.
+        // 여기까지 만든 섹션은 이미 저장돼 있으므로 재시도 시 이어서 진행된다.
+        if (Date.now() >= deadline) {
+          console.warn(
+            `[Gen] report=${reportId} 시간 예산 소진 — ${i}/${total} 섹션까지 저장하고 중단(재시도 시 이어서 생성)`
+          );
+          await prisma.report.update({
+            where: { id: reportId },
+            data: { status: ReportStatus.PENDING },
+          });
+          errorProgress(
+            reportId,
+            `시간이 초과되어 ${i}/${total} 섹션까지 저장했습니다. "다시 시도"를 누르면 남은 섹션부터 이어서 생성합니다.`
+          );
+          return;
+        }
+
         console.log(`[Gen] report=${reportId} ${i + 1}/${total} ${meta.title} 생성 시작`);
         const startedAt = Date.now();
         const continuity =

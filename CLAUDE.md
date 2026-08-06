@@ -40,7 +40,7 @@
 
 ## 기술 스택
 
-Next.js 14 App Router, TypeScript, Tailwind, shadcn/ui, Neon (PostgreSQL), OpenRouter/Gemini, Vercel, Toss Payments
+Next.js 14 App Router, TypeScript, Tailwind, shadcn/ui, Neon (PostgreSQL), OpenRouter, Vercel, Toss Payments
 
 ## 개발 로드맵
 

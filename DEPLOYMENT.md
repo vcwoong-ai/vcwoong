@@ -55,7 +55,7 @@ npx prisma db seed   # demo@axiom.kr / Demo1234!
 
 | 변수 | 용도 |
 |------|------|
-| `OPENROUTER_API_KEY` / `GEMINI_API_KEY` | AI 보고서 |
+| `OPENROUTER_API_KEY` | AI 보고서 (없으면 데모 모드) |
 | `NEXT_PUBLIC_TOSS_CLIENT_KEY` / `TOSS_SECRET_KEY` | 구독 결제 |
 
 → **Redeploy**
