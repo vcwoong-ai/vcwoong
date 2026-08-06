@@ -4,7 +4,10 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ReportStatus } from "@prisma/client";
-import { generateSectionsAsync } from "@/lib/report-generation";
+import {
+  generateSectionsAsync,
+  STALE_GENERATION_MS,
+} from "@/lib/report-generation";
 import { checkQuota } from "@/lib/quotas";
 import {
   getUserTeamContext,
@@ -40,11 +43,8 @@ export async function POST(
     return NextResponse.json({ error: permissionDeniedMessage("edit") }, { status: 403 });
   }
 
-  // 서버리스 함수가 실행시간 제한(vercel.json maxDuration 800초)에 걸려
-  // 강제 종료되면 상태가 GENERATING에 영원히 멈출 수 있다. 그 제한보다
-  // 넉넉히 긴 시간이 지나도 안 끝났으면 멈춘 것으로 보고 재시도를 허용한다.
-  // (maxDuration보다 짧게 잡으면 정상 진행 중인 생성을 stale로 오판할 수 있음)
-  const STALE_GENERATION_MS = 15 * 60 * 1000;
+  // 함수가 실행시간 제한으로 강제 종료되면 상태가 GENERATING에 멈출 수 있다.
+  // 일정 시간이 지나도 안 끝났으면 멈춘 것으로 보고 재시도를 허용한다.
   const isStale =
     report.status === ReportStatus.GENERATING &&
     Date.now() - report.updatedAt.getTime() > STALE_GENERATION_MS;

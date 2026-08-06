@@ -36,6 +36,16 @@ const GENERATION_BUDGET_MS = Number(
   process.env.REPORT_GENERATION_BUDGET_MS ?? 660_000
 );
 
+/**
+ * GENERATING 상태가 이 시간을 넘겨도 안 끝나면 "멈춘 것"으로 본다.
+ *
+ * 함수가 강제 종료되면 상태를 정리하지 못해 GENERATING으로 남는데, 그걸
+ * 영원히 "생성 중"으로 취급하면 해당 딜은 새 보고서를 만들 수 없게 된다.
+ * 시간 예산(660초)보다 넉넉히 길게 잡아 정상 진행 중인 생성을 멈춘 것으로
+ * 오판하지 않도록 한다.
+ */
+export const STALE_GENERATION_MS = 15 * 60 * 1000;
+
 export async function generateSectionsAsync(
   reportId: string,
   deal: DealForGeneration,

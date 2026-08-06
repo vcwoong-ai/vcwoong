@@ -6,7 +6,10 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { AgentType, ReportStatus } from "@prisma/client";
 import { inferAgentType } from "@/agents";
-import { generateSectionsAsync } from "@/lib/report-generation";
+import {
+  generateSectionsAsync,
+  STALE_GENERATION_MS,
+} from "@/lib/report-generation";
 import { checkQuota } from "@/lib/quotas";
 import { getUserTeamContext, dealWriteWhere, templateReadWhere, permissionDeniedMessage } from "@/lib/team-access";
 
@@ -86,8 +89,30 @@ export async function POST(
     );
   }
 
+  // 실행시간 제한으로 함수가 강제 종료되면 status가 GENERATING에 남는다.
+  // 그런 리포트를 계속 "생성 중"으로 취급하면 이 딜은 영영 새 보고서를
+  // 만들 수 없으므로(항상 409), 오래된 것은 멈춘 것으로 보고 정리한다.
+  const staleBefore = new Date(Date.now() - STALE_GENERATION_MS);
+  const stale = await prisma.report.updateMany({
+    where: {
+      dealId: params.id,
+      status: ReportStatus.GENERATING,
+      updatedAt: { lt: staleBefore },
+    },
+    data: { status: ReportStatus.PENDING },
+  });
+  if (stale.count > 0) {
+    console.warn(
+      `[Report] deal=${params.id} 멈춘 생성 ${stale.count}건을 PENDING으로 정리`
+    );
+  }
+
   const inFlight = await prisma.report.findFirst({
-    where: { dealId: params.id, status: ReportStatus.GENERATING },
+    where: {
+      dealId: params.id,
+      status: ReportStatus.GENERATING,
+      updatedAt: { gte: staleBefore },
+    },
     select: { id: true },
   });
   if (inFlight) {
