@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getProgress } from "@/lib/generation-progress";
 import { getUserTeamContext, reportReadWhere } from "@/lib/team-access";
+import { SECTION_META } from "@/types";
 
 /**
  * Server-Sent Events endpoint for report generation progress.
@@ -93,11 +94,13 @@ export async function GET(
             break;
           }
 
-          // 아직 생성 중 — 하트비트만 보내고 계속 기다린다
+          // 아직 생성 중 — 하트비트만 보내고 계속 기다린다.
+          // total을 0으로 보내면 클라이언트가 진행 바를 아예 숨겨서
+          // 멈춘 것처럼 보이므로, 전체 섹션 수를 넣어 진행 중임을 보여준다.
           send({
             status: "generating",
             completed: current._count.sections,
-            total: 0,
+            total: SECTION_META.length,
             currentSection: "AI 분석 진행 중",
           });
         }
