@@ -401,7 +401,9 @@ export function ReportWizard({ deal, open, onClose }: WizardProps) {
                 </div>
 
                 <p className="text-xs text-center text-gray-400">
-                  PubMed·ClinicalTrials·FDA 실시간 데이터 조회 포함 시 최대 10분 소요
+                  {selectedAgent === AgentType.BIO
+                    ? "PubMed·ClinicalTrials·FDA 실시간 데이터 조회 포함 시 최대 10분 소요"
+                    : "AI 분석에 최대 몇 분 정도 소요될 수 있습니다"}
                 </p>
               </>
             ) : (
