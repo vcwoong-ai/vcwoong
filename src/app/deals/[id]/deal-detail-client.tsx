@@ -181,7 +181,8 @@ export function DealDetailClient({
   );
   const [wizardOpen, setWizardOpen] = useState(false);
   const [loadingFixture, setLoadingFixture] = useState(false);
-  const eventSourceRef = useRef<EventSource | null>(null);
+  // 페이지를 벗어나면 진행 중인 폴링 루프를 멈춘다.
+  const pollAbortRef = useRef(false);
 
   // 사용 가능한 템플릿 로드
   const loadTemplates = useCallback(async () => {
@@ -199,7 +200,7 @@ export function DealDetailClient({
       setWizardOpen(true);
     }
     return () => {
-      eventSourceRef.current?.close();
+      pollAbortRef.current = true;
     };
   }, [loadTemplates]);
 
@@ -253,28 +254,28 @@ export function DealDetailClient({
       const reportId: string | undefined = created?.id;
 
       if (reportId) {
-        // Subscribe to SSE progress stream
-        const es = new EventSource(`/api/reports/${reportId}/progress`);
-        eventSourceRef.current = es;
+        // 진행 상태 폴링 — SSE는 서버리스에서 장시간 연결이 쉽게 끊긴다.
+        const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+        let consecutiveErrors = 0;
 
-        await new Promise<void>((resolve) => {
-          es.onmessage = (event) => {
-            try {
-              const data: GenerationProgress = JSON.parse(event.data);
-              setProgress(data);
-              if (data.status === "completed" || data.status === "error") {
-                es.close();
-                resolve();
-              }
-            } catch {
-              // ignore parse errors
-            }
-          };
-          es.onerror = () => {
-            es.close();
-            resolve();
-          };
-        });
+        while (!pollAbortRef.current) {
+          try {
+            const statusRes = await fetch(`/api/reports/${reportId}/status`, {
+              cache: "no-store",
+            });
+            if (!statusRes.ok) throw new Error(String(statusRes.status));
+            const { data } = (await statusRes.json()) as {
+              data: GenerationProgress;
+            };
+            consecutiveErrors = 0;
+            setProgress(data);
+            if (data.status === "completed" || data.status === "error") break;
+          } catch {
+            consecutiveErrors += 1;
+            if (consecutiveErrors >= 5) break;
+          }
+          await sleep(3000);
+        }
       }
 
       router.refresh();

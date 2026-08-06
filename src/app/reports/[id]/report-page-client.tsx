@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ReportEditor } from "@/components/reports/report-editor";
@@ -60,37 +60,46 @@ function GeneratingView({
 }) {
   const [progress, setProgress] = useState<GenerationProgress | null>(null);
   const [streamDropped, setStreamDropped] = useState(false);
-  const eventSourceRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
-    const es = new EventSource(`/api/reports/${report.id}/progress`);
-    eventSourceRef.current = es;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    // 일시적인 네트워크 오류로 곧장 실패 화면을 띄우지 않는다.
+    let consecutiveErrors = 0;
 
-    es.onmessage = (event) => {
-      let data: GenerationProgress;
+    const poll = async () => {
       try {
-        data = JSON.parse(event.data);
+        const res = await fetch(`/api/reports/${report.id}/status`, {
+          cache: "no-store",
+        });
+        if (!res.ok) throw new Error(String(res.status));
+        const { data } = (await res.json()) as { data: GenerationProgress };
+        if (cancelled) return;
+
+        consecutiveErrors = 0;
+        setProgress(data);
+
+        if (data.status === "completed") {
+          setTimeout(onComplete, 500);
+          return;
+        }
+        if (data.status === "error") return;
       } catch {
-        return;
+        if (cancelled) return;
+        consecutiveErrors += 1;
+        if (consecutiveErrors >= 5) {
+          setStreamDropped(true);
+          return;
+        }
       }
-      setProgress(data);
-      if (data.status === "completed") {
-        es.close();
-        setTimeout(onComplete, 500);
-      }
-      if (data.status === "error") {
-        es.close();
-      }
+      timer = setTimeout(poll, 3000);
     };
 
-    es.onerror = () => {
-      es.close();
-      setStreamDropped(true);
-    };
+    poll();
 
     return () => {
-      es.close();
-      eventSourceRef.current = null;
+      cancelled = true;
+      clearTimeout(timer);
     };
   }, [report.id, onComplete]);
 
