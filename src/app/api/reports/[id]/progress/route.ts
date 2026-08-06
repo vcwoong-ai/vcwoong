@@ -8,7 +8,7 @@ import { SECTION_META } from "@/types";
 
 /**
  * Server-Sent Events endpoint for report generation progress.
- * Streams progress updates until generation completes or times out (10 min).
+ * Streams progress updates until generation completes or times out (~13 min).
  *
  * 진행 상태 저장소는 프로세스 메모리라, 값이 없으면 DB 상태로 종료 여부를 확인한다.
  */
@@ -46,8 +46,8 @@ export async function GET(
         }
       };
 
-      // Poll every 400ms, max 10 minutes (vercel.json maxDuration과 맞춤)
-      const maxAttempts = 1500;
+      // Poll every 400ms, ~13분(vercel.json maxDuration 800초보다 살짝 짧게)
+      const maxAttempts = 1900;
       // 서버리스/개발 환경에서는 라우트마다 모듈 인스턴스가 달라 메모리 진행
       // 상태가 비어 있을 수 있다. 이때는 DB 상태를 주기적으로 확인한다.
       const dbCheckEvery = 5; // 약 2초
