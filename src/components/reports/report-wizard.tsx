@@ -76,10 +76,12 @@ export function ReportWizard({ deal, open, onClose }: WizardProps) {
   const [genError, setGenError] = useState<string | null>(null);
   const [progress, setProgress] = useState<GenerationProgress | null>(null);
   const [reportId, setReportId] = useState<string | null>(null);
-  const eventSourceRef = useRef<EventSource | null>(null);
+  // 마법사가 닫히면 진행 중인 폴링 루프를 멈춘다.
+  const pollAbortRef = useRef(false);
 
   useEffect(() => {
     if (open) {
+      pollAbortRef.current = false;
       setStep(1);
       setProgress(null);
       setReportId(null);
@@ -89,7 +91,9 @@ export function ReportWizard({ deal, open, onClose }: WizardProps) {
         .then((d) => setTemplates((d.data ?? []).filter((t: Template) => t.status === "READY")))
         .catch(() => {});
     }
-    return () => eventSourceRef.current?.close();
+    return () => {
+      pollAbortRef.current = true;
+    };
   }, [open]);
 
   const detectSector = async () => {
@@ -132,36 +136,43 @@ export function ReportWizard({ deal, open, onClose }: WizardProps) {
       const id = data?.id as string;
       setReportId(id);
 
-      // SSE 구독
-      const es = new EventSource(`/api/reports/${id}/progress`);
-      eventSourceRef.current = es;
+      // 진행 상태 폴링 — SSE는 서버리스에서 장시간 연결이 쉽게 끊겨,
+      // 매 요청이 즉시 끝나는 폴링이 훨씬 안정적이다.
+      const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+      let consecutiveErrors = 0;
+      let finalStatus: GenerationProgress["status"] | "dropped" = "generating";
 
-      const finalStatus = await new Promise<GenerationProgress["status"] | "dropped">(
-        (resolve) => {
-          es.onmessage = (event) => {
-            try {
-              const prog: GenerationProgress = JSON.parse(event.data);
-              setProgress(prog);
-              if (prog.status === "completed" || prog.status === "error") {
-                es.close();
-                resolve(prog.status);
-              }
-            } catch {
-              /* 파싱 실패는 무시하고 다음 이벤트를 기다린다 */
-            }
+      while (!pollAbortRef.current) {
+        try {
+          const statusRes = await fetch(`/api/reports/${id}/status`, {
+            cache: "no-store",
+          });
+          if (!statusRes.ok) throw new Error(String(statusRes.status));
+          const { data: prog } = (await statusRes.json()) as {
+            data: GenerationProgress;
           };
-          es.onerror = () => {
-            es.close();
-            resolve("dropped");
-          };
+          consecutiveErrors = 0;
+          setProgress(prog);
+          if (prog.status === "completed" || prog.status === "error") {
+            finalStatus = prog.status;
+            break;
+          }
+        } catch {
+          // 일시적 오류로 곧장 실패 처리하지 않는다.
+          consecutiveErrors += 1;
+          if (consecutiveErrors >= 5) {
+            finalStatus = "dropped";
+            break;
+          }
         }
-      );
+        await sleep(3000);
+      }
 
       if (finalStatus !== "completed") {
         setGenError(
           finalStatus === "error"
             ? "생성 중 오류가 발생했습니다. 보고서 페이지에서 상태를 확인하세요."
-            : "진행 상태 연결이 끊겼습니다. 보고서 페이지에서 확인하세요."
+            : "진행 상태를 확인하지 못했습니다. 보고서 페이지에서 확인하세요."
         );
       }
     } catch (e) {
