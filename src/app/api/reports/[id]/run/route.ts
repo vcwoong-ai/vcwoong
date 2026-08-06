@@ -40,7 +40,15 @@ export async function POST(
     return NextResponse.json({ error: permissionDeniedMessage("edit") }, { status: 403 });
   }
 
-  if (report.status === ReportStatus.GENERATING) {
+  // 서버리스 함수가 실행시간 제한에 걸려 강제 종료되면 상태가 GENERATING에
+  // 영원히 멈출 수 있다. 일정 시간(10분)이 지나도 안 끝났으면 멈춘 것으로
+  // 보고 재시도를 허용한다.
+  const STALE_GENERATION_MS = 10 * 60 * 1000;
+  const isStale =
+    report.status === ReportStatus.GENERATING &&
+    Date.now() - report.updatedAt.getTime() > STALE_GENERATION_MS;
+
+  if (report.status === ReportStatus.GENERATING && !isStale) {
     return NextResponse.json({ error: "이미 생성 중입니다" }, { status: 409 });
   }
 
@@ -56,9 +64,19 @@ export async function POST(
     return NextResponse.json({ error: quota.message }, { status: 429 });
   }
 
-  // 동시 요청이 둘 다 통과하지 않도록 조건부 업데이트로 락을 건다
+  // 동시 요청이 둘 다 통과하지 않도록 조건부 업데이트로 락을 건다.
+  // stale(멈춘) GENERATING 상태도 재시도 대상에 포함한다.
   const claimed = await prisma.report.updateMany({
-    where: { id: report.id, status: { not: ReportStatus.GENERATING } },
+    where: {
+      id: report.id,
+      OR: [
+        { status: { not: ReportStatus.GENERATING } },
+        {
+          status: ReportStatus.GENERATING,
+          updatedAt: { lt: new Date(Date.now() - STALE_GENERATION_MS) },
+        },
+      ],
+    },
     data: { status: ReportStatus.GENERATING },
   });
   if (claimed.count === 0) {
