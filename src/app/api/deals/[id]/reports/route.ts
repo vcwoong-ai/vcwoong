@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { waitUntil } from "@vercel/functions";
 import { getServerSession } from "next-auth";
 import { z } from "zod";
 import { authOptions } from "@/lib/auth";
@@ -126,14 +127,18 @@ export async function POST(
       },
     });
 
-    // Generate sections using AI (async - don't await to return immediately)
-    void generateSectionsAsync(
-      report.id,
-      deal,
-      agentType,
-      validated.additionalContext,
-      session.user.id
-    ).catch((err) => console.error("generateSectionsAsync failed:", err));
+    // 응답을 먼저 보낸 뒤에도 Vercel이 함수를 바로 얼리지 않도록 생성 작업의
+    // 수명을 연장한다. waitUntil 없이 fire-and-forget으로 두면 서버리스
+    // 인스턴스가 응답 직후 정지되면서 생성이 시작도 못 하고 끊길 수 있다.
+    waitUntil(
+      generateSectionsAsync(
+        report.id,
+        deal,
+        agentType,
+        validated.additionalContext,
+        session.user.id
+      ).catch((err) => console.error("generateSectionsAsync failed:", err))
+    );
 
     return NextResponse.json({ data: report }, { status: 201 });
   } catch (error) {
