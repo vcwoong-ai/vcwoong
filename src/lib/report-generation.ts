@@ -1,6 +1,6 @@
 import { AgentType, DealSector, ReportStatus } from "@prisma/client";
 import { getAgent } from "@/agents";
-import { SECTION_META } from "@/types";
+import { SECTION_META, type GenerationResult } from "@/types";
 import { prisma } from "@/lib/prisma";
 import {
   initProgress,
@@ -36,11 +36,19 @@ export async function generateSectionsAsync(
 
   try {
     const agent = getAgent(agentType, deal.sector);
-    const results = [];
+    const results: GenerationResult[] = [];
     const sectionKeys = SECTION_META.map((s) => s.key);
 
-    // 이전(멈춘) 시도에서 남은 부분 섹션이 있으면 지우고 새로 시작한다.
-    await prisma.reportSection.deleteMany({ where: { reportId } });
+    // 이전(멈춘) 시도에서 남은 섹션이 있으면 재사용하고, 없는 섹션만
+    // 이어서 만든다 — 타임아웃으로 몇 번을 재시도하든 이미 만든 섹션은
+    // 다시 AI를 호출하지 않고, 순서·문맥 일관성도 그대로 유지된다.
+    const existingSections = await prisma.reportSection.findMany({
+      where: { reportId },
+      select: { sectionKey: true, content: true },
+    });
+    const existingByKey = new Map(
+      existingSections.map((s) => [s.sectionKey, s.content])
+    );
 
     const sharedFacts = extractSharedFacts({
       companyName: deal.companyName,
@@ -62,52 +70,84 @@ export async function generateSectionsAsync(
       const isClosing =
         sectionKey === "OPINION_SUMMARY" ||
         sectionKey === "INVESTMENT_TERMS";
-      const continuity =
-        priorSummaries.length > 0
-          ? `\n## 이전 섹션 요약 (일관성 유지)\n${(
-              isClosing ? priorSummaries : priorSummaries.slice(-3)
-            ).join("\n")}\n`
-          : "";
-      const closingHint = isClosing
-        ? "\n## 마감 섹션 지침\n- 공유 팩트·이전 섹션 수치를 그대로 인용할 것\n- 투자조건은 텀시트 표+보호조항, 의견종합은 권고 라벨 필수\n"
-        : "";
 
-      const result = await agent.generateSection(
-        {
-          dealId: deal.id,
-          companyName: deal.companyName,
-          sector: deal.sector,
-          agentType,
-          investRound: deal.investRound ?? undefined,
-          investAmount: deal.investAmount ?? undefined,
-          valuation: deal.valuation ?? undefined,
-          documents: deal.documents,
-          additionalContext: [
-            factsBlock,
-            continuity,
-            closingHint,
-            additionalContext,
-          ]
-            .filter(Boolean)
-            .join("\n\n"),
-        },
-        sectionKey
-      );
+      const existingContent = existingByKey.get(sectionKey);
+      let result: GenerationResult;
+
+      if (existingContent !== undefined) {
+        // 이전 시도에서 이미 만들어진 섹션 — 재사용하고 AI 호출은 건너뛴다.
+        result = { sectionKey, content: existingContent, tokensUsed: 0 };
+      } else {
+        const continuity =
+          priorSummaries.length > 0
+            ? `\n## 이전 섹션 요약 (일관성 유지)\n${(
+                isClosing ? priorSummaries : priorSummaries.slice(-3)
+              ).join("\n")}\n`
+            : "";
+        const closingHint = isClosing
+          ? "\n## 마감 섹션 지침\n- 공유 팩트·이전 섹션 수치를 그대로 인용할 것\n- 투자조건은 텀시트 표+보호조항, 의견종합은 권고 라벨 필수\n"
+          : "";
+
+        result = await agent.generateSection(
+          {
+            dealId: deal.id,
+            companyName: deal.companyName,
+            sector: deal.sector,
+            agentType,
+            investRound: deal.investRound ?? undefined,
+            investAmount: deal.investAmount ?? undefined,
+            valuation: deal.valuation ?? undefined,
+            documents: deal.documents,
+            additionalContext: [
+              factsBlock,
+              continuity,
+              closingHint,
+              additionalContext,
+            ]
+              .filter(Boolean)
+              .join("\n\n"),
+          },
+          sectionKey
+        );
+
+        // 섹션이 완성되는 즉시 저장한다 — 진행률 화면이 실시간으로 반영되고,
+        // 도중에 타임아웃/실패해도 이미 만든 섹션은 남아 다시 만들 필요가 없다.
+        await prisma.reportSection.create({
+          data: {
+            reportId,
+            sectionKey: result.sectionKey,
+            title: meta.title,
+            content: result.content,
+            order: meta.order,
+          },
+        });
+
+        if (userId && result.tokensUsed > 0) {
+          prisma.usageLog
+            .create({
+              data: {
+                userId,
+                dealId: deal.id,
+                reportId,
+                agentType,
+                sectionKey: result.sectionKey,
+                model: result.modelUsed ?? "unknown",
+                inputTokens: Math.round(result.tokensUsed * 0.7),
+                outputTokens: Math.round(result.tokensUsed * 0.3),
+                totalTokens: result.tokensUsed,
+              },
+            })
+            .catch(() => {});
+        }
+
+        if (i < sectionKeys.length - 1) {
+          await new Promise((r) => setTimeout(r, 1200));
+        }
+      }
+
       results.push(result);
 
-      // 섹션이 완성되는 즉시 저장한다 — 진행률 화면이 실시간으로 반영되고,
-      // 도중에 타임아웃/실패해도 이미 만든 섹션은 남아 다시 만들 필요가 없다.
-      await prisma.reportSection.create({
-        data: {
-          reportId,
-          sectionKey: result.sectionKey,
-          title: meta.title,
-          content: result.content,
-          order: meta.order,
-        },
-      });
-
-      // 다음 섹션 일관성: 숫자·키워드를 남긴 요약
+      // 다음 섹션 일관성: 숫자·키워드를 남긴 요약 (재사용한 섹션도 포함)
       const nums = (result.content.match(/[\d,.]+(?:억|조|%|원)?/g) ?? [])
         .slice(0, 6)
         .join(", ");
@@ -118,28 +158,6 @@ export async function generateSectionsAsync(
       priorSummaries.push(
         `- ${meta.title}: ${snippet}${nums ? ` [수치: ${nums}]` : ""}`
       );
-
-      if (userId && result.tokensUsed > 0) {
-        prisma.usageLog
-          .create({
-            data: {
-              userId,
-              dealId: deal.id,
-              reportId,
-              agentType,
-              sectionKey: result.sectionKey,
-              model: result.modelUsed ?? "unknown",
-              inputTokens: Math.round(result.tokensUsed * 0.7),
-              outputTokens: Math.round(result.tokensUsed * 0.3),
-              totalTokens: result.tokensUsed,
-            },
-          })
-          .catch(() => {});
-      }
-
-      if (i < sectionKeys.length - 1) {
-        await new Promise((r) => setTimeout(r, 1200));
-      }
     }
 
     // 품질 평가(+공유팩트 일치) → 의견종합 섹션 끝에 메모 추가
