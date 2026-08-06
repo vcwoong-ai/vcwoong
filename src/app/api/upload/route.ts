@@ -87,8 +87,11 @@ export async function POST(request: NextRequest) {
       const parsed = await parseDocument(buffer, file.type, file.name);
       parsedText = parsed.text;
       metadata = parsed.metadata as Record<string, unknown>;
+      if (parsed.warning) metadata.warning = parsed.warning;
     } catch (parseError) {
       console.warn("Document parsing failed:", parseError);
+      metadata.warning =
+        "문서에서 텍스트를 추출하지 못했습니다. AI가 이 자료의 내용을 인식할 수 없습니다.";
     }
 
     const docType =
@@ -154,9 +157,15 @@ async function finalizeBlobUpload(request: NextRequest, userId: string) {
         const parsed = await parseDocument(buffer, mime, fileName);
         parsedText = parsed.text;
         metadata = parsed.metadata as Record<string, unknown>;
+        if (parsed.warning) metadata.warning = parsed.warning;
+      } else {
+        metadata.warning =
+          "업로드된 파일을 읽지 못했습니다. AI가 이 자료의 내용을 인식할 수 없습니다.";
       }
     } catch (parseError) {
       console.warn("Document parsing failed:", parseError);
+      metadata.warning =
+        "문서에서 텍스트를 추출하지 못했습니다. AI가 이 자료의 내용을 인식할 수 없습니다.";
     }
 
     const docType = documentType ?? MIME_TYPE_MAP[mime] ?? DocumentType.OTHER;

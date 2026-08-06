@@ -20,6 +20,7 @@ interface UploadedFile {
   documentId?: string;
   parsedChars?: number;
   parsedPreview?: string;
+  warning?: string;
 }
 
 interface FileUploaderProps {
@@ -129,6 +130,7 @@ export function FileUploader({ dealId, onUploadComplete }: FileUploaderProps) {
                 documentId: result.data.id,
                 parsedChars: result.data.parsedText?.length ?? 0,
                 parsedPreview: result.data.parsedText?.slice(0, 120),
+                warning: result.data.metadata?.warning,
               }
             : f
         )
@@ -237,8 +239,14 @@ export function FileUploader({ dealId, onUploadComplete }: FileUploaderProps) {
                     {formatSize(uf.file.size)}
                   </span>
                   {uf.status === "done" && (
-                    <span className="text-xs text-green-600">
-                      ✓ {uf.parsedChars ? `${uf.parsedChars.toLocaleString()}자 추출` : "텍스트 추출 완료"}
+                    <span
+                      className={cn(
+                        "text-xs",
+                        uf.warning ? "text-amber-600" : "text-green-600"
+                      )}
+                    >
+                      {uf.warning ? "⚠" : "✓"}{" "}
+                      {(uf.parsedChars ?? 0).toLocaleString()}자 추출
                     </span>
                   )}
                   {uf.status === "error" && (
@@ -261,6 +269,12 @@ export function FileUploader({ dealId, onUploadComplete }: FileUploaderProps) {
                 </Button>
               )}
             </div>
+            {/* 텍스트 추출 경고 (이미지·스캔 위주 자료 등) */}
+            {uf.status === "done" && uf.warning && (
+              <div className="mt-1 ml-8 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                {uf.warning}
+              </div>
+            )}
             {/* 파싱 텍스트 미리보기 */}
             {uf.status === "done" && uf.parsedPreview && (
               <div className="mt-1 ml-8 text-xs text-gray-400 bg-gray-50 rounded px-2 py-1 line-clamp-2">
