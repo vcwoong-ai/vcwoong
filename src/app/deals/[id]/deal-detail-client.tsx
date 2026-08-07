@@ -53,6 +53,7 @@ interface DealWithRelations {
     mimeType: string;
     createdAt: string;
     parsedText: string | null;
+    metadata: { warning?: string } | null;
   }>;
   reports: Array<{
     id: string;
@@ -548,28 +549,47 @@ export function DealDetailClient({
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
-                  {deal.documents.map((doc) => (
-                    <div
-                      key={doc.id}
-                      className="flex items-center gap-3 p-3 rounded-lg border bg-gray-50"
-                    >
-                      <File className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-800 truncate">
-                          {doc.name}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {formatFileSize(doc.size)} ·{" "}
-                          {new Date(doc.createdAt).toLocaleDateString("ko-KR")}
-                          {doc.parsedText && (
-                            <span className="ml-2 text-green-600">
-                              ✓ 텍스트 추출 완료
+                  {deal.documents.map((doc) => {
+                    const chars = doc.parsedText?.length ?? 0;
+                    // metadata.warning은 업로드 시점(신규)에 계산돼 저장되지만,
+                    // 그 이전에 업로드된 문서는 저장된 값이 없으므로 실제 글자
+                    // 수를 기준으로도 다시 판단해 항상 정확한 상태를 보여준다.
+                    const warning =
+                      doc.metadata?.warning ??
+                      (chars < 300
+                        ? `추출된 텍스트가 매우 적습니다 (${chars}자). AI가 내용을 충분히 인식하지 못할 수 있습니다.`
+                        : undefined);
+                    return (
+                      <div
+                        key={doc.id}
+                        className="flex items-center gap-3 p-3 rounded-lg border bg-gray-50"
+                      >
+                        <File className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-800 truncate">
+                            {doc.name}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {formatFileSize(doc.size)} ·{" "}
+                            {new Date(doc.createdAt).toLocaleDateString("ko-KR")}
+                            <span
+                              className={cn(
+                                "ml-2",
+                                warning ? "text-amber-600" : "text-green-600"
+                              )}
+                            >
+                              {warning ? "⚠" : "✓"} {chars.toLocaleString()}자 추출
                             </span>
+                          </p>
+                          {warning && (
+                            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 mt-1">
+                              {warning}
+                            </p>
                           )}
-                        </p>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </CardContent>
             </Card>
