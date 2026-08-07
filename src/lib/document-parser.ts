@@ -93,19 +93,30 @@ async function parseDOCX(
 async function parsePDF(
   buffer: Buffer
 ): Promise<{ text: string; metadata: Record<string, unknown>; warning?: string }> {
-  // pdf-parse requires a dynamic import to avoid test file detection in Next.js
+  // pdf-parse v2는 API가 전면 개편되어 기본 함수 export가 없고, 클래스
+  // (PDFParse)를 생성해 getText()를 호출하는 방식이다. 동적 require는
+  // Next.js가 정적 import 시 시도하는 클라이언트 번들링을 피하기 위함.
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const pdfParse = require("pdf-parse") as (buf: Buffer) => Promise<{ text: string; numpages: number; info: unknown }>;
-  const data = await pdfParse(buffer);
-  return {
-    text: data.text,
-    metadata: {
-      type: "pdf",
-      numPages: data.numpages,
-      info: data.info,
-    },
-    warning: buildLowTextWarning(data.text, "pdf"),
+  const { PDFParse } = require("pdf-parse") as {
+    PDFParse: new (opts: { data: Buffer }) => {
+      getText: () => Promise<{ text: string; total: number }>;
+      destroy: () => Promise<void>;
+    };
   };
+  const parser = new PDFParse({ data: buffer });
+  try {
+    const result = await parser.getText();
+    return {
+      text: result.text,
+      metadata: {
+        type: "pdf",
+        numPages: result.total,
+      },
+      warning: buildLowTextWarning(result.text, "pdf"),
+    };
+  } finally {
+    await parser.destroy();
+  }
 }
 
 /** XML에서 <a:t> 텍스트 런을 모두 뽑아 하나의 문자열로 합친다 */
