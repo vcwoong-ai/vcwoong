@@ -20,11 +20,15 @@ const nextConfig = {
     // @napi-rs/canvas는 pdf-parse 번들 내부에서 조건부 require()로 로드되기
     // 때문에 @vercel/nft가 정적 분석만으로는 찾지 못한다 — 네이티브(.node)
     // 바이너리를 명시적으로 강제 포함시켜야 배포 번들에 실제로 실린다.
+    // pdf-parse(pdfjs-dist)는 텍스트 추출 시에도 "fake worker"를 구동하기
+    // 위해 pdf.worker.mjs를 런타임에 동적으로 찾아 로드하는데, 이 경로도
+    // 정적 분석으로 못 잡아서 dist 전체를 강제 포함해야 한다.
     outputFileTracingIncludes: {
       "/api/upload": [
         "./node_modules/@napi-rs/canvas/**/*",
         "./node_modules/@napi-rs/canvas-linux-x64-gnu/**/*",
         "./node_modules/@napi-rs/canvas-linux-x64-musl/**/*",
+        "./node_modules/pdf-parse/dist/**/*",
       ],
     },
   },
