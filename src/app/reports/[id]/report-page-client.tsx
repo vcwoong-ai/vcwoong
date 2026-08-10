@@ -218,7 +218,13 @@ export function ReportPageClient({
     if (!confirm("기존 섹션 내용이 덮어씌워집니다. 재생성하시겠습니까?")) return;
     setIsRegenerating(true);
     try {
-      const response = await fetch(`/api/reports/${report.id}/run`, { method: "POST" });
+      // mode를 명시하지 않으면 서버가 "이어서 생성"으로 처리해, 이미 완성된
+      // 보고서에서는 전 섹션이 재사용되면서 아무것도 바뀌지 않는다.
+      const response = await fetch(`/api/reports/${report.id}/run`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "restart" }),
+      });
       if (!response.ok) {
         const err = await response.json();
         throw new Error(err.error ?? "재생성 실패");
@@ -324,8 +330,8 @@ export function ReportPageClient({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <Link href={`/deals/${report.deal.id}`}>
             <Button variant="ghost" size="sm">
               <ArrowLeft className="w-4 h-4 mr-1" />

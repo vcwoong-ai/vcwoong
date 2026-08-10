@@ -12,12 +12,112 @@
 
 import type { ReportSection } from "@prisma/client";
 
-function splitBullets(content: string): string[] {
-  return content
-    .split(/\n/)
-    .map((l) => l.replace(/^[-*•]\s*/, "").trim())
-    .filter(Boolean)
-    .slice(0, 8);
+// 앱 UI에서 실제로 쓰는 주 색상(Tailwind blue-600/700)과 통일해 브랜드 일관성을 준다.
+const BRAND_COLOR = "2563EB";
+const TEXT_DARK = "1F2937";
+const TEXT_MUTED = "6B7280";
+const FONT = "맑은 고딕";
+
+type ContentBlock =
+  | { type: "text"; lines: string[] }
+  | { type: "table"; rows: string[][] };
+
+function cleanLine(line: string): string {
+  return line
+    .replace(/^[-*•]\s*/, "")
+    .replace(/^#{1,6}\s+/, "")
+    .replace(/\*\*/g, "")
+    .trim();
+}
+
+/** "| a | b |" 형태의 마크다운 표 행을 셀 배열로 파싱 (표가 아니면 null) */
+function parseTableRow(line: string): string[] | null {
+  const trimmed = line.trim();
+  if (trimmed.length < 2 || !trimmed.startsWith("|") || !trimmed.endsWith("|")) {
+    return null;
+  }
+  return trimmed
+    .slice(1, -1)
+    .split("|")
+    .map((c) => c.replace(/\*\*/g, "").trim());
+}
+
+/** "| --- | --- |" 형태의 구분선 행인지 (표 헤더 다음 줄) */
+function isTableSeparatorRow(cells: string[]): boolean {
+  return cells.length > 0 && cells.every((c) => /^:?-{2,}:?$/.test(c));
+}
+
+/**
+ * 본문을 일반 텍스트 블록과 마크다운 표 블록으로 분리한다.
+ * 표는 실제 PPTX 표(addTable)로 렌더링하기 위해 텍스트 블록과 구분해야
+ * 한다 — 안 그러면 "| 항목 | 내용 |" 같은 줄이 그냥 불릿 텍스트로 나온다.
+ */
+function splitContentBlocks(content: string): ContentBlock[] {
+  const blocks: ContentBlock[] = [];
+  const lines = content.split("\n");
+  let textLines: string[] = [];
+
+  const flushText = () => {
+    if (textLines.length > 0) {
+      blocks.push({ type: "text", lines: textLines });
+      textLines = [];
+    }
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const headerRow = parseTableRow(lines[i]);
+    const separatorRow =
+      headerRow && i + 1 < lines.length ? parseTableRow(lines[i + 1]) : null;
+
+    if (headerRow && separatorRow && isTableSeparatorRow(separatorRow)) {
+      flushText();
+      const rows: string[][] = [headerRow];
+      i += 2;
+      while (i < lines.length) {
+        const row = parseTableRow(lines[i]);
+        if (!row) {
+          i -= 1;
+          break;
+        }
+        rows.push(row);
+        i += 1;
+      }
+      blocks.push({ type: "table", rows });
+      continue;
+    }
+
+    const cleaned = cleanLine(lines[i]);
+    if (cleaned && !/^-{3,}$/.test(cleaned)) {
+      textLines.push(cleaned);
+    }
+  }
+  flushText();
+  return blocks;
+}
+
+interface MetricPoint {
+  label: string;
+  value: number;
+}
+
+/**
+ * "ARR: 45억원", "NRR: 118%" 같은 "라벨: 숫자(단위)" 줄을 뽑아 막대차트용
+ * 데이터로 변환한다. 텍스트 불릿만 나열하는 것보다 핵심 수치 몇 개는
+ * 그래프로 보여주는 게 훨씬 보고서답게 읽힌다.
+ */
+function extractMetricPoints(lines: string[]): MetricPoint[] {
+  const re =
+    /^([^:：]{1,16}?)\s*[:：]\s*([\d][\d,]*(?:\.\d+)?)\s*(?:%|억원|억|조원|조|만원|명|원|배|점|x)?\s*$/;
+  const points: MetricPoint[] = [];
+  for (const line of lines) {
+    const m = re.exec(line.trim());
+    if (!m) continue;
+    const label = m[1].trim();
+    const value = Number(m[2].replace(/,/g, ""));
+    if (!label || !Number.isFinite(value) || value <= 0) continue;
+    points.push({ label, value });
+  }
+  return points.slice(0, 6);
 }
 
 export async function generateReportPPTX(
@@ -29,60 +129,183 @@ export async function generateReportPPTX(
   pptx.defineLayout({ name: "AXIOM_4X3", width: 10, height: 7.5 });
   pptx.layout = "AXIOM_4X3";
 
+  pptx.defineSlideMaster({
+    title: "AXIOM_SLIDE",
+    background: { color: "FFFFFF" },
+    objects: [
+      { rect: { x: 0, y: 0, w: 0.14, h: 7.5, fill: { color: BRAND_COLOR } } },
+      {
+        text: {
+          text: "Axiom",
+          options: {
+            x: 8.2,
+            y: 7.1,
+            w: 1.3,
+            h: 0.3,
+            fontSize: 9,
+            color: TEXT_MUTED,
+            align: "right",
+            fontFace: FONT,
+          },
+        },
+      },
+    ],
+    slideNumber: { x: 9.55, y: 7.1, fontSize: 9, color: TEXT_MUTED, fontFace: FONT },
+  });
+
   const coverTitle = `${meta.companyName} 투자심의보고서`;
   const coverDate = (meta.reportDate ?? new Date()).toLocaleDateString("ko-KR");
 
-  const coverSlide = pptx.addSlide();
-  coverSlide.addText(coverTitle, {
-    x: 0.5,
-    y: 2.8,
-    w: 9,
-    h: 1.2,
-    fontSize: 32,
-    bold: true,
-    align: "center",
-    fontFace: "맑은 고딕",
+  const coverSlide = pptx.addSlide({ masterName: "AXIOM_SLIDE" });
+  coverSlide.addShape("rect", {
+    x: 0.7,
+    y: 3.15,
+    w: 1.1,
+    h: 0.06,
+    fill: { color: BRAND_COLOR },
   });
-  coverSlide.addText(`${coverDate}\nAxiom IC Report`, {
-    x: 0.5,
-    y: 4.1,
-    w: 9,
-    h: 0.8,
-    fontSize: 14,
-    align: "center",
-    color: "666666",
-    fontFace: "맑은 고딕",
+  coverSlide.addText(coverTitle, {
+    x: 0.7,
+    y: 2.5,
+    w: 8.6,
+    h: 1.0,
+    fontSize: 30,
+    bold: true,
+    color: TEXT_DARK,
+    fontFace: FONT,
+  });
+  coverSlide.addText(`${coverDate}  ·  Axiom IC Report`, {
+    x: 0.7,
+    y: 3.35,
+    w: 8.6,
+    h: 0.5,
+    fontSize: 13,
+    color: TEXT_MUTED,
+    fontFace: FONT,
   });
 
+  const CONTENT_TOP = 1.25;
+  const CONTENT_BOTTOM = 7.05;
+  const LINE_HEIGHT = 0.32;
+  const TABLE_ROW_HEIGHT = 0.32;
+
   for (const section of sections) {
-    const slide = pptx.addSlide();
+    const slide = pptx.addSlide({ masterName: "AXIOM_SLIDE" });
     slide.addText(section.title, {
       x: 0.5,
       y: 0.35,
-      w: 9,
-      h: 0.7,
-      fontSize: 26,
+      w: 8.8,
+      h: 0.6,
+      fontSize: 24,
       bold: true,
-      fontFace: "맑은 고딕",
+      color: TEXT_DARK,
+      fontFace: FONT,
     });
+    slide.addShape("rect", { x: 0.52, y: 0.98, w: 0.5, h: 0.05, fill: { color: BRAND_COLOR } });
 
-    const bullets = splitBullets(section.content);
-    const lines = bullets.length > 0 ? bullets : ["확인 필요"];
-    slide.addText(
-      lines.map((line) => ({
-        text: line.slice(0, 200),
-        options: { bullet: true, breakLine: true },
-      })),
-      {
-        x: 0.5,
-        y: 1.25,
-        w: 9,
-        h: 5.8,
-        fontSize: 16,
-        valign: "top",
-        fontFace: "맑은 고딕",
+    const blocks = splitContentBlocks(section.content);
+    let y = CONTENT_TOP;
+    let rendered = false;
+
+    for (const block of blocks) {
+      const remaining = CONTENT_BOTTOM - y;
+      if (remaining < 0.4) break;
+
+      if (block.type === "table") {
+        const rows = block.rows.slice(0, 8);
+        const colCount = Math.max(...rows.map((r) => r.length));
+        const h = Math.min(rows.length * TABLE_ROW_HEIGHT, remaining);
+        const tableRows = rows.map((cells, rowIdx) =>
+          Array.from({ length: colCount }, (_, colIdx) => ({
+            text: (cells[colIdx] ?? "").slice(0, 60),
+            options: {
+              bold: rowIdx === 0,
+              color: rowIdx === 0 ? "FFFFFF" : TEXT_DARK,
+              fill: rowIdx === 0 ? { color: BRAND_COLOR } : undefined,
+              fontSize: 12,
+              fontFace: FONT,
+            },
+          }))
+        );
+        slide.addTable(tableRows, {
+          x: 0.5,
+          y,
+          w: 9,
+          h,
+          border: { type: "solid", color: "E5E7EB", pt: 0.5 },
+          autoPage: false,
+        });
+        y += h + 0.2;
+      } else {
+        const lines = block.lines.slice(0, 10);
+        const metrics = extractMetricPoints(block.lines);
+        const showChart = metrics.length >= 2;
+        const textW = showChart ? 4.5 : 9;
+        const h = Math.min(lines.length * LINE_HEIGHT + 0.15, remaining);
+
+        slide.addText(
+          lines.map((line) => ({
+            text: line.slice(0, 200),
+            options: { bullet: true, breakLine: true },
+          })),
+          {
+            x: 0.5,
+            y,
+            w: textW,
+            h,
+            fontSize: 16,
+            valign: "top",
+            color: TEXT_DARK,
+            fontFace: FONT,
+          }
+        );
+
+        if (showChart) {
+          slide.addChart(
+            pptx.ChartType.bar,
+            [
+              {
+                name: section.title,
+                labels: metrics.map((m) => m.label),
+                values: metrics.map((m) => m.value),
+              },
+            ],
+            {
+              x: 5.3,
+              y,
+              w: 4.2,
+              h: Math.min(h, 3.2),
+              barDir: "bar",
+              chartColors: [BRAND_COLOR],
+              showLegend: false,
+              showValue: true,
+              dataLabelColor: TEXT_DARK,
+              dataLabelFontSize: 10,
+              catAxisLabelFontSize: 10,
+              valAxisLabelFontSize: 9,
+              catAxisLabelColor: TEXT_MUTED,
+              valAxisLabelColor: TEXT_MUTED,
+              fontFace: FONT,
+            }
+          );
+        }
+
+        y += h + 0.15;
       }
-    );
+      rendered = true;
+    }
+
+    if (!rendered) {
+      slide.addText("확인 필요", {
+        x: 0.5,
+        y: CONTENT_TOP,
+        w: 9,
+        h: 1,
+        fontSize: 16,
+        color: TEXT_MUTED,
+        fontFace: FONT,
+      });
+    }
   }
 
   return (await pptx.write({ outputType: "nodebuffer" })) as Buffer;

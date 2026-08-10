@@ -77,6 +77,8 @@ export abstract class BaseAgent {
         content: result.content,
         tokensUsed: result.inputTokens + result.outputTokens,
         modelUsed: result.usedModel,
+        inputTokens: result.inputTokens,
+        outputTokens: result.outputTokens,
       };
     }
 
@@ -108,6 +110,8 @@ export abstract class BaseAgent {
       content: result.content,
       tokensUsed: result.inputTokens + result.outputTokens,
       modelUsed: result.usedModel,
+      inputTokens: result.inputTokens,
+      outputTokens: result.outputTokens,
     };
   }
 

@@ -54,6 +54,8 @@ export class ClimateAgent extends BaseAgent {
       sectionKey,
       content: result.content,
       tokensUsed: result.inputTokens + result.outputTokens,
+      inputTokens: result.inputTokens,
+      outputTokens: result.outputTokens,
       modelUsed: result.usedModel,
     };
   }

@@ -93,6 +93,58 @@ export async function chargeBilling(
   };
 }
 
+/** 웹훅 시크릿을 실어 보낼 수 있는 헤더 이름들 */
+export const TOSS_WEBHOOK_SECRET_HEADERS = [
+  "x-toss-webhook-secret",
+  "x-webhook-secret",
+] as const;
+
+/**
+ * 웹훅 요청의 공유 시크릿을 검증한다.
+ *
+ * 시크릿이 설정돼 있지 않으면 통과시키지 않는다(fail-closed). 이 엔드포인트는
+ * 인증 없이 열려 있고 customerKey가 추측 가능해서, 검증 없이 받아주면 아무나
+ * 남의 구독을 해지시킬 수 있기 때문이다.
+ */
+export function verifyTossWebhookSecret(
+  headers: { get(name: string): string | null },
+  expectedSecret = process.env.TOSS_WEBHOOK_SECRET
+): boolean {
+  const expected = expectedSecret?.trim();
+  if (!expected) return false;
+  return TOSS_WEBHOOK_SECRET_HEADERS.some(
+    (header) => headers.get(header)?.trim() === expected
+  );
+}
+
+/**
+ * 결제 건을 Toss에 직접 조회한다.
+ *
+ * 웹훅 본문은 누구나 위조해서 보낼 수 있으므로, 본문 값을 그대로 믿고
+ * DB를 바꾸면 안 된다. 실제 상태는 항상 Toss API로 되물어 확인한다.
+ * 조회할 수 없으면 null.
+ */
+export async function getPayment(
+  paymentKey: string
+): Promise<{ status: string; orderId: string } | null> {
+  const auth = getAuthHeader();
+  if (!auth) return null;
+
+  try {
+    const res = await fetch(
+      `${TOSS_API}/payments/${encodeURIComponent(paymentKey)}`,
+      { headers: { Authorization: auth } }
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (typeof data?.status !== "string") return null;
+    return { status: data.status, orderId: String(data.orderId ?? "") };
+  } catch (error) {
+    console.error("[Toss] 결제 조회 실패:", error);
+    return null;
+  }
+}
+
 export async function recordPayment(
   userId: string,
   plan: SubscriptionPlan,

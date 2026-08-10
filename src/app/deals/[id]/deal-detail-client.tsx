@@ -19,6 +19,7 @@ import {
   Calendar,
   Sparkles,
   LayoutTemplate,
+  Trash2,
 } from "lucide-react";
 import { EditDealDialog } from "@/components/deals/edit-deal-dialog";
 import { TeamShareToggle } from "@/components/team/team-share-toggle";
@@ -182,6 +183,7 @@ export function DealDetailClient({
   );
   const [wizardOpen, setWizardOpen] = useState(false);
   const [loadingFixture, setLoadingFixture] = useState(false);
+  const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
   // 페이지를 벗어나면 진행 중인 폴링 루프를 멈춘다.
   const pollAbortRef = useRef(false);
 
@@ -228,6 +230,25 @@ export function DealDetailClient({
       );
     } finally {
       setLoadingFixture(false);
+    }
+  };
+
+  const deleteDocument = async (docId: string, docName: string) => {
+    if (!confirm(`"${docName}" 문서를 삭제하시겠습니까?`)) return;
+    setDeletingDocId(docId);
+    try {
+      const response = await fetch(`/api/documents/${docId}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error ?? "삭제 실패");
+      }
+      router.refresh();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "문서 삭제 중 오류가 발생했습니다");
+    } finally {
+      setDeletingDocId(null);
     }
   };
 
@@ -332,10 +353,11 @@ export function DealDetailClient({
         </div>
       )}
 
-      {/* Deal header */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-2">
+      {/* Deal header — 모바일에서는 제목과 액션 버튼을 세로로 쌓는다.
+          가로로 두면 좁은 화면에서 제목 영역이 눌려 글자가 세로로 깨진다. */}
+      <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2 mb-2">
             <Badge variant="outline">{deal.sector}</Badge>
             <Badge variant="secondary">{deal.stage}</Badge>
             {deal.teamId && (
@@ -349,13 +371,15 @@ export function DealDetailClient({
               </Badge>
             )}
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">{deal.companyName}</h1>
-          <p className="text-gray-500">{deal.name}</p>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 break-words">
+            {deal.companyName}
+          </h1>
+          <p className="text-gray-500 break-words">{deal.name}</p>
           {deal.description && (
             <p className="text-sm text-gray-600 mt-2 max-w-2xl">{deal.description}</p>
           )}
         </div>
-        <div className="flex flex-wrap gap-2 items-center">
+        <div className="flex flex-wrap gap-2 items-center lg:flex-shrink-0">
           <TeamShareToggle
             type="deal"
             resourceId={deal.id}
@@ -370,7 +394,7 @@ export function DealDetailClient({
               {/* 템플릿 선택 */}
               {templates.length > 0 && (
                 <Select value={selectedTemplateId} onValueChange={setSelectedTemplateId}>
-                  <SelectTrigger className="w-44 text-sm h-9">
+                  <SelectTrigger className="w-full sm:w-44 text-sm h-9">
                     <LayoutTemplate className="w-3.5 h-3.5 mr-1.5 text-gray-500" />
                     <SelectValue placeholder="양식 선택 (선택)" />
                   </SelectTrigger>
@@ -480,7 +504,8 @@ export function DealDetailClient({
 
       {/* Tabs */}
       <Tabs defaultValue="documents">
-        <TabsList>
+        {/* 탭 3개가 좁은 화면 폭을 넘기므로 가로 스크롤을 허용한다 */}
+        <TabsList className="w-full sm:w-auto overflow-x-auto justify-start">
           <TabsTrigger value="documents" className="flex items-center gap-1.5">
             <Upload className="w-3.5 h-3.5" />
             문서 ({deal.documents.length})
@@ -587,6 +612,22 @@ export function DealDetailClient({
                             </p>
                           )}
                         </div>
+                        {canEdit && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 flex-shrink-0 text-gray-400 hover:text-red-600"
+                            title="문서 삭제"
+                            disabled={deletingDocId === doc.id}
+                            onClick={() => deleteDocument(doc.id, doc.name)}
+                          >
+                            {deletingDocId === doc.id ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <Trash2 className="w-3.5 h-3.5" />
+                            )}
+                          </Button>
+                        )}
                       </div>
                     );
                   })}

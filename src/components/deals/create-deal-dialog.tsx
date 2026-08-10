@@ -112,7 +112,7 @@ export function CreateDealDialog({ trigger }: { trigger?: React.ReactNode }) {
           <DialogTitle>새 투자 딜 등록</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 mt-2">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label htmlFor="companyName">기업명 *</Label>
               <Input
@@ -160,7 +160,7 @@ export function CreateDealDialog({ trigger }: { trigger?: React.ReactNode }) {
             )}
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="space-y-1.5">
               <Label htmlFor="investRound">투자 라운드</Label>
               <Input

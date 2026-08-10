@@ -16,6 +16,7 @@ import {
   LayoutTemplate,
   LineChart,
   Sparkles,
+  X,
 } from "lucide-react";
 
 const navItems = [
@@ -71,22 +72,55 @@ const navItems = [
   },
 ];
 
-export function Sidebar() {
+interface SidebarProps {
+  /** 모바일 드로어 열림 상태 (데스크톱에서는 무시된다) */
+  open?: boolean;
+  onClose?: () => void;
+}
+
+export function Sidebar({ open = false, onClose }: SidebarProps) {
   const pathname = usePathname();
 
   return (
-    <aside className="fixed left-0 top-0 h-screen w-64 bg-slate-900 text-white flex flex-col z-40">
+    <>
+      {/* 모바일 드로어가 열렸을 때의 배경 (탭하면 닫힘) */}
+      {open && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          onClick={onClose}
+          aria-hidden="true"
+        />
+      )}
+
+      <aside
+        className={cn(
+          "fixed left-0 top-0 h-screen w-64 bg-slate-900 text-white flex flex-col z-50",
+          "overflow-y-auto transition-transform duration-200 lg:transition-none",
+          // 모바일에서는 기본으로 화면 밖에 두고, 열었을 때만 밀어 넣는다.
+          // 항상 보이게 두면 좁은 화면에서 본문이 100px대로 찌그러진다.
+          open ? "translate-x-0" : "-translate-x-full",
+          "lg:translate-x-0"
+        )}
+      >
       {/* Logo */}
-      <div className="p-6 border-b border-slate-700">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center">
+      <div className="p-6 border-b border-slate-700 flex items-start justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center flex-shrink-0">
             <Zap className="w-5 h-5 text-white" />
           </div>
-          <div>
+          <div className="min-w-0">
             <h1 className="text-lg font-bold tracking-tight">{BRAND.name}</h1>
-            <p className="text-xs text-slate-400">{BRAND.nameKr} · {BRAND.tagline}</p>
+            <p className="text-xs text-slate-400 truncate">{BRAND.nameKr} · {BRAND.tagline}</p>
           </div>
         </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="lg:hidden text-slate-400 hover:text-white p-1 -mr-1 flex-shrink-0"
+          aria-label="메뉴 닫기"
+        >
+          <X className="w-5 h-5" />
+        </button>
       </div>
 
       {/* Navigation */}
@@ -98,6 +132,8 @@ export function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
+              // 모바일에서 메뉴를 고르면 드로어가 닫혀야 이동한 화면이 보인다.
+              onClick={onClose}
               className={cn(
                 "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150",
                 isActive
@@ -136,6 +172,7 @@ export function Sidebar() {
           ))}
         </div>
       </div>
-    </aside>
+      </aside>
+    </>
   );
 }

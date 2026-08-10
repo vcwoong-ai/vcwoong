@@ -166,7 +166,7 @@ export function PromoteDealDialog({
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="col-span-2">
               <Label htmlFor="pf-name">기업명</Label>
               <Input

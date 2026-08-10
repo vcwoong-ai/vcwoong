@@ -85,7 +85,7 @@ export default function LandingPage() {
           </p>
 
           {/* Stats */}
-          <div className="mt-20 grid grid-cols-3 gap-8 border-t border-slate-700 pt-12">
+          <div className="mt-12 sm:mt-20 grid grid-cols-1 sm:grid-cols-3 gap-6 sm:gap-8 border-t border-slate-700 pt-8 sm:pt-12">
             {[
               { value: "10분", label: "보고서 1건 생성 시간" },
               { value: "6개", label: "섹터 전문 AI 에이전트" },
@@ -167,7 +167,7 @@ export default function LandingPage() {
             <h2 className="text-3xl font-bold">전문 AI 심사역 6명</h2>
             <p className="text-slate-400 mt-3">섹터별로 다른 분석 프레임워크를 사용합니다</p>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
             {[
               { name: "Dr. Cell", sector: "BIO/헬스케어", dot: "bg-purple-400", desc: "rNPV · 임상 단계 · PubMed · FDA", special: "외부 DB 연동" },
               { name: "Code", sector: "IT/SaaS", dot: "bg-blue-400", desc: "ARR · NRR · LTV/CAC · Magic Number", special: "SaaS 지표" },
@@ -321,7 +321,7 @@ export default function LandingPage() {
                 판단의 전제를 분명히 남기는 보고서.
               </p>
             </div>
-            <div className="grid grid-cols-2 gap-8 text-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 text-sm">
               <div>
                 <p className="text-white font-medium mb-3">제품</p>
                 <div className="space-y-2">

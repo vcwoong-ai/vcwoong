@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
@@ -37,6 +37,16 @@ export const metadata: Metadata = {
     description: "AI 투자심의보고서 자동화 플랫폼",
   },
   robots: { index: true, follow: true },
+};
+
+/**
+ * viewport 설정이 없으면 모바일 브라우저가 데스크톱 폭(약 980px)으로 렌더한
+ * 뒤 축소해서 보여줘, 글자가 읽을 수 없을 만큼 작아진다.
+ * 확대는 접근성을 위해 막지 않는다(maximumScale 미지정).
+ */
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({

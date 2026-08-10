@@ -189,6 +189,10 @@ export interface GenerationResult {
   tokensUsed: number;
   /** 실제 호출된 모델명 (폴백 포함) */
   modelUsed?: string;
+  /** 프로바이더가 보고한 실제 입력 토큰 (사용량 기록·비용 추적용) */
+  inputTokens?: number;
+  /** 프로바이더가 보고한 실제 출력 토큰 */
+  outputTokens?: number;
 }
 
 // Korean character width counting

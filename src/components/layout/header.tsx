@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
-import { Bell, LogOut, User } from "lucide-react";
+import { Bell, LogOut, User, Menu } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,9 +16,11 @@ import { Button } from "@/components/ui/button";
 
 interface HeaderProps {
   title?: string;
+  /** 모바일 햄버거 버튼 (lg 미만에서만 노출) */
+  onMenuClick?: () => void;
 }
 
-export function Header({ title }: HeaderProps) {
+export function Header({ title, onMenuClick }: HeaderProps) {
   const { data: session } = useSession();
 
   const initials = session?.user?.name
@@ -37,15 +39,26 @@ export function Header({ title }: HeaderProps) {
   };
 
   return (
-    <header className="h-16 border-b border-gray-200 bg-white flex items-center justify-between px-6">
-      <div>
+    <header className="h-16 border-b border-gray-200 bg-white flex items-center justify-between px-4 sm:px-6 gap-2">
+      <div className="flex items-center gap-2 min-w-0">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="lg:hidden flex-shrink-0"
+          onClick={onMenuClick}
+          aria-label="메뉴 열기"
+        >
+          <Menu className="w-5 h-5" />
+        </Button>
         {title && (
-          <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
+          <h2 className="text-base sm:text-lg font-semibold text-gray-900 truncate">
+            {title}
+          </h2>
         )}
       </div>
 
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" className="relative">
+      <div className="flex items-center gap-1 sm:gap-3 flex-shrink-0">
+        <Button variant="ghost" size="icon" className="relative hidden sm:inline-flex">
           <Bell className="w-4 h-4" />
         </Button>
 

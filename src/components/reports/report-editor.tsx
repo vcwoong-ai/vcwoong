@@ -287,11 +287,11 @@ export function ReportEditor({
 
   return (
     <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900">{dealName}</h2>
-          <p className="text-sm text-gray-500 flex items-center gap-3">
+      {/* Header — 내보내기 버튼이 많아 좁은 화면에서는 세로로 쌓고 줄바꿈한다 */}
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-lg sm:text-xl font-bold text-gray-900 break-words">{dealName}</h2>
+          <p className="text-sm text-gray-500 flex flex-wrap items-center gap-x-3 gap-y-1">
             <span>승인: {approvedCount}/{totalCount} 섹션</span>
             <span className="flex items-center gap-1">
               <BarChart2 className="w-3 h-3" />
@@ -305,7 +305,7 @@ export function ReportEditor({
             )}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" size="sm" onClick={copyAll}>
             {copied ? <CheckCircle className="w-4 h-4 mr-1.5 text-green-500" /> : <Copy className="w-4 h-4 mr-1.5" />}
             {copied ? "복사됨" : "전체 복사"}

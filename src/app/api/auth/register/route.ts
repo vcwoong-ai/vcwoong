@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { checkRateLimit, clientIp, RATE_LIMITS } from "@/lib/rate-limit";
 
 const registerSchema = z.object({
   name: z.string().min(2, "이름은 2자 이상이어야 합니다"),
@@ -16,6 +17,20 @@ const registerSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+  // 가입에 아무 마찰이 없으면 봇이 계정을 양산해 AI 생성 비용을 태울 수 있다.
+  const ip = clientIp(request);
+  const rate = await checkRateLimit(
+    `register:${ip}`,
+    RATE_LIMITS.register.limit,
+    RATE_LIMITS.register.windowMs
+  );
+  if (!rate.allowed) {
+    return NextResponse.json(
+      { error: "가입 시도가 너무 많습니다. 잠시 후 다시 시도해 주세요." },
+      { status: 429, headers: { "Retry-After": String(rate.retryAfterSec) } }
+    );
+  }
+
   try {
     const body = await request.json();
     const validated = registerSchema.parse(body);

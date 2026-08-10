@@ -24,7 +24,10 @@
     "test:pptx-template": "tsx tools/test-pptx-template.ts",
     "test:pptx-export": "tsx tools/test-pptx-export.ts",
     "test:permissions": "tsx tools/test-permissions.ts",
-    "test:all": "npm run test:quality && npm run test:fixtures && npm run test:routing && npm run test:template && npm run test:email && npm run test:pptx-template && npm run test:pptx-export && npm run test:permissions",
+    "test:security": "tsx tools/test-security.ts",
+    "test:mobile": "tsx tools/test-mobile.ts",
+    "smoke": "tsx tools/smoke.ts",
+    "test:all": "npm run test:quality && npm run test:fixtures && npm run test:routing && npm run test:template && npm run test:email && npm run test:pptx-template && npm run test:pptx-export && npm run test:permissions && npm run test:security",
     "postinstall": "prisma generate"
   },
   "dependencies": {
@@ -87,6 +90,7 @@
     "@types/react-dom": "^18",
     "eslint": "^8",
     "eslint-config-next": "14.2.35",
+    "playwright": "^1.62.1",
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
     "tsx": "^4.22.4",

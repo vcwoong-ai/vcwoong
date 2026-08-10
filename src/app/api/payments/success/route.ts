@@ -12,6 +12,7 @@ import {
   activateSubscription,
   planParamToEnum,
 } from "@/lib/subscription";
+import { brandCustomerKey } from "@/lib/brand";
 import type { PlanKey } from "@/lib/quotas";
 
 export async function GET(request: NextRequest) {
@@ -29,6 +30,17 @@ export async function GET(request: NextRequest) {
   if (!authKey || !customerKey || !planKey) {
     return NextResponse.redirect(
       new URL("/settings?payment=missing_params", request.url)
+    );
+  }
+
+  // customerKey는 URL로 들어오므로 남의 키를 넣어 호출할 수 있다.
+  // 로그인한 사용자 본인의 키가 아니면 거부한다.
+  if (customerKey !== brandCustomerKey(session.user.id)) {
+    console.warn(
+      `[Payment] customerKey 불일치 — user=${session.user.id} key=${customerKey}`
+    );
+    return NextResponse.redirect(
+      new URL("/settings?payment=invalid_customer", request.url)
     );
   }
 
