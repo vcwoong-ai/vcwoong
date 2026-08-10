@@ -93,6 +93,46 @@ export async function readStoredFile(
   }
 }
 
+/**
+ * 저장된 파일을 URL로 삭제한다 (Document.url / Template.fileUrl 에 저장된 형태).
+ *
+ * deleteFile()은 업로드 시점의 key를 받지만, DB에는 업로드 결과 URL만 남기
+ * 때문에 그대로는 지울 수 없다. 지우지 못하면 Blob에 파일이 영구히 쌓여
+ * 스토리지 요금만 계속 나간다.
+ *
+ * 삭제 실패가 상위 작업(딜/문서 삭제)을 막으면 안 되므로 예외를 삼키고
+ * 성공 여부만 돌려준다.
+ */
+export async function deleteStoredFile(urlOrKey: string): Promise<boolean> {
+  try {
+    if (
+      storageMode === "vercel-blob" ||
+      urlOrKey.includes(".blob.vercel-storage.com")
+    ) {
+      // Vercel Blob의 del()은 공개 URL을 그대로 받는다.
+      await blobDel(urlOrKey);
+      return true;
+    }
+
+    if (storageMode === "s3" && s3Client) {
+      const key = urlOrKey.startsWith("http")
+        ? new URL(urlOrKey).pathname.replace(/^\//, "")
+        : urlOrKey;
+      await s3Client.send(
+        new DeleteObjectCommand({ Bucket: bucket, Key: key })
+      );
+      return true;
+    }
+
+    const name = urlOrKey.replace(/^\/uploads\//, "").replace(/\//g, "_");
+    await fs.unlink(path.join(process.cwd(), uploadDir, name));
+    return true;
+  } catch (error) {
+    console.warn(`[Storage] 파일 삭제 실패 (무시): ${urlOrKey}`, error);
+    return false;
+  }
+}
+
 export async function getFileUrl(key: string): Promise<string> {
   if (storageMode === "vercel-blob") {
     // uploadFile이 이미 공개 URL을 반환하므로 key 자체가 URL이다.

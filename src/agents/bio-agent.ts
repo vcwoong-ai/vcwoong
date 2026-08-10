@@ -99,6 +99,8 @@ export class BioAgent extends BaseAgent {
       sectionKey: OVERVIEW_SECTION,
       content: result.content,
       tokensUsed: result.inputTokens + result.outputTokens,
+      inputTokens: result.inputTokens,
+      outputTokens: result.outputTokens,
       modelUsed: result.usedModel,
     };
   }
@@ -202,7 +204,7 @@ ${documentContext}${externalContext}
       { systemPrompt, maxTokens: 4096, temperature: 0.35 }
     );
 
-    return { sectionKey: SectionKey.PRODUCT_TECHNOLOGY, content: result.content, tokensUsed: result.inputTokens + result.outputTokens, modelUsed: result.usedModel };
+    return { sectionKey: SectionKey.PRODUCT_TECHNOLOGY, content: result.content, tokensUsed: result.inputTokens + result.outputTokens, inputTokens: result.inputTokens, outputTokens: result.outputTokens, modelUsed: result.usedModel };
   }
 
   private async generateBioValuation(input: AgentInput): Promise<GenerationResult> {
@@ -261,7 +263,7 @@ ${documentContext}${rnpvContext}${externalContext}
       { systemPrompt, maxTokens: 4096, temperature: 0.35 }
     );
 
-    return { sectionKey: SectionKey.VALUATION, content: result.content, tokensUsed: result.inputTokens + result.outputTokens, modelUsed: result.usedModel };
+    return { sectionKey: SectionKey.VALUATION, content: result.content, tokensUsed: result.inputTokens + result.outputTokens, inputTokens: result.inputTokens, outputTokens: result.outputTokens, modelUsed: result.usedModel };
   }
 
   private async generateBioMarket(input: AgentInput): Promise<GenerationResult> {
@@ -305,7 +307,7 @@ ${documentContext}${externalContext}
       { systemPrompt, maxTokens: 4096, temperature: 0.35 }
     );
 
-    return { sectionKey: SectionKey.MARKET_ANALYSIS, content: result.content, tokensUsed: result.inputTokens + result.outputTokens, modelUsed: result.usedModel };
+    return { sectionKey: SectionKey.MARKET_ANALYSIS, content: result.content, tokensUsed: result.inputTokens + result.outputTokens, inputTokens: result.inputTokens, outputTokens: result.outputTokens, modelUsed: result.usedModel };
   }
 
   private async generateBioRisk(input: AgentInput): Promise<GenerationResult> {
@@ -351,7 +353,7 @@ ${documentContext}${externalContext}
       { systemPrompt, maxTokens: 4096, temperature: 0.35 }
     );
 
-    return { sectionKey: SectionKey.RISK_ANALYSIS, content: result.content, tokensUsed: result.inputTokens + result.outputTokens, modelUsed: result.usedModel };
+    return { sectionKey: SectionKey.RISK_ANALYSIS, content: result.content, tokensUsed: result.inputTokens + result.outputTokens, inputTokens: result.inputTokens, outputTokens: result.outputTokens, modelUsed: result.usedModel };
   }
 
   private async generateBioAppendix(input: AgentInput): Promise<GenerationResult> {

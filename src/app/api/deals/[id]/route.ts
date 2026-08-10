@@ -4,6 +4,7 @@ import { z } from "zod";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { DealSector, DealStage, DealStatus } from "@prisma/client";
+import { deleteStoredFile } from "@/lib/storage";
 import { getUserTeamContext, dealReadWhere, dealWriteWhere, dealOwnerWhere, permissionDeniedMessage } from "@/lib/team-access";
 
 const updateDealSchema = z.object({
@@ -113,6 +114,14 @@ export async function DELETE(
       { status: 403 }
     );
   }
+
+  // 딜을 지우면 Document 레코드는 cascade로 사라지지만 스토리지 실물은
+  // 그대로 남는다. 지우지 않으면 Blob에 고아 파일이 계속 쌓여 요금만 나간다.
+  const documents = await prisma.document.findMany({
+    where: { dealId: params.id },
+    select: { url: true },
+  });
+  await Promise.all(documents.map((doc) => deleteStoredFile(doc.url)));
 
   await prisma.deal.delete({ where: { id: params.id } });
   return NextResponse.json({ message: "딜이 삭제되었습니다" });

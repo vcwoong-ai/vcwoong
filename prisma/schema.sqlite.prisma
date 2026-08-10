@@ -298,6 +298,15 @@ model UsageLog {
   user User @relation(fields: [userId], references: [id])
 }
 
+/// 고정 윈도우 레이트리밋 카운터 (스키마 설명은 schema.prisma 참고)
+model RateLimit {
+  key       String   @id
+  count     Int      @default(0)
+  expiresAt DateTime
+
+  @@index([expiresAt])
+}
+
 enum TemplateFileType {
   DOCX
   PPTX

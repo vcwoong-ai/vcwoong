@@ -11,6 +11,7 @@ import {
   STALE_GENERATION_MS,
 } from "@/lib/report-generation";
 import { checkQuota } from "@/lib/quotas";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { getUserTeamContext, dealWriteWhere, templateReadWhere, permissionDeniedMessage } from "@/lib/team-access";
 
 const createReportSchema = z.object({
@@ -74,6 +75,20 @@ export async function POST(
     return NextResponse.json(
       { error: permissionDeniedMessage("edit") },
       { status: 403 }
+    );
+  }
+
+  // 월 한도(quota)와 별개로, 짧은 시간에 몰아치는 생성을 막는다.
+  // 생성 1건은 AI 호출 10회라 비용이 바로 나간다.
+  const rate = await checkRateLimit(
+    `report-gen:${session.user.id}`,
+    RATE_LIMITS.reportGeneration.limit,
+    RATE_LIMITS.reportGeneration.windowMs
+  );
+  if (!rate.allowed) {
+    return NextResponse.json(
+      { error: "보고서 생성 요청이 너무 잦습니다. 잠시 후 다시 시도해 주세요." },
+      { status: 429, headers: { "Retry-After": String(rate.retryAfterSec) } }
     );
   }
 

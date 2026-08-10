@@ -57,6 +57,7 @@ npx prisma db seed   # demo@axiom.kr / Demo1234!
 |------|------|
 | `OPENROUTER_API_KEY` | AI 보고서 (없으면 데모 모드) |
 | `NEXT_PUBLIC_TOSS_CLIENT_KEY` / `TOSS_SECRET_KEY` | 구독 결제 |
+| `TOSS_WEBHOOK_SECRET` | 결제 웹훅 검증 (**결제를 쓴다면 필수** — 미설정 시 웹훅이 무시되어 구독 해지가 반영되지 않음) |
 
 → **Redeploy**
 

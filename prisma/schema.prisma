@@ -284,6 +284,17 @@ model UsageLog {
   user User @relation(fields: [userId], references: [id])
 }
 
+/// 고정 윈도우 레이트리밋 카운터.
+/// 서버리스는 인스턴스마다 메모리가 따로 놀아 in-memory 카운터가 무의미하므로
+/// DB를 공유 저장소로 쓴다. key = "<용도>:<식별자>" 형태.
+model RateLimit {
+  key       String   @id
+  count     Int      @default(0)
+  expiresAt DateTime
+
+  @@index([expiresAt])
+}
+
 enum TemplateFileType {
   DOCX
   PPTX

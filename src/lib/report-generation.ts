@@ -180,8 +180,10 @@ export async function generateSectionsAsync(
                 agentType,
                 sectionKey: result.sectionKey,
                 model: result.modelUsed ?? "unknown",
-                inputTokens: Math.round(result.tokensUsed * 0.7),
-                outputTokens: Math.round(result.tokensUsed * 0.3),
+                // 프로바이더가 보고한 실측값을 그대로 쓴다. 예전엔 합계에
+                // 70/30을 곱한 추정치를 넣어 사용량 통계가 실제와 달랐다.
+                inputTokens: result.inputTokens ?? 0,
+                outputTokens: result.outputTokens ?? 0,
                 totalTokens: result.tokensUsed,
               },
             })

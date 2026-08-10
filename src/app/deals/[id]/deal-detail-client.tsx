@@ -19,6 +19,7 @@ import {
   Calendar,
   Sparkles,
   LayoutTemplate,
+  Trash2,
 } from "lucide-react";
 import { EditDealDialog } from "@/components/deals/edit-deal-dialog";
 import { TeamShareToggle } from "@/components/team/team-share-toggle";
@@ -182,6 +183,7 @@ export function DealDetailClient({
   );
   const [wizardOpen, setWizardOpen] = useState(false);
   const [loadingFixture, setLoadingFixture] = useState(false);
+  const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
   // 페이지를 벗어나면 진행 중인 폴링 루프를 멈춘다.
   const pollAbortRef = useRef(false);
 
@@ -228,6 +230,25 @@ export function DealDetailClient({
       );
     } finally {
       setLoadingFixture(false);
+    }
+  };
+
+  const deleteDocument = async (docId: string, docName: string) => {
+    if (!confirm(`"${docName}" 문서를 삭제하시겠습니까?`)) return;
+    setDeletingDocId(docId);
+    try {
+      const response = await fetch(`/api/documents/${docId}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error ?? "삭제 실패");
+      }
+      router.refresh();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "문서 삭제 중 오류가 발생했습니다");
+    } finally {
+      setDeletingDocId(null);
     }
   };
 
@@ -587,6 +608,22 @@ export function DealDetailClient({
                             </p>
                           )}
                         </div>
+                        {canEdit && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 flex-shrink-0 text-gray-400 hover:text-red-600"
+                            title="문서 삭제"
+                            disabled={deletingDocId === doc.id}
+                            onClick={() => deleteDocument(doc.id, doc.name)}
+                          >
+                            {deletingDocId === doc.id ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <Trash2 className="w-3.5 h-3.5" />
+                            )}
+                          </Button>
+                        )}
                       </div>
                     );
                   })}
