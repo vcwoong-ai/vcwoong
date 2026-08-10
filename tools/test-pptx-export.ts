@@ -83,6 +83,26 @@ async function main() {
   assert(tableSlide.includes("핵심 포인트"), "표 뒤 텍스트 블록 누락");
   console.log("✅ 마크다운 표 → 실제 PPTX 표 렌더링 확인");
 
+  // "라벨: 숫자(단위)" 줄 2개 이상이면 실제 막대차트가 삽입되는지 확인
+  const chartSection = [
+    {
+      title: "재무현황",
+      content: "- ARR: 45억원\n- NRR: 118%\n- LTV/CAC: 4.5",
+    },
+  ];
+  const chartBuf = await generateReportPPTX(chartSection, {
+    companyName: "테스트회사",
+    reportDate: new Date(),
+  });
+  const chartZip = await JSZip.loadAsync(chartBuf);
+  const chartFile = Object.keys(chartZip.files).find((f) =>
+    /^ppt\/charts\/chart\d*\.xml$/.test(f)
+  );
+  assert(!!chartFile, "핵심 지표 막대차트가 생성되지 않음");
+  const chartXml = await chartZip.file(chartFile!)!.async("text");
+  assert(chartXml.includes("ARR") && chartXml.includes("NRR"), "차트에 지표 라벨 누락");
+  console.log("✅ 핵심 지표 2개 이상일 때 막대차트 렌더링 확인");
+
   console.log("✅ PPTX 내보내기 구조 검증 통과\n");
 }
 
