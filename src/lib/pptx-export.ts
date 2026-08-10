@@ -12,12 +12,81 @@
 
 import type { ReportSection } from "@prisma/client";
 
-function splitBullets(content: string): string[] {
-  return content
-    .split(/\n/)
-    .map((l) => l.replace(/^[-*•]\s*/, "").trim())
-    .filter(Boolean)
-    .slice(0, 8);
+type ContentBlock =
+  | { type: "text"; lines: string[] }
+  | { type: "table"; rows: string[][] };
+
+function cleanLine(line: string): string {
+  return line
+    .replace(/^[-*•]\s*/, "")
+    .replace(/^#{1,6}\s+/, "")
+    .replace(/\*\*/g, "")
+    .trim();
+}
+
+/** "| a | b |" 형태의 마크다운 표 행을 셀 배열로 파싱 (표가 아니면 null) */
+function parseTableRow(line: string): string[] | null {
+  const trimmed = line.trim();
+  if (trimmed.length < 2 || !trimmed.startsWith("|") || !trimmed.endsWith("|")) {
+    return null;
+  }
+  return trimmed
+    .slice(1, -1)
+    .split("|")
+    .map((c) => c.replace(/\*\*/g, "").trim());
+}
+
+/** "| --- | --- |" 형태의 구분선 행인지 (표 헤더 다음 줄) */
+function isTableSeparatorRow(cells: string[]): boolean {
+  return cells.length > 0 && cells.every((c) => /^:?-{2,}:?$/.test(c));
+}
+
+/**
+ * 본문을 일반 텍스트 블록과 마크다운 표 블록으로 분리한다.
+ * 표는 실제 PPTX 표(addTable)로 렌더링하기 위해 텍스트 블록과 구분해야
+ * 한다 — 안 그러면 "| 항목 | 내용 |" 같은 줄이 그냥 불릿 텍스트로 나온다.
+ */
+function splitContentBlocks(content: string): ContentBlock[] {
+  const blocks: ContentBlock[] = [];
+  const lines = content.split("\n");
+  let textLines: string[] = [];
+
+  const flushText = () => {
+    if (textLines.length > 0) {
+      blocks.push({ type: "text", lines: textLines });
+      textLines = [];
+    }
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const headerRow = parseTableRow(lines[i]);
+    const separatorRow =
+      headerRow && i + 1 < lines.length ? parseTableRow(lines[i + 1]) : null;
+
+    if (headerRow && separatorRow && isTableSeparatorRow(separatorRow)) {
+      flushText();
+      const rows: string[][] = [headerRow];
+      i += 2;
+      while (i < lines.length) {
+        const row = parseTableRow(lines[i]);
+        if (!row) {
+          i -= 1;
+          break;
+        }
+        rows.push(row);
+        i += 1;
+      }
+      blocks.push({ type: "table", rows });
+      continue;
+    }
+
+    const cleaned = cleanLine(lines[i]);
+    if (cleaned && !/^-{3,}$/.test(cleaned)) {
+      textLines.push(cleaned);
+    }
+  }
+  flushText();
+  return blocks;
 }
 
 export async function generateReportPPTX(
@@ -54,6 +123,11 @@ export async function generateReportPPTX(
     fontFace: "맑은 고딕",
   });
 
+  const CONTENT_TOP = 1.25;
+  const CONTENT_BOTTOM = 7.1;
+  const LINE_HEIGHT = 0.32;
+  const TABLE_ROW_HEIGHT = 0.32;
+
   for (const section of sections) {
     const slide = pptx.addSlide();
     slide.addText(section.title, {
@@ -66,23 +140,71 @@ export async function generateReportPPTX(
       fontFace: "맑은 고딕",
     });
 
-    const bullets = splitBullets(section.content);
-    const lines = bullets.length > 0 ? bullets : ["확인 필요"];
-    slide.addText(
-      lines.map((line) => ({
-        text: line.slice(0, 200),
-        options: { bullet: true, breakLine: true },
-      })),
-      {
-        x: 0.5,
-        y: 1.25,
-        w: 9,
-        h: 5.8,
-        fontSize: 16,
-        valign: "top",
-        fontFace: "맑은 고딕",
+    const blocks = splitContentBlocks(section.content);
+    let y = CONTENT_TOP;
+    let rendered = false;
+
+    for (const block of blocks) {
+      const remaining = CONTENT_BOTTOM - y;
+      if (remaining < 0.4) break;
+
+      if (block.type === "table") {
+        const rows = block.rows.slice(0, 8);
+        const colCount = Math.max(...rows.map((r) => r.length));
+        const h = Math.min(rows.length * TABLE_ROW_HEIGHT, remaining);
+        const tableRows = rows.map((cells, rowIdx) =>
+          Array.from({ length: colCount }, (_, colIdx) => ({
+            text: (cells[colIdx] ?? "").slice(0, 60),
+            options: {
+              bold: rowIdx === 0,
+              fill: rowIdx === 0 ? { color: "F2F4F7" } : undefined,
+              fontSize: 12,
+              fontFace: "맑은 고딕",
+            },
+          }))
+        );
+        slide.addTable(tableRows, {
+          x: 0.5,
+          y,
+          w: 9,
+          h,
+          border: { type: "solid", color: "BFBFBF", pt: 0.5 },
+          autoPage: false,
+        });
+        y += h + 0.2;
+      } else {
+        const lines = block.lines.slice(0, 10);
+        const h = Math.min(lines.length * LINE_HEIGHT + 0.15, remaining);
+        slide.addText(
+          lines.map((line) => ({
+            text: line.slice(0, 200),
+            options: { bullet: true, breakLine: true },
+          })),
+          {
+            x: 0.5,
+            y,
+            w: 9,
+            h,
+            fontSize: 16,
+            valign: "top",
+            fontFace: "맑은 고딕",
+          }
+        );
+        y += h + 0.15;
       }
-    );
+      rendered = true;
+    }
+
+    if (!rendered) {
+      slide.addText("확인 필요", {
+        x: 0.5,
+        y: CONTENT_TOP,
+        w: 9,
+        h: 1,
+        fontSize: 16,
+        fontFace: "맑은 고딕",
+      });
+    }
   }
 
   return (await pptx.write({ outputType: "nodebuffer" })) as Buffer;
