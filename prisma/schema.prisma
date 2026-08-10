@@ -31,6 +31,7 @@ model Account {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
+  @@index([userId])
 }
 
 model Session {
@@ -39,6 +40,8 @@ model Session {
   userId       String
   expires      DateTime
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model VerificationToken {
@@ -78,6 +81,8 @@ model User {
   funds              Fund[]
   portfolioCompanies PortfolioCompany[]
   inboundDeals       InboundDeal[]
+
+  @@index([teamId])
 }
 
 model Team {
@@ -115,6 +120,10 @@ model Deal {
   documents Document[]
   reports   Report[]
   portfolio PortfolioCompany?
+
+  @@index([userId])
+  @@index([teamId])
+  @@index([status])
 }
 
 model Document {
@@ -130,6 +139,8 @@ model Document {
   createdAt  DateTime     @default(now())
 
   deal Deal @relation(fields: [dealId], references: [id], onDelete: Cascade)
+
+  @@index([dealId])
 }
 
 model Template {
@@ -151,6 +162,9 @@ model Template {
   user    User     @relation(fields: [userId], references: [id])
   team    Team?    @relation(fields: [teamId], references: [id])
   reports Report[]
+
+  @@index([userId])
+  @@index([teamId])
 }
 
 model Report {
@@ -168,6 +182,10 @@ model Report {
   deal     Deal            @relation(fields: [dealId], references: [id], onDelete: Cascade)
   template Template?       @relation(fields: [templateId], references: [id])
   sections ReportSection[]
+
+  @@index([dealId])
+  @@index([templateId])
+  @@index([status])
 }
 
 model ReportSection {
@@ -183,6 +201,8 @@ model ReportSection {
   updatedAt  DateTime      @updatedAt
 
   report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([reportId])
 }
 
 // ───────────────────────────────────────────────
@@ -220,6 +240,9 @@ model SubscriptionPayment {
   createdAt  DateTime         @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([paymentKey])
 }
 
 enum DealSector {
@@ -282,6 +305,9 @@ model UsageLog {
   createdAt    DateTime    @default(now())
 
   user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([createdAt])
 }
 
 /// 고정 윈도우 레이트리밋 카운터.
@@ -359,6 +385,9 @@ model Fund {
   team      Team?              @relation(fields: [teamId], references: [id])
   companies PortfolioCompany[]
   lpReports LpReport[]
+
+  @@index([userId])
+  @@index([teamId])
 }
 
 /// 투자 집행된 포트폴리오사 (사후관리 대상)
@@ -394,6 +423,10 @@ model PortfolioCompany {
   kpis       CompanyKPI[]
   milestones Milestone[]
   updates    PortfolioUpdate[]
+
+  @@index([userId])
+  @@index([teamId])
+  @@index([fundId])
 }
 
 /// 분기별 핵심 지표
@@ -424,6 +457,8 @@ model Milestone {
   updatedAt DateTime        @updatedAt
 
   company PortfolioCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
 }
 
 /// 분기 모니터링 노트
@@ -454,6 +489,8 @@ model LpReport {
   updatedAt DateTime     @updatedAt
 
   fund Fund @relation(fields: [fundId], references: [id], onDelete: Cascade)
+
+  @@index([fundId])
 }
 
 /// 딜소싱 인박스 — 심사 전 인바운드 딜
@@ -479,6 +516,10 @@ model InboundDeal {
 
   user User  @relation(fields: [userId], references: [id], onDelete: Cascade)
   team Team? @relation(fields: [teamId], references: [id])
+
+  @@index([userId])
+  @@index([teamId])
+  @@index([status])
 }
 
 enum PortfolioStatus {
