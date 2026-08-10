@@ -22,8 +22,9 @@
     "test:template": "tsx tools/test-template.ts",
     "test:email": "tsx tools/test-email-parser.ts",
     "test:pptx-template": "tsx tools/test-pptx-template.ts",
+    "test:pptx-export": "tsx tools/test-pptx-export.ts",
     "test:permissions": "tsx tools/test-permissions.ts",
-    "test:all": "npm run test:quality && npm run test:fixtures && npm run test:routing && npm run test:template && npm run test:email && npm run test:pptx-template && npm run test:permissions",
+    "test:all": "npm run test:quality && npm run test:fixtures && npm run test:routing && npm run test:template && npm run test:email && npm run test:pptx-template && npm run test:pptx-export && npm run test:permissions",
     "postinstall": "prisma generate"
   },
   "dependencies": {
@@ -62,6 +63,7 @@
     "next-auth": "^4.24.14",
     "openai": "^6.45.0",
     "pdf-parse": "^2.4.5",
+    "pptxgenjs": "^4.0.1",
     "prisma": "^6.19.3",
     "react": "^18",
     "react-dom": "^18",
