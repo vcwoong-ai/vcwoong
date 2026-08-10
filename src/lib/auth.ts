@@ -31,8 +31,8 @@ export const authOptions: NextAuthOptions = {
           throw new Error("이메일과 비밀번호를 입력해주세요.");
         }
 
-        // 비밀번호 대입 공격 차단. 실패한 시도만 카운트하므로 정상 사용자는
-        // 로그인에 성공하는 한 이 제한에 걸리지 않는다.
+        // 비밀번호 대입 공격 차단. 모든 시도를 세되 성공하면 아래에서
+        // 카운터를 비우므로, 결과적으로 실패만 누적된다.
         const ip = ipFromAuthRequest(
           req?.headers as Record<string, unknown> | undefined
         );

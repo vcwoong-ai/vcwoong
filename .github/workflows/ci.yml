@@ -1,0 +1,40 @@
+name: CI
+
+# 지금까지 자동으로 도는 검사가 Vercel 빌드뿐이었다. 빌드는 통과하는데
+# 타입·린트·오프라인 테스트가 깨진 채로 머지되는 걸 막는다.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # postinstall의 prisma generate가 DATABASE_URL 없이도 돌도록 더미 값을 준다.
+      - name: Install
+        run: npm ci
+        env:
+          DATABASE_URL: postgresql://user:pass@localhost:5432/db
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Offline tests
+        run: npm run test:all
+
+      - name: Build
+        run: npm run build
+        env:
+          DATABASE_URL: postgresql://user:pass@localhost:5432/db
+          NEXTAUTH_SECRET: ci-dummy-secret
