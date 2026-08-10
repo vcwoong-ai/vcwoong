@@ -56,7 +56,7 @@ export function UsageStats() {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {[
           { label: "총 토큰", value: formatTokens(data.total.tokens) },
           { label: "AI 호출", value: `${data.total.calls}회` },

@@ -266,18 +266,22 @@ export default async function DashboardPage() {
                       href={`/deals/${deal.id}`}
                       className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 transition-colors"
                     >
-                      <div>
-                        <p className="font-medium text-sm text-gray-900 flex items-center gap-2">
-                          {deal.companyName}
+                      <div className="min-w-0">
+                        {/* Badge가 <div>라 <p> 안에 넣으면 HTML 규격 위반이라
+                            하이드레이션 에러가 난다. 컨테이너를 div로 둔다. */}
+                        <div className="font-medium text-sm text-gray-900 flex items-center gap-2">
+                          <span className="truncate">{deal.companyName}</span>
                           {deal.teamId && (
-                            <Badge variant="secondary" className="text-[10px]">
+                            <Badge variant="secondary" className="text-[10px] flex-shrink-0">
                               팀
                             </Badge>
                           )}
-                        </p>
-                        <p className="text-xs text-gray-500">{deal.name}</p>
+                        </div>
+                        <p className="text-xs text-gray-500 truncate">{deal.name}</p>
                       </div>
-                      <Badge variant="outline" className="text-xs">{stageLabel[deal.stage]}</Badge>
+                      <Badge variant="outline" className="text-xs flex-shrink-0 ml-2">
+                        {stageLabel[deal.stage]}
+                      </Badge>
                     </Link>
                   ))}
                 </div>

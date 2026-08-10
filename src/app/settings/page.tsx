@@ -46,7 +46,7 @@ export default async function SettingsPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4 pb-4 border-b">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pb-4 border-b">
               <div>
                 <p className="text-xs text-gray-400">이메일</p>
                 <p className="font-medium">{session.user.email ?? "-"}</p>

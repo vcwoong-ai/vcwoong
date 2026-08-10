@@ -330,8 +330,8 @@ export function ReportPageClient({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <Link href={`/deals/${report.deal.id}`}>
             <Button variant="ghost" size="sm">
               <ArrowLeft className="w-4 h-4 mr-1" />

@@ -143,7 +143,7 @@ export function EditDealDialog({ deal }: EditDealDialogProps) {
           <DialogTitle>딜 편집</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 mt-2">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label>기업명 *</Label>
               <Input {...register("companyName")} />
@@ -179,7 +179,7 @@ export function EditDealDialog({ deal }: EditDealDialogProps) {
             </Select>
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="space-y-1.5">
               <Label>투자 라운드</Label>
               <Input {...register("investRound")} placeholder="Series A" />
