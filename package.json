@@ -63,6 +63,7 @@
     "next-auth": "^4.24.14",
     "openai": "^6.45.0",
     "pdf-parse": "^2.4.5",
+    "pptxgenjs": "^4.0.1",
     "prisma": "^6.19.3",
     "react": "^18",
     "react-dom": "^18",
