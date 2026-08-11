@@ -120,10 +120,32 @@ model Deal {
   documents Document[]
   reports   Report[]
   portfolio PortfolioCompany?
+  score     DealScore?
 
   @@index([userId])
   @@index([teamId])
   @@index([status])
+}
+
+/// 투자 매력도 점수 (보고서 작성 품질이 아니라 투자 판단 점수).
+/// 딜 1건당 최신 점수 하나만 유지 — 재계산 시 덮어쓴다.
+model DealScore {
+  id            String   @id @default(cuid())
+  dealId        String   @unique
+  overall       Float
+  marketSize    Float
+  team          Float
+  product       Float
+  businessModel Float
+  financials    Float
+  moat          Float
+  /// 차원별 한 줄 근거: { marketSize: "...", team: "...", ... }
+  rationale     Json
+  modelUsed     String
+  computedAt    DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  deal Deal @relation(fields: [dealId], references: [id], onDelete: Cascade)
 }
 
 model Document {
@@ -407,6 +429,9 @@ model PortfolioCompany {
   currentValuation Float?
   /// 회수 금액 (억원)
   realizedAmount   Float           @default(0)
+  /// 회수(EXITED/WRITTEN_OFF) 처리일 — XIRR 현금흐름 날짜 기준.
+  /// 없으면 updatedAt으로 근사한다 (정확도 낮음, fund-analytics.ts 참고)
+  exitedAt         DateTime?
   status           PortfolioStatus @default(ACTIVE)
   notes            String?
   userId           String

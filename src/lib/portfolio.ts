@@ -96,6 +96,44 @@ export const PORTFOLIO_STATUS_TONE: Record<PortfolioStatus, string> = {
   WRITTEN_OFF: "bg-gray-100 text-gray-500 border-gray-200",
 };
 
+export type ManagementGrade = "A" | "B" | "C" | "D" | "F";
+
+export const GRADE_LABEL: Record<ManagementGrade, string> = {
+  A: "우수",
+  B: "양호",
+  C: "관찰",
+  D: "위험",
+  F: "손상",
+};
+
+export const GRADE_TONE: Record<ManagementGrade, string> = {
+  A: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  B: "bg-blue-50 text-blue-700 border-blue-200",
+  C: "bg-amber-50 text-amber-700 border-amber-200",
+  D: "bg-orange-50 text-orange-700 border-orange-200",
+  F: "bg-red-50 text-red-700 border-red-200",
+};
+
+/**
+ * 관리등급 — 상태(WATCH/RISK 등)와 MOIC 성과를 합쳐 A~F 한 글자로 요약한다.
+ *
+ * 상태(사람이 직접 태그한 위험 신호)가 MOIC(숫자 성과)보다 우선한다 —
+ * 예를 들어 MOIC 3배짜리 딜이라도 심사역이 RISK로 태그했다면 그 판단을
+ * 존중해야지, 숫자만 보고 A를 주면 안 된다.
+ */
+export function companyGrade(
+  status: PortfolioStatus,
+  moic: number
+): ManagementGrade {
+  if (status === PortfolioStatus.WRITTEN_OFF) return "F";
+  if (status === PortfolioStatus.RISK) return "D";
+  if (status === PortfolioStatus.WATCH) return "C";
+  if (moic >= 3) return "A";
+  if (moic >= 1.5) return "B";
+  if (moic >= 1) return "C";
+  return "D";
+}
+
 /** 2025Q1 형식의 현재 분기 */
 export function currentPeriod(date = new Date()): string {
   const q = Math.floor(date.getMonth() / 3) + 1;

@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { DealCard } from "@/components/deals/deal-card";
 import { DealKanban } from "@/components/deals/deal-kanban";
 import { CreateDealDialog } from "@/components/deals/create-deal-dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, LayoutGrid, Kanban } from "lucide-react";
+import { Search, LayoutGrid, Kanban, Gauge } from "lucide-react";
 import { DealStage, DealSector } from "@prisma/client";
 import { cn } from "@/lib/utils";
 
@@ -57,8 +58,20 @@ export function DealsPageClient({
   currentTeamId: string | null;
   role: string;
 }) {
+  const router = useRouter();
   const [view, setView] = useState<"grid" | "kanban">("grid");
   const [search, setSearch] = useState("");
+  const [compareIds, setCompareIds] = useState<string[]>([]);
+
+  const toggleCompare = (id: string) => {
+    setCompareIds((prev) =>
+      prev.includes(id)
+        ? prev.filter((x) => x !== id)
+        : prev.length >= 5
+        ? prev // 레이더에 5개 넘게 겹치면 못 읽으므로 상한
+        : [...prev, id]
+    );
+  };
 
   const filtered = initialDeals.filter(
     (d) =>
@@ -134,7 +147,21 @@ export function DealsPageClient({
         /* 카드 그리드 뷰 */
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {filtered.map((deal) => (
-            <DealCard key={deal.id} deal={deal} />
+            <div key={deal.id} className="relative">
+              <label
+                className="absolute top-3 right-3 z-10 flex items-center gap-1.5 bg-white/90 backdrop-blur rounded-full px-2 py-1 text-xs text-gray-500 border border-gray-200 cursor-pointer hover:border-blue-300"
+                title="투자 매력도 비교에 추가"
+              >
+                <input
+                  type="checkbox"
+                  className="accent-blue-600"
+                  checked={compareIds.includes(deal.id)}
+                  onChange={() => toggleCompare(deal.id)}
+                />
+                비교
+              </label>
+              <DealCard deal={deal} />
+            </div>
           ))}
           {filtered.length === 0 && (
             <p className="col-span-full text-center text-gray-400 py-8">
@@ -155,6 +182,28 @@ export function DealsPageClient({
             onStageChange={handleStageChange}
             canEditDeal={canEditDeal}
           />
+        </div>
+      )}
+
+      {/* 비교 선택 바 — 2개 이상 골라야 레이더 오버레이가 의미 있다 */}
+      {compareIds.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3 bg-gray-900 text-white rounded-full px-4 py-2.5 shadow-lg">
+          <span className="text-sm">{compareIds.length}개 선택됨</span>
+          <Button
+            size="sm"
+            className="h-7 bg-blue-600 hover:bg-blue-500"
+            disabled={compareIds.length < 2}
+            onClick={() => router.push(`/deals/compare?ids=${compareIds.join(",")}`)}
+          >
+            <Gauge className="w-3.5 h-3.5 mr-1" />
+            투자 매력도 비교
+          </Button>
+          <button
+            className="text-xs text-gray-400 hover:text-white"
+            onClick={() => setCompareIds([])}
+          >
+            취소
+          </button>
         </div>
       )}
     </div>
