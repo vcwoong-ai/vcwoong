@@ -92,4 +92,6 @@ export const RATE_LIMITS = {
   login: { limit: 10, windowMs: 15 * 60 * 1000 },
   /** AI 보고서 생성: 사용자당 1시간 10회 (월 한도와 별개로 폭주 방지) */
   reportGeneration: { limit: 10, windowMs: 60 * 60 * 1000 },
+  /** 딜 스코어링(AI 호출): 사용자당 1시간 20회 */
+  dealScoring: { limit: 20, windowMs: 60 * 60 * 1000 },
 } as const;

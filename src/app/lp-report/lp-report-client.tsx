@@ -16,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Download, Loader2, Plus, Sparkles, Wallet, Printer } from "lucide-react";
+import { Download, Loader2, Plus, Sparkles, Wallet, Printer, TrendingUp } from "lucide-react";
 import { currentPeriod, recentPeriods } from "@/lib/portfolio";
 import type { LpReportComputed } from "@/lib/lp-report";
 
@@ -256,6 +256,12 @@ export function LPReportClient({
               ))}
             </SelectContent>
           </Select>
+          <Link href={`/lp-report/${fund.id}/analytics`}>
+            <Button variant="outline" disabled={fund.companyCount === 0}>
+              <TrendingUp className="w-4 h-4 mr-1" />
+              운용 심화 분석
+            </Button>
+          </Link>
           <Button
             variant="outline"
             onClick={() => setShowCreate(true)}

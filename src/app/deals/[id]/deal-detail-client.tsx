@@ -20,10 +20,14 @@ import {
   Sparkles,
   LayoutTemplate,
   Trash2,
+  Gauge,
+  Landmark,
 } from "lucide-react";
 import { EditDealDialog } from "@/components/deals/edit-deal-dialog";
 import { TeamShareToggle } from "@/components/team/team-share-toggle";
 import { ReportWizard } from "@/components/reports/report-wizard";
+import { DealScoreRadar } from "@/components/deals/deal-score-radar";
+import { DealDartPanel } from "@/components/deals/deal-dart-panel";
 import {
   Select,
   SelectContent,
@@ -518,6 +522,14 @@ export function DealDetailClient({
             <Zap className="w-3.5 h-3.5" />
             AI 에이전트
           </TabsTrigger>
+          <TabsTrigger value="score" className="flex items-center gap-1.5">
+            <Gauge className="w-3.5 h-3.5" />
+            투자 매력도
+          </TabsTrigger>
+          <TabsTrigger value="dart" className="flex items-center gap-1.5">
+            <Landmark className="w-3.5 h-3.5" />
+            전자공시
+          </TabsTrigger>
         </TabsList>
 
         {/* Documents tab */}
@@ -744,6 +756,16 @@ export function DealDetailClient({
               ))}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* 투자 매력도 점수 tab */}
+        <TabsContent value="score">
+          <DealScoreRadar dealId={deal.id} canEdit={canEdit} />
+        </TabsContent>
+
+        {/* DART 전자공시 tab */}
+        <TabsContent value="dart">
+          <DealDartPanel dealId={deal.id} />
         </TabsContent>
       </Tabs>
     </div>

@@ -26,9 +26,14 @@
     "test:permissions": "tsx tools/test-permissions.ts",
     "test:security": "tsx tools/test-security.ts",
     "test:evidence": "tsx tools/test-evidence.ts",
+    "test:deal-scoring": "tsx tools/test-deal-scoring.ts",
+    "test:fund-analytics": "tsx tools/test-fund-analytics.ts",
+    "test:dart": "tsx tools/test-dart.ts",
+    "test:irr-calculator": "tsx tools/test-irr-calculator.ts",
+    "test:portfolio-grade": "tsx tools/test-portfolio-grade.ts",
     "test:mobile": "tsx tools/test-mobile.ts",
     "smoke": "tsx tools/smoke.ts",
-    "test:all": "npm run test:quality && npm run test:fixtures && npm run test:routing && npm run test:template && npm run test:email && npm run test:pptx-template && npm run test:pptx-export && npm run test:permissions && npm run test:security && npm run test:evidence",
+    "test:all": "npm run test:quality && npm run test:fixtures && npm run test:routing && npm run test:template && npm run test:email && npm run test:pptx-template && npm run test:pptx-export && npm run test:permissions && npm run test:security && npm run test:evidence && npm run test:deal-scoring && npm run test:fund-analytics && npm run test:dart && npm run test:irr-calculator && npm run test:portfolio-grade",
     "postinstall": "prisma generate"
   },
   "dependencies": {

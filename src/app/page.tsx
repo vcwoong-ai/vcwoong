@@ -12,6 +12,10 @@ import {
   LayoutTemplate,
   FlaskConical,
   FileSearch,
+  ShieldCheck,
+  Lock,
+  KeyRound,
+  Users2,
 } from "lucide-react";
 
 export default function LandingPage() {
@@ -31,6 +35,7 @@ export default function LandingPage() {
             <a href="#features" className="hover:text-gray-900 transition-colors">기능</a>
             <a href="#agents" className="hover:text-gray-900 transition-colors">AI 에이전트</a>
             <Link href="/pricing" className="hover:text-gray-900 transition-colors">가격</Link>
+            <Link href="/irr-calculator" className="hover:text-gray-900 transition-colors">IRR 계산기</Link>
             <a href="#faq" className="hover:text-gray-900 transition-colors">FAQ</a>
           </div>
           <div className="flex items-center gap-3">
@@ -253,6 +258,54 @@ export default function LandingPage() {
               </tbody>
             </table>
           </div>
+        </div>
+      </section>
+
+      {/* Security — 실제로 하고 있는 것만. 인증(SOC2·ISO27001 등)은 받은 적
+          없어서 넣지 않는다. 안 받은 인증을 배지로 걸면 허위 광고가 된다. */}
+      <section className="py-24 px-6 bg-slate-900 text-white">
+        <div className="max-w-4xl mx-auto">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl font-bold">보안</h2>
+            <p className="text-slate-400 mt-3">
+              지금 실제로 적용돼 있는 것만 안내합니다. 받지 않은 인증은 표시하지 않습니다.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            {[
+              {
+                icon: Lock,
+                title: "전 구간 HTTPS + 저장 데이터 암호화",
+                desc: "업로드 문서·보고서는 전송 구간 TLS로 보호되고, 저장소(Neon/Vercel)에서 저장 시 암호화됩니다.",
+              },
+              {
+                icon: KeyRound,
+                title: "비밀번호 해시 저장",
+                desc: "비밀번호는 bcrypt로 해시해 저장하며 평문으로 보관하지 않습니다.",
+              },
+              {
+                icon: Users2,
+                title: "팀 단위 권한 분리",
+                desc: "관리자·파트너·심사역 역할별로 조회·편집 권한이 나뉘고, 팀 밖으로 딜 데이터가 노출되지 않습니다.",
+              },
+              {
+                icon: ShieldCheck,
+                title: "결제 웹훅 서명 검증 + 요청 제한",
+                desc: "결제 이벤트는 서명을 검증한 요청만 처리하고, 가입·로그인·생성 요청은 비정상 폭주를 막는 속도 제한이 걸려 있습니다.",
+              },
+            ].map((item) => (
+              <div key={item.title} className="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                <div className="flex items-center gap-2 mb-2">
+                  <item.icon className="w-4 h-4 text-blue-400" />
+                  <span className="font-semibold">{item.title}</span>
+                </div>
+                <p className="text-sm text-slate-400">{item.desc}</p>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-slate-500 text-center mt-8">
+            SOC 2, ISO 27001 등 제3자 보안 인증은 아직 받지 않았습니다. 필요하신 경우 별도로 문의해 주세요.
+          </p>
         </div>
       </section>
 
