@@ -187,6 +187,7 @@ export function DealDetailClient({
   );
   const [wizardOpen, setWizardOpen] = useState(false);
   const [loadingFixture, setLoadingFixture] = useState(false);
+  const [deletingDeal, setDeletingDeal] = useState(false);
   const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
   // 페이지를 벗어나면 진행 중인 폴링 루프를 멈춘다.
   const pollAbortRef = useRef(false);
@@ -253,6 +254,27 @@ export function DealDetailClient({
       alert(error instanceof Error ? error.message : "문서 삭제 중 오류가 발생했습니다");
     } finally {
       setDeletingDocId(null);
+    }
+  };
+
+  const deleteDeal = async () => {
+    if (
+      !confirm(
+        `"${deal.companyName}" 딜을 삭제하시겠습니까?\n업로드한 문서·보고서·투자매력도 점수가 모두 함께 삭제되며 되돌릴 수 없습니다.`
+      )
+    )
+      return;
+    setDeletingDeal(true);
+    try {
+      const response = await fetch(`/api/deals/${deal.id}`, { method: "DELETE" });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error ?? "삭제 실패");
+      }
+      router.push("/deals");
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "딜 삭제 중 오류가 발생했습니다");
+      setDeletingDeal(false);
     }
   };
 
@@ -393,6 +415,23 @@ export function DealDetailClient({
             canUseTeam={canUseTeam}
           />
           {canEdit && <EditDealDialog deal={deal} />}
+          {deal.userId === currentUserId && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+              onClick={deleteDeal}
+              disabled={deletingDeal}
+              title="딜 삭제 (문서·보고서 전부 함께 삭제됨)"
+            >
+              {deletingDeal ? (
+                <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+              ) : (
+                <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+              )}
+              삭제
+            </Button>
+          )}
           {canEdit && deal.documents.length > 0 && (
             <>
               {/* 템플릿 선택 */}

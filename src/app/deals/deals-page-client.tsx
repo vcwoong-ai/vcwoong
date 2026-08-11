@@ -62,6 +62,29 @@ export function DealsPageClient({
   const [view, setView] = useState<"grid" | "kanban">("grid");
   const [search, setSearch] = useState("");
   const [compareIds, setCompareIds] = useState<string[]>([]);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const handleDeleteDeal = async (dealId: string, companyName: string) => {
+    if (
+      !confirm(
+        `"${companyName}" 딜을 삭제하시겠습니까?\n업로드한 문서·보고서가 모두 함께 삭제되며 되돌릴 수 없습니다.`
+      )
+    )
+      return;
+    setDeletingId(dealId);
+    try {
+      const res = await fetch(`/api/deals/${dealId}`, { method: "DELETE" });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error ?? "삭제 실패");
+      }
+      router.refresh();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "딜 삭제 중 오류가 발생했습니다");
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   const toggleCompare = (id: string) => {
     setCompareIds((prev) =>
@@ -160,7 +183,15 @@ export function DealsPageClient({
                 />
                 비교
               </label>
-              <DealCard deal={deal} />
+              <DealCard
+                deal={deal}
+                onDelete={
+                  deal.userId === currentUserId
+                    ? () => handleDeleteDeal(deal.id, deal.companyName)
+                    : undefined
+                }
+                deleting={deletingId === deal.id}
+              />
             </div>
           ))}
           {filtered.length === 0 && (

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FileText, Upload, ArrowRight } from "lucide-react";
+import { FileText, Upload, ArrowRight, Trash2, Loader2 } from "lucide-react";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,9 @@ interface DealCardProps {
     documents: Array<{ id: string }>;
     reports: Array<{ id: string; status: string }>;
   };
+  /** 제공되면 삭제 버튼이 뜬다 — 소유자에게만 넘겨줄 것 (API도 소유자만 허용) */
+  onDelete?: () => void;
+  deleting?: boolean;
 }
 
 const SECTOR_CONFIG: Record<
@@ -50,7 +53,7 @@ const STAGE_CONFIG: Record<DealStage, { label: string; variant: "default" | "sec
   REJECTED: { label: "거절", variant: "destructive" },
 };
 
-export function DealCard({ deal }: DealCardProps) {
+export function DealCard({ deal, onDelete, deleting }: DealCardProps) {
   const sectorCfg = SECTOR_CONFIG[deal.sector];
   const stageCfg = STAGE_CONFIG[deal.stage];
   const hasReports = deal.reports.length > 0;
@@ -156,6 +159,25 @@ export function DealCard({ deal }: DealCardProps) {
               <ArrowRight className="w-3 h-3 ml-1" />
             </Button>
           </Link>
+          {onDelete && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-red-500 border-red-200 hover:bg-red-50 hover:text-red-700"
+              onClick={(e) => {
+                e.preventDefault();
+                onDelete();
+              }}
+              disabled={deleting}
+              title="딜 삭제"
+            >
+              {deleting ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Trash2 className="w-3.5 h-3.5" />
+              )}
+            </Button>
+          )}
         </div>
       </CardFooter>
     </Card>
