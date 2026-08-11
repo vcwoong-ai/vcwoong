@@ -25,9 +25,10 @@
     "test:pptx-export": "tsx tools/test-pptx-export.ts",
     "test:permissions": "tsx tools/test-permissions.ts",
     "test:security": "tsx tools/test-security.ts",
+    "test:evidence": "tsx tools/test-evidence.ts",
     "test:mobile": "tsx tools/test-mobile.ts",
     "smoke": "tsx tools/smoke.ts",
-    "test:all": "npm run test:quality && npm run test:fixtures && npm run test:routing && npm run test:template && npm run test:email && npm run test:pptx-template && npm run test:pptx-export && npm run test:permissions && npm run test:security",
+    "test:all": "npm run test:quality && npm run test:fixtures && npm run test:routing && npm run test:template && npm run test:email && npm run test:pptx-template && npm run test:pptx-export && npm run test:permissions && npm run test:security && npm run test:evidence",
     "postinstall": "prisma generate"
   },
   "dependencies": {

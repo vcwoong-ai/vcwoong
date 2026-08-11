@@ -11,6 +11,7 @@ import {
   Brain,
   LayoutTemplate,
   FlaskConical,
+  FileSearch,
 } from "lucide-react";
 
 export default function LandingPage() {
@@ -63,7 +64,8 @@ export default function LandingPage() {
           <p className="text-xl text-slate-300 mb-10 max-w-2xl mx-auto leading-relaxed">
             BIO·IT·AI·제조·콘텐츠·핀테크 6개 섹터 전문 AI가<br className="hidden md:block" />
             10섹션 IC 보고서를 자동 작성합니다.
-            딜소싱부터 사후관리·LP 리포팅까지 한 흐름으로 이어집니다.
+            <strong className="text-white font-semibold">쓰인 모든 숫자는 업로드 자료의 원문까지 되짚을 수 있고</strong>,
+            근거가 없는 값은 따로 표시해 IC 전에 확인할 것만 남깁니다.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link
@@ -104,12 +106,19 @@ export default function LandingPage() {
       <section id="features" className="py-24 px-6 bg-gray-50">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold text-gray-900">4가지 핵심 차별화</h2>
+            <h2 className="text-3xl font-bold text-gray-900">5가지 핵심 차별화</h2>
             <p className="text-gray-500 mt-3">경쟁사가 제공하지 않는 {BRAND.name}만의 기능</p>
           </div>
 
           <div className="grid md:grid-cols-2 gap-8">
             {[
+              {
+                icon: FileSearch,
+                color: "bg-rose-100 text-rose-600",
+                title: "모든 숫자에 근거를 답니다",
+                desc: "보고서에 쓰인 수치를 업로드 자료와 한 건씩 대조해, 어느 문서 어느 문장에서 나온 값인지 원문 발췌까지 보여줍니다. 자료에 없는 숫자는 '근거 없음'으로 따로 모아, IC 전에 확인할 것만 남깁니다.",
+                badge: "환각 방어",
+              },
               {
                 icon: Brain,
                 color: "bg-purple-100 text-purple-600",
@@ -217,6 +226,7 @@ export default function LandingPage() {
               </thead>
               <tbody>
                 {[
+                  ["수치 근거 추적 (원문 발췌)", true, false, false],
                   ["섹터 전문 AI (6개)", true, "일부", false],
                   ["기존 양식 1:1 재현", true, false, false],
                   ["PubMed/ClinicalTrials 연동", true, false, false],
@@ -254,6 +264,10 @@ export default function LandingPage() {
           <h2 className="text-3xl font-bold text-gray-900 text-center mb-16">자주 묻는 질문</h2>
           <div className="space-y-6">
             {[
+              {
+                q: "AI가 지어낸 숫자인지 어떻게 아나요?",
+                a: "보고서의 모든 수치를 업로드한 자료와 대조해 '문서 확인 / 딜 입력 / 근거 없음'으로 표시합니다. 문서에서 나온 값은 어느 파일 어느 문장인지 원문 발췌까지 보여주고, 자료 어디에도 없는 값은 따로 모아둡니다. 확인이 필요한 숫자만 보면 되므로 전부 다시 대조할 필요가 없습니다.",
+              },
               {
                 q: "AI가 생성한 보고서를 그대로 IC에 제출할 수 있나요?",
                 a: `아니요, 초안으로 활용하세요. ${BRAND.name}는 심사역의 분석 시간을 80% 단축하는 도구입니다. AI가 생성한 초안을 심사역이 검토하고 편집한 후 최종 제출하는 방식을 권장합니다.`,
