@@ -261,7 +261,7 @@ export function formatQualityFooter(summary: ReportQualitySummary): string {
   return [
     "",
     "---",
-    `*Axiom 자동 품질 점수: ${summary.overallScore}/100*`,
+    `*DealMind 자동 품질 점수: ${summary.overallScore}/100*`,
     summary.criticalIssues.length
       ? `*이슈: ${summary.criticalIssues.slice(0, 3).join("; ")}*`
       : "*치명적 이슈 없음*",

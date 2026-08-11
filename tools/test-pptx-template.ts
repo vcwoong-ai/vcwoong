@@ -88,7 +88,7 @@ async function buildFirmPptxTemplate(): Promise<Buffer> {
 }
 
 async function main() {
-  console.log("\n=== Axiom PPTX 양식 1:1 재현 테스트 ===\n");
+  console.log("\n=== DealMind PPTX 양식 1:1 재현 테스트 ===\n");
 
   const original = await buildFirmPptxTemplate();
   const origZip = await JSZip.loadAsync(original);

@@ -1,4 +1,4 @@
-# 📱 모바일 5분 셋업 (Axiom + Neon)
+# 📱 모바일 5분 셋업 (DealMind + Neon)
 
 ## Vercel / Neon이 뭐야?
 

@@ -58,7 +58,7 @@ npm run test:ai         # OpenRouter 스모크 (모델 ID 유효성 확인)
 npm run dev:local
 ```
 
-데모 로그인: `demo@axiom.kr` / `Demo1234!`
+데모 로그인: `demo@dealmind.kr` / `Demo1234!`
 
 ## 품질 연습 루프 (추천)
 

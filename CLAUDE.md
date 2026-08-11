@@ -1,10 +1,10 @@
-# Axiom — Agent Context
+# DealMind — Agent Context
 
 ## 제품 개요
 
-- **이름:** Axiom (액시엄)
+- **이름:** DealMind (딜마인드)
 - **한 줄:** 섹터별 전문 AI 심사역 6명을 고용하는 VC용 투자심사보고서 자동화 SaaS
-- **이름 유래:** axiom(공리) — 판단의 전제를 명확히 남기는 보고서
+- **이름 유래:** Deal + Mind — 딜을 요약하는 게 아니라 판단하는 AI
 - **브랜드 단일 소스:** `src/lib/brand.ts` (UI·메타데이터는 반드시 `BRAND` 참조)
 
 ### 사용 금지 이름
@@ -13,10 +13,14 @@
 
 | 금지 | 이유 |
 |------|------|
+| Axiom / 액시엄 | 이전 제품명 (2026-08 폐기) |
 | Vcwoong / VC우ng | 이전 제품명 (2026-07 폐기) |
 | DealSync / 딜싱크 | Claude Code의 별개 프로젝트 |
 | VCNote / 심사노트 | 직접 경쟁사 |
 | 비키 / 메리 / ZUZU | 경쟁사 |
+
+> 예외: `src/lib/brand.ts`의 `LEGACY_CUSTOMER_KEY_PREFIXES`는 Toss에 이미
+> 등록된 `axiom-<userId>` 형태 빌링키를 계속 인식하기 위한 것이라 남겨둔다.
 
 > Vercel 슬러그(`dealsync-jade`)와 GitHub 저장소명(`vcwoong-ai/vcwoong`)은
 > 인프라 식별자라 그대로 두지만, 제품 문구에는 노출하지 않는다.

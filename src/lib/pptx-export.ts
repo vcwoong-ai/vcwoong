@@ -136,7 +136,7 @@ export async function generateReportPPTX(
       { rect: { x: 0, y: 0, w: 0.14, h: 7.5, fill: { color: BRAND_COLOR } } },
       {
         text: {
-          text: "Axiom",
+          text: "DealMind",
           options: {
             x: 8.2,
             y: 7.1,
@@ -174,7 +174,7 @@ export async function generateReportPPTX(
     color: TEXT_DARK,
     fontFace: FONT,
   });
-  coverSlide.addText(`${coverDate}  ·  Axiom IC Report`, {
+  coverSlide.addText(`${coverDate}  ·  DealMind IC Report`, {
     x: 0.7,
     y: 3.35,
     w: 8.6,

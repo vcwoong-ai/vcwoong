@@ -317,8 +317,8 @@ export default function LandingPage() {
               </div>
               <p className="text-sm">섹터별 전문 AI 심사역 6명을 고용하는<br />VC용 투자심사보고서 자동화 SaaS</p>
               <p className="text-xs text-slate-500 mt-3 max-w-xs">
-                {BRAND.name}({BRAND.nameKr}) — 공리(公理).
-                판단의 전제를 분명히 남기는 보고서.
+                {BRAND.name}({BRAND.nameKr}) — 딜을 요약하는 게 아니라 판단하는 AI.
+                결론과 함께 그 근거를 원문까지 되짚을 수 있게 남깁니다.
               </p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 text-sm">

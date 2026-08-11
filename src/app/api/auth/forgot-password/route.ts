@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
 
       await sendEmail({
         to: email,
-        subject: "[Axiom] 비밀번호 재설정",
+        subject: "[DealMind] 비밀번호 재설정",
         html: passwordResetEmail(resetUrl, RESET_TOKEN_TTL_MINUTES),
       });
     }

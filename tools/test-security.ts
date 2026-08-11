@@ -100,11 +100,19 @@ function testCustomerKey() {
     "다른 접두사 키가 파싱됨"
   );
 
-  console.log("✅ customerKey 왕복 + 잘못된 접두사 거부");
+  // 리브랜딩(Axiom → DealMind) 이전에 Toss에 등록된 빌링키는 옛 접두사를
+  // 그대로 달고 웹훅으로 들어온다. 이걸 못 읽으면 옛 구독자의 해지가
+  // 조용히 무시되므로 반드시 계속 인식돼야 한다.
+  assert(
+    parseCustomerKeyUserId("axiom-user_abc123") === "user_abc123",
+    "리브랜딩 이전 접두사(axiom-)가 파싱되지 않음"
+  );
+
+  console.log("✅ customerKey 왕복 + 옛 접두사 호환 + 잘못된 접두사 거부");
 }
 
 function main() {
-  console.log("\n=== Axiom 보안 로직 테스트 ===\n");
+  console.log("\n=== DealMind 보안 로직 테스트 ===\n");
   testWebhookSecret();
   testClientIp();
   testCustomerKey();

@@ -9,9 +9,9 @@
  *
  * Usage:
  *   npm run smoke -- https://dealsync-git-xxx.vercel.app
- *   SMOKE_EMAIL=demo@axiom.kr SMOKE_PASSWORD=... npm run smoke -- <url>
+ *   SMOKE_EMAIL=demo@dealmind.kr SMOKE_PASSWORD=... npm run smoke -- <url>
  *
- * 기본 계정은 시드 데모 계정(demo@axiom.kr)이다.
+ * 기본 계정은 시드 데모 계정(demo@dealmind.kr)이다.
  * 테스트로 만든 딜은 끝나고 지우므로 데이터가 남지 않는다.
  */
 import { BRAND } from "../src/lib/brand";
@@ -81,7 +81,7 @@ async function readJson<T>(res: Response, what: string): Promise<T> {
  */
 function buildTestPdf(): Buffer {
   const text =
-    "Axiom smoke test document. ARR 45 EOK. NRR 118 percent. Series A round.";
+    "DealMind smoke test document. ARR 45 EOK. NRR 118 percent. Series A round.";
   const stream = `BT /F1 12 Tf 40 700 Td (${text}) Tj ET`;
   const objects = [
     "<< /Type /Catalog /Pages 2 0 R >>",
@@ -168,7 +168,7 @@ async function uploadAndCheckParsing(dealId: string) {
       `배포 번들에 pdf-parse 의존성이 빠졌을 수 있습니다 (로컬에서는 재현되지 않는 문제).`
   );
   assert(
-    data.parsedText?.includes("Axiom") ?? false,
+    data.parsedText?.includes("DealMind") ?? false,
     `추출된 텍스트에 기대한 내용이 없습니다: ${data.parsedText?.slice(0, 80)}`
   );
   console.log(`✅ PDF 업로드 + 텍스트 추출 (${chars}자)`);
@@ -181,7 +181,7 @@ async function cleanup(dealId: string) {
 }
 
 async function main() {
-  console.log(`\n=== Axiom 스모크 테스트 ===\n대상: ${baseUrl}\n`);
+  console.log(`\n=== DealMind 스모크 테스트 ===\n대상: ${baseUrl}\n`);
 
   await checkHealth();
   await login();

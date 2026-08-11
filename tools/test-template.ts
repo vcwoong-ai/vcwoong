@@ -115,7 +115,7 @@ async function readDocXml(buffer: Buffer): Promise<string> {
 }
 
 async function main() {
-  console.log("\n=== Axiom 양식 1:1 재현 테스트 ===\n");
+  console.log("\n=== DealMind 양식 1:1 재현 테스트 ===\n");
 
   const original = await buildFirmTemplate();
   const originalXml = await readDocXml(original);

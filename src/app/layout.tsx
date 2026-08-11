@@ -19,8 +19,8 @@ export const metadata: Metadata = {
     "투자심의보고서",
     "IC Report",
     "바이오 투자",
-    "Axiom",
-    "액시엄",
+    "DealMind",
+    "딜마인드",
   ],
   authors: [{ name: BRAND.name }],
   openGraph: {

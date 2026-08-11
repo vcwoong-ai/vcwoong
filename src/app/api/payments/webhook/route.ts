@@ -8,7 +8,7 @@ import { getPayment, verifyTossWebhookSecret } from "@/lib/payments/toss";
  * Toss 결제 웹훅.
  *
  * 이 엔드포인트는 인증 없이 외부에 열려 있으므로, 본문 값을 그대로 믿고
- * DB를 바꾸면 안 된다. customerKey는 `axiom-<userId>` 형태라 추측이 쉬워서,
+ * DB를 바꾸면 안 된다. customerKey는 `dealmind-<userId>` 형태라 추측이 쉬워서,
  * 검증 없이 BILLING_DELETED를 받아주면 아무나 남의 구독을 해지시킬 수 있다.
  *
  * 두 겹으로 막는다:

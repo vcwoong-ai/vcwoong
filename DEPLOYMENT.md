@@ -1,4 +1,4 @@
-# Axiom 배포 가이드
+# DealMind 배포 가이드
 
 ## 1. GitHub + Vercel
 
@@ -39,7 +39,7 @@ postgresql://<user>:<password>@<project>.<region>.aws.neon.tech/<db>?sslmode=req
 ```bash
 cp .env.local.example .env.local
 npx prisma db push
-npx prisma db seed   # demo@axiom.kr / Demo1234!
+npx prisma db seed   # demo@dealmind.kr / Demo1234!
 ```
 
 ## 3. Vercel 환경 변수 (필수)

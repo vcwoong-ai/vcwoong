@@ -15,26 +15,44 @@ const prisma = new PrismaClient();
 async function main() {
   console.log("Seeding database...");
 
-  const DEMO_EMAIL = "demo@axiom.kr";
-  // 리브랜딩 이전 데모 계정 — 남아 있으면 이메일만 옮겨 기존 데이터를 살린다
-  const LEGACY_DEMO_EMAILS = ["demo@vcwoong.kr", "demo@dealsync.kr"];
+  const DEMO_EMAIL = "demo@dealmind.kr";
+  const PARTNER_EMAIL = "partner@dealmind.kr";
+  const ANALYST_EMAIL = "analyst@dealmind.kr";
+  const TEAM_NAME = "DealMind 투자 1팀";
 
-  const passwordHash = await bcrypt.hash("Demo1234!", 12);
+  // 리브랜딩 이전 계정 — 남아 있으면 이메일만 옮겨 기존 데이터를 살린다.
+  // 로컬파트는 그대로고 도메인만 바뀌어 왔으므로 도메인 목록으로 훑는다.
+  const LEGACY_DOMAINS = ["axiom.kr", "vcwoong.kr", "dealsync.kr"];
+  const legacyOf = (email: string) => {
+    const local = email.split("@")[0];
+    return LEGACY_DOMAINS.map((d) => `${local}@${d}`);
+  };
+  const LEGACY_DEMO_EMAILS = legacyOf(DEMO_EMAIL);
 
-  const current = await prisma.user.findUnique({ where: { email: DEMO_EMAIL } });
-  const legacy = current
-    ? null
-    : await prisma.user.findFirst({
-        where: { email: { in: LEGACY_DEMO_EMAILS } },
-      });
-
-  if (legacy) {
+  /**
+   * 옛 도메인 계정이 남아 있으면 새 이메일로 이름만 바꾼다.
+   * upsert 전에 돌려야 한다 — 그러지 않으면 옛 계정의 딜·보고서를 그대로
+   * 둔 채 빈 계정이 새로 만들어져 데모 데이터가 둘로 갈라진다.
+   */
+  async function migrateLegacyEmail(targetEmail: string) {
+    const current = await prisma.user.findUnique({ where: { email: targetEmail } });
+    if (current) return;
+    const legacy = await prisma.user.findFirst({
+      where: { email: { in: legacyOf(targetEmail) } },
+    });
+    if (!legacy) return;
     await prisma.user.update({
       where: { id: legacy.id },
-      data: { email: DEMO_EMAIL },
+      data: { email: targetEmail },
     });
-    console.log(`Migrated legacy demo account ${legacy.email} -> ${DEMO_EMAIL}`);
+    console.log(`Migrated legacy account ${legacy.email} -> ${targetEmail}`);
   }
+
+  for (const email of [DEMO_EMAIL, PARTNER_EMAIL, ANALYST_EMAIL]) {
+    await migrateLegacyEmail(email);
+  }
+
+  const passwordHash = await bcrypt.hash("Demo1234!", 12);
 
   const user = await prisma.user.upsert({
     where: { email: DEMO_EMAIL },
@@ -56,11 +74,24 @@ async function main() {
   });
 
   // 팀 데모 — 관리자(demo) + 파트너 + 심사역
+  // 리브랜딩 이전 이름의 팀이 남아 있으면 새로 만들지 않고 이름만 바꾼다
+  // (그러지 않으면 같은 사용자에게 옛/새 팀이 둘 다 생겨 공유 데이터가 갈라진다).
+  const LEGACY_TEAM_NAMES = ["Axiom 투자 1팀", "Vcwoong 투자 1팀", "DealSync 투자 1팀"];
   let team = await prisma.team.findFirst({
-    where: { name: "Axiom 투자 1팀", users: { some: { id: user.id } } },
+    where: {
+      name: { in: [TEAM_NAME, ...LEGACY_TEAM_NAMES] },
+      users: { some: { id: user.id } },
+    },
   });
+  if (team && team.name !== TEAM_NAME) {
+    team = await prisma.team.update({
+      where: { id: team.id },
+      data: { name: TEAM_NAME },
+    });
+    console.log(`Renamed legacy team -> ${TEAM_NAME}`);
+  }
   if (!team) {
-    team = await prisma.team.create({ data: { name: "Axiom 투자 1팀" } });
+    team = await prisma.team.create({ data: { name: TEAM_NAME } });
   }
   await prisma.user.update({
     where: { id: user.id },
@@ -71,7 +102,7 @@ async function main() {
   const analystHash = await bcrypt.hash("Analyst1234!", 12);
 
   const partner = await prisma.user.upsert({
-    where: { email: "partner@axiom.kr" },
+    where: { email: PARTNER_EMAIL },
     update: {
       passwordHash: partnerHash,
       teamId: team.id,
@@ -80,7 +111,7 @@ async function main() {
       subscriptionStatus: "ACTIVE",
     },
     create: {
-      email: "partner@axiom.kr",
+      email: PARTNER_EMAIL,
       name: "이파트너",
       passwordHash: partnerHash,
       role: UserRole.PARTNER,
@@ -91,7 +122,7 @@ async function main() {
   });
 
   const analyst = await prisma.user.upsert({
-    where: { email: "analyst@axiom.kr" },
+    where: { email: ANALYST_EMAIL },
     update: {
       passwordHash: analystHash,
       teamId: team.id,
@@ -100,7 +131,7 @@ async function main() {
       subscriptionStatus: "ACTIVE",
     },
     create: {
-      email: "analyst@axiom.kr",
+      email: ANALYST_EMAIL,
       name: "박심사역",
       passwordHash: analystHash,
       role: UserRole.ANALYST,
@@ -439,7 +470,7 @@ async function main() {
     update: { userId: user.id, teamId: team.id },
     create: {
       id: "seed-fund-001",
-      name: "Axiom 1호 벤처투자조합",
+      name: "DealMind 1호 벤처투자조합",
       vintageYear: 2023,
       fundSize: 500,
       paidIn: 320,
@@ -589,9 +620,9 @@ async function main() {
 
   console.log("\nSeed completed successfully!");
   console.log("\nDemo credentials:");
-  console.log("  Admin:   demo@axiom.kr / Demo1234!");
-  console.log("  Partner: partner@axiom.kr / Partner1234!");
-  console.log("  Analyst: analyst@axiom.kr / Analyst1234!");
+  console.log("  Admin:   demo@dealmind.kr / Demo1234!");
+  console.log("  Partner: partner@dealmind.kr / Partner1234!");
+  console.log("  Analyst: analyst@dealmind.kr / Analyst1234!");
 }
 
 main()

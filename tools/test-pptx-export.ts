@@ -17,7 +17,7 @@ function assert(cond: boolean, msg: string) {
 }
 
 async function main() {
-  console.log("\n=== Axiom PPTX 내보내기(신규 생성) 구조 검증 ===\n");
+  console.log("\n=== DealMind PPTX 내보내기(신규 생성) 구조 검증 ===\n");
 
   const sections = [
     { title: "투자개요", content: "- Series B 100억\n- Post 800억" },

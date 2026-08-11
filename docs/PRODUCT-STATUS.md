@@ -1,4 +1,4 @@
-# Axiom 제품 현황 (배포 제외)
+# DealMind 제품 현황 (배포 제외)
 
 4축 차별화 기준으로 현재 무엇이 동작하고 무엇이 남았는지 정리한 문서입니다.
 다른 환경(예: Claude)에서 작업한 내용과 병합할 때 기준점으로 사용하세요.
@@ -104,9 +104,9 @@ npm run test:template      # 양식 1:1 재현 서식 보존 검증
 
 | 계정 | 비밀번호 | 역할 |
 |------|----------|------|
-| `demo@axiom.kr` | `Demo1234!` | ADMIN (소유·공유 관리) |
-| `partner@axiom.kr` | `Partner1234!` | PARTNER (공유 딜 편집) |
-| `analyst@axiom.kr` | `Analyst1234!` | ANALYST (공유 딜 조회 전용) |
+| `demo@dealmind.kr` | `Demo1234!` | ADMIN (소유·공유 관리) |
+| `partner@dealmind.kr` | `Partner1234!` | PARTNER (공유 딜 편집) |
+| `analyst@dealmind.kr` | `Analyst1234!` | ANALYST (공유 딜 조회 전용) |
 
 샘플 딜·펀드·포트폴리오·인바운드는 팀에 공유되어 역할별 권한을 바로 확인할 수 있습니다.
 
