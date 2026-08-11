@@ -192,7 +192,7 @@ export function TeamSettings({
             id="new-team-name"
             value={teamName}
             onChange={(e) => setTeamName(e.target.value)}
-            placeholder="예: Axiom 투자 1팀"
+            placeholder="예: DealMind 투자 1팀"
           />
         </div>
         <Button onClick={createTeam} disabled={busy}>

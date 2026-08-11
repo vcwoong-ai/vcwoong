@@ -1,12 +1,12 @@
-# Axiom 프로젝트 통합 현황
+# DealMind 프로젝트 통합 현황
 
 ## 브랜드
 
 | 항목 | 값 |
 |------|-----|
-| **제품명** | Axiom (액시엄) |
+| **제품명** | DealMind (딜마인드) |
 | **코드 상수** | `src/lib/brand.ts` |
-| **데모 계정** | `demo@axiom.kr` / `Demo1234!` |
+| **데모 계정** | `demo@dealmind.kr` / `Demo1234!` |
 
 > Claude Code의 **DealSync**는 별개 프로젝트입니다. 이 레포·배포와 혼동하지 마세요.
 
@@ -36,5 +36,5 @@ Cursor Agent →  cursor/* 브랜치
 
 ## 데모 계정
 
-- Email: `demo@axiom.kr`
+- Email: `demo@dealmind.kr`
 - Password: `Demo1234!`

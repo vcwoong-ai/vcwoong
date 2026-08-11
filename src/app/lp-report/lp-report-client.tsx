@@ -183,7 +183,7 @@ export function LPReportClient({
                 id="fund-name"
                 value={newFundName}
                 onChange={(e) => setNewFundName(e.target.value)}
-                placeholder="예: Axiom 2호 벤처투자조합"
+                placeholder="예: DealMind 2호 벤처투자조합"
               />
             </div>
             <div>

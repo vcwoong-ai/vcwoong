@@ -2,7 +2,7 @@
 /**
  * 딜소싱 인박스 폴링 CLI
  * Usage:
- *   SOURCING_WEBHOOK_SECRET=... SOURCING_WEBHOOK_USER_EMAIL=demo@axiom.kr \
+ *   SOURCING_WEBHOOK_SECRET=... SOURCING_WEBHOOK_USER_EMAIL=demo@dealmind.kr \
  *     npx tsx tools/imap-poll.ts
  *
  * 또는 로컬에서:

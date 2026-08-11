@@ -1,7 +1,7 @@
 /**
  * AI 기반 템플릿 섹션 매핑.
  *
- * 업로드된 템플릿의 섹션 제목들을 Axiom 표준 IC 섹션(SectionKey)에 매핑한다.
+ * 업로드된 템플릿의 섹션 제목들을 DealMind 표준 IC 섹션(SectionKey)에 매핑한다.
  *
  * 예:
  *   "I. 투자 요약" → INVESTMENT_OVERVIEW

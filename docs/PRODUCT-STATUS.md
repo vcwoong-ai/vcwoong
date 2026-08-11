@@ -1,7 +1,28 @@
-# Axiom 제품 현황 (배포 제외)
+# DealMind 제품 현황 (배포 제외)
 
-4축 차별화 기준으로 현재 무엇이 동작하고 무엇이 남았는지 정리한 문서입니다.
+5축 차별화 기준으로 현재 무엇이 동작하고 무엇이 남았는지 정리한 문서입니다.
 다른 환경(예: Claude)에서 작업한 내용과 병합할 때 기준점으로 사용하세요.
+
+## 0. 수치 근거 추적 (2026-08-11 추가)
+
+| 항목 | 상태 |
+|------|------|
+| 보고서 수치 ↔ 업로드 자료 대조 | **동작** — `src/lib/evidence.ts` |
+| 상태 구분 (문서 확인 / 딜 입력 / 근거 없음) | 동작 |
+| 근거 문서명 + 원문 발췌 표시 | 동작 |
+| 보고서 화면 패널 | 동작 — `report-evidence-panel.tsx` |
+| API | `GET /api/reports/[id]/evidence` (AI 호출 없음, 문자열 대조라 무료) |
+| 노이즈 제외 | 연도·항목번호·NCT 식별자·자동 품질 메모 |
+| 오매칭 방지 | 숫자 토큰 단위 정확 비교 (45가 1450에 걸리지 않음) |
+| 검증 | `npm run test:evidence` (8케이스) |
+
+시드 보고서 실측: 수치 29개 중 문서 확인 18 / 딜 입력 2 / 근거 없음 9 (추적 69%).
+근거 없음으로 잡힌 값은 "Phase II→III 전환 확률 40%", "항암제 시장 연 10% 성장"처럼
+AI가 업계 통념에서 끌어온 수치들로, 실제로 심사역이 IC 전에 확인해야 하는 것들이다.
+
+> **한계(과장 금지)**: '문서 확인'은 같은 값이 자료에 있다는 뜻이지 해석이 맞다는
+> 보증이 아니다. 반대 방향(자료의 팩트가 보고서에 쓰였는지)은
+> `report-quality.ts`의 `checkFactConsistency`가 따로 본다.
 
 ## 1. 섹터별 전문 AI 에이전트
 
@@ -96,7 +117,7 @@
 ```bash
 npm run db:setup:local     # SQLite + 시드 (펀드·포트폴리오·인바운드 포함)
 npm run dev:local
-npm run test:all           # quality + fixtures + routing + template (API 키 불필요)
+npm run test:all           # quality + fixtures + routing + template + 근거추적 (API 키 불필요)
 npm run test:template      # 양식 1:1 재현 서식 보존 검증
 ```
 
@@ -104,9 +125,9 @@ npm run test:template      # 양식 1:1 재현 서식 보존 검증
 
 | 계정 | 비밀번호 | 역할 |
 |------|----------|------|
-| `demo@axiom.kr` | `Demo1234!` | ADMIN (소유·공유 관리) |
-| `partner@axiom.kr` | `Partner1234!` | PARTNER (공유 딜 편집) |
-| `analyst@axiom.kr` | `Analyst1234!` | ANALYST (공유 딜 조회 전용) |
+| `demo@dealmind.kr` | `Demo1234!` | ADMIN (소유·공유 관리) |
+| `partner@dealmind.kr` | `Partner1234!` | PARTNER (공유 딜 편집) |
+| `analyst@dealmind.kr` | `Analyst1234!` | ANALYST (공유 딜 조회 전용) |
 
 샘플 딜·펀드·포트폴리오·인바운드는 팀에 공유되어 역할별 권한을 바로 확인할 수 있습니다.
 

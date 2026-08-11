@@ -11,7 +11,7 @@ function assert(cond: boolean, msg: string) {
 }
 
 function main() {
-  console.log("\n=== Axiom 라우팅 테스트 ===\n");
+  console.log("\n=== DealMind 라우팅 테스트 ===\n");
 
   const cases: Array<{
     agentType: AgentType;

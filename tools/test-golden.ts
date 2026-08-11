@@ -89,7 +89,7 @@ async function runCase(f: (typeof GOLDEN_FIXTURES)[number]) {
 }
 
 async function main() {
-  console.log("\n=== Axiom 골든 샘플 (실제 에이전트) ===\n");
+  console.log("\n=== DealMind 골든 샘플 (실제 에이전트) ===\n");
 
   if (!isAIConfigured()) {
     console.log("❌ OPENROUTER_API_KEY가 없습니다.");

@@ -14,7 +14,7 @@ function assert(cond: boolean, msg: string) {
 }
 
 function main() {
-  console.log("\n=== Axiom 품질 모듈 테스트 ===\n");
+  console.log("\n=== DealMind 품질 모듈 테스트 ===\n");
 
   const short = evaluateSection("INVESTMENT_OVERVIEW", "짧음");
   assert(short.score < 60, "짧은 본문은 낮은 점수여야 함");

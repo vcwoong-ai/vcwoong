@@ -5,10 +5,12 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ReportEditor } from "@/components/reports/report-editor";
 import { ReportQualityPanel } from "@/components/reports/report-quality-panel";
+import { ReportEvidencePanel } from "@/components/reports/report-evidence-panel";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { ArrowLeft, Loader2, Sparkles } from "lucide-react";
+import { formatKoreanDateTime } from "@/lib/utils";
 
 interface ReportSection {
   id: string;
@@ -347,14 +349,7 @@ export function ReportPageClient({
         </div>
         {report.generatedAt && (
           <p className="text-xs text-gray-400">
-            생성일:{" "}
-            {new Date(report.generatedAt).toLocaleDateString("ko-KR", {
-              year: "numeric",
-              month: "long",
-              day: "numeric",
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
+            생성일: {formatKoreanDateTime(report.generatedAt)}
           </p>
         )}
       </div>
@@ -416,6 +411,13 @@ export function ReportPageClient({
               }
               : undefined
           }
+        />
+      )}
+
+      {report.sections.length > 0 && (
+        <ReportEvidencePanel
+          reportId={report.id}
+          refreshKey={qualityRefreshKey}
         />
       )}
 

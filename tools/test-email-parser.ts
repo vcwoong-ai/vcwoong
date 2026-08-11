@@ -1,7 +1,7 @@
 import { parseInboundEmail } from "../src/lib/email-parser";
 
 const sample = `From: 김대표 <founder@greenloop.kr>
-To: investment@axiom.kr
+To: investment@dealmind.kr
 Subject: [그린루프] Series A IR 자료 송부
 
 안녕하세요,

@@ -15,7 +15,7 @@
 import { chromium } from "playwright";
 
 const BASE = (process.argv[2] ?? process.env.MOBILE_TEST_URL ?? "http://localhost:3000").replace(/\/$/, "");
-const EMAIL = process.env.SMOKE_EMAIL ?? "demo@axiom.kr";
+const EMAIL = process.env.SMOKE_EMAIL ?? "demo@dealmind.kr";
 const PASSWORD = process.env.SMOKE_PASSWORD ?? "Demo1234!";
 const WIDTH = 375; // iPhone SE / 일반적인 최소 폭
 

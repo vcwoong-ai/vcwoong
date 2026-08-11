@@ -1,11 +1,11 @@
-# Axiom — Phase 실행 가이드
+# DealMind — Phase 실행 가이드
 
-> **위치 변경:** 이 파일들은 `W:\OneDrive - SGC\axiom\docs\phases\`로 통합되었습니다.
+> **위치 변경:** 이 파일들은 `W:\OneDrive - SGC\dealmind\docs\phases\`로 통합되었습니다.
 
 ## 사용 순서
 
 각 파일을 **에이전트 새 세션**에 붙여넣으세요.  
-작업 디렉터리: `W:\OneDrive - SGC\axiom`
+작업 디렉터리: `W:\OneDrive - SGC\dealmind`
 
 | 순서 | 파일 | 소요 | 결과물 |
 |------|------|------|--------|

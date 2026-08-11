@@ -42,7 +42,7 @@ function assert(cond: boolean, msg: string) {
 }
 
 async function main() {
-  console.log("\n=== Axiom 권한·요금·QA 테스트 ===\n");
+  console.log("\n=== DealMind 권한·요금·QA 테스트 ===\n");
 
   // 권한
   assert(canEditShared("ADMIN"), "ADMIN edit");

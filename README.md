@@ -1,8 +1,8 @@
-# Axiom (액시엄) — AI 투자심의 자동화 플랫폼
+# DealMind (딜마인드) — AI 투자심의 자동화 플랫폼
 
 한국 벤처캐피탈을 위한 AI 기반 투자심의보고서(IC Report) 자동화 SaaS
 
-> **브랜드:** Axiom (액시엄) · GitHub `vcwoong-ai/vcwoong`  
+> **브랜드:** DealMind (딜마인드) · GitHub `vcwoong-ai/vcwoong`  
 > **참고:** Claude Code의 별도 프로젝트 "DealSync"와 무관합니다.
 
 ## 링크
@@ -50,7 +50,7 @@ cp .env.local.example .env.local
 필수 환경 변수:
 
 ```env
-DATABASE_URL="postgresql://user:password@localhost:5432/axiom"
+DATABASE_URL="postgresql://user:password@localhost:5432/dealmind"
 NEXTAUTH_SECRET="your-secret-here"
 ANTHROPIC_API_KEY="sk-ant-..."
 ```
@@ -82,7 +82,7 @@ http://localhost:3000 에서 확인하세요.
 ### 데모 계정
 
 ```
-이메일: demo@axiom.kr
+이메일: demo@dealmind.kr
 비밀번호: Demo1234!
 ```
 
@@ -148,7 +148,7 @@ STORAGE_MODE="s3"
 AWS_ACCESS_KEY_ID="..."
 AWS_SECRET_ACCESS_KEY="..."
 AWS_REGION="ap-northeast-2"
-AWS_S3_BUCKET="axiom-documents"
+AWS_S3_BUCKET="dealmind-documents"
 ```
 
 ## 라이선스

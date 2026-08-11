@@ -10,7 +10,7 @@
 async function main() {
   const key = process.env.OPENROUTER_API_KEY?.trim() ?? "";
 
-  console.log("\n=== Axiom AI 테스트 ===\n");
+  console.log("\n=== DealMind AI 테스트 ===\n");
   console.log(
     `OPENROUTER_API_KEY: ${key.startsWith("sk-or-") ? "✅ 설정됨" : "❌ 없음"}`
   );
@@ -47,7 +47,7 @@ async function main() {
     ],
     {
       systemPrompt:
-        "당신은 Axiom(액시엄) BIO 투자심사 AI입니다. 간결하고 전문적으로 작성하세요.",
+        "당신은 DealMind(딜마인드) BIO 투자심사 AI입니다. 간결하고 전문적으로 작성하세요.",
       maxTokens: 512,
     }
   );
