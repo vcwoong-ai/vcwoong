@@ -204,10 +204,25 @@ model Report {
   deal     Deal            @relation(fields: [dealId], references: [id], onDelete: Cascade)
   template Template?       @relation(fields: [templateId], references: [id])
   sections ReportSection[]
+  deepDive ReportDeepDive?
 
   @@index([dealId])
   @@index([templateId])
   @@index([status])
+}
+
+/// 보조 리서치(딥다이브 검증) — 보고서 핵심 주장을 웹·뉴스 외부 자료로
+/// 교차 검증한 결과. evidence.ts(업로드 문서 내부 대조)와 반대 방향으로,
+/// 여기는 외부에서 새 근거를 끌어온다. 보고서 1건당 최신 결과 하나만 유지.
+model ReportDeepDive {
+  id         String   @id @default(cuid())
+  reportId   String   @unique
+  claims     Json
+  modelUsed  String
+  computedAt DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
 }
 
 model ReportSection {

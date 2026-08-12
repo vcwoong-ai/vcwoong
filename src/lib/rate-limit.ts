@@ -94,4 +94,6 @@ export const RATE_LIMITS = {
   reportGeneration: { limit: 10, windowMs: 60 * 60 * 1000 },
   /** 딜 스코어링(AI 호출): 사용자당 1시간 20회 */
   dealScoring: { limit: 20, windowMs: 60 * 60 * 1000 },
+  /** 딥다이브 검증(주장당 검색+AI 호출, 건당 최대 5회): 사용자당 1시간 10회 */
+  deepDive: { limit: 10, windowMs: 60 * 60 * 1000 },
 } as const;
