@@ -9,6 +9,7 @@
  */
 import {
   stripNaverMarkup,
+  stripMarkdown,
   searchExternal,
   extractClaims,
   normalizeVerdict,
@@ -82,6 +83,59 @@ function testExtractClaimsIgnoresUnrelatedText() {
   console.log("✅ 검증 불가능한 일반 서술(팀·대표 소개 등)은 주장으로 뽑지 않음");
 }
 
+function testStripMarkdown() {
+  assert(stripMarkdown("**굵게**") === "굵게", "굵게 표기가 안 벗겨짐");
+  assert(stripMarkdown("### 제목") === "제목", "제목 표기가 안 벗겨짐");
+  assert(stripMarkdown("`코드`") === "코드", "인라인 코드가 안 벗겨짐");
+  assert(
+    stripMarkdown("[링크](https://a.b)") === "링크",
+    "링크 표기가 안 벗겨짐"
+  );
+  assert(
+    stripMarkdown("- 불릿 항목") === "불릿 항목",
+    "불릿 표기가 안 벗겨짐"
+  );
+  console.log("✅ 마크다운 표기 제거 (화면에 ** 가 새어나오지 않음)");
+}
+
+/**
+ * 프로덕션 회귀: "…데이터가 모두 '확인 필요' 입니다"가 검증 대상으로 뽑혔다.
+ * 자료가 없다는 메모지 사실 주장이 아니라 외부 검증 대상이 아니다.
+ */
+function testSkipsUnverifiableSentences() {
+  const sections = [
+    {
+      sectionKey: "valuation",
+      content:
+        'Rule of 40(성장률 + EBITDA 마진 ≥ 40%) 및 NRR(Net Revenue Retention)을 판단하기 위한 **매출 성장률, EBITDA 마진, NRR/Churn 데이터가 모두 "확인 필요"** 입니다.',
+    },
+  ];
+  const claims = extractClaims(sections, 5);
+  assert(
+    claims.length === 0,
+    `'확인 필요' 문장이 주장으로 뽑힘: ${JSON.stringify(claims)}`
+  );
+  console.log("✅ '확인 필요/자료 없음' 류 문장은 검증 대상에서 제외");
+}
+
+function testStillExtractsRealClaimsFromMarkdown() {
+  // 마크다운이 섞여 있어도 진짜 주장은 여전히 뽑혀야 한다 (과하게 걸러내면 안 됨)
+  const sections = [
+    {
+      sectionKey: "market",
+      content:
+        "### 1. 시장 규모\n- **국내 시장 규모는 3.2조 원**으로 추정된다.\n- 연평균 성장률(CAGR)은 18.5%다.",
+    },
+  ];
+  const claims = extractClaims(sections, 5);
+  assert(claims.length === 2, `주장 2건이 안 뽑힘: ${claims.length}`);
+  for (const c of claims) {
+    assert(!c.text.includes("*"), `마크다운이 남아 있음: ${c.text}`);
+    assert(!c.text.includes("#"), `제목 표기가 남아 있음: ${c.text}`);
+  }
+  console.log("✅ 마크다운 섞인 본문에서도 실제 주장은 정상 추출 (과잉 필터 아님)");
+}
+
 function testNormalizeVerdict() {
   assert(normalizeVerdict("지지") === "지지", "유효한 verdict가 통과 안됨");
   assert(normalizeVerdict("불일치") === "불일치", "유효한 verdict가 통과 안됨");
@@ -131,6 +185,9 @@ async function testRunDeepDiveDemoModeWhenAiUnconfigured() {
 async function main() {
   console.log("\n=== DealMind 보조 리서치(딥다이브 검증) 테스트 ===\n");
   testStripNaverMarkup();
+  testStripMarkdown();
+  testSkipsUnverifiableSentences();
+  testStillExtractsRealClaimsFromMarkdown();
   testExtractClaimsWithDecimals();
   testExtractClaimsDedupeAndCap();
   testExtractClaimsIgnoresUnrelatedText();

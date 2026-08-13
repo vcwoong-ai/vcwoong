@@ -114,6 +114,54 @@ export interface Claim {
 }
 
 /**
+ * 보고서 본문은 마크다운이라 `**굵게**`·`###`·표 구분자가 섞여 있다.
+ * 그대로 두면 화면에 별표가 노출되고, 검색 쿼리에도 잡소리가 섞인다.
+ */
+export function stripMarkdown(text: string): string {
+  return text
+    .replace(/^#{1,6}\s*/g, "") // 제목
+    .replace(/\*\*(.+?)\*\*/g, "$1") // 굵게
+    .replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, "$1") // 기울임
+    .replace(/`([^`]+)`/g, "$1") // 인라인 코드
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1") // 링크
+    .replace(/^[-*+]\s+/g, "") // 불릿
+    .replace(/^>\s*/g, "") // 인용
+    .replace(/\|/g, " ") // 표 구분자
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * "이 값은 확인이 필요하다" 같은 문장은 사실 주장이 아니라 **자료가 없다는
+ * 메모**다. 외부에서 검증할 대상이 아닌데도 숫자가 섞여 있으면 정규식에
+ * 걸려버려서, 실제로 프로덕션에서 "Rule of 40 … 데이터가 모두 '확인 필요'
+ * 입니다"가 검증 대상으로 뽑히는 오탐이 났다.
+ *
+ * AI가 자료 부족을 표시할 때 쓰는 상투구를 먼저 걸러낸다.
+ */
+const UNVERIFIABLE_MARKERS = [
+  "확인 필요",
+  "확인이 필요",
+  "추가 확인",
+  "미확인",
+  "자료 없음",
+  "데이터 없음",
+  "정보 없음",
+  "출처 확인",
+  "산출 불가",
+  "판단 불가",
+  "제공되지 않",
+  "명시되지 않",
+  "기재되지 않",
+  "알 수 없",
+  "해당 없음",
+];
+
+function isUnverifiable(sentence: string): boolean {
+  return UNVERIFIABLE_MARKERS.some((m) => sentence.includes(m));
+}
+
+/**
  * 문장 단위로 나눈다. "18.5%"처럼 숫자 뒤에 오는 마침표(소수점)는 문장
  * 끝이 아니므로 분리하지 않는다 — 마침표 뒤에 숫자가 바로 오면 소수점으로
  * 보고 건너뛴다.
@@ -122,7 +170,7 @@ function splitSentences(content: string): string[] {
   return content
     .split(/\n+/)
     .flatMap((line) => line.split(/\.(?!\d)\s*/))
-    .map((s) => s.trim())
+    .map((s) => stripMarkdown(s))
     .filter(Boolean);
 }
 
@@ -159,6 +207,8 @@ export function extractClaims(
 
   outer: for (const { sectionKey, content } of sections) {
     for (const sentence of splitSentences(content)) {
+      // 자료 부족을 알리는 문장은 검증할 "주장"이 아니다
+      if (isUnverifiable(sentence)) continue;
       for (const { label, re } of CLAIM_PATTERNS) {
         if (!re.test(sentence)) continue;
         const text = sentence.replace(/\s+/g, " ").trim();

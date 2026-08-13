@@ -111,10 +111,13 @@ export function ReportDeepDivePanel({
         )}
       </div>
 
+      {/* 위쪽 '근거 추적' 패널은 업로드 자료 "안"에서 숫자를 대조하고,
+          이 패널은 뉴스·웹에서 "밖"의 근거를 새로 끌어온다. 두 패널이
+          나란히 있어서 뭐가 다른지 한 줄로 짚어준다. */}
       <p className="text-xs text-gray-500 mt-2 leading-relaxed">
-        evidence.ts(근거 추적)와 방향이 반대입니다 — 그건 보고서 숫자가 업로드
-        자료 &ldquo;안&rdquo;에 있는지 대조하고, 이건 시장 규모·성장률·시장 지위 같은
-        핵심 주장을 뉴스·웹 자료로 &ldquo;밖&rdquo;에서 교차 검증합니다.
+        위 <span className="font-medium text-gray-600">근거 추적</span>이 업로드한
+        자료 안에서 숫자를 대조한다면, 딥다이브는 시장 규모·성장률·시장 지위 같은
+        핵심 주장을 뉴스·웹 자료에서 찾아 교차 검증합니다.
       </p>
 
       {error && (
@@ -176,9 +179,25 @@ export function ReportDeepDivePanel({
           </p>
         </>
       ) : (
-        <p className="mt-3 text-sm text-gray-400">
-          {data ? "검증할 만한 핵심 주장을 찾지 못했습니다." : "아직 실행하지 않았습니다."}
-        </p>
+        <div className="mt-3 rounded-lg border border-dashed border-gray-200 bg-gray-50/50 px-4 py-6 text-center">
+          {data ? (
+            <>
+              <p className="text-sm text-gray-500">
+                외부에서 검증할 만한 주장을 찾지 못했습니다
+              </p>
+              <p className="text-xs text-gray-400 mt-1">
+                시장 규모·성장률·시장 지위처럼 수치가 담긴 문장이 있어야 검증 대상이 됩니다
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-gray-500">아직 검증하지 않았습니다</p>
+              <p className="text-xs text-gray-400 mt-1">
+                실행하면 보고서의 핵심 주장을 최대 5건까지 뉴스·웹에서 찾아 대조합니다
+              </p>
+            </>
+          )}
+        </div>
       )}
 
       {canEdit && (
