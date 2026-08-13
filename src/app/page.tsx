@@ -149,7 +149,7 @@ export default function LandingPage() {
                 icon: FlaskConical,
                 color: "bg-amber-100 text-amber-600",
                 title: "딜 소싱 → 사후관리 풀사이클",
-                desc: "스크리닝부터 IC 준비, 심의, 투자 완료까지 딜 파이프라인 전 단계를 하나의 플랫폼에서 관리합니다.",
+                desc: "검토부터 IR 예정, 투자심의위원회, IR 심의, 투자 완료까지 딜 파이프라인 전 단계를 하나의 플랫폼에서 관리합니다.",
                 badge: "풀사이클",
               },
             ].map((feat) => (

@@ -68,10 +68,10 @@ const SECTOR_OPTIONS = [
 ];
 
 const STAGE_OPTIONS = [
-  { value: DealStage.SCREENING, label: "스크리닝" },
-  { value: DealStage.DEEP_DIVE, label: "딥다이브" },
-  { value: DealStage.IC_PREP, label: "IC 준비" },
-  { value: DealStage.IC_REVIEW, label: "IC 심의" },
+  { value: DealStage.SCREENING, label: "검토" },
+  { value: DealStage.DEEP_DIVE, label: "IR 예정" },
+  { value: DealStage.IC_PREP, label: "투자심의위원회" },
+  { value: DealStage.IC_REVIEW, label: "IR 심의" },
   { value: DealStage.CLOSED, label: "투자 완료" },
   { value: DealStage.REJECTED, label: "거절" },
 ];

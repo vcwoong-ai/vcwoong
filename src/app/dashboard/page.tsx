@@ -110,8 +110,8 @@ export default async function DashboardPage() {
   const portfolioAlerts = buildAlerts(portfolioCompanies).slice(0, 5);
 
   const stageLabel: Record<DealStage, string> = {
-    SCREENING: "스크리닝", DEEP_DIVE: "딥다이브", IC_PREP: "IC 준비",
-    IC_REVIEW: "IC 심의", CLOSED: "완료", REJECTED: "거절",
+    SCREENING: "검토", DEEP_DIVE: "IR 예정", IC_PREP: "투자심의위원회",
+    IC_REVIEW: "IR 심의", CLOSED: "완료", REJECTED: "거절",
   };
   const statusLabel: Record<ReportStatus, string> = {
     PENDING: "대기", GENERATING: "생성 중", DRAFT: "초안",
