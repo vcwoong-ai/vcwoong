@@ -12,6 +12,8 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { ArrowLeft, Loader2, Sparkles } from "lucide-react";
 import { formatKoreanDateTime } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
+import { useConfirm } from "@/hooks/use-confirm";
 
 interface ReportSection {
   id: string;
@@ -178,6 +180,8 @@ export function ReportPageClient({
   canEdit?: boolean;
 }) {
   const router = useRouter();
+  const toast = useToast();
+  const confirm = useConfirm();
   const [isExporting, setIsExporting] = useState(false);
   const [isFinalizing, setIsFinalizing] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
@@ -218,7 +222,13 @@ export function ReportPageClient({
   };
 
   const handleRegenerate = async () => {
-    if (!confirm("기존 섹션 내용이 덮어씌워집니다. 재생성하시겠습니까?")) return;
+    const ok = await confirm({
+      title: "보고서를 재생성할까요?",
+      description: "기존 섹션 내용이 모두 덮어씌워집니다.",
+      confirmLabel: "재생성",
+      destructive: true,
+    });
+    if (!ok) return;
     setIsRegenerating(true);
     try {
       // mode를 명시하지 않으면 서버가 "이어서 생성"으로 처리해, 이미 완성된
@@ -234,7 +244,9 @@ export function ReportPageClient({
       }
       setPageStatus("GENERATING");
     } catch (error) {
-      alert(error instanceof Error ? error.message : "재생성 중 오류가 발생했습니다");
+      toast.error("재생성 실패", {
+        description: error instanceof Error ? error.message : "다시 시도해 주세요",
+      });
     } finally {
       setIsRegenerating(false);
     }
@@ -254,7 +266,9 @@ export function ReportPageClient({
       }
       window.location.reload();
     } catch (error) {
-      alert(error instanceof Error ? error.message : "완성 처리 중 오류가 발생했습니다");
+      toast.error("완성 처리 실패", {
+        description: error instanceof Error ? error.message : "다시 시도해 주세요",
+      });
       setIsFinalizing(false);
     }
   };
@@ -291,7 +305,9 @@ export function ReportPageClient({
       a.click();
       URL.revokeObjectURL(url);
     } catch (error) {
-      alert(error instanceof Error ? error.message : "보내기 실패");
+      toast.error("내보내기 실패", {
+        description: error instanceof Error ? error.message : "다시 시도해 주세요",
+      });
     } finally {
       setIsExporting(false);
     }
@@ -374,13 +390,13 @@ export function ReportPageClient({
           onBatchImprove={
             canEdit
               ? async () => {
-            if (
-              !confirm(
-                "품질 70점 미만 섹션(최대 3개)을 이슈 반영해 다시 생성할까요?"
-              )
-            ) {
-              return;
-            }
+            const ok = await confirm({
+              title: "약한 섹션을 일괄 개선할까요?",
+              description:
+                "품질 70점 미만 섹션(최대 3개)을 지적된 이슈를 반영해 다시 생성합니다.",
+              confirmLabel: "개선 실행",
+            });
+            if (!ok) return;
             setBatchImproving(true);
             setBatchNote(null);
             try {
@@ -405,7 +421,9 @@ export function ReportPageClient({
               // 서버에서 갱신된 본문을 가져오되, 결과 메시지를 볼 수 있게 살짝 늦춘다
               setTimeout(() => router.refresh(), 1500);
             } catch (e) {
-              alert(e instanceof Error ? e.message : "일괄 개선 실패");
+              toast.error("일괄 개선 실패", {
+                description: e instanceof Error ? e.message : "다시 시도해 주세요",
+              });
             } finally {
               setBatchImproving(false);
             }

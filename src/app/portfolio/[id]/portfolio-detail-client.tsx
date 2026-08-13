@@ -37,6 +37,7 @@ import {
   kpiChangePercent,
 } from "@/lib/portfolio";
 import type { MilestoneStatus, PortfolioStatus } from "@prisma/client";
+import { useToast } from "@/hooks/use-toast";
 
 interface Company {
   id: string;
@@ -110,6 +111,7 @@ export function PortfolioDetailClient({
   userRole?: string;
 }) {
   const router = useRouter();
+  const toast = useToast();
   const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -169,14 +171,19 @@ export function PortfolioDetailClient({
       setNotice("저장했습니다");
       router.refresh();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "저장 실패");
+      toast.error("저장 실패", {
+        description: e instanceof Error ? e.message : "다시 시도해 주세요",
+      });
     } finally {
       setSaving(false);
     }
   };
 
   const addKpi = async () => {
-    if (!kpiValue.trim()) return alert("값을 입력하세요");
+    if (!kpiValue.trim()) {
+      toast.error("값을 입력하세요");
+      return;
+    }
     setSaving(true);
     try {
       await call(`/api/portfolio/${company.id}/kpis`, {
@@ -192,14 +199,19 @@ export function PortfolioDetailClient({
       setKpiValue("");
       router.refresh();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "KPI 저장 실패");
+      toast.error("KPI 저장 실패", {
+        description: e instanceof Error ? e.message : "다시 시도해 주세요",
+      });
     } finally {
       setSaving(false);
     }
   };
 
   const addMilestone = async () => {
-    if (!msTitle.trim() || !msDue) return alert("제목과 기한을 입력하세요");
+    if (!msTitle.trim() || !msDue) {
+      toast.error("제목과 기한을 입력하세요");
+      return;
+    }
     setSaving(true);
     try {
       await call(`/api/portfolio/${company.id}/milestones`, {
@@ -210,7 +222,9 @@ export function PortfolioDetailClient({
       setMsDue("");
       router.refresh();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "마일스톤 저장 실패");
+      toast.error("마일스톤 저장 실패", {
+        description: e instanceof Error ? e.message : "다시 시도해 주세요",
+      });
     } finally {
       setSaving(false);
     }
@@ -226,7 +240,9 @@ export function PortfolioDetailClient({
       );
       router.refresh();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "상태 변경 실패");
+      toast.error("상태 변경 실패", {
+        description: e instanceof Error ? e.message : "다시 시도해 주세요",
+      });
     } finally {
       setSaving(false);
     }
@@ -242,7 +258,9 @@ export function PortfolioDetailClient({
       setNotice(`${data.period} 모니터링 노트를 생성했습니다`);
       router.refresh();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "노트 생성 실패");
+      toast.error("노트 생성 실패", {
+        description: e instanceof Error ? e.message : "다시 시도해 주세요",
+      });
     } finally {
       setGenerating(false);
     }

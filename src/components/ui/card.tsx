@@ -8,7 +8,9 @@ const Card = React.forwardRef<
   <div
     ref={ref}
     className={cn(
-      "rounded-lg border bg-card text-card-foreground shadow-sm",
+      // shadow-sm 단일 그림자 대신 다층 그림자(globals.css의 .shadow-card).
+      // 아주 옅게 두 겹 깔면 종이처럼 떠 보여서 훨씬 정돈돼 보인다.
+      "rounded-xl border border-slate-200/80 bg-card text-card-foreground shadow-card",
       className
     )}
     {...props}

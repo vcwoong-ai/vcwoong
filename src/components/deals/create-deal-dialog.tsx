@@ -25,6 +25,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Plus } from "lucide-react";
 import { DealSector } from "@prisma/client";
+import { useToast } from "@/hooks/use-toast";
 
 const formSchema = z.object({
   name: z.string().min(1, "딜 이름을 입력해주세요"),
@@ -54,6 +55,7 @@ export function CreateDealDialog({ trigger }: { trigger?: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const toast = useToast();
 
   const {
     register,
@@ -92,7 +94,9 @@ export function CreateDealDialog({ trigger }: { trigger?: React.ReactNode }) {
       router.refresh();
     } catch (error) {
       console.error(error);
-      alert(error instanceof Error ? error.message : "오류가 발생했습니다");
+      toast.error("딜 생성 실패", {
+        description: error instanceof Error ? error.message : "다시 시도해 주세요",
+      });
     } finally {
       setLoading(false);
     }

@@ -5,54 +5,157 @@
 @layer base {
   :root {
     --background: 0 0% 100%;
-    --foreground: 240 10% 3.9%;
+    --foreground: 222 47% 11%;
     --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
+    --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.9%;
-    --primary: 240 5.9% 10%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 240 4.8% 95.9%;
-    --secondary-foreground: 240 5.9% 10%;
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
-    --accent: 240 4.8% 95.9%;
-    --accent-foreground: 240 5.9% 10%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 90%;
-    --ring: 240 5.9% 10%;
-    --radius: 0.5rem;
+    --popover-foreground: 222 47% 11%;
+    /* 브랜드 색. 기존에는 shadcn 기본값(거의 검정)이라 토큰과 실제 UI가
+       따로 놀았다 — 화면은 전부 bg-blue-600을 하드코딩하고 있었음.
+       토큰을 실제 브랜드 블루로 맞춰 두 갈래를 하나로 합친다. */
+    --primary: 221 83% 53%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 210 40% 96%;
+    --accent-foreground: 222 47% 11%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 142 71% 45%;
+    --warning: 38 92% 50%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 221 83% 53%;
+    --radius: 0.625rem;
   }
 
   .dark {
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 240 10% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 240 10% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 240 5.9% 10%;
-    --secondary: 240 3.7% 15.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
-    --accent: 240 3.7% 15.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 240 4.9% 83.9%;
+    --background: 222 47% 11%;
+    --foreground: 210 40% 98%;
+    --card: 222 47% 11%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222 47% 11%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 217 91% 60%;
+    --primary-foreground: 222 47% 11%;
+    --secondary: 217 33% 17%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 217 33% 17%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 210 40% 98%;
+    --success: 142 71% 45%;
+    --warning: 38 92% 50%;
+    --border: 217 33% 17%;
+    --input: 217 33% 17%;
+    --ring: 217 91% 60%;
   }
 
   * {
     @apply border-border;
   }
 
+  html {
+    /* 앵커 이동(랜딩 #features 등)이 툭 끊기지 않게 */
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+
   body {
     @apply bg-background text-foreground;
+    /* 한글은 Pretendard, 숫자·영문은 Inter가 먼저 잡는다.
+       Inter를 앞에 두어도 한글 글리프가 없어 자연스럽게 Pretendard로 넘어간다. */
+    font-family: var(--font-inter), "Pretendard", -apple-system,
+      BlinkMacSystemFont, system-ui, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    /* 한글 줄바꿈이 단어 중간에서 끊기지 않게 */
+    word-break: keep-all;
+    overflow-wrap: break-word;
+  }
+
+  /* 금액·지분율·MOIC 같은 숫자가 표에서 세로로 안 맞으면 조잡해 보인다.
+     자릿수 폭을 고정해 열이 딱 맞게 떨어지도록. */
+  table,
+  .tabular {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+
+  /* 제목은 자간을 살짝 좁혀야 한글·영문 혼용에서 덜 성기게 보인다 */
+  h1,
+  h2,
+  h3 {
+    letter-spacing: -0.02em;
+  }
+
+  /* 키보드 사용자에게만 포커스 링을 보여준다(마우스 클릭 시엔 안 뜸) */
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  /* 기본 스크롤바가 윈도우에서 특히 투박해 보여서 얇게 다듬는다 */
+  @supports selector(::-webkit-scrollbar) {
+    ::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      @apply bg-slate-300 dark:bg-slate-700;
+      border-radius: 9999px;
+      border: 2px solid transparent;
+      background-clip: content-box;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      @apply bg-slate-400 dark:bg-slate-600;
+      background-clip: content-box;
+    }
+  }
+
+  /* 움직임에 민감한 사용자를 위해 애니메이션을 걷어낸다 */
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer components {
+  /* 카드가 그냥 흰 박스로 떠 있으면 밋밋해서, 아주 옅은 다층 그림자로
+     깊이를 준다. 진한 그림자 하나보다 이쪽이 고급스럽게 읽힌다. */
+  .shadow-card {
+    box-shadow:
+      0 1px 2px 0 rgb(16 24 40 / 0.04),
+      0 1px 3px 0 rgb(16 24 40 / 0.06);
+  }
+  .shadow-card-hover {
+    box-shadow:
+      0 4px 8px -2px rgb(16 24 40 / 0.06),
+      0 2px 4px -2px rgb(16 24 40 / 0.04);
+  }
+  .shadow-elevated {
+    box-shadow:
+      0 12px 16px -4px rgb(16 24 40 / 0.08),
+      0 4px 6px -2px rgb(16 24 40 / 0.03);
+  }
+
+  /* 로딩 중 자리를 잡아주는 스켈레톤 */
+  .skeleton {
+    @apply animate-pulse rounded-md bg-slate-200/70 dark:bg-slate-700/50;
   }
 }

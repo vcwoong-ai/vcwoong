@@ -36,6 +36,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
+import { useConfirm } from "@/hooks/use-confirm";
 import { AgentType, DealSector, DealStage } from "@prisma/client";
 
 interface DealWithRelations {
@@ -176,6 +178,8 @@ export function DealDetailClient({
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const toast = useToast();
+  const confirm = useConfirm();
   const [generating, setGenerating] = useState(false);
   const [progress, setProgress] = useState<GenerationProgress | null>(null);
   const [uploadKey, setUploadKey] = useState(0);
@@ -204,13 +208,23 @@ export function DealDetailClient({
 
   useEffect(() => {
     loadTemplates();
-    if (searchParams.get("wizard") === "1") {
-      setWizardOpen(true);
-    }
     return () => {
       pollAbortRef.current = true;
     };
   }, [loadTemplates]);
+
+  // ?wizard=1로 들어오면 보고서 마법사를 자동으로 연다.
+  // searchParams를 의존성에 넣되 "한 번 처리하면 끝"으로 잠근다 — 안 그러면
+  // 사용자가 마법사를 닫아도 URL에 파라미터가 남아 있는 한 리렌더 때마다
+  // 다시 열려서 닫을 수 없게 된다.
+  const wizardParamConsumed = useRef(false);
+  useEffect(() => {
+    if (wizardParamConsumed.current) return;
+    if (searchParams.get("wizard") === "1") {
+      wizardParamConsumed.current = true;
+      setWizardOpen(true);
+    }
+  }, [searchParams]);
 
   const recommendedAgent = SECTOR_AGENT_MAP[deal.sector] ?? AgentType.GENERAL;
   const agentInfo = AGENT_INFO[recommendedAgent];
@@ -230,16 +244,23 @@ export function DealDetailClient({
       }
       router.refresh();
     } catch (error) {
-      alert(
-        error instanceof Error ? error.message : "픽스처 로드 중 오류가 발생했습니다"
-      );
+      toast.error("픽스처 로드 실패", {
+        description:
+          error instanceof Error ? error.message : "다시 시도해 주세요",
+      });
     } finally {
       setLoadingFixture(false);
     }
   };
 
   const deleteDocument = async (docId: string, docName: string) => {
-    if (!confirm(`"${docName}" 문서를 삭제하시겠습니까?`)) return;
+    const ok = await confirm({
+      title: "문서를 삭제할까요?",
+      description: `"${docName}"이(가) 삭제됩니다.`,
+      confirmLabel: "삭제",
+      destructive: true,
+    });
+    if (!ok) return;
     setDeletingDocId(docId);
     try {
       const response = await fetch(`/api/documents/${docId}`, {
@@ -249,21 +270,27 @@ export function DealDetailClient({
         const err = await response.json();
         throw new Error(err.error ?? "삭제 실패");
       }
+      toast.success("문서를 삭제했습니다");
       router.refresh();
     } catch (error) {
-      alert(error instanceof Error ? error.message : "문서 삭제 중 오류가 발생했습니다");
+      toast.error("문서 삭제 실패", {
+        description:
+          error instanceof Error ? error.message : "다시 시도해 주세요",
+      });
     } finally {
       setDeletingDocId(null);
     }
   };
 
   const deleteDeal = async () => {
-    if (
-      !confirm(
-        `"${deal.companyName}" 딜을 삭제하시겠습니까?\n업로드한 문서·보고서·투자매력도 점수가 모두 함께 삭제되며 되돌릴 수 없습니다.`
-      )
-    )
-      return;
+    const ok = await confirm({
+      title: `"${deal.companyName}" 딜을 삭제할까요?`,
+      description:
+        "업로드한 문서·보고서·투자매력도 점수가 모두 함께 삭제되며 되돌릴 수 없습니다.",
+      confirmLabel: "영구 삭제",
+      destructive: true,
+    });
+    if (!ok) return;
     setDeletingDeal(true);
     try {
       const response = await fetch(`/api/deals/${deal.id}`, { method: "DELETE" });
@@ -271,9 +298,13 @@ export function DealDetailClient({
         const err = await response.json();
         throw new Error(err.error ?? "삭제 실패");
       }
+      toast.success("딜을 삭제했습니다");
       router.push("/deals");
     } catch (error) {
-      alert(error instanceof Error ? error.message : "딜 삭제 중 오류가 발생했습니다");
+      toast.error("딜 삭제 실패", {
+        description:
+          error instanceof Error ? error.message : "다시 시도해 주세요",
+      });
       setDeletingDeal(false);
     }
   };
@@ -328,9 +359,10 @@ export function DealDetailClient({
 
       router.refresh();
     } catch (error) {
-      alert(
-        error instanceof Error ? error.message : "보고서 생성 중 오류가 발생했습니다"
-      );
+      toast.error("보고서 생성 실패", {
+        description:
+          error instanceof Error ? error.message : "다시 시도해 주세요",
+      });
     } finally {
       setGenerating(false);
       setProgress(null);

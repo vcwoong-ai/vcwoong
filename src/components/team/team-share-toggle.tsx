@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Users } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 export function TeamShareToggle({
   type,
@@ -20,6 +21,7 @@ export function TeamShareToggle({
   isOwner: boolean;
   canUseTeam: boolean;
 }) {
+  const toast = useToast();
   const [isShared, setIsShared] = useState(shared);
   const [busy, setBusy] = useState(false);
 
@@ -47,7 +49,9 @@ export function TeamShareToggle({
       if (!res.ok) throw new Error(json.error ?? "공유 설정 실패");
       setIsShared(!isShared);
     } catch (e) {
-      alert(e instanceof Error ? e.message : "공유 설정 실패");
+      toast.error("공유 설정 실패", {
+        description: e instanceof Error ? e.message : "다시 시도해 주세요",
+      });
     } finally {
       setBusy(false);
     }

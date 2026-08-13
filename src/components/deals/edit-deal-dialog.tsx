@@ -25,6 +25,8 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Settings2, Loader2, Trash2 } from "lucide-react";
 import { DealSector, DealStage } from "@prisma/client";
+import { useToast } from "@/hooks/use-toast";
+import { useConfirm } from "@/hooks/use-confirm";
 
 const formSchema = z.object({
   name: z.string().min(1),
@@ -79,6 +81,8 @@ export function EditDealDialog({ deal }: EditDealDialogProps) {
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const router = useRouter();
+  const toast = useToast();
+  const confirm = useConfirm();
 
   const { register, handleSubmit, setValue, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -110,14 +114,22 @@ export function EditDealDialog({ deal }: EditDealDialogProps) {
       setOpen(false);
       router.refresh();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "오류 발생");
+      toast.error("오류 발생", {
+        description: e instanceof Error ? e.message : "다시 시도해 주세요",
+      });
     } finally {
       setLoading(false);
     }
   };
 
   const handleDelete = async () => {
-    if (!confirm(`"${deal.companyName}" 딜을 삭제하시겠습니까? 관련 문서와 보고서도 함께 삭제됩니다.`)) return;
+    const ok = await confirm({
+      title: `"${deal.companyName}" 딜을 삭제할까요?`,
+      description: "관련 문서와 보고서도 함께 삭제되며 되돌릴 수 없습니다.",
+      confirmLabel: "영구 삭제",
+      destructive: true,
+    });
+    if (!ok) return;
     setDeleting(true);
     try {
       const res = await fetch(`/api/deals/${deal.id}`, { method: "DELETE" });
@@ -125,7 +137,9 @@ export function EditDealDialog({ deal }: EditDealDialogProps) {
       router.push("/deals");
       router.refresh();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "삭제 오류");
+      toast.error("삭제 오류", {
+        description: e instanceof Error ? e.message : "다시 시도해 주세요",
+      });
       setDeleting(false);
     }
   };

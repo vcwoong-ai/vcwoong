@@ -72,6 +72,27 @@ const navItems = [
   },
 ];
 
+/**
+ * 어떤 메뉴를 활성 표시할지 정한다.
+ *
+ * 단순 prefix 매칭(`startsWith(href + "/")`)이면 `/reports/new`에 있을 때
+ * "보고서"와 "보고서 생성"이 **동시에** 파랗게 켜진다 — `/reports/new`가
+ * `/reports/`로 시작하기 때문. 그래서 더 긴(= 더 구체적인) 메뉴가 이미
+ * 매칭됐다면 짧은 쪽은 양보하게 한다.
+ */
+export function isActiveHref(pathname: string, href: string): boolean {
+  const matches = (h: string) => pathname === h || pathname.startsWith(h + "/");
+  if (!matches(href)) return false;
+
+  // 나보다 더 구체적으로 맞는 메뉴가 있으면 그쪽이 활성이다.
+  return !navItems.some(
+    (other) =>
+      other.href !== href &&
+      other.href.length > href.length &&
+      matches(other.href)
+  );
+}
+
 interface SidebarProps {
   /** 모바일 드로어 열림 상태 (데스크톱에서는 무시된다) */
   open?: boolean;
@@ -94,7 +115,10 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
 
       <aside
         className={cn(
-          "fixed left-0 top-0 h-screen w-64 bg-slate-900 text-white flex flex-col z-50",
+          // 단색 대신 아주 옅은 그라데이션 — 큰 남색 면이 밋밋해 보이는 걸 덜어준다
+          "fixed left-0 top-0 h-screen w-64 z-50 flex flex-col text-white",
+          "bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950",
+          "border-r border-white/5",
           "overflow-y-auto transition-transform duration-200 lg:transition-none",
           // 모바일에서는 기본으로 화면 밖에 두고, 열었을 때만 밀어 넣는다.
           // 항상 보이게 두면 좁은 화면에서 본문이 100px대로 찌그러진다.
@@ -103,9 +127,9 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         )}
       >
       {/* Logo */}
-      <div className="p-6 border-b border-slate-700 flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center flex-shrink-0">
+      <div className="p-6 border-b border-white/10 flex items-start justify-between gap-2">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg shadow-blue-500/25">
             <Zap className="w-5 h-5 text-white" />
           </div>
           <div className="min-w-0">
@@ -126,8 +150,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
       {/* Navigation */}
       <nav className="flex-1 p-4 space-y-1">
         {navItems.map((item) => {
-          const isActive =
-            pathname === item.href || pathname.startsWith(item.href + "/");
+          const isActive = isActiveHref(pathname, item.href);
           return (
             <Link
               key={item.href}
@@ -135,13 +158,25 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
               // 모바일에서 메뉴를 고르면 드로어가 닫혀야 이동한 화면이 보인다.
               onClick={onClose}
               className={cn(
-                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150",
+                "group relative flex items-center gap-3 px-3 py-2.5 rounded-lg",
+                "text-sm font-medium transition-colors duration-150",
                 isActive
-                  ? "bg-blue-600 text-white"
-                  : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                  ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20"
+                  : "text-slate-400 hover:bg-white/5 hover:text-white"
               )}
+              aria-current={isActive ? "page" : undefined}
             >
-              <item.icon className="w-4 h-4 flex-shrink-0" />
+              {/* 활성 항목 왼쪽 하이라이트 바 — 배경색만으로 구분하는 것보다
+                  어디에 있는지가 한눈에 들어온다 */}
+              {isActive && (
+                <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-1 rounded-r-full bg-white/90" />
+              )}
+              <item.icon
+                className={cn(
+                  "w-4 h-4 flex-shrink-0 transition-transform duration-150",
+                  !isActive && "group-hover:scale-110"
+                )}
+              />
               <span>{item.label}</span>
               {isActive && (
                 <ChevronRight className="w-3 h-3 ml-auto opacity-70" />
@@ -152,8 +187,8 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
       </nav>
 
       {/* Agent badges */}
-      <div className="p-4 border-t border-slate-700">
-        <p className="text-xs text-slate-500 mb-2 font-medium uppercase tracking-wider">
+      <div className="p-4 border-t border-white/10">
+        <p className="text-[10px] text-slate-500 mb-2.5 font-semibold uppercase tracking-[0.12em]">
           활성 에이전트
         </p>
         <div className="space-y-1.5">
@@ -166,7 +201,14 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
             { dot: "bg-emerald-400",name: "Vault" },
           ].map((agent) => (
             <div key={agent.name} className="flex items-center gap-2 text-xs text-slate-400">
-              <div className={`w-1.5 h-1.5 rounded-full ${agent.dot}`} />
+              {/* 점 바깥으로 같은 색 후광을 줘서 '켜져 있다'는 느낌을 준다 */}
+              <span className="relative flex h-1.5 w-1.5 flex-shrink-0">
+                <span
+                  className={`absolute inline-flex h-full w-full rounded-full opacity-40 ${agent.dot}`}
+                  style={{ transform: "scale(2)" }}
+                />
+                <span className={`relative inline-flex h-1.5 w-1.5 rounded-full ${agent.dot}`} />
+              </span>
               <span>{agent.name}</span>
             </div>
           ))}

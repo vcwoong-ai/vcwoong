@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Search, LayoutGrid, Kanban, Gauge } from "lucide-react";
 import { DealStage, DealSector } from "@prisma/client";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
+import { useConfirm } from "@/hooks/use-confirm";
 
 function canEditDealLocal(opts: {
   ownerUserId: string;
@@ -63,14 +65,18 @@ export function DealsPageClient({
   const [search, setSearch] = useState("");
   const [compareIds, setCompareIds] = useState<string[]>([]);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const toast = useToast();
+  const confirm = useConfirm();
 
   const handleDeleteDeal = async (dealId: string, companyName: string) => {
-    if (
-      !confirm(
-        `"${companyName}" 딜을 삭제하시겠습니까?\n업로드한 문서·보고서가 모두 함께 삭제되며 되돌릴 수 없습니다.`
-      )
-    )
-      return;
+    const ok = await confirm({
+      title: `"${companyName}" 딜을 삭제할까요?`,
+      description:
+        "업로드한 문서·보고서가 모두 함께 삭제되며 되돌릴 수 없습니다.",
+      confirmLabel: "영구 삭제",
+      destructive: true,
+    });
+    if (!ok) return;
     setDeletingId(dealId);
     try {
       const res = await fetch(`/api/deals/${dealId}`, { method: "DELETE" });
@@ -78,9 +84,12 @@ export function DealsPageClient({
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error ?? "삭제 실패");
       }
+      toast.success("딜을 삭제했습니다");
       router.refresh();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "딜 삭제 중 오류가 발생했습니다");
+      toast.error("딜 삭제 실패", {
+        description: e instanceof Error ? e.message : "다시 시도해 주세요",
+      });
     } finally {
       setDeletingId(null);
     }
