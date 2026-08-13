@@ -29,7 +29,7 @@ export const metadata: Metadata = {
     "벤처캐피털",
     "AI 심사역",
     "투자심의보고서",
-    "IC Report",
+    "투자심의위원회 보고서",
     "바이오 투자",
     "DealMind",
     "딜마인드",

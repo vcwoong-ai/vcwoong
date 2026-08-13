@@ -524,7 +524,7 @@ export function TemplatesClient({
         <div className="text-sm text-blue-800">
           <p className="font-medium">양식 재현 엔진 사용법</p>
           <ol className="mt-1 space-y-1 text-blue-700 list-decimal list-inside">
-            <li>기존 IC 보고서 DOCX 또는 PPTX를 업로드</li>
+            <li>기존 투자심의위원회 보고서 DOCX 또는 PPTX를 업로드</li>
             <li>AI가 섹션 구조를 자동 분석 및 매핑 (30초~1분)</li>
             <li>딜 상세 페이지에서 보고서 생성 시 이 양식 선택</li>
             <li>AI 생성 내용이 업로드한 양식 구조 그대로 출력</li>

@@ -174,7 +174,7 @@ export async function generateReportPPTX(
     color: TEXT_DARK,
     fontFace: FONT,
   });
-  coverSlide.addText(`${coverDate}  ·  DealMind IC Report`, {
+  coverSlide.addText(`${coverDate}  ·  DealMind 투자심의위원회 보고서`, {
     x: 0.7,
     y: 3.35,
     w: 8.6,

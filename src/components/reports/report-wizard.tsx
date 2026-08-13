@@ -296,7 +296,7 @@ export function ReportWizard({ deal, open, onClose }: WizardProps) {
                   <Brain className="w-4 h-4 text-gray-500" />
                   <div>
                     <p className="text-sm font-medium">기본 {BRAND.name} 양식</p>
-                    <p className="text-xs text-gray-500">표준 10섹션 IC 보고서</p>
+                    <p className="text-xs text-gray-500">표준 10섹션 투자심의위원회 보고서</p>
                   </div>
                   {!selectedTemplateId && <Badge className="ml-auto">선택됨</Badge>}
                 </div>
