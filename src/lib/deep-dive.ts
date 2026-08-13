@@ -38,22 +38,73 @@ export function stripNaverMarkup(text: string): string {
     .replace(/&#39;/g, "'");
 }
 
+/**
+ * 검색 API는 발급처가 두 군데고 인증 방식이 다르다.
+ *
+ *  - NAVER API HUB(네이버 클라우드 플랫폼): X-NCP-APIGW-API-KEY-ID/KEY
+ *  - developers.naver.com(구): X-Naver-Client-Id/Secret
+ *
+ * 지금은 API HUB에서만 검색 API를 붙일 수 있어 그쪽을 먼저 시도하지만,
+ * 예전에 발급받은 키를 쓰는 경우도 있어 401/403/404면 구 호스트로 한 번 더
+ * 시도한다. 실제로 이 차이 때문에 키가 멀쩡한데도 401만 계속 나서 원인을
+ * 찾는 데 한참 걸렸다.
+ *
+ * 헤더는 두 벌을 함께 보낸다 — 상대 호스트가 모르는 헤더는 무시하므로
+ * 손해가 없고, 어느 쪽 키를 넣든 맞는 헤더가 항상 포함된다.
+ */
+const NCP_SEARCH_HOST = "https://naveropenapi.apigw.ntruss.com";
+const LEGACY_SEARCH_HOST = "https://openapi.naver.com";
+
+/** 문서와 다른 경로가 안내되면 코드 수정 없이 환경변수로 덮어쓸 수 있게 */
+const SEARCH_HOSTS = process.env.NAVER_SEARCH_BASE_URL
+  ? [process.env.NAVER_SEARCH_BASE_URL]
+  : [NCP_SEARCH_HOST, LEGACY_SEARCH_HOST];
+
+/** 한 번 통한 호스트를 기억해 두 번 두드리지 않는다 */
+let workingHost: string | null = null;
+
+/** 인증·경로 문제라 다른 호스트를 시도해볼 만한 상태 코드 */
+const RETRY_ON = new Set([401, 403, 404]);
+
 async function naverSearch(
   endpoint: "news" | "webkr",
   query: string,
   display: number
 ): Promise<Array<{ title: string; description: string; link: string; pubDate?: string }>> {
-  const url = `https://openapi.naver.com/v1/search/${endpoint}.json?query=${encodeURIComponent(query)}&display=${display}&sort=sim`;
-  const res = await fetch(url, {
-    headers: {
-      "X-Naver-Client-Id": NAVER_CLIENT_ID,
-      "X-Naver-Client-Secret": NAVER_CLIENT_SECRET,
-    },
-    signal: AbortSignal.timeout(8000),
-  });
-  if (!res.ok) throw new Error(`Naver ${endpoint} HTTP ${res.status}`);
-  const json = (await res.json()) as { items?: Array<{ title: string; description: string; link: string; pubDate?: string }> };
-  return json.items ?? [];
+  const path = `/v1/search/${endpoint}.json?query=${encodeURIComponent(query)}&display=${display}&sort=sim`;
+  const hosts = workingHost ? [workingHost] : SEARCH_HOSTS;
+  const errors: string[] = [];
+
+  for (const host of hosts) {
+    const res = await fetch(`${host}${path}`, {
+      headers: {
+        "X-NCP-APIGW-API-KEY-ID": NAVER_CLIENT_ID,
+        "X-NCP-APIGW-API-KEY": NAVER_CLIENT_SECRET,
+        "X-Naver-Client-Id": NAVER_CLIENT_ID,
+        "X-Naver-Client-Secret": NAVER_CLIENT_SECRET,
+      },
+      signal: AbortSignal.timeout(8000),
+    });
+
+    if (res.ok) {
+      workingHost = host;
+      const json = (await res.json()) as {
+        items?: Array<{ title: string; description: string; link: string; pubDate?: string }>;
+      };
+      return json.items ?? [];
+    }
+
+    errors.push(`${hostLabel(host)} HTTP ${res.status}`);
+    if (!RETRY_ON.has(res.status)) break;
+  }
+
+  throw new Error(`${endpoint} ${errors.join(" → ")}`);
+}
+
+function hostLabel(host: string): string {
+  if (host === NCP_SEARCH_HOST) return "API HUB";
+  if (host === LEGACY_SEARCH_HOST) return "developers.naver";
+  return host;
 }
 
 /**
