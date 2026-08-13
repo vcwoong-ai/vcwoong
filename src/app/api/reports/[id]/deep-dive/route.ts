@@ -64,8 +64,15 @@ export async function POST(
     RATE_LIMITS.deepDive.windowMs
   );
   if (!rate.allowed) {
+    // 얼마나 기다려야 하는지 안 알려주면 사용자는 계속 누르게 된다.
+    // 딥다이브는 1회에 AI를 최대 5번 부르는 비싼 작업이라 한도 자체는
+    // 유지하되, 남은 시간을 분 단위로 알려준다.
+    const mins = Math.ceil(rate.retryAfterSec / 60);
     return NextResponse.json(
-      { error: "딥다이브 요청이 너무 잦습니다. 잠시 후 다시 시도해 주세요." },
+      {
+        error: `딥다이브 요청 한도를 모두 썼습니다 (시간당 ${RATE_LIMITS.deepDive.limit}회). 약 ${mins}분 후 다시 시도해 주세요.`,
+        retryAfterSec: rate.retryAfterSec,
+      },
       { status: 429, headers: { "Retry-After": String(rate.retryAfterSec) } }
     );
   }
