@@ -96,7 +96,7 @@ export default function LandingPage() {
             {[
               { value: "10분", label: "보고서 1건 생성 시간" },
               { value: "6개", label: "섹터 전문 AI 에이전트" },
-              { value: "3개", label: "연동 외부 데이터베이스" },
+              { value: "6개", label: "연동 외부 데이터베이스" },
             ].map((stat) => (
               <div key={stat.label} className="text-center">
                 <div className="text-3xl font-bold text-blue-400">{stat.value}</div>
@@ -134,9 +134,9 @@ export default function LandingPage() {
               {
                 icon: Database,
                 color: "bg-blue-100 text-blue-600",
-                title: "실시간 외부 데이터 자동 주입",
-                desc: "PubMed 논문, ClinicalTrials.gov 임상 현황, OpenFDA 허가 약물 데이터를 자동 조회해 보고서에 NCT 번호와 함께 인용합니다.",
-                badge: "Dr. Cell 전용",
+                title: "실시간 외부 데이터 자동 연동",
+                desc: "PubMed 논문·ClinicalTrials.gov 임상 현황·OpenFDA 허가 데이터(BIO), KIPRIS 특허 검색(전 섹터), DART 전자공시, 뉴스·웹 교차검증(딥다이브)까지 — API 키 등록만 하면 보고서 작성 중 자동으로 조회해 반영합니다.",
+                badge: "6개 외부 소스",
               },
               {
                 icon: LayoutTemplate,
