@@ -12,6 +12,7 @@ import {
   stripMarkdown,
   searchExternal,
   extractClaims,
+  buildSearchQuery,
   normalizeVerdict,
   runDeepDive,
 } from "../src/lib/deep-dive";
@@ -168,6 +169,60 @@ function testStillExtractsRealClaimsFromMarkdown() {
   console.log("✅ 마크다운 섞인 본문에서도 실제 주장은 정상 추출 (과잉 필터 아님)");
 }
 
+/**
+ * 프로덕션 회귀: "국내 최대 B2B 핀테크 기업 WebCash에 모듈을 공급"이
+ * 심사 대상 기업의 시장 지위 주장으로 뽑혔다. '국내 최대'가 수식하는 건
+ * 고객사지 심사 대상이 아니다.
+ */
+function testSkipsThirdPartySuperlative() {
+  const claims = extractClaims(
+    [
+      {
+        sectionKey: "market",
+        content:
+          "2단계는 금융기관 대상 송금망 제공으로, 국내 최대 B2B 핀테크 기업 WebCash에 해외송금 모듈을 공급하고 있다.",
+      },
+    ],
+    5
+  );
+  assert(
+    claims.length === 0,
+    `고객사를 수식하는 '국내 최대'가 주장으로 뽑힘: ${JSON.stringify(claims)}`
+  );
+  console.log("✅ 제3자(고객사)를 수식하는 '국내 최대'는 시장 지위 주장이 아님");
+}
+
+/**
+ * 프로덕션 회귀: 검색 쿼리가 `회사명 + 라벨`("데모회사 시장 지위")이라
+ * 기사 제목에 있을 리 없는 문자열로 검색해 늘 0건이었다.
+ */
+function testSearchQueryUsesMarketNotCompany() {
+  const q = buildSearchQuery(
+    { text: "글로벌 항암제 시장 규모는 150억 달러다", keyword: "시장 규모" },
+    "데모바이오"
+  );
+  assert(q.includes("항암제"), `시장 이름이 쿼리에 안 들어감: ${q}`);
+  assert(
+    !q.includes("데모바이오"),
+    `시장 규모 주장인데 회사명이 쿼리에 들어감(검색 정확도 하락): ${q}`
+  );
+
+  // 성장률도 시장 기준
+  const g = buildSearchQuery(
+    { text: "항암제 시장은 연 10% 내외 성장 중이다", keyword: "성장률" },
+    "데모바이오"
+  );
+  assert(g.includes("항암제") && g.includes("성장률"), `성장률 쿼리 부실: ${g}`);
+
+  // 반대로 시장 지위는 회사가 주어라 회사명이 있어야 한다
+  const p = buildSearchQuery(
+    { text: "업계 최초로 상용화했다", keyword: "시장 지위" },
+    "데모바이오"
+  );
+  assert(p.includes("데모바이오"), `시장 지위 쿼리에 회사명이 없음: ${p}`);
+  console.log("✅ 검색 쿼리: 시장 주장은 시장명 기준, 지위 주장은 회사명 기준");
+}
+
 function testNormalizeVerdict() {
   assert(normalizeVerdict("지지") === "지지", "유효한 verdict가 통과 안됨");
   assert(normalizeVerdict("불일치") === "불일치", "유효한 verdict가 통과 안됨");
@@ -221,6 +276,8 @@ async function main() {
   testSkipsUnverifiableSentences();
   testKeepsClaimWithSourceCaveat();
   testDollarMarketSize();
+  testSkipsThirdPartySuperlative();
+  testSearchQueryUsesMarketNotCompany();
   testStillExtractsRealClaimsFromMarkdown();
   testExtractClaimsWithDecimals();
   testExtractClaimsDedupeAndCap();

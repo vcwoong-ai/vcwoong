@@ -213,9 +213,44 @@ const CLAIM_PATTERNS: Array<{ label: string; re: RegExp }> = [
   },
   {
     label: "시장 지위",
-    re: /업계\s*(?:최초|유일)|시장\s*점유율\s*\d|국내\s*(?:1위|최대)|글로벌\s*\d위|점유율\s*\d[\d.]*\s*%/,
+    // "국내 최대"는 뺐다. 마케팅 수식어라 아무 회사에나 붙는데, 실제로
+    // "국내 최대 B2B 핀테크 기업 WebCash에 모듈을 공급"처럼 **고객사**를
+    // 수식하는 문장이 심사 대상 기업의 시장 지위 주장으로 잘못 뽑혔다.
+    re: /업계\s*(?:최초|유일)|시장\s*점유율\s*\d|국내\s*1위|글로벌\s*\d위|점유율\s*\d[\d.]*\s*%/,
   },
 ];
+
+/**
+ * 검색 쿼리를 만든다.
+ *
+ * 예전엔 `회사명 + 라벨`("데모회사 시장 지위")로 검색했는데, 이런 문자열은
+ * 실제 기사 제목에 나올 리가 없어서 검색 결과가 늘 0건이었다. 키를 넣어도
+ * "외부 자료를 찾지 못했습니다"만 뜨던 원인.
+ *
+ * 핵심은 **주장의 종류에 따라 주어가 다르다**는 점이다:
+ *  - 시장 규모·성장률 → 회사가 아니라 *시장*에 대한 주장이라 회사명을 넣으면
+ *    오히려 검색이 망가진다. "항암제 시장 규모"로 물어야 한다.
+ *  - 시장 지위 → 회사에 대한 주장이라 회사명이 필요하다.
+ */
+export function buildSearchQuery(
+  claim: { text: string; keyword: string },
+  companyName: string
+): string {
+  if (claim.keyword === "시장 지위") {
+    return `${companyName} ${claim.text.includes("점유율") ? "점유율" : "시장 지위"}`;
+  }
+
+  // "글로벌 항암제 시장", "국내 반도체 검사장비 시장" 등에서 시장 이름을 뽑는다
+  const market = /([가-힣A-Za-z0-9·\s]{2,25}?)\s*시장/.exec(claim.text)?.[1]?.trim();
+  const suffix = claim.keyword === "성장률" ? "성장률 전망" : "시장 규모";
+
+  if (market) {
+    // "국내/글로벌" 같은 지역 수식어는 남겨두는 편이 검색 정확도가 높다
+    return `${market} ${suffix}`;
+  }
+  // 시장 이름을 못 찾으면 회사 기준으로라도 물어본다
+  return `${companyName} ${suffix}`;
+}
 
 export function extractClaims(
   sections: Array<{ sectionKey: string; content: string }>,
@@ -381,7 +416,7 @@ export async function runDeepDive(params: {
   let modelUsed = "unknown";
   const verified: VerifiedClaim[] = [];
   for (const claim of claims) {
-    const results = await searchExternal(`${companyName} ${claim.keyword}`);
+    const results = await searchExternal(buildSearchQuery(claim, companyName));
     const outcome = await verifyOneClaim(claim, companyName, results);
     verified.push(outcome);
     modelUsed = "search+ai"; // 실제 모델명은 개별 호출마다 다를 수 있어 통칭
