@@ -157,8 +157,24 @@ const UNVERIFIABLE_MARKERS = [
   "해당 없음",
 ];
 
+/**
+ * "(출처 확인 필요)", "(추정치)" 같은 괄호 주석은 주장에 달린 **꼬리표**지
+ * 주장 자체가 아니다.
+ *
+ * 이걸 구분하지 않고 "확인 필요"가 있으면 무조건 버렸더니, 정작
+ * "시장 규모는 3.2조 원으로 추정된다(출처 확인 필요)"처럼 **출처가 없어서
+ * 외부 검증이 가장 필요한** 문장까지 통째로 날아갔다. 괄호 주석을 먼저
+ * 떼어낸 뒤 남은 본문으로 판단한다.
+ */
+function stripCaveats(sentence: string): string {
+  return sentence
+    .replace(/[（(][^)）]*(?:확인|미상|추정|출처|자료)[^)）]*[)）]/g, "")
+    .trim();
+}
+
 function isUnverifiable(sentence: string): boolean {
-  return UNVERIFIABLE_MARKERS.some((m) => sentence.includes(m));
+  const core = stripCaveats(sentence);
+  return UNVERIFIABLE_MARKERS.some((m) => core.includes(m));
 }
 
 /**
@@ -186,15 +202,18 @@ function splitSentences(content: string): string[] {
 const CLAIM_PATTERNS: Array<{ label: string; re: RegExp }> = [
   {
     label: "시장 규모",
-    re: /시장\s*(?:규모|크기)[\s\S]*?\d[\d,.]*\s*(?:조|억)\s*원/,
+    // 원화(조/억)뿐 아니라 달러 표기도 흔하다: "150억 달러 규모"
+    re: /시장\s*(?:규모|크기)[\s\S]*?\d[\d,.]*\s*(?:조|억|만)?\s*(?:원|달러|USD)/i,
   },
   {
     label: "성장률",
-    re: /(?:연평균\s*)?(?:성장률|CAGR)[\s\S]*?\d[\d.]*\s*%/i,
+    // "연평균 성장률 18.5%"와 "연 10% 내외 성장" 둘 다 잡는다 —
+    // 후자는 '성장률'이라는 단어가 없어서 예전 패턴으로는 놓쳤다.
+    re: /(?:(?:연평균\s*)?(?:성장률|CAGR)[\s\S]*?\d[\d.]*\s*%)|(?:\d[\d.]*\s*%\s*(?:내외\s*|가량\s*|수준\s*)?(?:성장|증가))/i,
   },
   {
     label: "시장 지위",
-    re: /업계\s*(?:최초|유일)|시장\s*점유율\s*\d|국내\s*1위|글로벌\s*\d위/,
+    re: /업계\s*(?:최초|유일)|시장\s*점유율\s*\d|국내\s*(?:1위|최대)|글로벌\s*\d위|점유율\s*\d[\d.]*\s*%/,
   },
 ];
 

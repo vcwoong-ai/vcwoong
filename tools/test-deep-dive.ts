@@ -118,6 +118,38 @@ function testSkipsUnverifiableSentences() {
   console.log("✅ '확인 필요/자료 없음' 류 문장은 검증 대상에서 제외");
 }
 
+/**
+ * 과잉 필터 회귀: "확인 필요"를 통째로 버렸더니 "(출처 확인 필요)"가 달린
+ * 진짜 주장까지 사라져 검증 0건이 됐다. 출처가 없는 수치야말로 외부 검증이
+ * 가장 필요한 대상이라 반드시 살아남아야 한다.
+ */
+function testKeepsClaimWithSourceCaveat() {
+  const sections = [
+    {
+      sectionKey: "market",
+      content:
+        "국내 시장 규모는 3.2조 원으로 추정된다(출처 확인 필요).\n" +
+        "글로벌 항암제 시장은 연 10% 내외 성장이 지속되고 있다.",
+    },
+  ];
+  const claims = extractClaims(sections, 5);
+  assert(
+    claims.length === 2,
+    `괄호 주석·'성장' 표현 주장이 안 뽑힘 (${claims.length}건): ${JSON.stringify(claims)}`
+  );
+  console.log("✅ '(출처 확인 필요)' 꼬리표가 달려도 주장 자체는 유지");
+  console.log("✅ '연 10% 내외 성장'처럼 '성장률' 단어가 없어도 추출");
+}
+
+function testDollarMarketSize() {
+  const claims = extractClaims(
+    [{ sectionKey: "market", content: "글로벌 시장 규모는 150억 달러 수준이다." }],
+    5
+  );
+  assert(claims.length === 1, `달러 표기 시장 규모가 안 뽑힘: ${JSON.stringify(claims)}`);
+  console.log("✅ 달러 표기 시장 규모도 추출 (원화만 보던 문제 해소)");
+}
+
 function testStillExtractsRealClaimsFromMarkdown() {
   // 마크다운이 섞여 있어도 진짜 주장은 여전히 뽑혀야 한다 (과하게 걸러내면 안 됨)
   const sections = [
@@ -187,6 +219,8 @@ async function main() {
   testStripNaverMarkup();
   testStripMarkdown();
   testSkipsUnverifiableSentences();
+  testKeepsClaimWithSourceCaveat();
+  testDollarMarketSize();
   testStillExtractsRealClaimsFromMarkdown();
   testExtractClaimsWithDecimals();
   testExtractClaimsDedupeAndCap();
