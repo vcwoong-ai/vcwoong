@@ -52,89 +52,41 @@ export function stripNaverMarkup(text: string): string {
  * 헤더는 두 벌을 함께 보낸다 — 상대 호스트가 모르는 헤더는 무시하므로
  * 손해가 없고, 어느 쪽 키를 넣든 맞는 헤더가 항상 포함된다.
  */
-const NCP_SEARCH_HOST = "https://naveropenapi.apigw.ntruss.com";
-const LEGACY_SEARCH_HOST = "https://openapi.naver.com";
-
 /**
- * API HUB로 옮겨오면서 경로 규칙이 바뀌었는데 콘솔마다 안내가 달라, 어느
- * 경로가 맞는지 코드에서 확정할 수가 없다. 그래서 후보를 순서대로 두드려
- * 보고 **처음 통하는 것을 기억**한다. 404는 게이트웨이가 응답은 한다는
- * 뜻이라 이런 탐색이 안전하다(요청이 새는 게 아니라 그냥 없는 경로).
+ * NAVER API HUB 검색 API 공식 엔드포인트.
+ * 출처: NCP "검색" API 가이드 PDF(뉴스/웹문서 검색 결과 조회, 2026-08) —
+ *   GET https://naverapihub.apigw.ntruss.com/search/v1/{news,webkr}
+ *   헤더: X-NCP-APIGW-API-KEY-ID / X-NCP-APIGW-API-KEY
  *
- * 한 번 찾으면 이후 요청은 그 경로만 쓰므로 비용은 최초 1회뿐이다.
+ * 예전엔 호스트를 naveropenapi.apigw.ntruss.com으로 잘못 짐작해서(오타 한
+ * 글자 차이: naverapihub가 맞음) 계속 404가 났다. 공식 문서로 확정됐으니
+ * 더 이상 후보를 탐색하지 않는다.
  */
-function candidateUrls(endpoint: "news" | "webkr", qs: string): string[] {
-  const override = process.env.NAVER_SEARCH_BASE_URL?.replace(/\/+$/, "");
-  if (override) {
-    // 베이스만 준 경우와 전체 경로를 준 경우를 모두 받아준다
-    return override.includes("/search")
-      ? [`${override}/${endpoint}.json?${qs}`]
-      : [`${override}/v1/search/${endpoint}.json?${qs}`];
-  }
-  return [
-    `${NCP_SEARCH_HOST}/naver-search/v1/search/${endpoint}.json?${qs}`,
-    `${NCP_SEARCH_HOST}/naver-search/v1/${endpoint}.json?${qs}`,
-    `${NCP_SEARCH_HOST}/search/v1/${endpoint}.json?${qs}`,
-    `${NCP_SEARCH_HOST}/v1/search/${endpoint}.json?${qs}`,
-    `${LEGACY_SEARCH_HOST}/v1/search/${endpoint}.json?${qs}`,
-  ];
-}
-
-/** 한 번 통한 URL 형태를 기억해 두 번 두드리지 않는다 */
-let workingTemplate: ((ep: string, qs: string) => string) | null = null;
-
-/** 인증·경로 문제라 다음 후보를 시도해볼 만한 상태 코드 */
-const RETRY_ON = new Set([401, 403, 404]);
+const SEARCH_BASE_URL = (
+  process.env.NAVER_SEARCH_BASE_URL || "https://naverapihub.apigw.ntruss.com/search/v1"
+).replace(/\/+$/, "");
 
 async function naverSearch(
   endpoint: "news" | "webkr",
   query: string,
   display: number
 ): Promise<Array<{ title: string; description: string; link: string; pubDate?: string }>> {
-  const qs = `query=${encodeURIComponent(query)}&display=${display}&sort=sim`;
-  const urls = workingTemplate
-    ? [workingTemplate(endpoint, qs)]
-    : candidateUrls(endpoint, qs);
-  const errors: string[] = [];
+  const qs = `query=${encodeURIComponent(query)}&display=${display}&sort=sim&format=json`;
+  const res = await fetch(`${SEARCH_BASE_URL}/${endpoint}?${qs}`, {
+    headers: {
+      "X-NCP-APIGW-API-KEY-ID": NAVER_CLIENT_ID,
+      "X-NCP-APIGW-API-KEY": NAVER_CLIENT_SECRET,
+    },
+    signal: AbortSignal.timeout(8000),
+  });
 
-  for (const url of urls) {
-    const res = await fetch(url, {
-      headers: {
-        // 두 벌을 함께 보낸다 — 상대가 모르는 헤더는 무시하므로 손해가 없고,
-        // 어느 콘솔에서 받은 키든 맞는 헤더가 항상 포함된다.
-        "X-NCP-APIGW-API-KEY-ID": NAVER_CLIENT_ID,
-        "X-NCP-APIGW-API-KEY": NAVER_CLIENT_SECRET,
-        "X-Naver-Client-Id": NAVER_CLIENT_ID,
-        "X-Naver-Client-Secret": NAVER_CLIENT_SECRET,
-      },
-      signal: AbortSignal.timeout(8000),
-    });
-
-    if (res.ok) {
-      // 통한 형태를 기억한다 (엔드포인트 이름만 갈아끼울 수 있게)
-      const prefix = url.slice(0, url.indexOf(`/${endpoint}.json`));
-      workingTemplate = (ep, q) => `${prefix}/${ep}.json?${q}`;
-      console.info(`[DeepDive] 검색 엔드포인트 확정: ${prefix}/{news,webkr}.json`);
-      const json = (await res.json()) as {
-        items?: Array<{ title: string; description: string; link: string; pubDate?: string }>;
-      };
-      return json.items ?? [];
-    }
-
-    errors.push(`${shortLabel(url)} ${res.status}`);
-    if (!RETRY_ON.has(res.status)) break;
+  if (!res.ok) {
+    throw new Error(`Naver ${endpoint} HTTP ${res.status}`);
   }
-
-  // 후보를 다 훑고도 실패하면 어디서 몇 번이 났는지 전부 남긴다 —
-  // 이 문자열만 보고 다음에 뭘 고쳐야 할지 판단할 수 있어야 한다.
-  throw new Error(`${endpoint} ${errors.join(", ")}`);
-}
-
-/** 에러 문구가 길어지지 않게 URL을 짧게 표시 */
-function shortLabel(url: string): string {
-  if (url.startsWith(LEGACY_SEARCH_HOST)) return "developers.naver";
-  const path = url.replace(NCP_SEARCH_HOST, "").split("?")[0];
-  return `HUB${path.replace(/\/(news|webkr)\.json$/, "")}`;
+  const json = (await res.json()) as {
+    items?: Array<{ title: string; description: string; link: string; pubDate?: string }>;
+  };
+  return json.items ?? [];
 }
 
 /**
