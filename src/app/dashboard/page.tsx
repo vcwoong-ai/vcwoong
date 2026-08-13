@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { DealStage, ReportStatus, DealSector } from "@prisma/client";
+import { STAGE_LABEL } from "@/lib/deal-labels";
 import { DashboardCharts } from "./dashboard-charts";
 import { DashboardQuickActions } from "@/components/dashboard/quick-actions";
 import {
@@ -109,10 +110,7 @@ export default async function DashboardPage() {
 
   const portfolioAlerts = buildAlerts(portfolioCompanies).slice(0, 5);
 
-  const stageLabel: Record<DealStage, string> = {
-    SCREENING: "검토", DEEP_DIVE: "IR 예정", IC_PREP: "투자심의위원회",
-    IC_REVIEW: "IR 심의", CLOSED: "완료", REJECTED: "거절",
-  };
+  const stageLabel = STAGE_LABEL;
   const statusLabel: Record<ReportStatus, string> = {
     PENDING: "대기", GENERATING: "생성 중", DRAFT: "초안",
     REVIEW: "검토 중", FINAL: "최종", EXPORTED: "내보내기",

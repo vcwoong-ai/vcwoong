@@ -25,6 +25,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Settings2, Loader2, Trash2 } from "lucide-react";
 import { DealSector, DealStage } from "@prisma/client";
+import { STAGE_LABEL } from "@/lib/deal-labels";
 import { useToast } from "@/hooks/use-toast";
 import { useConfirm } from "@/hooks/use-confirm";
 
@@ -67,14 +68,10 @@ const SECTOR_OPTIONS = [
   { value: DealSector.GENERAL, label: "📁 일반" },
 ];
 
-const STAGE_OPTIONS = [
-  { value: DealStage.SCREENING, label: "검토" },
-  { value: DealStage.DEEP_DIVE, label: "IR 예정" },
-  { value: DealStage.IC_PREP, label: "투자심의위원회" },
-  { value: DealStage.IC_REVIEW, label: "IR 심의" },
-  { value: DealStage.CLOSED, label: "투자 완료" },
-  { value: DealStage.REJECTED, label: "거절" },
-];
+const STAGE_OPTIONS = (Object.keys(STAGE_LABEL) as DealStage[]).map((value) => ({
+  value,
+  label: STAGE_LABEL[value],
+}));
 
 export function EditDealDialog({ deal }: EditDealDialogProps) {
   const [open, setOpen] = useState(false);

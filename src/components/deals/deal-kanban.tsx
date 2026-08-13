@@ -5,6 +5,7 @@ import Link from "next/link";
 import { DealStage, DealSector } from "@prisma/client";
 import { FileText, Upload, GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { SECTOR_LABEL, STAGE_LABEL } from "@/lib/deal-labels";
 
 interface DealForKanban {
   id: string;
@@ -22,13 +23,13 @@ interface DealForKanban {
   reports: Array<{ id: string; status: string }>;
 }
 
-const STAGE_COLUMNS: Array<{ key: DealStage; label: string; color: string; bg: string }> = [
-  { key: DealStage.SCREENING,  label: "검토",         color: "text-gray-600",   bg: "bg-gray-50 border-gray-200" },
-  { key: DealStage.DEEP_DIVE,  label: "IR 예정",      color: "text-blue-600",   bg: "bg-blue-50 border-blue-200" },
-  { key: DealStage.IC_PREP,    label: "투자심의위원회", color: "text-amber-600",  bg: "bg-amber-50 border-amber-200" },
-  { key: DealStage.IC_REVIEW,  label: "IR 심의",      color: "text-purple-600", bg: "bg-purple-50 border-purple-200" },
-  { key: DealStage.CLOSED,     label: "투자 완료", color: "text-green-600",  bg: "bg-green-50 border-green-200" },
-  { key: DealStage.REJECTED,   label: "거절",      color: "text-red-500",    bg: "bg-red-50 border-red-200" },
+const STAGE_COLUMNS: Array<{ key: DealStage; color: string; bg: string }> = [
+  { key: DealStage.SCREENING,  color: "text-gray-600",   bg: "bg-gray-50 border-gray-200" },
+  { key: DealStage.DEEP_DIVE,  color: "text-blue-600",   bg: "bg-blue-50 border-blue-200" },
+  { key: DealStage.IC_PREP,    color: "text-amber-600",  bg: "bg-amber-50 border-amber-200" },
+  { key: DealStage.IC_REVIEW,  color: "text-purple-600", bg: "bg-purple-50 border-purple-200" },
+  { key: DealStage.CLOSED,     color: "text-green-600",  bg: "bg-green-50 border-green-200" },
+  { key: DealStage.REJECTED,   color: "text-red-500",    bg: "bg-red-50 border-red-200" },
 ];
 
 const SECTOR_COLOR: Record<DealSector, string> = {
@@ -41,12 +42,6 @@ const SECTOR_COLOR: Record<DealSector, string> = {
   CONSUMER:      "bg-amber-100 text-amber-700",
   CLIMATE:       "bg-green-100 text-green-700",
   GENERAL:       "bg-gray-100 text-gray-700",
-};
-
-const SECTOR_LABEL: Record<DealSector, string> = {
-  BIO: "바이오", IT: "IT/SaaS", DEEPTECH: "AI/딥테크",
-  MANUFACTURING: "제조", CONTENT: "콘텐츠", FINTECH: "핀테크",
-  CONSUMER: "소비재", CLIMATE: "기후", GENERAL: "일반",
 };
 
 interface DealKanbanProps {
@@ -196,7 +191,7 @@ export function DealKanban({ deals, onStageChange, canEditDeal }: DealKanbanProp
               "rounded-t-xl border-x border-t px-3 py-2.5 flex items-center justify-between",
               col.bg
             )}>
-              <span className={cn("text-sm font-semibold", col.color)}>{col.label}</span>
+              <span className={cn("text-sm font-semibold", col.color)}>{STAGE_LABEL[col.key]}</span>
               <span className={cn("text-xs px-1.5 py-0.5 rounded-full font-medium", col.bg, col.color)}>
                 {colDeals.length}
               </span>

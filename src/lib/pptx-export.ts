@@ -11,6 +11,9 @@
  */
 
 import type { ReportSection } from "@prisma/client";
+// 타입만 가져온다 — erased되므로 위쪽 주석의 "동적 import로 번들링 회피"
+// 전략과 충돌하지 않는다 (실제 모듈 로드는 여전히 함수 안 await import).
+import type PptxGenJS from "pptxgenjs";
 
 // 앱 UI에서 실제로 쓰는 주 색상(Tailwind blue-600/700)과 통일해 브랜드 일관성을 준다.
 const BRAND_COLOR = "2563EB";
@@ -120,9 +123,98 @@ function extractMetricPoints(lines: string[]): MetricPoint[] {
   return points.slice(0, 6);
 }
 
+interface ReportImage {
+  url: string;
+  mimeType: string;
+  sourceName: string;
+}
+
+/**
+ * 이미지를 가져와 base64 data URI로 바꾼다. pptxgenjs는 원격 URL을
+ * 직접 addImage에 넘겨도 되지만, 서버 환경마다 fetch 지원이 달라 실패가
+ * 조용히 빈 이미지로 남는 사례가 있어 여기서 직접 받아 확실히 넣는다.
+ *
+ * 개별 이미지 하나가 깨져 있거나 네트워크 오류가 나도 나머지 슬라이드
+ * 생성은 계속돼야 하므로 실패하면 null을 돌려주고 호출부가 건너뛴다.
+ */
+async function toDataUri(image: ReportImage): Promise<string | null> {
+  try {
+    const res = await fetch(image.url, { signal: AbortSignal.timeout(10000) });
+    if (!res.ok) return null;
+    const buf = Buffer.from(await res.arrayBuffer());
+    return `data:${image.mimeType};base64,${buf.toString("base64")}`;
+  } catch (error) {
+    console.warn(`[PptxExport] 이미지 로드 실패(건너뜀): ${image.url}`, error);
+    return null;
+  }
+}
+
+/**
+ * 업로드 자료에서 추출해둔 이미지를 "첨부 이미지" 슬라이드로 덧붙인다.
+ * 슬라이드당 2장씩, 원본 문서명을 캡션으로 단다 — 심사역이 어느 IR
+ * 자료에서 나온 이미지인지 바로 알 수 있어야 한다.
+ */
+async function addImageAppendix(
+  pptx: InstanceType<typeof PptxGenJS>,
+  images: ReportImage[]
+): Promise<void> {
+  if (images.length === 0) return;
+
+  const dataUris = await Promise.all(images.map(toDataUri));
+  const valid = images
+    .map((img, i) => ({ img, dataUri: dataUris[i] }))
+    .filter((x): x is { img: ReportImage; dataUri: string } => x.dataUri !== null);
+  if (valid.length === 0) return;
+
+  const PER_SLIDE = 2;
+  for (let i = 0; i < valid.length; i += PER_SLIDE) {
+    const pair = valid.slice(i, i + PER_SLIDE);
+    const slide = pptx.addSlide({ masterName: "AXIOM_SLIDE" });
+    if (i === 0) {
+      slide.addText("첨부 이미지", {
+        x: 0.5,
+        y: 0.35,
+        w: 8.8,
+        h: 0.6,
+        fontSize: 24,
+        bold: true,
+        color: TEXT_DARK,
+        fontFace: FONT,
+      });
+      slide.addShape("rect", { x: 0.52, y: 0.98, w: 0.5, h: 0.05, fill: { color: BRAND_COLOR } });
+    }
+
+    const BOX_W = 4.2;
+    const BOX_H = 4.6;
+    const BOX_Y = i === 0 ? 1.4 : 0.6;
+    pair.forEach(({ img, dataUri }, idx) => {
+      const x = 0.5 + idx * (BOX_W + 0.3);
+      slide.addImage({
+        data: dataUri,
+        x,
+        y: BOX_Y,
+        w: BOX_W,
+        h: BOX_H,
+        sizing: { type: "contain", w: BOX_W, h: BOX_H },
+      });
+      slide.addText(img.sourceName, {
+        x,
+        y: BOX_Y + BOX_H + 0.05,
+        w: BOX_W,
+        h: 0.3,
+        fontSize: 10,
+        color: TEXT_MUTED,
+        align: "center",
+        fontFace: FONT,
+      });
+    });
+  }
+}
+
 export async function generateReportPPTX(
   sections: Pick<ReportSection, "title" | "content">[],
-  meta: { companyName: string; reportDate?: Date }
+  meta: { companyName: string; reportDate?: Date },
+  images: ReportImage[] = []
 ): Promise<Buffer> {
   const PptxGenJS = (await import("pptxgenjs")).default;
   const pptx = new PptxGenJS();
@@ -307,6 +399,8 @@ export async function generateReportPPTX(
       });
     }
   }
+
+  await addImageAppendix(pptx, images);
 
   return (await pptx.write({ outputType: "nodebuffer" })) as Buffer;
 }

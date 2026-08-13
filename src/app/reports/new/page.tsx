@@ -8,12 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { FileText, Upload, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { CreateDealDialog } from "@/components/deals/create-deal-dialog";
-
-const SECTOR_LABEL: Record<string, string> = {
-  BIO: "바이오", IT: "IT/SaaS", DEEPTECH: "AI/딥테크",
-  MANUFACTURING: "제조", CONTENT: "콘텐츠", FINTECH: "핀테크",
-  CONSUMER: "소비재", CLIMATE: "기후", GENERAL: "일반",
-};
+import { SECTOR_LABEL } from "@/lib/deal-labels";
 
 export default async function NewReportPage() {
   const session = await getServerSession(authOptions);
