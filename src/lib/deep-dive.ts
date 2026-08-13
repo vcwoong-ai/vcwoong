@@ -55,15 +55,35 @@ export function stripNaverMarkup(text: string): string {
 const NCP_SEARCH_HOST = "https://naveropenapi.apigw.ntruss.com";
 const LEGACY_SEARCH_HOST = "https://openapi.naver.com";
 
-/** 문서와 다른 경로가 안내되면 코드 수정 없이 환경변수로 덮어쓸 수 있게 */
-const SEARCH_HOSTS = process.env.NAVER_SEARCH_BASE_URL
-  ? [process.env.NAVER_SEARCH_BASE_URL]
-  : [NCP_SEARCH_HOST, LEGACY_SEARCH_HOST];
+/**
+ * API HUB로 옮겨오면서 경로 규칙이 바뀌었는데 콘솔마다 안내가 달라, 어느
+ * 경로가 맞는지 코드에서 확정할 수가 없다. 그래서 후보를 순서대로 두드려
+ * 보고 **처음 통하는 것을 기억**한다. 404는 게이트웨이가 응답은 한다는
+ * 뜻이라 이런 탐색이 안전하다(요청이 새는 게 아니라 그냥 없는 경로).
+ *
+ * 한 번 찾으면 이후 요청은 그 경로만 쓰므로 비용은 최초 1회뿐이다.
+ */
+function candidateUrls(endpoint: "news" | "webkr", qs: string): string[] {
+  const override = process.env.NAVER_SEARCH_BASE_URL?.replace(/\/+$/, "");
+  if (override) {
+    // 베이스만 준 경우와 전체 경로를 준 경우를 모두 받아준다
+    return override.includes("/search")
+      ? [`${override}/${endpoint}.json?${qs}`]
+      : [`${override}/v1/search/${endpoint}.json?${qs}`];
+  }
+  return [
+    `${NCP_SEARCH_HOST}/naver-search/v1/search/${endpoint}.json?${qs}`,
+    `${NCP_SEARCH_HOST}/naver-search/v1/${endpoint}.json?${qs}`,
+    `${NCP_SEARCH_HOST}/search/v1/${endpoint}.json?${qs}`,
+    `${NCP_SEARCH_HOST}/v1/search/${endpoint}.json?${qs}`,
+    `${LEGACY_SEARCH_HOST}/v1/search/${endpoint}.json?${qs}`,
+  ];
+}
 
-/** 한 번 통한 호스트를 기억해 두 번 두드리지 않는다 */
-let workingHost: string | null = null;
+/** 한 번 통한 URL 형태를 기억해 두 번 두드리지 않는다 */
+let workingTemplate: ((ep: string, qs: string) => string) | null = null;
 
-/** 인증·경로 문제라 다른 호스트를 시도해볼 만한 상태 코드 */
+/** 인증·경로 문제라 다음 후보를 시도해볼 만한 상태 코드 */
 const RETRY_ON = new Set([401, 403, 404]);
 
 async function naverSearch(
@@ -71,13 +91,17 @@ async function naverSearch(
   query: string,
   display: number
 ): Promise<Array<{ title: string; description: string; link: string; pubDate?: string }>> {
-  const path = `/v1/search/${endpoint}.json?query=${encodeURIComponent(query)}&display=${display}&sort=sim`;
-  const hosts = workingHost ? [workingHost] : SEARCH_HOSTS;
+  const qs = `query=${encodeURIComponent(query)}&display=${display}&sort=sim`;
+  const urls = workingTemplate
+    ? [workingTemplate(endpoint, qs)]
+    : candidateUrls(endpoint, qs);
   const errors: string[] = [];
 
-  for (const host of hosts) {
-    const res = await fetch(`${host}${path}`, {
+  for (const url of urls) {
+    const res = await fetch(url, {
       headers: {
+        // 두 벌을 함께 보낸다 — 상대가 모르는 헤더는 무시하므로 손해가 없고,
+        // 어느 콘솔에서 받은 키든 맞는 헤더가 항상 포함된다.
         "X-NCP-APIGW-API-KEY-ID": NAVER_CLIENT_ID,
         "X-NCP-APIGW-API-KEY": NAVER_CLIENT_SECRET,
         "X-Naver-Client-Id": NAVER_CLIENT_ID,
@@ -87,24 +111,30 @@ async function naverSearch(
     });
 
     if (res.ok) {
-      workingHost = host;
+      // 통한 형태를 기억한다 (엔드포인트 이름만 갈아끼울 수 있게)
+      const prefix = url.slice(0, url.indexOf(`/${endpoint}.json`));
+      workingTemplate = (ep, q) => `${prefix}/${ep}.json?${q}`;
+      console.info(`[DeepDive] 검색 엔드포인트 확정: ${prefix}/{news,webkr}.json`);
       const json = (await res.json()) as {
         items?: Array<{ title: string; description: string; link: string; pubDate?: string }>;
       };
       return json.items ?? [];
     }
 
-    errors.push(`${hostLabel(host)} HTTP ${res.status}`);
+    errors.push(`${shortLabel(url)} ${res.status}`);
     if (!RETRY_ON.has(res.status)) break;
   }
 
-  throw new Error(`${endpoint} ${errors.join(" → ")}`);
+  // 후보를 다 훑고도 실패하면 어디서 몇 번이 났는지 전부 남긴다 —
+  // 이 문자열만 보고 다음에 뭘 고쳐야 할지 판단할 수 있어야 한다.
+  throw new Error(`${endpoint} ${errors.join(", ")}`);
 }
 
-function hostLabel(host: string): string {
-  if (host === NCP_SEARCH_HOST) return "API HUB";
-  if (host === LEGACY_SEARCH_HOST) return "developers.naver";
-  return host;
+/** 에러 문구가 길어지지 않게 URL을 짧게 표시 */
+function shortLabel(url: string): string {
+  if (url.startsWith(LEGACY_SEARCH_HOST)) return "developers.naver";
+  const path = url.replace(NCP_SEARCH_HOST, "").split("?")[0];
+  return `HUB${path.replace(/\/(news|webkr)\.json$/, "")}`;
 }
 
 /**
