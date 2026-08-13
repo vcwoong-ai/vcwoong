@@ -57,15 +57,35 @@ async function naverSearch(
 }
 
 /**
- * 뉴스 + 웹문서를 함께 검색한다. 키 없으면 빈 배열(호출 자체를 안 함).
+ * 검색이 왜 빈손이었는지 구분한다.
+ *
+ * 예전엔 어떤 경우든 빈 배열만 돌려줘서, 화면에는 늘 "외부 자료를 찾지
+ * 못했습니다"만 떴다. 그러면 (1) 키를 안 넣은 건지 (2) 키가 틀려서 401인지
+ * (3) 진짜로 결과가 없는 건지 구분할 수 없어, 원인을 추측으로만 좁혀야 한다.
+ */
+export type SearchStatus =
+  | { kind: "ok" }
+  | { kind: "no-keys" }
+  | { kind: "failed"; message: string }
+  | { kind: "empty" };
+
+export interface SearchOutcome {
+  results: SearchResult[];
+  status: SearchStatus;
+}
+
+/**
+ * 뉴스 + 웹문서를 함께 검색한다. 키 없으면 호출 자체를 안 한다.
  * 하나가 실패해도 다른 하나는 살린다 — 뉴스 API 장애로 웹 검색까지
  * 죽으면 안 된다.
  */
-export async function searchExternal(
+export async function searchExternalDetailed(
   query: string,
   perSource = 3
-): Promise<SearchResult[]> {
-  if (!NAVER_CLIENT_ID || !NAVER_CLIENT_SECRET) return [];
+): Promise<SearchOutcome> {
+  if (!NAVER_CLIENT_ID || !NAVER_CLIENT_SECRET) {
+    return { results: [], status: { kind: "no-keys" } };
+  }
 
   const [newsResult, webResult] = await Promise.allSettled([
     naverSearch("news", query, perSource),
@@ -73,6 +93,8 @@ export async function searchExternal(
   ]);
 
   const results: SearchResult[] = [];
+  const failures: string[] = [];
+
   if (newsResult.status === "fulfilled") {
     for (const item of newsResult.value) {
       results.push({
@@ -84,8 +106,11 @@ export async function searchExternal(
       });
     }
   } else {
-    console.warn("[DeepDive] 뉴스 검색 실패:", newsResult.reason);
+    const msg = errorMessage(newsResult.reason);
+    console.warn(`[DeepDive] 뉴스 검색 실패 (query=${query}):`, msg);
+    failures.push(`뉴스 ${msg}`);
   }
+
   if (webResult.status === "fulfilled") {
     for (const item of webResult.value) {
       results.push({
@@ -96,10 +121,30 @@ export async function searchExternal(
       });
     }
   } else {
-    console.warn("[DeepDive] 웹 검색 실패:", webResult.reason);
+    const msg = errorMessage(webResult.reason);
+    console.warn(`[DeepDive] 웹 검색 실패 (query=${query}):`, msg);
+    failures.push(`웹 ${msg}`);
   }
 
-  return results;
+  if (results.length > 0) return { results, status: { kind: "ok" } };
+  // 둘 다 실패했으면 "결과 없음"이 아니라 "요청 실패"다 — 구분해야
+  // 키 오류(401)를 자료 부족으로 오해하지 않는다.
+  if (failures.length === 2) {
+    return { results, status: { kind: "failed", message: failures.join(" / ") } };
+  }
+  return { results, status: { kind: "empty" } };
+}
+
+function errorMessage(reason: unknown): string {
+  return reason instanceof Error ? reason.message : String(reason);
+}
+
+/** 결과 배열만 필요할 때 (진단이 필요 없는 호출부용) */
+export async function searchExternal(
+  query: string,
+  perSource = 3
+): Promise<SearchResult[]> {
+  return (await searchExternalDetailed(query, perSource)).results;
 }
 
 // ────────────────────────────────────────────────────────────
@@ -124,8 +169,10 @@ export function stripMarkdown(text: string): string {
     .replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, "$1") // 기울임
     .replace(/`([^`]+)`/g, "$1") // 인라인 코드
     .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1") // 링크
-    .replace(/^[-*+]\s+/g, "") // 불릿
-    .replace(/^>\s*/g, "") // 인용
+    // 들여쓴 불릿("  - 항목")도 벗긴다. \s*를 안 붙였더니 중첩 목록의
+    // 하이픈이 그대로 남아 화면에 "- 순환골재의…"로 노출됐다.
+    .replace(/^\s*[-*+]\s+/g, "") // 불릿
+    .replace(/^\s*>\s*/g, "") // 인용
     .replace(/\|/g, " ") // 표 구분자
     .replace(/\s+/g, " ")
     .trim();
@@ -199,11 +246,21 @@ function splitSentences(content: string): string[] {
  * 패턴 자체는 "문장 경계까지 몇 글자"를 신경 쓸 필요가 없다 — 소수점이
  * 섞여 있어도 문장 분리 단계에서 이미 안전하게 처리된다.
  */
-const CLAIM_PATTERNS: Array<{ label: string; re: RegExp }> = [
+const CLAIM_PATTERNS: Array<{
+  label: string;
+  re: RegExp;
+  /** 문장 전체에 함께 있어야 하는 맥락 (오탐 억제용) */
+  requires?: RegExp;
+}> = [
   {
     label: "시장 규모",
-    // 원화(조/억)뿐 아니라 달러 표기도 흔하다: "150억 달러 규모"
-    re: /시장\s*(?:규모|크기)[\s\S]*?\d[\d,.]*\s*(?:조|억|만)?\s*(?:원|달러|USD)/i,
+    // "시장 규모는 3.2조 원"뿐 아니라 "시장은 2031년 115조원 규모로"처럼
+    // 숫자가 '시장'과 '규모' 사이에 끼는 어순도 흔하다. 그래서 '규모'가
+    // 붙어 있기를 요구하지 않고, 시장 근처의 금액을 잡는다.
+    re: /시장[\s\S]{0,30}?\d[\d,.]*\s*(?:조|억|만)?\s*(?:원|달러|USD)/i,
+    // 대신 "시장 진입에 10억원을 투자했다" 같은 지출 문장이 딸려오지
+    // 않도록, 시장 크기를 말하는 맥락 단어를 함께 요구한다.
+    requires: /규모|크기|전망|추정|예상|수준|형성|성장|달할/,
   },
   {
     label: "성장률",
@@ -263,8 +320,9 @@ export function extractClaims(
     for (const sentence of splitSentences(content)) {
       // 자료 부족을 알리는 문장은 검증할 "주장"이 아니다
       if (isUnverifiable(sentence)) continue;
-      for (const { label, re } of CLAIM_PATTERNS) {
+      for (const { label, re, requires } of CLAIM_PATTERNS) {
         if (!re.test(sentence)) continue;
+        if (requires && !requires.test(sentence)) continue;
         const text = sentence.replace(/\s+/g, " ").trim();
         if (text.length < 4) break;
         const dedupeKey = text.slice(0, 40);
@@ -311,18 +369,31 @@ export function normalizeVerdict(v: unknown): Verdict {
   return VALID_VERDICTS.includes(v as Verdict) ? (v as Verdict) : "불명확";
 }
 
+/** 검색이 빈손인 이유를 사람이 읽을 문장으로 */
+function emptyReason(status: SearchStatus): string {
+  switch (status.kind) {
+    case "no-keys":
+      return "검색 API 키(NAVER_CLIENT_ID/SECRET)가 설정되지 않아 외부 검증을 건너뛰었습니다";
+    case "failed":
+      return `검색 요청이 실패했습니다 — ${status.message}`;
+    default:
+      return "외부 자료를 찾지 못했습니다";
+  }
+}
+
 /** 검색 결과가 없으면 AI를 부를 필요도 없다 — 판정할 근거가 없으니 항상 불명확 */
 async function verifyOneClaim(
   claim: Claim,
   companyName: string,
-  results: SearchResult[]
+  results: SearchResult[],
+  status: SearchStatus = { kind: "empty" }
 ): Promise<VerifiedClaim> {
   if (results.length === 0) {
     return {
       sectionKey: claim.sectionKey,
       claim: claim.text,
       verdict: "불명확",
-      rationale: "외부 자료를 찾지 못했습니다",
+      rationale: emptyReason(status),
       sources: [],
     };
   }
@@ -416,10 +487,12 @@ export async function runDeepDive(params: {
   let modelUsed = "unknown";
   const verified: VerifiedClaim[] = [];
   for (const claim of claims) {
-    const results = await searchExternal(buildSearchQuery(claim, companyName));
-    const outcome = await verifyOneClaim(claim, companyName, results);
+    const query = buildSearchQuery(claim, companyName);
+    const { results, status } = await searchExternalDetailed(query);
+    const outcome = await verifyOneClaim(claim, companyName, results, status);
     verified.push(outcome);
-    modelUsed = "search+ai"; // 실제 모델명은 개별 호출마다 다를 수 있어 통칭
+    // 검색이 실제로 붙었는지 한눈에 보이게 표기를 나눈다
+    modelUsed = status.kind === "ok" ? "search+ai" : `search:${status.kind}`;
   }
 
   return { claims: verified, modelUsed };

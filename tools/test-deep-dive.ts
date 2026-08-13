@@ -10,6 +10,7 @@
 import {
   stripNaverMarkup,
   stripMarkdown,
+  searchExternalDetailed,
   searchExternal,
   extractClaims,
   buildSearchQuery,
@@ -223,6 +224,51 @@ function testSearchQueryUsesMarketNotCompany() {
   console.log("✅ 검색 쿼리: 시장 주장은 시장명 기준, 지위 주장은 회사명 기준");
 }
 
+/**
+ * 검색이 빈손일 때 "왜"를 구분해야 한다. 예전엔 키 미설정·요청 실패·결과
+ * 없음이 전부 "외부 자료를 찾지 못했습니다"로 뭉개져서, 프로덕션에서
+ * 원인을 좁히지 못하고 추측만 반복했다.
+ */
+async function testSearchStatusDistinguishesNoKeys() {
+  const { results, status } = await searchExternalDetailed("아무 시장 규모");
+  assert(results.length === 0, "키가 없는데 결과가 반환됨");
+  assert(
+    status.kind === "no-keys",
+    `키 미설정이 'no-keys'로 구분되지 않음: ${status.kind}`
+  );
+  console.log("✅ 검색 실패 원인 구분: 키 미설정을 '결과 없음'과 혼동하지 않음");
+}
+
+function testStripsIndentedBullet() {
+  const claims = extractClaims(
+    [
+      {
+        sectionKey: "market",
+        content: "  - 글로벌 콘크리트 시장은 2031년 115조원 규모로 전망된다",
+      },
+    ],
+    5
+  );
+  assert(claims.length === 1, `들여쓴 불릿 문장이 안 뽑힘: ${JSON.stringify(claims)}`);
+  assert(
+    !claims[0].text.startsWith("-"),
+    `불릿 하이픈이 화면 문구에 남음: ${claims[0].text}`
+  );
+  console.log("✅ 들여쓴 불릿('  - 항목')의 하이픈도 제거");
+}
+
+function testMarketSizeIgnoresSpending() {
+  const claims = extractClaims(
+    [{ sectionKey: "x", content: "시장 진입을 위해 초기 마케팅에 10억원을 집행했다" }],
+    5
+  );
+  assert(
+    claims.length === 0,
+    `지출 문장이 시장 규모 주장으로 뽑힘: ${JSON.stringify(claims)}`
+  );
+  console.log("✅ '시장 진입에 10억원 집행' 같은 지출 문장은 시장 규모가 아님");
+}
+
 function testNormalizeVerdict() {
   assert(normalizeVerdict("지지") === "지지", "유효한 verdict가 통과 안됨");
   assert(normalizeVerdict("불일치") === "불일치", "유효한 verdict가 통과 안됨");
@@ -278,12 +324,15 @@ async function main() {
   testDollarMarketSize();
   testSkipsThirdPartySuperlative();
   testSearchQueryUsesMarketNotCompany();
+  testStripsIndentedBullet();
+  testMarketSizeIgnoresSpending();
   testStillExtractsRealClaimsFromMarkdown();
   testExtractClaimsWithDecimals();
   testExtractClaimsDedupeAndCap();
   testExtractClaimsIgnoresUnrelatedText();
   testNormalizeVerdict();
   await testSearchExternalNoApiKey();
+  await testSearchStatusDistinguishesNoKeys();
   await testRunDeepDiveNoClaimsFound();
   await testRunDeepDiveDemoModeWhenAiUnconfigured();
   console.log("\n✅ 보조 리서치 테스트 통과\n");
