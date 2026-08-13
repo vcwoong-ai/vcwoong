@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
-import { Bell, LogOut, User, Menu } from "lucide-react";
+import { LogOut, User, Menu } from "lucide-react";
+import { NotificationBell } from "@/components/layout/notification-bell";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -39,7 +40,15 @@ export function Header({ title, onMenuClick }: HeaderProps) {
   };
 
   return (
-    <header className="h-16 border-b border-gray-200 bg-white flex items-center justify-between px-4 sm:px-6 gap-2">
+    <header
+      className={
+        // 스크롤해도 헤더가 남아 있어야 알림·계정에 늘 닿는다.
+        // 반투명 + blur로 아래 내용이 비쳐 지나가게 해서 평평한 흰 띠보다 깊이가 생긴다.
+        "sticky top-0 z-30 h-16 border-b border-slate-200/80 " +
+        "bg-white/85 backdrop-blur-md supports-[backdrop-filter]:bg-white/70 " +
+        "flex items-center justify-between px-4 sm:px-6 gap-2"
+      }
+    >
       <div className="flex items-center gap-2 min-w-0">
         <Button
           variant="ghost"
@@ -58,9 +67,7 @@ export function Header({ title, onMenuClick }: HeaderProps) {
       </div>
 
       <div className="flex items-center gap-1 sm:gap-3 flex-shrink-0">
-        <Button variant="ghost" size="icon" className="relative hidden sm:inline-flex">
-          <Bell className="w-4 h-4" />
-        </Button>
+        <NotificationBell />
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

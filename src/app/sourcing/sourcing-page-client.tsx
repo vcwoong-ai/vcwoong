@@ -26,6 +26,8 @@ import {
   Sparkles,
   Trash2,
 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { useConfirm } from "@/hooks/use-confirm";
 import { cn } from "@/lib/utils";
 import {
   INBOUND_STATUS_LABEL,
@@ -83,6 +85,8 @@ export function SourcingPageClient({
   role?: string;
 }) {
   const router = useRouter();
+  const toast = useToast();
+  const confirm = useConfirm();
   const [showForm, setShowForm] = useState(leads.length === 0);
   const [formMode, setFormMode] = useState<"manual" | "email">("manual");
   const [filter, setFilter] = useState<InboundStatus | "ALL">("ALL");
@@ -107,7 +111,10 @@ export function SourcingPageClient({
   };
 
   const addLead = async () => {
-    if (!companyName.trim()) return alert("기업명을 입력하세요");
+    if (!companyName.trim()) {
+      toast.error("기업명을 입력하세요");
+      return;
+    }
     setSaving(true);
     try {
       const res = await fetch("/api/sourcing", {
@@ -128,16 +135,22 @@ export function SourcingPageClient({
       setContactEmail("");
       setSummary("");
       setShowForm(false);
+      toast.success("인바운드 딜을 등록했습니다");
       router.refresh();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "등록 실패");
+      toast.error("등록 실패", {
+        description: e instanceof Error ? e.message : "다시 시도해 주세요",
+      });
     } finally {
       setSaving(false);
     }
   };
 
   const importEmail = async () => {
-    if (rawEmail.trim().length < 20) return alert("이메일 원문을 붙여넣으세요");
+    if (rawEmail.trim().length < 20) {
+      toast.error("이메일 원문을 붙여넣으세요");
+      return;
+    }
     setSaving(true);
     try {
       const res = await fetch("/api/sourcing/import-email", {
@@ -149,13 +162,19 @@ export function SourcingPageClient({
       if (!res.ok) throw new Error(json.error ?? "파싱 실패");
       setRawEmail("");
       setShowForm(false);
-      alert(
-        `등록됨: ${json.parsed?.companyName ?? json.data?.companyName}` +
-          (json.parsed?.contactEmail ? ` (${json.parsed.contactEmail})` : "")
+      toast.success(
+        `${json.parsed?.companyName ?? json.data?.companyName} 등록 완료`,
+        {
+          description: json.parsed?.contactEmail
+            ? `연락처: ${json.parsed.contactEmail}`
+            : undefined,
+        }
       );
       router.refresh();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "메일 파싱 실패");
+      toast.error("메일 파싱 실패", {
+        description: e instanceof Error ? e.message : "다시 시도해 주세요",
+      });
     } finally {
       setSaving(false);
     }
@@ -171,14 +190,21 @@ export function SourcingPageClient({
       }
       router.refresh();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "스크리닝 실패");
+      toast.error("스크리닝 실패", {
+        description: e instanceof Error ? e.message : "다시 시도해 주세요",
+      });
     } finally {
       setBusyId(null);
     }
   };
 
   const promote = async (id: string) => {
-    if (!confirm("이 인바운드 딜을 심사 파이프라인으로 전환할까요?")) return;
+    const ok = await confirm({
+      title: "심사 파이프라인으로 전환할까요?",
+      description: "인바운드 딜이 정식 딜로 등록되고 딜 상세로 이동합니다.",
+      confirmLabel: "전환",
+    });
+    if (!ok) return;
     setBusyId(id);
     try {
       const res = await fetch(`/api/sourcing/${id}/promote`, { method: "POST" });
@@ -189,7 +215,9 @@ export function SourcingPageClient({
       const { data } = await res.json();
       router.push(`/deals/${data.deal.id}`);
     } catch (e) {
-      alert(e instanceof Error ? e.message : "전환 실패");
+      toast.error("전환 실패", {
+        description: e instanceof Error ? e.message : "다시 시도해 주세요",
+      });
       setBusyId(null);
     }
   };
@@ -209,10 +237,17 @@ export function SourcingPageClient({
   };
 
   const remove = async (id: string) => {
-    if (!confirm("삭제할까요?")) return;
+    const ok = await confirm({
+      title: "인바운드 딜을 삭제할까요?",
+      description: "되돌릴 수 없습니다.",
+      confirmLabel: "삭제",
+      destructive: true,
+    });
+    if (!ok) return;
     setBusyId(id);
     try {
       await fetch(`/api/sourcing/${id}`, { method: "DELETE" });
+      toast.success("삭제했습니다");
       router.refresh();
     } finally {
       setBusyId(null);
@@ -226,14 +261,18 @@ export function SourcingPageClient({
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error ?? "폴링 실패");
       const imported = json.data?.imported ?? 0;
-      alert(
-        imported > 0
-          ? `${imported}건의 메일을 인박스로 가져왔습니다`
-          : "새로 가져온 메일이 없습니다 (드롭폴더·IMAP 설정 확인)"
-      );
+      if (imported > 0) {
+        toast.success(`${imported}건의 메일을 인박스로 가져왔습니다`);
+      } else {
+        toast.toast("새로 가져온 메일이 없습니다", {
+          description: "드롭폴더·IMAP 설정을 확인해 주세요",
+        });
+      }
       router.refresh();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "폴링 실패");
+      toast.error("폴링 실패", {
+        description: e instanceof Error ? e.message : "다시 시도해 주세요",
+      });
     } finally {
       setPolling(false);
     }

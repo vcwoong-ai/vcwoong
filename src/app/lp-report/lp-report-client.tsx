@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Download, Loader2, Plus, Sparkles, Wallet, Printer, TrendingUp } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 import { currentPeriod, recentPeriods } from "@/lib/portfolio";
 import type { LpReportComputed } from "@/lib/lp-report";
 
@@ -49,6 +50,7 @@ export function LPReportClient({
   currentUserId?: string;
 }) {
   const router = useRouter();
+  const toast = useToast();
   const [selectedFundId, setSelectedFundId] = useState(funds[0]?.id ?? "");
   const [period, setPeriod] = useState(currentPeriod());
   const [generating, setGenerating] = useState(false);
@@ -65,7 +67,8 @@ export function LPReportClient({
 
   const createFund = async () => {
     if (!newFundName.trim() || !Number(newFundSize)) {
-      return alert("펀드명과 결성 총액을 입력하세요");
+      toast.error("펀드명과 결성 총액을 입력하세요");
+      return;
     }
     setCreatingFund(true);
     try {
@@ -85,9 +88,12 @@ export function LPReportClient({
       setNewFundName("");
       setNewFundSize("");
       setShowCreate(false);
+      toast.success("펀드를 만들었습니다");
       router.refresh();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "펀드 생성 실패");
+      toast.error("펀드 생성 실패", {
+        description: e instanceof Error ? e.message : "다시 시도해 주세요",
+      });
     } finally {
       setCreatingFund(false);
     }
@@ -108,7 +114,9 @@ export function LPReportClient({
       }
       router.refresh();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "LP 리포트 생성 실패");
+      toast.error("LP 리포트 생성 실패", {
+        description: e instanceof Error ? e.message : "다시 시도해 주세요",
+      });
     } finally {
       setGenerating(false);
     }
@@ -129,7 +137,9 @@ export function LPReportClient({
       a.click();
       URL.revokeObjectURL(url);
     } catch (e) {
-      alert(e instanceof Error ? e.message : "내보내기 실패");
+      toast.error("내보내기 실패", {
+        description: e instanceof Error ? e.message : "다시 시도해 주세요",
+      });
     } finally {
       setExportingId(null);
     }
@@ -150,7 +160,9 @@ export function LPReportClient({
       a.click();
       URL.revokeObjectURL(url);
     } catch (e) {
-      alert(e instanceof Error ? e.message : "PPTX 내보내기 실패");
+      toast.error("PPTX 내보내기 실패", {
+        description: e instanceof Error ? e.message : "다시 시도해 주세요",
+      });
     } finally {
       setExportingId(null);
     }

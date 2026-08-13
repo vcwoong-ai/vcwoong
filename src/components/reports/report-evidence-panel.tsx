@@ -130,7 +130,7 @@ export function ReportEvidencePanel({
       <p className="text-xs text-gray-500 mt-2 leading-relaxed">
         보고서에 쓰인 수치 {totals.checked}개를 업로드 자료 {data.documentCount}건과
         대조했습니다. &lsquo;문서 확인&rsquo;은 같은 값이 자료에 있다는 뜻이지 해석까지
-        맞다는 보증은 아닙니다. &lsquo;근거 없음&rsquo;은 IC 전에 반드시 직접 확인하세요.
+        맞다는 보증은 아닙니다. &lsquo;근거 없음&rsquo;은 투자심의위원회 전에 반드시 직접 확인하세요.
       </p>
 
       <div className="mt-3 grid grid-cols-3 gap-2">

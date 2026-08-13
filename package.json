@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "vercel-build": "prisma generate && next build",
+    "vercel-build": "prisma generate && tsx tools/setup-fonts.ts && next build",
     "start": "next start",
     "lint": "next lint",
     "db:migrate": "prisma migrate dev",
@@ -31,10 +31,13 @@
     "test:dart": "tsx tools/test-dart.ts",
     "test:irr-calculator": "tsx tools/test-irr-calculator.ts",
     "test:portfolio-grade": "tsx tools/test-portfolio-grade.ts",
+    "test:deep-dive": "tsx tools/test-deep-dive.ts",
+    "test:nav-active": "tsx tools/test-nav-active.ts",
     "test:mobile": "tsx tools/test-mobile.ts",
     "smoke": "tsx tools/smoke.ts",
-    "test:all": "npm run test:quality && npm run test:fixtures && npm run test:routing && npm run test:template && npm run test:email && npm run test:pptx-template && npm run test:pptx-export && npm run test:permissions && npm run test:security && npm run test:evidence && npm run test:deal-scoring && npm run test:fund-analytics && npm run test:dart && npm run test:irr-calculator && npm run test:portfolio-grade",
-    "postinstall": "prisma generate"
+    "test:all": "npm run test:quality && npm run test:fixtures && npm run test:routing && npm run test:template && npm run test:email && npm run test:pptx-template && npm run test:pptx-export && npm run test:permissions && npm run test:security && npm run test:evidence && npm run test:deal-scoring && npm run test:fund-analytics && npm run test:dart && npm run test:irr-calculator && npm run test:portfolio-grade && npm run test:deep-dive && npm run test:nav-active",
+    "setup:fonts": "tsx tools/setup-fonts.ts",
+    "postinstall": "prisma generate && tsx tools/setup-fonts.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.104.2",
@@ -73,6 +76,7 @@
     "openai": "^6.45.0",
     "pdf-parse": "^2.4.5",
     "pptxgenjs": "^4.0.1",
+    "pretendard": "^1.3.9",
     "prisma": "^6.19.3",
     "react": "^18",
     "react-dom": "^18",

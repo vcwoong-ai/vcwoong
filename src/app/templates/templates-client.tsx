@@ -25,6 +25,8 @@ import {
   ChevronUp,
 } from "lucide-react";
 import { TeamShareToggle } from "@/components/team/team-share-toggle";
+import { useToast } from "@/hooks/use-toast";
+import { useConfirm } from "@/hooks/use-confirm";
 
 interface Template {
   id: string;
@@ -77,6 +79,7 @@ interface PreviewData {
  */
 function ReproductionPreview({ templateId }: { templateId: string }) {
   const [data, setData] = useState<PreviewData | null>(null);
+  const toast = useToast();
   const [loading, setLoading] = useState(true);
   const [qaBusy, setQaBusy] = useState(false);
   const [qaResult, setQaResult] = useState<{
@@ -116,7 +119,9 @@ function ReproductionPreview({ templateId }: { templateId: string }) {
       if (!res.ok) throw new Error(json.error ?? "QA 실패");
       setQaResult(json.data);
     } catch (e) {
-      alert(e instanceof Error ? e.message : "구조 QA 실패");
+      toast.error("구조 QA 실패", {
+        description: e instanceof Error ? e.message : "다시 시도해 주세요",
+      });
     } finally {
       setQaBusy(false);
     }
@@ -243,6 +248,7 @@ function TemplateCard({
   userTeamId,
   canUseTeam,
 }: TemplateCardProps) {
+  const toast = useToast();
   const [expanded, setExpanded] = useState(false);
   const [qaBusy, setQaBusy] = useState(false);
   const [qaScore, setQaScore] = useState<number | null>(null);
@@ -262,7 +268,9 @@ function TemplateCard({
       if (!res.ok) throw new Error(json.error ?? "QA 실패");
       setQaScore(json.data?.score ?? json.data?.qaScore ?? null);
     } catch (e) {
-      alert(e instanceof Error ? e.message : "구조 QA 실패");
+      toast.error("구조 QA 실패", {
+        description: e instanceof Error ? e.message : "다시 시도해 주세요",
+      });
     } finally {
       setQaBusy(false);
     }
@@ -394,6 +402,7 @@ export function TemplatesClient({
   userTeamId: string | null;
   canUseTeam: boolean;
 }) {
+  const confirm = useConfirm();
   const [templates, setTemplates] = useState(initialTemplates);
   const [uploading, setUploading] = useState(false);
   const [templateName, setTemplateName] = useState("");
@@ -486,7 +495,13 @@ export function TemplatesClient({
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("이 양식을 삭제하시겠습니까?")) return;
+    const ok = await confirm({
+      title: "양식을 삭제할까요?",
+      description: "이 양식으로 만든 기존 보고서는 그대로 남습니다.",
+      confirmLabel: "삭제",
+      destructive: true,
+    });
+    if (!ok) return;
     const res = await fetch(`/api/templates/${id}`, { method: "DELETE" });
     if (res.ok) {
       setTemplates(templates.filter((t) => t.id !== id));
@@ -509,7 +524,7 @@ export function TemplatesClient({
         <div className="text-sm text-blue-800">
           <p className="font-medium">양식 재현 엔진 사용법</p>
           <ol className="mt-1 space-y-1 text-blue-700 list-decimal list-inside">
-            <li>기존 IC 보고서 DOCX 또는 PPTX를 업로드</li>
+            <li>기존 투자심의위원회 보고서 DOCX 또는 PPTX를 업로드</li>
             <li>AI가 섹션 구조를 자동 분석 및 매핑 (30초~1분)</li>
             <li>딜 상세 페이지에서 보고서 생성 시 이 양식 선택</li>
             <li>AI 생성 내용이 업로드한 양식 구조 그대로 출력</li>

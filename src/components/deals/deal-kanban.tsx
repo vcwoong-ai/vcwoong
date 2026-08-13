@@ -23,10 +23,10 @@ interface DealForKanban {
 }
 
 const STAGE_COLUMNS: Array<{ key: DealStage; label: string; color: string; bg: string }> = [
-  { key: DealStage.SCREENING,  label: "스크리닝",  color: "text-gray-600",   bg: "bg-gray-50 border-gray-200" },
-  { key: DealStage.DEEP_DIVE,  label: "딥다이브",  color: "text-blue-600",   bg: "bg-blue-50 border-blue-200" },
-  { key: DealStage.IC_PREP,    label: "IC 준비",   color: "text-amber-600",  bg: "bg-amber-50 border-amber-200" },
-  { key: DealStage.IC_REVIEW,  label: "IC 심의",   color: "text-purple-600", bg: "bg-purple-50 border-purple-200" },
+  { key: DealStage.SCREENING,  label: "검토",         color: "text-gray-600",   bg: "bg-gray-50 border-gray-200" },
+  { key: DealStage.DEEP_DIVE,  label: "IR 예정",      color: "text-blue-600",   bg: "bg-blue-50 border-blue-200" },
+  { key: DealStage.IC_PREP,    label: "투자심의위원회", color: "text-amber-600",  bg: "bg-amber-50 border-amber-200" },
+  { key: DealStage.IC_REVIEW,  label: "IR 심의",      color: "text-purple-600", bg: "bg-purple-50 border-purple-200" },
   { key: DealStage.CLOSED,     label: "투자 완료", color: "text-green-600",  bg: "bg-green-50 border-green-200" },
   { key: DealStage.REJECTED,   label: "거절",      color: "text-red-500",    bg: "bg-red-50 border-red-200" },
 ];

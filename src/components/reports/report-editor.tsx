@@ -22,6 +22,8 @@ import { SECTION_META, getKoreanVisualWidth } from "@/types";
 import { SectionStatus } from "@prisma/client";
 import { Markdown } from "@/components/ui/markdown";
 import { ReportPreviewPanel } from "@/components/reports/report-preview-panel";
+import { useToast } from "@/hooks/use-toast";
+import { useConfirm } from "@/hooks/use-confirm";
 
 interface Section {
   id: string;
@@ -76,6 +78,8 @@ export function ReportEditor({
   readOnly = false,
 }: ReportEditorProps) {
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
+  const toast = useToast();
+  const confirm = useConfirm();
   const [editContent, setEditContent] = useState("");
   const [saving, setSaving] = useState<string | null>(null);
   const [approvingAll, setApprovingAll] = useState(false);
@@ -107,7 +111,9 @@ export function ReportEditor({
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      alert("클립보드 복사에 실패했습니다. 브라우저 권한을 확인해 주세요.");
+      toast.error("클립보드 복사 실패", {
+        description: "브라우저 권한을 확인해 주세요",
+      });
     }
   };
 
@@ -143,7 +149,7 @@ export function ReportEditor({
       setEditingSectionId(null);
     } catch (error) {
       console.error(error);
-      alert("저장 중 오류가 발생했습니다");
+      toast.error("저장 실패", { description: "다시 시도해 주세요" });
     } finally {
       setSaving(null);
     }
@@ -170,7 +176,7 @@ export function ReportEditor({
       );
     } catch (error) {
       console.error(error);
-      alert("섹션 승인 중 오류가 발생했습니다");
+      toast.error("섹션 승인 실패", { description: "다시 시도해 주세요" });
     } finally {
       setSaving(null);
     }
@@ -180,13 +186,14 @@ export function ReportEditor({
     section: Section,
     opts?: { qualityIssues?: string[]; skipConfirm?: boolean }
   ) => {
-    if (
-      !opts?.skipConfirm &&
-      !confirm(
-        `"${section.title}" 섹션만 AI로 다시 생성할까요?\n기존 내용은 덮어씁니다.`
-      )
-    ) {
-      return;
+    if (!opts?.skipConfirm) {
+      const ok = await confirm({
+        title: `"${section.title}" 섹션을 다시 생성할까요?`,
+        description: "이 섹션의 기존 내용은 덮어씌워집니다.",
+        confirmLabel: "재생성",
+        destructive: true,
+      });
+      if (!ok) return;
     }
     setRegeneratingKey(section.sectionKey);
     try {
@@ -229,9 +236,10 @@ export function ReportEditor({
       }
     } catch (error) {
       console.error(error);
-      alert(
-        error instanceof Error ? error.message : "섹션 재생성 중 오류가 발생했습니다"
-      );
+      toast.error("섹션 재생성 실패", {
+        description:
+          error instanceof Error ? error.message : "다시 시도해 주세요",
+      });
     } finally {
       setRegeneratingKey(null);
     }
@@ -272,7 +280,7 @@ export function ReportEditor({
       );
     } catch (error) {
       console.error(error);
-      alert("전체 승인 중 오류가 발생했습니다");
+      toast.error("전체 승인 실패", { description: "다시 시도해 주세요" });
     } finally {
       setApprovingAll(false);
     }

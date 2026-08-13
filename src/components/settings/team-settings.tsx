@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Users, UserPlus, LogOut } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { useConfirm } from "@/hooks/use-confirm";
 
 interface TeamMember {
   id: string;
@@ -41,6 +43,8 @@ export function TeamSettings({
   canUseTeam: boolean;
 }) {
   const [team, setTeam] = useState<TeamData | null>(null);
+  const toast = useToast();
+  const confirm = useConfirm();
   const [loading, setLoading] = useState(true);
   const [teamName, setTeamName] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
@@ -69,7 +73,10 @@ export function TeamSettings({
   }, [canUseTeam]);
 
   const createTeam = async () => {
-    if (!teamName.trim()) return alert("팀 이름을 입력하세요");
+    if (!teamName.trim()) {
+      toast.error("팀 이름을 입력하세요");
+      return;
+    }
     setBusy(true);
     try {
       const res = await fetch("/api/team", {
@@ -81,7 +88,9 @@ export function TeamSettings({
       if (!res.ok) throw new Error(json.error ?? "팀 생성 실패");
       await load();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "팀 생성 실패");
+      toast.error("팀 생성 실패", {
+        description: e instanceof Error ? e.message : "다시 시도해 주세요",
+      });
     } finally {
       setBusy(false);
     }
@@ -100,7 +109,9 @@ export function TeamSettings({
       if (!res.ok) throw new Error(json.error ?? "이름 변경 실패");
       await load();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "이름 변경 실패");
+      toast.error("이름 변경 실패", {
+        description: e instanceof Error ? e.message : "다시 시도해 주세요",
+      });
     } finally {
       setBusy(false);
     }
@@ -120,7 +131,9 @@ export function TeamSettings({
       setInviteEmail("");
       await load();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "초대 실패");
+      toast.error("초대 실패", {
+        description: e instanceof Error ? e.message : "다시 시도해 주세요",
+      });
     } finally {
       setBusy(false);
     }
@@ -138,14 +151,22 @@ export function TeamSettings({
       if (!res.ok) throw new Error(json.error ?? "역할 변경 실패");
       await load();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "역할 변경 실패");
+      toast.error("역할 변경 실패", {
+        description: e instanceof Error ? e.message : "다시 시도해 주세요",
+      });
     } finally {
       setBusy(false);
     }
   };
 
   const removeMember = async (memberId: string) => {
-    if (!confirm("팀에서 제거하시겠습니까?")) return;
+    const ok = await confirm({
+      title: "팀에서 제거할까요?",
+      description: "해당 멤버는 팀에 공유된 딜·펀드에 더 이상 접근할 수 없습니다.",
+      confirmLabel: "제거",
+      destructive: true,
+    });
+    if (!ok) return;
     setBusy(true);
     try {
       const res = await fetch("/api/team/members", {
@@ -157,7 +178,9 @@ export function TeamSettings({
       if (!res.ok) throw new Error(json.error ?? "제거 실패");
       await load();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "제거 실패");
+      toast.error("제거 실패", {
+        description: e instanceof Error ? e.message : "다시 시도해 주세요",
+      });
     } finally {
       setBusy(false);
     }

@@ -13,6 +13,7 @@ import {
   monthlyEquivalent,
   type BillingCycle,
 } from "@/lib/plans";
+import { useConfirm } from "@/hooks/use-confirm";
 
 interface SubscriptionPlansProps {
   userId: string;
@@ -39,9 +40,16 @@ export function SubscriptionPlans({
   const [message, setMessage] = useState<string | null>(null);
   const [canceling, setCanceling] = useState(false);
   const [cycle, setCycle] = useState<BillingCycle>("monthly");
+  const confirm = useConfirm();
 
   async function handleCancel() {
-    if (!confirm("구독을 해지하고 Free 플랜으로 전환할까요?")) return;
+    const ok = await confirm({
+      title: "구독을 해지할까요?",
+      description: "Free 플랜으로 전환되며 유료 기능을 쓸 수 없게 됩니다.",
+      confirmLabel: "구독 해지",
+      destructive: true,
+    });
+    if (!ok) return;
     setCanceling(true);
     setMessage(null);
     try {

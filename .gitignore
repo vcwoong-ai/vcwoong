@@ -43,3 +43,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# 빌드 시 tools/setup-fonts.ts가 node_modules에서 생성 (368개·5.5MB)
+/public/fonts/pretendard

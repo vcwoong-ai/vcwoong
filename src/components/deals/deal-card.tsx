@@ -45,10 +45,10 @@ const SECTOR_CONFIG: Record<
 };
 
 const STAGE_CONFIG: Record<DealStage, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
-  SCREENING: { label: "스크리닝", variant: "outline" },
-  DEEP_DIVE: { label: "딥다이브", variant: "secondary" },
-  IC_PREP: { label: "IC 준비", variant: "default" },
-  IC_REVIEW: { label: "IC 심의", variant: "default" },
+  SCREENING: { label: "검토", variant: "outline" },
+  DEEP_DIVE: { label: "IR 예정", variant: "secondary" },
+  IC_PREP: { label: "투자심의위원회", variant: "default" },
+  IC_REVIEW: { label: "IR 심의", variant: "default" },
   CLOSED: { label: "투자 완료", variant: "secondary" },
   REJECTED: { label: "거절", variant: "destructive" },
 };
