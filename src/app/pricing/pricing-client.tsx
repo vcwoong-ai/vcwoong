@@ -67,25 +67,28 @@ export function PricingClient() {
           <p className="text-gray-500 mt-3">
             가격을 공개합니다. 영업 미팅 없이 바로 시작하고, 필요할 때 올리세요.
           </p>
-          <div className="inline-flex rounded-lg border p-0.5 mt-6">
-            <button
-              type="button"
-              onClick={() => setCycle("monthly")}
-              className={`text-sm px-4 py-2 rounded-md ${
-                cycle === "monthly" ? "bg-gray-900 text-white" : "text-gray-600"
-              }`}
-            >
+          <div className="inline-flex items-center gap-3 mt-6">
+            <span className={`text-sm ${cycle === "monthly" ? "text-gray-900 font-medium" : "text-gray-400"}`}>
               월간
-            </button>
+            </span>
             <button
               type="button"
-              onClick={() => setCycle("yearly")}
-              className={`text-sm px-4 py-2 rounded-md ${
-                cycle === "yearly" ? "bg-gray-900 text-white" : "text-gray-600"
+              role="switch"
+              aria-checked={cycle === "yearly"}
+              onClick={() => setCycle(cycle === "monthly" ? "yearly" : "monthly")}
+              className={`relative w-12 h-6 rounded-full transition-colors ${
+                cycle === "yearly" ? "bg-blue-600" : "bg-gray-300"
               }`}
             >
-              연간 · 2개월 무료
+              <span
+                className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                  cycle === "yearly" ? "translate-x-6" : "translate-x-0"
+                }`}
+              />
             </button>
+            <span className={`text-sm ${cycle === "yearly" ? "text-gray-900 font-medium" : "text-gray-400"}`}>
+              연간 <span className="text-green-600">· 2개월 무료</span>
+            </span>
           </div>
         </div>
 
@@ -99,49 +102,58 @@ export function PricingClient() {
             return (
               <div
                 key={plan.key}
-                className={`rounded-2xl border p-6 flex flex-col ${
+                className={`rounded-2xl p-6 flex flex-col ${
                   plan.highlight
-                    ? "border-blue-500 ring-2 ring-blue-100 relative"
-                    : "border-gray-200"
+                    ? "bg-slate-900 text-white relative shadow-xl scale-[1.02]"
+                    : "border border-gray-200"
                 }`}
               >
                 {plan.highlight && (
-                  <span className="absolute -top-3 left-6 bg-blue-600 text-white text-xs px-3 py-1 rounded-full">
+                  <span className="absolute -top-3 left-6 bg-blue-500 text-white text-xs px-3 py-1 rounded-full font-medium">
                     추천
                   </span>
                 )}
-                <h2 className="text-lg font-semibold text-gray-900">{plan.name}</h2>
-                <p className="text-sm text-gray-500 mt-1">{plan.tagline}</p>
-                <p className="text-3xl font-bold text-gray-900 mt-4">
-                  {price === 0
-                    ? "무료"
-                    : cycle === "yearly"
-                      ? `₩${price.toLocaleString()}`
-                      : `₩${price.toLocaleString()}`}
+                <h2 className={`text-lg font-semibold ${plan.highlight ? "text-white" : "text-gray-900"}`}>
+                  {plan.name}
+                </h2>
+                <p className={`text-sm mt-1 ${plan.highlight ? "text-slate-400" : "text-gray-500"}`}>
+                  {plan.tagline}
+                </p>
+                <p className={`text-3xl font-bold mt-4 ${plan.highlight ? "text-white" : "text-gray-900"}`}>
+                  {price === 0 ? "무료" : `₩${price.toLocaleString()}`}
                   {price > 0 && (
-                    <span className="text-sm font-normal text-gray-400">
+                    <span className={`text-sm font-normal ${plan.highlight ? "text-slate-500" : "text-gray-400"}`}>
                       /{cycle === "yearly" ? "년" : "월"}
                     </span>
                   )}
                 </p>
                 {equiv != null && (
-                  <p className="text-xs text-green-700 mt-1">
+                  <p className={`text-xs mt-1 ${plan.highlight ? "text-emerald-400" : "text-green-700"}`}>
                     월 환산 ₩{equiv.toLocaleString()}
                   </p>
                 )}
                 <ul className="mt-6 space-y-2 flex-1">
                   {plan.features.map((f) => (
-                    <li key={f} className="flex items-start gap-2 text-sm text-gray-600">
-                      <Check className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
+                    <li
+                      key={f}
+                      className={`flex items-start gap-2 text-sm ${
+                        plan.highlight ? "text-slate-300" : "text-gray-600"
+                      }`}
+                    >
+                      <Check
+                        className={`w-4 h-4 mt-0.5 shrink-0 ${
+                          plan.highlight ? "text-blue-400" : "text-blue-600"
+                        }`}
+                      />
                       {f}
                     </li>
                   ))}
                 </ul>
                 <Link
                   href={plan.key === "free" ? "/register" : "/settings#subscription"}
-                  className={`mt-6 text-center text-sm py-2.5 rounded-lg ${
+                  className={`mt-6 text-center text-sm py-2.5 rounded-lg font-medium ${
                     plan.highlight
-                      ? "bg-blue-600 text-white hover:bg-blue-700"
+                      ? "bg-blue-500 text-white hover:bg-blue-400"
                       : "border hover:bg-gray-50"
                   }`}
                 >
@@ -153,12 +165,15 @@ export function PricingClient() {
         </div>
 
         <div className="mt-20 max-w-2xl mx-auto">
-          <h2 className="text-xl font-bold text-gray-900 mb-6">자주 묻는 질문</h2>
-          <div className="space-y-6">
+          <h2 className="text-xl font-bold text-gray-900 mb-6 text-center">자주 묻는 질문</h2>
+          <div className="space-y-4">
             {FAQ.map((item) => (
-              <div key={item.q}>
-                <h3 className="font-medium text-gray-900">{item.q}</h3>
-                <p className="text-sm text-gray-600 mt-1">{item.a}</p>
+              <div key={item.q} className="border border-gray-200 rounded-xl p-5 hover:border-gray-300 transition-colors">
+                <h3 className="font-semibold text-gray-900 flex items-start gap-2">
+                  <span className="text-blue-600 text-sm font-bold flex-shrink-0 mt-0.5">Q.</span>
+                  {item.q}
+                </h3>
+                <p className="text-sm text-gray-600 mt-2 leading-relaxed pl-5">{item.a}</p>
               </div>
             ))}
           </div>
