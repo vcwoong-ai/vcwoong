@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { parseDocument } from "@/lib/document-parser";
+import { extractDocumentImages } from "@/lib/document-images";
 import { uploadFile, readStoredFile } from "@/lib/storage";
 import { DocumentType } from "@prisma/client";
 import { randomUUID } from "crypto";
@@ -13,6 +14,38 @@ import {
 } from "@/lib/team-access";
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+
+/**
+ * DOCX/PPTX면 내장 이미지를 꺼내 각각 별도 Blob으로 올리고 URL 목록을
+ * 돌려준다. 보고서 내보내기(PPTX)에서 첨부 이미지로 재활용한다.
+ *
+ * 이미지 추출·업로드가 실패해도 문서 등록 자체는 막지 않는다 — 텍스트
+ * 파싱(AI 인풋의 핵심)과 달리 이미지는 있으면 좋은 보너스라, 실패를
+ * 삼키고 빈 배열로 계속 진행한다.
+ */
+async function extractAndUploadImages(
+  buffer: Buffer,
+  mimeType: string,
+  filename: string,
+  dealId: string,
+  fileId: string
+): Promise<Array<{ url: string; mimeType: string }>> {
+  try {
+    const images = await extractDocumentImages(buffer, mimeType, filename);
+    const uploaded = await Promise.all(
+      images.map(async (img, i) => {
+        const ext = img.mimeType.split("/")[1] ?? "png";
+        const key = `deals/${dealId}/images/${fileId}-${i}.${ext}`;
+        const url = await uploadFile(img.buffer, key, img.mimeType);
+        return { url, mimeType: img.mimeType };
+      })
+    );
+    return uploaded;
+  } catch (error) {
+    console.warn("[Upload] 이미지 업로드 실패(무시):", error);
+    return [];
+  }
+}
 
 const MIME_TYPE_MAP: Record<string, DocumentType> = {
   "application/vnd.openxmlformats-officedocument.presentationml.presentation":
@@ -94,6 +127,9 @@ export async function POST(request: NextRequest) {
         "문서에서 텍스트를 추출하지 못했습니다. AI가 이 자료의 내용을 인식할 수 없습니다.";
     }
 
+    const images = await extractAndUploadImages(buffer, file.type, file.name, dealId, fileId);
+    if (images.length > 0) metadata.images = images;
+
     const docType =
       documentType ?? MIME_TYPE_MAP[file.type] ?? DocumentType.OTHER;
 
@@ -158,6 +194,15 @@ async function finalizeBlobUpload(request: NextRequest, userId: string) {
         parsedText = parsed.text;
         metadata = parsed.metadata as Record<string, unknown>;
         if (parsed.warning) metadata.warning = parsed.warning;
+
+        const images = await extractAndUploadImages(
+          buffer,
+          mime,
+          fileName,
+          dealId,
+          randomUUID()
+        );
+        if (images.length > 0) metadata.images = images;
       } else {
         metadata.warning =
           "업로드된 파일을 읽지 못했습니다. AI가 이 자료의 내용을 인식할 수 없습니다.";

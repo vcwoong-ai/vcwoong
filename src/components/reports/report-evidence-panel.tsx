@@ -118,7 +118,7 @@ export function ReportEvidencePanel({
   const filteredCount = onlyUnverified ? totals.unverified : totals.checked;
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4">
+    <div className="rounded-xl border border-gray-200 bg-white p-5">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2 font-medium text-gray-900">
           <FileSearch className="w-4 h-4" />
@@ -133,20 +133,20 @@ export function ReportEvidencePanel({
         맞다는 보증은 아닙니다. &lsquo;근거 없음&rsquo;은 투자심의위원회 전에 반드시 직접 확인하세요.
       </p>
 
-      <div className="mt-3 grid grid-cols-3 gap-2">
+      <div className="mt-4 grid grid-cols-3 gap-3">
         {(["document", "deal", "unverified"] as const).map((status) => {
           const meta = STATUS_META[status];
           const Icon = meta.icon;
           return (
             <div
               key={status}
-              className={`rounded border px-2 py-1.5 text-center ${meta.className}`}
+              className={`rounded-xl border px-3 py-3 text-center ${meta.className}`}
             >
-              <div className="flex items-center justify-center gap-1 text-[11px] opacity-80">
-                <Icon className="w-3 h-3 shrink-0" />
+              <div className="flex items-center justify-center gap-1.5 text-xs opacity-80">
+                <Icon className="w-3.5 h-3.5 shrink-0" />
                 <span className="truncate">{meta.label}</span>
               </div>
-              <div className="font-semibold text-sm">{totals[status]}</div>
+              <div className="font-bold text-2xl mt-1">{totals[status]}</div>
             </div>
           );
         })}

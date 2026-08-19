@@ -32,6 +32,11 @@ yarn-error.log*
 # local sqlite db
 /prisma/dev.db
 /prisma/dev.db-journal
+/dev.db
+/dev.db-journal
+
+# STORAGE_MODE=local(로컬 개발) 업로드 파일 — 프로덕션은 Vercel Blob을 쓴다
+/public/uploads/
 
 # demo artifacts
 /screenshots/

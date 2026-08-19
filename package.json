@@ -33,9 +33,10 @@
     "test:portfolio-grade": "tsx tools/test-portfolio-grade.ts",
     "test:deep-dive": "tsx tools/test-deep-dive.ts",
     "test:nav-active": "tsx tools/test-nav-active.ts",
+    "test:document-images": "tsx tools/test-document-images.ts",
     "test:mobile": "tsx tools/test-mobile.ts",
     "smoke": "tsx tools/smoke.ts",
-    "test:all": "npm run test:quality && npm run test:fixtures && npm run test:routing && npm run test:template && npm run test:email && npm run test:pptx-template && npm run test:pptx-export && npm run test:permissions && npm run test:security && npm run test:evidence && npm run test:deal-scoring && npm run test:fund-analytics && npm run test:dart && npm run test:irr-calculator && npm run test:portfolio-grade && npm run test:deep-dive && npm run test:nav-active",
+    "test:all": "npm run test:quality && npm run test:fixtures && npm run test:routing && npm run test:template && npm run test:email && npm run test:pptx-template && npm run test:pptx-export && npm run test:permissions && npm run test:security && npm run test:evidence && npm run test:deal-scoring && npm run test:fund-analytics && npm run test:dart && npm run test:irr-calculator && npm run test:portfolio-grade && npm run test:deep-dive && npm run test:nav-active && npm run test:document-images",
     "setup:fonts": "tsx tools/setup-fonts.ts",
     "postinstall": "prisma generate && tsx tools/setup-fonts.ts"
   },

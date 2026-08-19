@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { waitUntil } from "@vercel/functions";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -93,8 +94,13 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  // 백그라운드에서 분석 실행
-  analyzeTemplateAsync(template.id, buffer, file.name, file.type);
+  // 응답을 먼저 보낸 뒤에도 Vercel이 함수를 바로 얼리지 않도록 분석 작업의
+  // 수명을 연장한다. waitUntil 없이 fire-and-forget으로 두면 서버리스
+  // 인스턴스가 응답 직후 정지되면서 분석이 중간에 끊겨 ANALYZING에 영원히
+  // 멈출 수 있다 (report-generation의 run/route.ts와 동일한 이유).
+  waitUntil(
+    analyzeTemplateAsync(template.id, buffer, file.name, file.type)
+  );
 
   return NextResponse.json({ data: template }, { status: 201 });
 }
@@ -137,11 +143,13 @@ async function finalizeBlobTemplate(request: NextRequest, userId: string) {
 
   const buffer = await readStoredFile(blobUrl);
   if (buffer) {
-    analyzeTemplateAsync(
-      template.id,
-      buffer,
-      fileName,
-      mimeType ?? "application/octet-stream"
+    waitUntil(
+      analyzeTemplateAsync(
+        template.id,
+        buffer,
+        fileName,
+        mimeType ?? "application/octet-stream"
+      )
     );
   } else {
     await prisma.template.update({

@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { DealSector, DealStage, DealStatus } from "@prisma/client";
+import { SECTOR_LABEL, STAGE_LABEL } from "@/lib/deal-labels";
 
 interface DealCardProps {
   deal: {
@@ -29,33 +30,30 @@ interface DealCardProps {
   deleting?: boolean;
 }
 
-const SECTOR_CONFIG: Record<
-  DealSector,
-  { label: string; color: string; bg: string }
-> = {
-  BIO:           { label: "바이오",    color: "text-purple-700",  bg: "bg-purple-50 border-purple-200" },
-  IT:            { label: "IT/SaaS",  color: "text-blue-700",    bg: "bg-blue-50 border-blue-200" },
-  DEEPTECH:      { label: "AI/딥테크",color: "text-cyan-700",    bg: "bg-cyan-50 border-cyan-200" },
-  MANUFACTURING: { label: "제조",     color: "text-orange-700",  bg: "bg-orange-50 border-orange-200" },
-  CONTENT:       { label: "콘텐츠",   color: "text-pink-700",    bg: "bg-pink-50 border-pink-200" },
-  FINTECH:       { label: "핀테크",   color: "text-emerald-700", bg: "bg-emerald-50 border-emerald-200" },
-  CONSUMER:      { label: "소비재",   color: "text-amber-700",   bg: "bg-amber-50 border-amber-200" },
-  CLIMATE:       { label: "기후/ESG", color: "text-green-700",   bg: "bg-green-50 border-green-200" },
-  GENERAL:       { label: "일반",     color: "text-gray-700",    bg: "bg-gray-50 border-gray-200" },
+const SECTOR_CONFIG: Record<DealSector, { color: string; bg: string }> = {
+  BIO:           { color: "text-purple-700",  bg: "bg-purple-50 border-purple-200" },
+  IT:            { color: "text-blue-700",    bg: "bg-blue-50 border-blue-200" },
+  DEEPTECH:      { color: "text-cyan-700",    bg: "bg-cyan-50 border-cyan-200" },
+  MANUFACTURING: { color: "text-orange-700",  bg: "bg-orange-50 border-orange-200" },
+  CONTENT:       { color: "text-pink-700",    bg: "bg-pink-50 border-pink-200" },
+  FINTECH:       { color: "text-emerald-700", bg: "bg-emerald-50 border-emerald-200" },
+  CONSUMER:      { color: "text-amber-700",   bg: "bg-amber-50 border-amber-200" },
+  CLIMATE:       { color: "text-green-700",   bg: "bg-green-50 border-green-200" },
+  GENERAL:       { color: "text-gray-700",    bg: "bg-gray-50 border-gray-200" },
 };
 
-const STAGE_CONFIG: Record<DealStage, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
-  SCREENING: { label: "검토", variant: "outline" },
-  DEEP_DIVE: { label: "IR 예정", variant: "secondary" },
-  IC_PREP: { label: "투자심의위원회", variant: "default" },
-  IC_REVIEW: { label: "IR 심의", variant: "default" },
-  CLOSED: { label: "투자 완료", variant: "secondary" },
-  REJECTED: { label: "거절", variant: "destructive" },
+const STAGE_VARIANT: Record<DealStage, "default" | "secondary" | "destructive" | "outline"> = {
+  SCREENING: "outline",
+  DEEP_DIVE: "secondary",
+  IC_PREP: "default",
+  IC_REVIEW: "default",
+  CLOSED: "secondary",
+  REJECTED: "destructive",
 };
 
 export function DealCard({ deal, onDelete, deleting }: DealCardProps) {
   const sectorCfg = SECTOR_CONFIG[deal.sector];
-  const stageCfg = STAGE_CONFIG[deal.stage];
+  const stageVariant = STAGE_VARIANT[deal.stage];
   const hasReports = deal.reports.length > 0;
   const latestReport = deal.reports[0];
 
@@ -72,10 +70,10 @@ export function DealCard({ deal, onDelete, deleting }: DealCardProps) {
                   sectorCfg.color
                 )}
               >
-                {sectorCfg.label}
+                {SECTOR_LABEL[deal.sector]}
               </span>
-              <Badge variant={stageCfg.variant} className="text-xs">
-                {stageCfg.label}
+              <Badge variant={stageVariant} className="text-xs">
+                {STAGE_LABEL[deal.stage]}
               </Badge>
               {deal.teamId && (
                 <Badge variant="secondary" className="text-xs">

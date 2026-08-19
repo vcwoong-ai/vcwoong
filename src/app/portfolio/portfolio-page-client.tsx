@@ -28,8 +28,9 @@ import {
   type PortfolioAlert,
   type PortfolioMetrics,
 } from "@/lib/portfolio";
-import type { PortfolioStatus } from "@prisma/client";
+import type { PortfolioStatus, DealSector } from "@prisma/client";
 import { PromoteDealDialog } from "@/components/portfolio/promote-deal-dialog";
+import { SECTOR_LABEL } from "@/lib/deal-labels";
 
 export interface PortfolioCompanyView {
   id: string;
@@ -60,18 +61,6 @@ export interface PromotableDeal {
   investAmount: number | null;
   valuation: number | null;
 }
-
-const SECTOR_LABEL: Record<string, string> = {
-  BIO: "바이오",
-  IT: "IT",
-  DEEPTECH: "딥테크",
-  MANUFACTURING: "제조",
-  CONTENT: "콘텐츠",
-  FINTECH: "핀테크",
-  CONSUMER: "소비재",
-  CLIMATE: "기후",
-  GENERAL: "일반",
-};
 
 function moicOf(c: PortfolioCompanyView): number {
   const holding =
@@ -272,7 +261,7 @@ export function PortfolioPageClient({
                           {c.companyName}
                         </Link>
                         <Badge variant="outline" className="text-xs">
-                          {SECTOR_LABEL[c.sector] ?? c.sector}
+                          {SECTOR_LABEL[c.sector as DealSector] ?? c.sector}
                         </Badge>
                         <span
                           className={cn(
@@ -409,7 +398,7 @@ function ManagementGradeMap({ companies }: { companies: PortfolioCompanyView[] }
                       </p>
                       <div className="flex items-center justify-between mt-0.5">
                         <span className="text-[11px] text-gray-400">
-                          {SECTOR_LABEL[c.sector] ?? c.sector}
+                          {SECTOR_LABEL[c.sector as DealSector] ?? c.sector}
                         </span>
                         <span
                           className={cn(

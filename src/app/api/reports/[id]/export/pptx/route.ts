@@ -9,6 +9,7 @@ import {
   loadReportForExport,
   markExported,
   exportFilename,
+  collectDocumentImages,
 } from "@/lib/report-export-common";
 
 export async function POST(
@@ -62,10 +63,11 @@ export async function POST(
 
     const buffer =
       pptxBuffer ??
-      (await generateReportPPTX(report.sections, {
-        companyName: report.deal.companyName,
-        reportDate: new Date(),
-      }));
+      (await generateReportPPTX(
+        report.sections,
+        { companyName: report.deal.companyName, reportDate: new Date() },
+        collectDocumentImages(report.deal.documents)
+      ));
 
     await markExported(params.id);
 

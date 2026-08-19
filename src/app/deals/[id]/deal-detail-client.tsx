@@ -39,6 +39,7 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useConfirm } from "@/hooks/use-confirm";
 import { AgentType, DealSector, DealStage } from "@prisma/client";
+import { SECTOR_LABEL, STAGE_LABEL } from "@/lib/deal-labels";
 
 interface DealWithRelations {
   id: string;
@@ -416,8 +417,8 @@ export function DealDetailClient({
       <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2 mb-2">
-            <Badge variant="outline">{deal.sector}</Badge>
-            <Badge variant="secondary">{deal.stage}</Badge>
+            <Badge variant="outline">{SECTOR_LABEL[deal.sector]}</Badge>
+            <Badge variant="secondary">{STAGE_LABEL[deal.stage]}</Badge>
             {deal.teamId && (
               <Badge variant="secondary" className="gap-1">
                 팀 공유

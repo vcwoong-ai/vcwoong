@@ -16,6 +16,8 @@ import {
   Lock,
   KeyRound,
   Users2,
+  FileText,
+  BarChart3,
 } from "lucide-react";
 
 export default function LandingPage() {
@@ -56,54 +58,101 @@ export default function LandingPage() {
       </nav>
 
       {/* Hero */}
-      <section className="pt-32 pb-20 px-6 bg-gradient-to-b from-slate-900 to-slate-800 text-white">
-        <div className="max-w-4xl mx-auto text-center">
-          <div className="inline-flex items-center gap-2 bg-blue-500/20 border border-blue-500/30 rounded-full px-4 py-1.5 text-sm text-blue-300 mb-8">
-            <Star className="w-3.5 h-3.5" />
-            섹터별 전문 AI 심사역 6명을 고용하세요
+      <section className="pt-32 pb-20 px-6 bg-gradient-to-b from-slate-900 to-slate-800 text-white overflow-hidden">
+        <div className="max-w-6xl mx-auto grid lg:grid-cols-2 gap-16 items-center">
+          <div className="text-center lg:text-left">
+            <div className="inline-flex items-center gap-2 bg-blue-500/20 border border-blue-500/30 rounded-full px-4 py-1.5 text-sm text-blue-300 mb-8">
+              <Star className="w-3.5 h-3.5" />
+              섹터별 전문 AI 심사역 6명을 고용하세요
+            </div>
+            <h1 className="text-5xl md:text-6xl font-bold leading-tight mb-6">
+              투자심의보고서,<br />
+              <span className="text-blue-400">AI가 초안을 씁니다</span>
+            </h1>
+            <p className="text-xl text-slate-300 mb-10 max-w-2xl mx-auto lg:mx-0 leading-relaxed">
+              BIO·IT·AI·제조·콘텐츠·핀테크 6개 섹터 전문 AI가<br className="hidden md:block" />
+              10섹션 투자심의위원회 보고서를 자동 작성합니다.
+              <strong className="text-white font-semibold">쓰인 모든 숫자는 업로드 자료의 원문까지 되짚을 수 있고</strong>,
+              근거가 없는 값은 따로 표시해 투자심의위원회 전에 확인할 것만 남깁니다.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
+              <Link
+                href="/register"
+                className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold px-8 py-4 rounded-xl transition-colors text-lg"
+              >
+                무료로 시작하기
+                <ArrowRight className="w-5 h-5" />
+              </Link>
+              <Link
+                href="/login"
+                className="inline-flex items-center gap-2 border border-slate-600 hover:border-slate-400 text-slate-300 hover:text-white font-semibold px-8 py-4 rounded-xl transition-colors text-lg"
+              >
+                데모 계정으로 체험
+              </Link>
+            </div>
+            <p className="mt-4 text-sm text-slate-500">
+              신용카드 불필요 · 5분 이내 설정 · 월 5건 무료
+            </p>
           </div>
-          <h1 className="text-5xl md:text-6xl font-bold leading-tight mb-6">
-            투자심의보고서,<br />
-            <span className="text-blue-400">AI가 초안을 씁니다</span>
-          </h1>
-          <p className="text-xl text-slate-300 mb-10 max-w-2xl mx-auto leading-relaxed">
-            BIO·IT·AI·제조·콘텐츠·핀테크 6개 섹터 전문 AI가<br className="hidden md:block" />
-            10섹션 투자심의위원회 보고서를 자동 작성합니다.
-            <strong className="text-white font-semibold">쓰인 모든 숫자는 업로드 자료의 원문까지 되짚을 수 있고</strong>,
-            근거가 없는 값은 따로 표시해 투자심의위원회 전에 확인할 것만 남깁니다.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link
-              href="/register"
-              className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold px-8 py-4 rounded-xl transition-colors text-lg"
-            >
-              무료로 시작하기
-              <ArrowRight className="w-5 h-5" />
-            </Link>
-            <Link
-              href="/login"
-              className="inline-flex items-center gap-2 border border-slate-600 hover:border-slate-400 text-slate-300 hover:text-white font-semibold px-8 py-4 rounded-xl transition-colors text-lg"
-            >
-              데모 계정으로 체험
-            </Link>
-          </div>
-          <p className="mt-4 text-sm text-slate-500">
-            신용카드 불필요 · 5분 이내 설정 · 월 5건 무료
-          </p>
 
-          {/* Stats */}
-          <div className="mt-12 sm:mt-20 grid grid-cols-1 sm:grid-cols-3 gap-6 sm:gap-8 border-t border-slate-700 pt-8 sm:pt-12">
-            {[
-              { value: "10분", label: "보고서 1건 생성 시간" },
-              { value: "6개", label: "섹터 전문 AI 에이전트" },
-              { value: "6개", label: "연동 외부 데이터베이스" },
-            ].map((stat) => (
-              <div key={stat.label} className="text-center">
-                <div className="text-3xl font-bold text-blue-400">{stat.value}</div>
-                <div className="text-sm text-slate-400 mt-1">{stat.label}</div>
+          {/* 히어로 그래픽 — 실제 보고서/투자매력도 점수/섹터 에이전트 UI를
+              카드로 축약해 겹쳐 보여준다(추상 일러스트 대신 제품 자체를 미리 보여줌) */}
+          <div className="relative hidden lg:block h-[420px]">
+            <div className="absolute inset-0 pointer-events-none" aria-hidden>
+              <svg className="w-full h-full" viewBox="0 0 400 420" fill="none">
+                <path d="M215 150 L305 95" stroke="rgba(148,163,184,0.35)" strokeWidth="1.5" strokeDasharray="4 5" />
+                <path d="M170 270 L110 320" stroke="rgba(148,163,184,0.35)" strokeWidth="1.5" strokeDasharray="4 5" />
+              </svg>
+            </div>
+
+            <div className="absolute top-6 left-4 w-72 bg-white rounded-2xl shadow-2xl p-6 text-slate-900 -rotate-3">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <FileText className="w-4 h-4 text-white" />
+                </div>
+                <span className="text-sm font-semibold text-gray-900">투자심의위원회 보고서</span>
               </div>
-            ))}
+              <div className="space-y-2">
+                <div className="h-2 bg-gray-100 rounded-full w-full" />
+                <div className="h-2 bg-gray-100 rounded-full w-5/6" />
+                <div className="h-2 bg-gray-100 rounded-full w-4/6" />
+              </div>
+              <div className="mt-4 flex items-center gap-1.5 text-xs text-green-600 font-medium">
+                <CheckCircle className="w-3.5 h-3.5" />
+                근거 문서 확인 완료 18/29
+              </div>
+            </div>
+
+            <div className="absolute bottom-8 left-0 w-40 bg-slate-800/95 border border-slate-700 rounded-xl shadow-xl p-4 rotate-3">
+              <BarChart3 className="w-5 h-5 text-blue-400 mb-2" />
+              <div className="text-xs text-slate-400">투자 매력도</div>
+              <div className="text-xl font-bold text-white">
+                82<span className="text-xs text-slate-500">/100</span>
+              </div>
+            </div>
+
+            <div className="absolute top-2 right-2 w-44 bg-slate-800/95 border border-slate-700 rounded-xl shadow-xl p-4 rotate-2">
+              <div className="flex items-center gap-2 mb-1.5">
+                <div className="w-2 h-2 rounded-full bg-purple-400" />
+                <span className="text-xs font-semibold text-white">Dr. Cell</span>
+              </div>
+              <p className="text-[11px] text-slate-400 leading-relaxed">BIO 전문 AI · rNPV 계산 완료</p>
+            </div>
           </div>
+        </div>
+
+        {/* Stats */}
+        <div className="max-w-6xl mx-auto mt-12 sm:mt-20 grid grid-cols-1 sm:grid-cols-3 gap-6 sm:gap-8 border-t border-slate-700 pt-8 sm:pt-12">
+          {[
+            { value: "10분", label: "보고서 1건 생성 시간" },
+            { value: "6개", label: "섹터 전문 AI 에이전트" },
+            { value: "6개", label: "연동 외부 데이터베이스" },
+          ].map((stat) => (
+            <div key={stat.label} className="text-center">
+              <div className="text-3xl font-bold text-blue-400">{stat.value}</div>
+              <div className="text-sm text-slate-400 mt-1">{stat.label}</div>
+            </div>
+          ))}
         </div>
       </section>
 
@@ -294,11 +343,11 @@ export default function LandingPage() {
                 desc: "결제 이벤트는 서명을 검증한 요청만 처리하고, 가입·로그인·생성 요청은 비정상 폭주를 막는 속도 제한이 걸려 있습니다.",
               },
             ].map((item) => (
-              <div key={item.title} className="bg-slate-800 rounded-xl p-6 border border-slate-700">
-                <div className="flex items-center gap-2 mb-2">
-                  <item.icon className="w-4 h-4 text-blue-400" />
-                  <span className="font-semibold">{item.title}</span>
+              <div key={item.title} className="bg-slate-800 rounded-xl p-6 border border-slate-700 hover:border-slate-500 transition-colors">
+                <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center mb-3">
+                  <item.icon className="w-5 h-5 text-blue-400" />
                 </div>
+                <p className="font-semibold mb-1.5">{item.title}</p>
                 <p className="text-sm text-slate-400">{item.desc}</p>
               </div>
             ))}
