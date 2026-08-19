@@ -50,8 +50,12 @@ function buildSlideIndex(
   }
 
   const result = new Map<number, SectionKey>();
-  const used = new Set<SectionKey>();
 
+  // 같은 SectionKey로 매핑되는 슬라이드가 여러 개일 수 있다(예: "재무 현황"과
+  // "손익 추정"이 둘 다 FINANCIAL_STATUS로 매핑). 예전엔 먼저 나온 슬라이드만
+  // 채우고 나머지는 건너뛰어서, 남은 슬라이드에 다른 회사(원본 템플릿의
+  // 예시 기업)의 실제 수치가 그대로 남는 문제가 있었다 — 생성 콘텐츠가
+  // 중복되더라도, 엉뚱한 회사 데이터가 그대로 남는 것보다는 낫다.
   slideTitles.forEach((title, idx) => {
     const norm = normalizeTitle(title);
     if (!norm) return;
@@ -63,8 +67,7 @@ function buildSlideIndex(
       });
     }
     if (!key) key = resolveByKeyword(title);
-    if (!key || used.has(key)) return;
-    used.add(key);
+    if (!key) return;
     result.set(idx, key);
   });
 
