@@ -77,7 +77,12 @@ export default async function ReportsPage() {
         {/* Report list */}
         {reports.length === 0 ? (
           <div className="text-center py-20 text-gray-400">
-            <FileText className="w-10 h-10 mx-auto mb-3 opacity-40" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/illustrations/empty-reports.svg"
+              alt=""
+              className="w-56 mx-auto mb-6 opacity-90"
+            />
             <p className="font-medium text-gray-600">생성된 보고서가 없습니다</p>
             <p className="text-sm mt-1">
               딜 상세 페이지에서 AI 보고서를 생성해보세요.

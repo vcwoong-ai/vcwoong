@@ -726,7 +726,12 @@ export function DealDetailClient({
           {deal.reports.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center">
-                <FileText className="w-12 h-12 mx-auto text-gray-300 mb-3" />
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/illustrations/empty-deal-reports.svg"
+                  alt=""
+                  className="w-56 mx-auto mb-4 opacity-90"
+                />
                 <p className="text-gray-500">아직 생성된 보고서가 없습니다.</p>
                 <p className="text-sm text-gray-400 mt-1">
                   문서를 업로드한 후 AI 보고서를 생성해보세요.

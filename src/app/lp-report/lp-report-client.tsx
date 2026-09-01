@@ -178,6 +178,12 @@ export function LPReportClient({
     }
     return (
       <div className="max-w-lg mx-auto py-10">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/illustrations/empty-lp-report.svg"
+          alt=""
+          className="w-48 mx-auto mb-6 opacity-90"
+        />
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">

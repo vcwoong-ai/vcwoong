@@ -600,7 +600,12 @@ export function TemplatesClient({
         </h2>
         {templates.length === 0 ? (
           <div className="text-center py-12 text-gray-400">
-            <FileText className="w-8 h-8 mx-auto mb-2 opacity-40" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/illustrations/empty-templates.svg"
+              alt=""
+              className="w-48 mx-auto mb-4 opacity-90"
+            />
             <p>등록된 양식이 없습니다</p>
           </div>
         ) : (

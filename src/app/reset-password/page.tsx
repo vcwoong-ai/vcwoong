@@ -151,6 +151,12 @@ export default function ResetPasswordPage() {
       <div className="w-full max-w-md">
         <Card>
           <CardHeader className="space-y-1 text-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/illustrations/reset-password.svg"
+              alt=""
+              className="w-40 mx-auto mb-2"
+            />
             <div className="flex justify-center mb-2">
               <div className="w-10 h-10 rounded-lg bg-blue-600 flex items-center justify-center">
                 <Zap className="w-5 h-5 text-white" />

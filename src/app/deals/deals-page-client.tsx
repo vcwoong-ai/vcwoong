@@ -237,7 +237,12 @@ export function DealsPageClient({
       {/* 빈 상태 */}
       {initialDeals.length === 0 ? (
         <div className="text-center py-16 text-gray-400">
-          <div className="text-6xl mb-4">📋</div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/illustrations/empty-deals.svg"
+            alt=""
+            className="w-56 mx-auto mb-6 opacity-90"
+          />
           <p className="text-lg font-medium text-gray-600">등록된 딜이 없습니다</p>
           <p className="text-sm mt-1">
             새 딜을 등록하여 투자심의 보고서를 자동으로 생성해보세요.

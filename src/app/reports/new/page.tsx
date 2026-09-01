@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { FileText, Upload, ArrowRight } from "lucide-react";
+import { Upload, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { CreateDealDialog } from "@/components/deals/create-deal-dialog";
 import { SECTOR_LABEL } from "@/lib/deal-labels";
@@ -36,7 +36,12 @@ export default async function NewReportPage() {
         {deals.length === 0 ? (
           <Card>
             <CardContent className="py-12 text-center space-y-4">
-              <FileText className="w-10 h-10 text-gray-300 mx-auto" />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/illustrations/empty-reports-new.svg"
+                alt=""
+                className="w-56 mx-auto opacity-90"
+              />
               <p className="text-gray-600">등록된 딜이 없습니다.</p>
               <CreateDealDialog />
             </CardContent>
