@@ -63,6 +63,12 @@ export function PricingClient() {
 
       <section className="max-w-6xl mx-auto px-6 py-16">
         <div className="text-center mb-8">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/illustrations/pricing-hero.svg"
+            alt=""
+            className="w-40 mx-auto mb-6"
+          />
           <h1 className="text-4xl font-bold text-gray-900">요금제</h1>
           <p className="text-gray-500 mt-3">
             가격을 공개합니다. 영업 미팅 없이 바로 시작하고, 필요할 때 올리세요.

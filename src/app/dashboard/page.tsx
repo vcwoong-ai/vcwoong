@@ -158,9 +158,9 @@ export default async function DashboardPage() {
   return (
     <AppLayout title="대시보드">
       <div className="space-y-6">
-        {/* 환영 */}
-        <div className="flex items-start justify-between">
-          <div>
+        {/* 환영 — 데이터가 있어도 로그인할 때마다 항상 보이는 자리라 일러스트를 넣었다 */}
+        <div className="relative flex items-center justify-between gap-4 bg-blue-50/60 border border-blue-100 rounded-2xl px-6 py-5 overflow-hidden">
+          <div className="relative z-10">
             <h1 className="text-2xl font-bold text-gray-900">
               안녕하세요, {session.user.name ?? "사용자"}님
             </h1>
@@ -170,6 +170,12 @@ export default async function DashboardPage() {
                 : "오늘도 좋은 투자 딜을 발굴하세요."}
             </p>
           </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/illustrations/dashboard-welcome.svg"
+            alt=""
+            className="hidden sm:block w-40 md:w-48 flex-shrink-0 opacity-95"
+          />
         </div>
 
         <DashboardQuickActions />
