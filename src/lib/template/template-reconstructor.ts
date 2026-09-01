@@ -183,36 +183,42 @@ function buildHeadingIndex(
   }
 
   const result = new Map<number, SectionKey>();
-  const used = new Set<SectionKey>();
 
+  // 같은 SectionKey로 매핑되는 헤딩이 여러 개일 수 있다(예: "재무 현황"과
+  // "손익 추정"이 둘 다 FINANCIAL_STATUS). 예전엔 먼저 나온 헤딩만 채우고
+  // 나머지는 건너뛰어서, 뒤 헤딩 자리엔 원본 예시 기업의 실제 내용이 그대로
+  // 남았다(대신 문서 끝에 같은 내용이 중복 첨부됨) — 자리에 맞게 채우는 쪽이
+  // 엉뚱한 회사 데이터를 그 자리에 남겨두는 것보다 낫다.
   blocks.forEach((b, idx) => {
     if (b.kind !== "p" || !b.text) return;
     const norm = normalizeTitle(b.text);
     if (!norm) return;
 
+    // 정확히 일치하는 제목은 헤딩 스타일이 없어도 안전하게 받아들인다
+    // ("작성 요령) 리스크..." 같은 안내문이 우연히 "리스크"를 완전히
+    // 통째로 담는 경우는 사실상 없다).
     let key = titleToKey.get(norm);
-    if (!key) {
+
+    // 부분 일치·키워드 추정은 오탐 위험이 있다 — "(작성 요령) 주요 리스크와
+    // 완화 방안을 기재한다" 같은 본문 문장도 "리스크"를 부분 문자열로 담고
+    // 있어서, 실제 헤딩 스타일이 있는 블록에만 적용해 본문이 헤딩으로
+    // 오인되지 않게 한다.
+    if (!key && b.headingLevel !== null) {
       // 부분 일치 (원본 헤딩에 번호·부제가 덧붙은 경우)
       titleToKey.forEach((k, t) => {
         if (!key && t.length >= 2 && (norm.includes(t) || t.includes(norm))) {
           key = k;
         }
       });
+      // 매핑표에 없어도 흔히 쓰는 제목 키워드면 잡는다 (섹션맵이 불완전한 경우 대비)
+      if (!key) key = resolveByKeyword(b.text) ?? undefined;
     }
 
-    // 헤딩 스타일이 없더라도 매핑표에 있는 짧은 줄이면 제목으로 본다
+    // 헤딩 스타일이 없더라도 매핑표에 정확히 일치하는 짧은 줄이면 제목으로 본다
     const looksLikeHeading = b.headingLevel !== null || b.text.length <= 40;
     if (!looksLikeHeading) return;
+    if (!key) return;
 
-    if (!key && b.headingLevel !== null) {
-      // 매핑표에 없어도 흔히 쓰는 제목 키워드면 잡는다 (섹션맵이 불완전한 경우 대비).
-      // 단, 실제 헤딩 스타일(outline/Heading N)이 있는 블록만 — 그렇지 않으면
-      // "...기술한다" 같은 본문 문장이 "기술" 키워드에 우연히 걸려 헤딩으로 오인될 수 있다.
-      key = resolveByKeyword(b.text) ?? undefined;
-    }
-    if (!key || used.has(key)) return;
-
-    used.add(key);
     result.set(idx, key);
   });
 

@@ -300,6 +300,45 @@ async function main() {
   assert(threw, "매칭 실패 시 에러를 던져 폴백할 수 있어야 함");
   console.log("✅ 매칭 실패 시 폴백용 에러 발생");
 
+  // ── 중복 매핑 검증: 서로 다른 헤딩 2개가 같은 SectionKey로 매핑되면
+  // (예: "재무 현황"과 "손익 추정" 둘 다 FINANCIAL_STATUS) 둘 다 채워져야
+  // 한다. 예전엔 먼저 나온 헤딩만 채우고 나머지는 원본 예시 회사의 실제
+  // 내용이 그대로 남아있었다(실사용 버그로 발견됨).
+  const dupDoc = await Packer.toBuffer(
+    new Document({
+      sections: [
+        {
+          properties: {},
+          children: [
+            new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: "재무 현황" })] }),
+            new Paragraph({ children: [new TextRun({ text: "원본 예시회사 재무 수치 14,976" })] }),
+            new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: "손익 추정" })] }),
+            new Paragraph({ children: [new TextRun({ text: "원본 예시회사 손익 추정치 228,328" })] }),
+          ],
+        },
+      ],
+    })
+  );
+  const dupResult = await reconstructDOCX({
+    originalBuffer: dupDoc,
+    sectionMap: {
+      mappings: [
+        { templateSection: "재무 현황", sectionKey: SectionKey.FINANCIAL_STATUS, confidence: 1 },
+        { templateSection: "손익 추정", sectionKey: SectionKey.FINANCIAL_STATUS, confidence: 1 },
+      ],
+      unmappedSections: [],
+      coverageRate: 0.1,
+    },
+    reportSections: [
+      { sectionKey: SectionKey.FINANCIAL_STATUS, title: "재무현황", content: "신규 회사 재무 요약 내용." },
+    ],
+  });
+  const dupXml = await readDocXml(dupResult.buffer);
+  assert(dupResult.filledSections === 2, `같은 키로 매핑된 헤딩 2개 모두 채움 기대, got ${dupResult.filledSections}`);
+  assert(!dupXml.includes("14,976"), "첫 번째 헤딩 아래 원본 회사 수치가 남아있음");
+  assert(!dupXml.includes("228,328"), "두 번째 헤딩 아래 원본 회사 수치가 남아있음(중복 매핑 시 건너뛰던 버그)");
+  console.log("✅ 같은 SectionKey로 매핑된 헤딩이 여러 개여도 전부 채워짐 (원본 회사 데이터 잔존 방지)");
+
   console.log("\n✅ 양식 재현 테스트 통과\n");
 }
 
