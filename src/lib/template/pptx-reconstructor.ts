@@ -7,6 +7,7 @@ import { SectionKey } from "@prisma/client";
 import type { TemplateSectionMap } from "./template-mapper";
 import {
   extractSlideTitle,
+  extractSlideText,
   markdownToSlideLines,
   normalizeTitle,
   replaceBodyContent,
@@ -15,6 +16,7 @@ import {
 } from "./pptx-xml";
 import type { ReconstructInput, ReconstructResult } from "./template-reconstructor";
 import { ReconstructError } from "./template-reconstructor";
+import { extractUnmappedContent, MAX_EXTRACTION_ATTEMPTS } from "./slide-extraction";
 
 export type ReconstructPptxInput = ReconstructInput;
 
@@ -127,6 +129,30 @@ export async function reconstructPPTX(
     }
   }
 
+  // 표준 섹션에 대응하지 않는 슬라이드(인력 구성·주주 구성 등)는 AI 생성
+  // 섹션으로 못 채우지만, 업로드된 IR 자료에 관련 내용이 있으면 대신
+  // 채운다 — 없으면 원본 예시 슬라이드를 그대로 둔다(지어내지 않음).
+  const extractedFromDocuments: string[] = [];
+  if (input.documents && input.documents.length > 0) {
+    let attempts = 0;
+    for (let idx = 0; idx < slideTitles.length; idx++) {
+      if (attempts >= MAX_EXTRACTION_ATTEMPTS) break;
+      if (slideMap.has(idx)) continue;
+      const title = slideTitles[idx];
+      if (!title.trim()) continue;
+
+      attempts += 1;
+      const sample = extractSlideText(slideXmls[idx]);
+      const extracted = await extractUnmappedContent(title, sample, input.documents);
+      if (!extracted) continue;
+
+      const lines = markdownToSlideLines(extracted);
+      slideXmls[idx] = replaceBodyContent(slideXmls[idx], lines);
+      extractedFromDocuments.push(title);
+      filledSections += 1;
+    }
+  }
+
   for (let i = 0; i < slidePaths.length; i++) {
     let xml = slideXmls[i];
     xml = replacePlaceholders(xml, input.replacements ?? {});
@@ -146,5 +172,6 @@ export async function reconstructPPTX(
     // 슬라이드는 문단과 달리 새 슬라이드 삽입에 presentation.xml·rels·레이아웃 등록이 함께 필요해
     // DOCX처럼 안전하게 끝에 덧붙일 수 없다. 매핑 안 된 섹션은 missedSections로만 보고한다.
     appendedSections: [],
+    extractedFromDocuments,
   };
 }

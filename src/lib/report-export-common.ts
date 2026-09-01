@@ -13,9 +13,10 @@ export async function loadReportForExport(userId: string, reportId: string) {
     include: {
       deal: {
         include: {
-          // PPTX 내보내기의 첨부 이미지 슬라이드용 — 문서 업로드 시
-          // 추출해둔 이미지 URL만 가볍게 가져온다(parsedText 전체는 불필요).
-          documents: { select: { name: true, metadata: true } },
+          // metadata: PPTX 첨부 이미지 슬라이드용(문서 업로드 시 추출해둔 이미지 URL).
+          // parsedText: 양식 재현 시 표준 섹션에 대응 안 되는 슬라이드/헤딩
+          // (인력 구성·주주 구성 등)을 원본 IR 자료에서 대신 채우기 위해 필요.
+          documents: { select: { name: true, metadata: true, parsedText: true } },
         },
       },
       template: true,

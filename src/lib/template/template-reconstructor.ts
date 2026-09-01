@@ -21,6 +21,7 @@ import {
   type ParagraphProto,
 } from "./docx-xml";
 import type { TemplateSectionMap } from "./template-mapper";
+import { extractUnmappedContent, MAX_EXTRACTION_ATTEMPTS } from "./slide-extraction";
 
 /**
  * 매핑표에 없는 헤딩도 텍스트 키워드로 SectionKey를 추정한다.
@@ -55,6 +56,13 @@ export interface ReconstructInput {
   reportSections: Array<{ sectionKey: string; title: string; content: string }>;
   /** 치환할 딜 정보 (플레이스홀더용) */
   replacements?: Record<string, string>;
+  /**
+   * 딜에 업로드된 원본 IR 자료. 표준 10개 섹션에 대응하지 않는 슬라이드/
+   * 헤딩(예: "인력 구성", "주주 구성")은 AI 생성 섹션으로 못 채우지만,
+   * 이 자료에서 관련 내용을 찾아 채울 수 있으면 시도한다. 생략하면
+   * 이 보조 추출 없이 매핑 안 된 자리는 그대로 둔다(기존 동작).
+   */
+  documents?: Array<{ name: string; parsedText: string | null }>;
 }
 
 export interface ReconstructResult {
@@ -67,6 +75,8 @@ export interface ReconstructResult {
   missedSections: string[];
   /** 생성됐지만 원본에 대응 헤딩이 없어 문서 끝에 덧붙인 섹션 (내용 유실 방지) */
   appendedSections: string[];
+  /** 표준 섹션에 대응하지 않아 업로드 자료에서 대신 추출해 채운 슬라이드/헤딩 제목 */
+  extractedFromDocuments: string[];
 }
 
 export class ReconstructError extends Error {}
@@ -304,6 +314,39 @@ export async function reconstructDOCX(
     }
   }
 
+  // 표준 섹션에 대응하지 않는 헤딩(인력 구성·주주 구성 등)은 AI 생성
+  // 섹션으로 못 채우지만, 업로드된 IR 자료에 관련 내용이 있으면 대신
+  // 채운다 — 없으면 원본 예시 내용을 그대로 둔다(지어내지 않음).
+  const extractedFromDocuments: string[] = [];
+  if (input.documents && input.documents.length > 0) {
+    let attempts = 0;
+    for (let idx = 0; idx < blocks.length; idx++) {
+      if (attempts >= MAX_EXTRACTION_ATTEMPTS) break;
+      const b = blocks[idx];
+      if (b.kind !== "p" || b.headingLevel === null || !b.text?.trim()) continue;
+      if (headingMap.has(idx)) continue;
+
+      attempts += 1;
+      const end = findSectionEnd(blocks, idx, headingIdx);
+      const sample = blocks
+        .slice(idx + 1, end)
+        .map((bb) => (bb.kind === "p" ? bb.text ?? "" : ""))
+        .join(" ");
+      const extracted = await extractUnmappedContent(b.text, sample, input.documents);
+      if (!extracted) continue;
+
+      const localProto = pickBodyProto(blocks.slice(idx + 1, end));
+      const proto = localProto.pPr || localProto.rPr ? localProto : globalProto;
+      replacedRanges.push({
+        from: idx + 1,
+        to: end,
+        xml: renderContent(proto, extracted) + buildEmptyParagraph(proto),
+      });
+      extractedFromDocuments.push(b.text);
+      filledSections += 1;
+    }
+  }
+
   replacedRanges.sort((a, b) => a.from - b.from);
 
   // 원본에 자리가 없어 통째로 유실될 뻔한 섹션은 문서 끝(sectPr 앞)에 덧붙인다
@@ -351,6 +394,7 @@ export async function reconstructDOCX(
     detectedHeadings: headingMap.size,
     missedSections: missedSections.filter((v, i) => missedSections.indexOf(v) === i),
     appendedSections,
+    extractedFromDocuments,
   };
 }
 
