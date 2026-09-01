@@ -49,9 +49,13 @@ export async function POST(
               작성일: new Date().toLocaleDateString("ko-KR"),
               투자라운드: report.deal.investRound ?? "",
             },
+            documents: report.deal.documents,
           });
           pptxBuffer = result.buffer;
-          mode = `pptx-reconstructed:${result.filledSections}/${result.detectedHeadings}`;
+          mode = `pptx-reconstructed:${result.filledSections}/${result.detectedHeadings}` +
+            (result.extractedFromDocuments.length
+              ? `+extracted:${result.extractedFromDocuments.length}`
+              : "");
         } catch (err) {
           console.warn(
             "[Export] PPTX 재현 실패 — 신규 생성으로 폴백:",

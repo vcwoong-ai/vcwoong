@@ -20,6 +20,7 @@ import { SectionKey } from "@prisma/client";
 import { reconstructDOCX } from "../src/lib/template/template-reconstructor";
 import { parseDOCXTemplate } from "../src/lib/template/template-parser";
 import type { TemplateSectionMap } from "../src/lib/template/template-mapper";
+import { extractUnmappedContent } from "../src/lib/template/slide-extraction";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -338,6 +339,30 @@ async function main() {
   assert(!dupXml.includes("14,976"), "첫 번째 헤딩 아래 원본 회사 수치가 남아있음");
   assert(!dupXml.includes("228,328"), "두 번째 헤딩 아래 원본 회사 수치가 남아있음(중복 매핑 시 건너뛰던 버그)");
   console.log("✅ 같은 SectionKey로 매핑된 헤딩이 여러 개여도 전부 채워짐 (원본 회사 데이터 잔존 방지)");
+
+  // ── 자료 기반 보조 추출 검증: 표준 섹션에 없는 헤딩(예: "인력 구성")도
+  // documents를 넘기면 시도되고, API 키 없는 데모 모드에선 엉뚱한 내용을
+  // 지어내지 않고 안전하게 건너뛰어야 한다(원본 예시 내용 그대로 유지) ──
+  const withDocsButNoAI = await reconstructDOCX({
+    originalBuffer: original,
+    sectionMap,
+    reportSections,
+    replacements: { 기업명: "헬스케어AI Inc." },
+    documents: [{ name: "IR.pdf", parsedText: "홍길동 대표, 임직원 30명 규모의 팀입니다." }],
+  });
+  assert(
+    withDocsButNoAI.extractedFromDocuments.length === 0,
+    "API 키 없는 데모 모드에서 추출이 시도된 것으로 기록됨(엉뚱한 내용 주입 위험)"
+  );
+  assert(
+    withDocsButNoAI.filledSections === 4,
+    `documents를 넘겨도 표준 섹션 채움 개수는 그대로여야 함, got ${withDocsButNoAI.filledSections}`
+  );
+  console.log("✅ documents를 넘겨도 데모 모드(API 키 없음)에선 추측성 내용을 주입하지 않음");
+
+  const noDocsResult = await extractUnmappedContent("인력 구성", "", []);
+  assert(noDocsResult === null, "자료가 없으면 AI 호출 없이 바로 null이어야 함");
+  console.log("✅ 참고할 자료가 없으면 AI 호출 없이 즉시 건너뜀");
 
   console.log("\n✅ 양식 재현 테스트 통과\n");
 }
