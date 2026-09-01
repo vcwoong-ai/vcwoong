@@ -52,6 +52,12 @@ export function IrrCalculatorClient() {
       <section className="pt-32 pb-24 px-6">
         <div className="max-w-lg mx-auto">
           <div className="text-center mb-10">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/illustrations/irr-hero.svg"
+              alt=""
+              className="w-48 mx-auto mb-6"
+            />
             <h1 className="text-3xl font-bold text-gray-900">무료 IRR 계산기</h1>
             <p className="text-gray-500 mt-3">
               투자금과 예상 회수금만 입력하면 IRR(내부수익률)과 투자 배수를

@@ -18,7 +18,6 @@ import {
 } from "@/components/ui/select";
 import {
   ArrowUpRight,
-  Inbox,
   Loader2,
   Mail,
   Plus,
@@ -471,7 +470,12 @@ export function SourcingPageClient({
       {visible.length === 0 ? (
         <Card>
           <CardContent className="py-16 text-center">
-            <Inbox className="w-12 h-12 mx-auto text-gray-300 mb-3" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/illustrations/empty-sourcing.svg"
+              alt=""
+              className="w-56 mx-auto mb-4 opacity-90"
+            />
             <p className="text-gray-500">인바운드 딜이 없습니다.</p>
             <p className="text-sm text-gray-400 mt-1">
               IR 메일이나 데모데이에서 받은 자료를 붙여넣어 시작하세요.

@@ -95,9 +95,22 @@ export default function LandingPage() {
             </p>
           </div>
 
-          {/* 히어로 그래픽 — 실제 보고서/투자매력도 점수/섹터 에이전트 UI를
-              카드로 축약해 겹쳐 보여준다(추상 일러스트 대신 제품 자체를 미리 보여줌) */}
-          <div className="relative hidden lg:block h-[420px]">
+          {/* 히어로 그래픽 — 큰 일러스트를 배경으로 깔고, 실제 보고서/투자매력도
+              점수/섹터 에이전트 UI 카드를 그 위에 겹쳐 보여준다. 일러스트로
+              시선을 끌면서도 추상적인 장식에 그치지 않고 제품 자체를 미리
+              보여주는 카드들이 함께 있어 "그냥 예쁜 그림"이 아니게 한다. */}
+          <div className="relative hidden lg:block h-[480px]">
+            <div
+              className="absolute inset-0 flex items-center justify-center opacity-90 pointer-events-none"
+              aria-hidden
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/illustrations/hero-bull-market.svg"
+                alt=""
+                className="w-[560px] max-w-none"
+              />
+            </div>
             <div className="absolute inset-0 pointer-events-none" aria-hidden>
               <svg className="w-full h-full" viewBox="0 0 400 420" fill="none">
                 <path d="M215 150 L305 95" stroke="rgba(148,163,184,0.35)" strokeWidth="1.5" strokeDasharray="4 5" />
@@ -105,7 +118,7 @@ export default function LandingPage() {
               </svg>
             </div>
 
-            <div className="absolute top-6 left-4 w-72 bg-white rounded-2xl shadow-2xl p-6 text-slate-900 -rotate-3">
+            <div className="absolute top-2 left-0 w-72 bg-white rounded-2xl shadow-2xl p-6 text-slate-900 -rotate-3">
               <div className="flex items-center gap-2 mb-4">
                 <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
                   <FileText className="w-4 h-4 text-white" />

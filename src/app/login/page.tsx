@@ -52,15 +52,39 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 flex items-center justify-center p-4">
+    <div className="min-h-screen flex">
+      {/* 좌측 패널 — 로그인 폼과 무관하지만, 빈 화면보다 브랜드 톤을 각인시킨다.
+          작은 화면에서는 공간이 부족해 숨긴다. */}
+      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 flex-col items-center justify-center p-12 relative overflow-hidden">
+        <div className="max-w-md text-center relative z-10">
+          {/* next/image의 최적화는 래스터 이미지 대상이라 SVG엔 이득이
+              없고, SVG는 next.config의 dangerouslyAllowSVG 없인 아예
+              차단된다 — 정적 벡터 장식 이미지라 그냥 img로 충분하다. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/illustrations/login.svg"
+            alt=""
+            className="w-full max-w-sm mx-auto mb-8"
+          />
+          <h2 className="text-2xl font-bold text-white mb-2">
+            섹터 전문 AI 심사역과 함께
+          </h2>
+          <p className="text-blue-300 text-sm leading-relaxed">
+            딜소싱부터 투자심의위원회 보고서, LP 리포팅까지 —
+            근거를 추적할 수 있는 투자심의 자동화.
+          </p>
+        </div>
+      </div>
+
+      <div className="flex-1 flex items-center justify-center p-4 bg-white">
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 bg-blue-500 rounded-2xl mb-4">
+          <div className="inline-flex items-center justify-center w-14 h-14 bg-blue-600 rounded-2xl mb-4">
             <Zap className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-white">{BRAND.name}</h1>
-          <p className="text-blue-300 mt-1 text-sm">{BRAND.nameKr} · AI 투자심의 자동화</p>
+          <h1 className="text-3xl font-bold text-gray-900">{BRAND.name}</h1>
+          <p className="text-gray-500 mt-1 text-sm">{BRAND.nameKr} · AI 투자심의 자동화</p>
         </div>
 
         <Card className="border-0 shadow-2xl">
@@ -156,9 +180,10 @@ export default function LoginPage() {
           </CardContent>
         </Card>
 
-        <p className="text-center text-xs text-blue-900 mt-6">
+        <p className="text-center text-xs text-gray-400 mt-6">
           © 2026 {BRAND.name} · 투자심의 보고서 자동화
         </p>
+      </div>
       </div>
     </div>
   );

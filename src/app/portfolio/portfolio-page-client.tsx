@@ -9,7 +9,6 @@ import { Badge } from "@/components/ui/badge";
 import {
   AlertTriangle,
   ArrowUpRight,
-  Building2,
   LayoutGrid,
   Loader2,
   Plus,
@@ -219,7 +218,12 @@ export function PortfolioPageClient({
       {companies.length === 0 ? (
         <Card>
           <CardContent className="py-16 text-center">
-            <Building2 className="w-12 h-12 mx-auto text-gray-300 mb-3" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/illustrations/empty-portfolio.svg"
+              alt=""
+              className="w-56 mx-auto mb-4 opacity-90"
+            />
             <p className="text-gray-500">등록된 포트폴리오사가 없습니다.</p>
             <p className="text-sm text-gray-400 mt-1">
               심사를 마친 딜을 포트폴리오로 승격하면 사후관리가 시작됩니다.
