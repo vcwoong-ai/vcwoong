@@ -27,13 +27,17 @@ export interface DealForGeneration {
 /**
  * 한 번의 실행에서 섹션 생성에 쓸 수 있는 시간(ms).
  *
- * Vercel 함수는 maxDuration(800초)에서 강제 종료되는데, 그렇게 죽으면
- * 상태 정리도 못 하고 GENERATING에 멈춘 채로 남는다. 그보다 일찍 스스로
+ * Vercel 함수는 maxDuration에서 강제 종료되는데, 그렇게 죽으면 상태
+ * 정리도 못 하고 GENERATING에 멈춘 채로 남는다. 그보다 일찍 스스로
  * 멈춰서 만든 섹션까지 저장하고 상태를 정리하면, 사용자가 "다시 시도"를
  * 눌렀을 때 남은 섹션만 이어서 만들 수 있다.
+ *
+ * 기본값은 Hobby 플랜의 함수 실행시간 상한(60초) 기준 — vercel.json의
+ * maxDuration도 60으로 맞춰뒀다. Pro로 돌아가면(더 긴 실행시간 가능)
+ * REPORT_GENERATION_BUDGET_MS 환경변수로 늘리면 된다(코드 변경 불필요).
  */
 const GENERATION_BUDGET_MS = Number(
-  process.env.REPORT_GENERATION_BUDGET_MS ?? 660_000
+  process.env.REPORT_GENERATION_BUDGET_MS ?? 40_000
 );
 
 /**
@@ -41,7 +45,7 @@ const GENERATION_BUDGET_MS = Number(
  *
  * 함수가 강제 종료되면 상태를 정리하지 못해 GENERATING으로 남는데, 그걸
  * 영원히 "생성 중"으로 취급하면 해당 딜은 새 보고서를 만들 수 없게 된다.
- * 시간 예산(660초)보다 넉넉히 길게 잡아 정상 진행 중인 생성을 멈춘 것으로
+ * 시간 예산보다 넉넉히 길게 잡아 정상 진행 중인 생성을 멈춘 것으로
  * 오판하지 않도록 한다.
  */
 export const STALE_GENERATION_MS = 15 * 60 * 1000;
