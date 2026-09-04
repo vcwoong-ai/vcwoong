@@ -11,6 +11,13 @@
 import { generateText } from "@/lib/claude";
 
 const DOC_CONTEXT_CHARS = 8000;
+/**
+ * 문서별로는 8000자씩 잘라도, 업로드 문서 수가 많으면(예: 10개) 전체 컨텍스트가
+ * 그만큼 커져서 추출 시도(최대 6번)마다 매번 큰 프롬프트를 보내게 된다 —
+ * 지연시간·비용, 그리고 함수 실행시간 상한(60초) 위험을 키우므로 합쳐서도
+ * 이 길이를 넘지 않게 문서를 앞에서부터 채운다.
+ */
+const TOTAL_CONTEXT_CHARS = 20000;
 const NOT_FOUND_SENTINEL = "NOT_FOUND";
 
 /** 한 번의 내보내기에서 시도할 추출 슬라이드 상한 — AI 호출·지연 시간을 제한한다 */
@@ -19,17 +26,18 @@ export const MAX_EXTRACTION_ATTEMPTS = 6;
 function buildDocumentContext(
   documents: Array<{ name: string; parsedText: string | null }>
 ): string {
-  return documents
-    .filter((d) => d.parsedText)
-    .map((d) => {
-      const text = d.parsedText ?? "";
-      const clipped =
-        text.length > DOC_CONTEXT_CHARS
-          ? `${text.slice(0, DOC_CONTEXT_CHARS)}\n…(이하 생략)`
-          : text;
-      return `### ${d.name}\n${clipped}`;
-    })
-    .join("\n\n");
+  let remaining = TOTAL_CONTEXT_CHARS;
+  const sections: string[] = [];
+  for (const d of documents) {
+    if (!d.parsedText || remaining <= 0) continue;
+    const text = d.parsedText;
+    const clipLen = Math.min(DOC_CONTEXT_CHARS, remaining);
+    const clipped =
+      text.length > clipLen ? `${text.slice(0, clipLen)}\n…(이하 생략)` : text;
+    sections.push(`### ${d.name}\n${clipped}`);
+    remaining -= clipped.length;
+  }
+  return sections.join("\n\n");
 }
 
 /**

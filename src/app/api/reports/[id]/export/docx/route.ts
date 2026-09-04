@@ -12,6 +12,12 @@ import {
   exportFilename,
 } from "@/lib/report-export-common";
 
+// 표준 섹션에 없는 헤딩은 업로드 자료에서 최대 6번까지 순차 AI 호출로
+// 채운다(slide-extraction.ts) — 기본 함수 실행시간(플랫폼 기본값, Hobby
+// 플랜은 10초)로는 부족해 vercel.json의 다른 AI 호출 라우트와 동일하게
+// 60초로 맞춰둔다.
+export const maxDuration = 60;
+
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
