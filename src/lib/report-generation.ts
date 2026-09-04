@@ -13,6 +13,7 @@ import {
   formatSharedFactsForPrompt,
 } from "@/lib/shared-facts";
 import { evaluateReport } from "@/lib/report-quality";
+import { REQUEST_TIMEOUT_MS, envDurationMs } from "@/lib/claude";
 
 export interface DealForGeneration {
   id: string;
@@ -36,8 +37,9 @@ export interface DealForGeneration {
  * maxDuration도 60으로 맞춰뒀다. Pro로 돌아가면(더 긴 실행시간 가능)
  * REPORT_GENERATION_BUDGET_MS 환경변수로 늘리면 된다(코드 변경 불필요).
  */
-const GENERATION_BUDGET_MS = Number(
-  process.env.REPORT_GENERATION_BUDGET_MS ?? 40_000
+const GENERATION_BUDGET_MS = envDurationMs(
+  process.env.REPORT_GENERATION_BUDGET_MS,
+  40_000
 );
 
 /**
@@ -45,10 +47,20 @@ const GENERATION_BUDGET_MS = Number(
  *
  * 함수가 강제 종료되면 상태를 정리하지 못해 GENERATING으로 남는데, 그걸
  * 영원히 "생성 중"으로 취급하면 해당 딜은 새 보고서를 만들 수 없게 된다.
- * 시간 예산보다 넉넉히 길게 잡아 정상 진행 중인 생성을 멈춘 것으로
- * 오판하지 않도록 한다.
+ *
+ * 예전엔 15분 고정이었는데, 함수 실행시간 상한이 60초인 Hobby에서는 이미
+ * 죽은 게 확실한 생성 때문에 사용자가 15분을 기다려야 했다. 실제 실행이
+ * 시간 예산을 넘길 수 없으므로 예산의 3배(최소 90초)면 정상 진행 중인
+ * 생성을 멈춘 것으로 오판하지 않으면서 훨씬 빨리 재시도할 수 있다.
  */
-export const STALE_GENERATION_MS = 15 * 60 * 1000;
+export const STALE_GENERATION_MS = Math.max(GENERATION_BUDGET_MS * 3, 90_000);
+
+/**
+ * 의견종합 끝에 붙이는 자동 품질 메모 — 재생성 시 중복 누적을 막으려고
+ * 다시 붙이기 전에 이 패턴으로 기존 메모를 떼어낸다.
+ * (`*자동 품질 점수: 82/100 · …*` 형태, 문서 맨 끝에만 존재)
+ */
+const QUALITY_NOTE_RE = /\n*---\n\*자동 품질 점수:[\s\S]*$/;
 
 export async function generateSectionsAsync(
   reportId: string,
@@ -108,7 +120,19 @@ export async function generateSectionsAsync(
       } else {
         // 남은 예산이 없으면 강제 종료를 기다리지 말고 스스로 멈춘다.
         // 여기까지 만든 섹션은 이미 저장돼 있으므로 재시도 시 이어서 진행된다.
-        if (Date.now() >= deadline) {
+        //
+        // "지금 예산이 남았는가"가 아니라 "한 섹션을 끝낼 만큼 남았는가"로
+        // 판단한다 — 마감 직전에 섹션을 시작하면 AI 호출이 예산을 한참 넘겨
+        // 결국 함수가 강제 종료되고, 상태 정리를 못 해 보고서가 GENERATING에
+        // 갇힌다.
+        //
+        // 최악의 경우를 계산하면: 마지막으로 시작 가능한 시점은
+        // (예산 - 1회 타임아웃)이고 거기서 재시도까지 다 쓰면
+        // AI_CALL_BUDGET_MS가 더 걸린다. 기본값 기준
+        // 40s - 25s + 40s = 55s로 Hobby 상한(60초) 안에 들어온다.
+        // 여유를 재시도 최악값(AI_CALL_BUDGET_MS)으로 잡으면 한 번 실행에
+        // 섹션 한 개도 못 만들어 사용자가 "다시 시도"만 반복하게 된다.
+        if (deadline - Date.now() < REQUEST_TIMEOUT_MS) {
           console.warn(
             `[Gen] report=${reportId} 시간 예산 소진 — ${i}/${total} 섹션까지 저장하고 중단(재시도 시 이어서 생성)`
           );
@@ -243,8 +267,12 @@ export async function generateSectionsAsync(
         quality.factConsistency && quality.factConsistency.checked > 0
           ? ` · 팩트일치 ${quality.factConsistency.matched}/${quality.factConsistency.checked}`
           : "";
+      // 이미 붙어 있는 품질 메모는 떼어내고 새로 붙인다. 완성된 보고서에서
+      // "다시 시도"를 누르면 모든 섹션이 재사용되면서 이 블록만 다시 도는데,
+      // 그대로 이어붙이면 메모가 누를 때마다 하나씩 쌓인다.
+      const base = results[opinionIdx].content.replace(QUALITY_NOTE_RE, "");
       const opinionContent =
-        results[opinionIdx].content +
+        base +
         `\n\n---\n*자동 품질 점수: ${quality.overallScore}/100` +
         factNote +
         (quality.suggestions[0] ? ` · ${quality.suggestions[0]}` : "") +

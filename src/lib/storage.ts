@@ -24,6 +24,43 @@ const s3Client =
 const bucket = process.env.AWS_S3_BUCKET ?? "";
 const uploadDir = process.env.UPLOAD_DIR ?? "./public/uploads";
 
+/** Vercel Blob 공개 URL의 호스트 접미사 */
+const BLOB_HOST_SUFFIX = ".blob.vercel-storage.com";
+
+/**
+ * 클라이언트가 보낸 Blob URL이 우리가 발급한 업로드 자리인지 검증한다.
+ *
+ * 큰 파일은 브라우저에서 Blob으로 직접 올린 뒤 그 URL을 서버로 보내는데,
+ * 이 값을 그대로 믿고 서버가 fetch하면(readStoredFile) 로그인한 사용자가
+ * 아무 주소나 서버에게 대신 요청시킬 수 있다(SSRF). 응답 본문이 그대로
+ * parsedText로 저장돼 화면에 보이기까지 하므로 내용 유출로도 이어진다.
+ *
+ * 호스트가 Vercel Blob이고 경로가 기대한 접두사(deals/<dealId>/ 또는
+ * templates/)로 시작할 때만 허용한다.
+ */
+export function isAllowedBlobUrl(
+  urlString: string,
+  expectedPrefix: string
+): boolean {
+  let url: URL;
+  try {
+    url = new URL(urlString);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== "https:") return false;
+  if (!url.hostname.endsWith(BLOB_HOST_SUFFIX)) return false;
+  // URL 인코딩된 "../" 등으로 접두사 검사를 우회하지 못하게 디코드 후 확인한다.
+  let pathname: string;
+  try {
+    pathname = decodeURIComponent(url.pathname);
+  } catch {
+    return false;
+  }
+  if (pathname.includes("..")) return false;
+  return pathname.startsWith(`/${expectedPrefix}`);
+}
+
 export async function uploadFile(
   buffer: Buffer,
   key: string,
@@ -67,7 +104,10 @@ export async function readStoredFile(
 ): Promise<Buffer | null> {
   try {
     if (storageMode === "vercel-blob" || urlOrKey.includes(".blob.vercel-storage.com")) {
-      const res = await fetch(urlOrKey);
+      // 타임아웃 필수 — 이 호출은 업로드·내보내기·양식 분석의 길목이라,
+      // Blob이 응답하지 않으면 함수 실행시간(60초)을 통째로 태우고 강제
+      // 종료된다. 못 읽으면 null로 폴백하는 게 낫다.
+      const res = await fetch(urlOrKey, { signal: AbortSignal.timeout(15000) });
       if (!res.ok) return null;
       return Buffer.from(await res.arrayBuffer());
     }

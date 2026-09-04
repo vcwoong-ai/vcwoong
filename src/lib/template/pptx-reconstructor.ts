@@ -16,7 +16,11 @@ import {
 } from "./pptx-xml";
 import type { ReconstructInput, ReconstructResult } from "./template-reconstructor";
 import { ReconstructError } from "./template-reconstructor";
-import { extractUnmappedContent, MAX_EXTRACTION_ATTEMPTS } from "./slide-extraction";
+import {
+  extractUnmappedContent,
+  MAX_EXTRACTION_ATTEMPTS,
+  createExtractionDeadline,
+} from "./slide-extraction";
 
 export type ReconstructPptxInput = ReconstructInput;
 
@@ -135,8 +139,11 @@ export async function reconstructPPTX(
   const extractedFromDocuments: string[] = [];
   if (input.documents && input.documents.length > 0) {
     let attempts = 0;
+    // 횟수뿐 아니라 시간도 제한한다 — 호출이 느리면 6번을 채우기 전에
+    // 함수 실행시간 상한을 넘겨 내보내기 전체가 실패한다.
+    const outOfTime = createExtractionDeadline();
     for (let idx = 0; idx < slideTitles.length; idx++) {
-      if (attempts >= MAX_EXTRACTION_ATTEMPTS) break;
+      if (attempts >= MAX_EXTRACTION_ATTEMPTS || outOfTime()) break;
       if (slideMap.has(idx)) continue;
       const title = slideTitles[idx];
       if (!title.trim()) continue;

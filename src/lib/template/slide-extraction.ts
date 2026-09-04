@@ -8,7 +8,7 @@
  *채우는 것보다 안전).
  */
 
-import { generateText } from "@/lib/claude";
+import { generateText, envDurationMs } from "@/lib/claude";
 
 const DOC_CONTEXT_CHARS = 8000;
 /**
@@ -22,6 +22,28 @@ const NOT_FOUND_SENTINEL = "NOT_FOUND";
 
 /** 한 번의 내보내기에서 시도할 추출 슬라이드 상한 — AI 호출·지연 시간을 제한한다 */
 export const MAX_EXTRACTION_ATTEMPTS = 6;
+
+/**
+ * 추출 단계 전체에 허용된 시간(ms).
+ *
+ * 횟수 상한만으로는 부족하다 — 호출 하나가 느리면 6번을 다 채우기 전에
+ * 함수 실행시간 상한(Hobby 60초)을 넘겨서 내보내기 자체가 실패한다.
+ * 시간이 다 되면 남은 슬라이드는 원본 그대로 두고 진행한다(부분 성공이
+ * 전체 실패보다 낫다).
+ */
+const EXTRACTION_BUDGET_MS = envDurationMs(
+  process.env.TEMPLATE_EXTRACTION_BUDGET_MS,
+  30_000
+);
+
+/**
+ * 추출 단계의 남은 시간을 재는 마감 시계를 만든다.
+ * 재현 엔진(PPTX/DOCX)이 추출 루프를 돌기 전에 하나 만들어 쓴다.
+ */
+export function createExtractionDeadline(): () => boolean {
+  const endsAt = Date.now() + EXTRACTION_BUDGET_MS;
+  return () => Date.now() >= endsAt;
+}
 
 function buildDocumentContext(
   documents: Array<{ name: string; parsedText: string | null }>
