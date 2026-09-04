@@ -5,7 +5,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { TemplateFileType, TemplateStatus } from "@prisma/client";
-import { uploadFile, readStoredFile } from "@/lib/storage";
+import { uploadFile, readStoredFile, isAllowedBlobUrl } from "@/lib/storage";
 import { parseTemplate } from "@/lib/template/template-parser";
 import { mapTemplateSections } from "@/lib/template/template-mapper";
 import { checkQuota } from "@/lib/quotas";
@@ -117,6 +117,17 @@ async function finalizeBlobTemplate(request: NextRequest, userId: string) {
 
   if (!blobUrl || !fileName) {
     return NextResponse.json({ error: "잘못된 요청입니다" }, { status: 400 });
+  }
+
+  // 이 URL은 그대로 서버가 fetch(readStoredFile)하므로, 우리가 발급한
+  // 업로드 자리인지 반드시 확인해야 한다 — 안 그러면 로그인한 사용자가
+  // 서버에게 임의 주소를 대신 요청시킬 수 있다(SSRF).
+  if (!isAllowedBlobUrl(blobUrl, "templates/")) {
+    console.warn(`[Template] 허용되지 않은 blobUrl 거부: ${blobUrl}`);
+    return NextResponse.json(
+      { error: "잘못된 업로드 주소입니다" },
+      { status: 400 }
+    );
   }
 
   const quota = await checkQuota(userId, "template");
