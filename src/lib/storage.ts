@@ -104,7 +104,10 @@ export async function readStoredFile(
 ): Promise<Buffer | null> {
   try {
     if (storageMode === "vercel-blob" || urlOrKey.includes(".blob.vercel-storage.com")) {
-      const res = await fetch(urlOrKey);
+      // 타임아웃 필수 — 이 호출은 업로드·내보내기·양식 분석의 길목이라,
+      // Blob이 응답하지 않으면 함수 실행시간(60초)을 통째로 태우고 강제
+      // 종료된다. 못 읽으면 null로 폴백하는 게 낫다.
+      const res = await fetch(urlOrKey, { signal: AbortSignal.timeout(15000) });
       if (!res.ok) return null;
       return Buffer.from(await res.arrayBuffer());
     }
