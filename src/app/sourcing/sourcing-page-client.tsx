@@ -74,11 +74,17 @@ const STATUS_FILTERS: Array<InboundStatus | "ALL"> = [
 
 export function SourcingPageClient({
   leads,
+  total,
+  nextLimit,
   currentUserId,
   canEditShared = true,
   role = "ANALYST",
 }: {
   leads: Lead[];
+  /** 서버가 센 전체 인입 건수 — 지금 몇 건을 보고 있는지 정확히 알린다 */
+  total?: number;
+  /** "더 보기"가 요청할 다음 표시 개수 */
+  nextLimit?: number;
   currentUserId?: string;
   canEditShared?: boolean;
   role?: string;
@@ -601,6 +607,21 @@ export function SourcingPageClient({
               </CardContent>
             </Card>
           ))}
+        </div>
+      )}
+
+      {/* 더 보기 — 서버가 ?limit으로 더 내려준다(자바스크립트 없이도 동작) */}
+      {typeof total === "number" && total > leads.length && (
+        <div className="flex flex-col items-center gap-2 pt-2">
+          <p className="text-xs text-gray-400">
+            전체 {total}건 중 {leads.length}건 표시 중
+          </p>
+          <Link
+            href={`/sourcing?limit=${nextLimit ?? leads.length + 30}`}
+            className="text-sm text-blue-600 hover:text-blue-800 font-medium border border-gray-200 rounded-lg px-4 py-2"
+          >
+            더 보기 ({total - leads.length}건 남음)
+          </Link>
         </div>
       )}
     </div>

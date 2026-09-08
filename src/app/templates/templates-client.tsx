@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
+import Link from "next/link";
 import { useDropzone } from "react-dropzone";
 import { upload } from "@vercel/blob/client";
 
@@ -393,11 +394,17 @@ function TemplateCard({
 
 export function TemplatesClient({
   templates: initialTemplates,
+  total,
+  nextLimit,
   currentUserId,
   userTeamId,
   canUseTeam,
 }: {
   templates: Template[];
+  /** 서버가 센 전체 양식 수 */
+  total?: number;
+  /** "더 보기"가 요청할 다음 표시 개수 */
+  nextLimit?: number;
   currentUserId: string;
   userTeamId: string | null;
   canUseTeam: boolean;
@@ -620,6 +627,21 @@ export function TemplatesClient({
                 canUseTeam={canUseTeam}
               />
             ))}
+          </div>
+        )}
+
+        {/* 더 보기 — 서버가 ?limit으로 더 내려준다 */}
+        {typeof total === "number" && total > templates.length && (
+          <div className="flex flex-col items-center gap-2 pt-2">
+            <p className="text-xs text-gray-400">
+              전체 {total}개 중 {templates.length}개 표시 중
+            </p>
+            <Link
+              href={`/templates?limit=${nextLimit ?? templates.length + 24}`}
+              className="text-sm text-blue-600 hover:text-blue-800 font-medium border border-gray-200 rounded-lg px-4 py-2"
+            >
+              더 보기 ({total - templates.length}개 남음)
+            </Link>
           </div>
         )}
       </div>
