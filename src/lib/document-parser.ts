@@ -26,7 +26,50 @@ function buildLowTextWarning(
   return `추출된 텍스트가 매우 적습니다 (${len}자).${imageHint} AI가 내용을 충분히 인식하지 못할 수 있습니다.`;
 }
 
+/**
+ * 저장하는 추출 텍스트의 상한(자).
+ *
+ * 지금까지 상한이 없어서, 텍스트가 아주 많은 파일(대형 엑셀 등)은 수 MB짜리
+ * parsedText가 그대로 DB에 들어가고 보고서를 만들 때마다 문서 전체가 메모리로
+ * 올라왔다 — 함수 메모리·실행시간을 갉아먹는다.
+ *
+ * 다만 근거 추적(evidence.ts)은 보고서의 숫자를 문서 "전문"과 대조하는 게
+ * 핵심이라 함부로 짧게 자르면 제품의 핵심 기능이 약해진다. 그래서 실제 IR
+ * 자료(보통 5천~5만 자)보다 훨씬 넉넉하게 잡아, 비정상적으로 큰 파일만
+ * 걸리도록 한다.
+ */
+const MAX_PARSED_TEXT_CHARS = 500_000;
+
+function clampParsedText(result: {
+  text: string;
+  metadata: Record<string, unknown>;
+  warning?: string;
+}) {
+  if (result.text.length <= MAX_PARSED_TEXT_CHARS) return result;
+
+  const truncatedNote =
+    `자료가 매우 길어 앞부분 ${MAX_PARSED_TEXT_CHARS.toLocaleString()}자만 저장했습니다. ` +
+    "뒷부분 수치는 근거 추적에서 '확인 필요'로 표시될 수 있습니다.";
+  return {
+    text: result.text.slice(0, MAX_PARSED_TEXT_CHARS),
+    metadata: {
+      ...result.metadata,
+      truncated: true,
+      originalLength: result.text.length,
+    },
+    warning: result.warning ? `${result.warning} ${truncatedNote}` : truncatedNote,
+  };
+}
+
 export async function parseDocument(
+  buffer: Buffer,
+  mimeType: string,
+  filename: string
+): Promise<{ text: string; metadata: Record<string, unknown>; warning?: string }> {
+  return clampParsedText(await parseDocumentRaw(buffer, mimeType, filename));
+}
+
+async function parseDocumentRaw(
   buffer: Buffer,
   mimeType: string,
   filename: string

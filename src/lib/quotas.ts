@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getUserPlanKey } from "@/lib/subscription";
+import { kstStartOfMonth } from "@/lib/utils";
 
 export const PLAN_LIMITS = {
   free: { reports: 5, sectors: 1, templates: 2 },
@@ -20,9 +21,12 @@ export interface QuotaResult {
   message?: string;
 }
 
+/**
+ * 월 한도의 기준 시각 — 한국 시간 기준 이번 달 1일 0시.
+ * (서버 UTC 기준으로 세면 매월 1일 0~9시에 한도가 안 풀린 것처럼 보인다)
+ */
 function startOfMonth(): Date {
-  const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), 1);
+  return kstStartOfMonth();
 }
 
 export async function checkQuota(

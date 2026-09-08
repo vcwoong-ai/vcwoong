@@ -35,19 +35,52 @@ function isFreeModel(model: string): boolean {
 }
 
 /**
- * 단일 AI 호출 타임아웃(ms).
+ * 환경변수로 받은 시간(ms) 설정을 안전하게 읽는다.
+ *
+ * `Number("")`는 0, `Number("30s")`는 NaN이 된다. 이 값들이 그대로 예산·
+ * 타임아웃으로 쓰이면 조용히 망가진다(0이면 아무 작업도 시작 못 하고,
+ * NaN이면 모든 시간 비교가 false라 자체 중단 장치가 통째로 무력화된다).
+ * 유효한 양수가 아니면 기본값을 쓴다.
+ */
+export function envDurationMs(raw: string | undefined, fallback: number): number {
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+/**
+ * 단일 AI 호출(1회 시도) 타임아웃(ms).
  *
  * 타임아웃이 없으면 업스트림이 응답을 주지 않을 때 호출이 무한정 매달리고,
  * 섹션 루프가 통째로 멈춰 진행률이 0에서 고정된 채 함수 실행시간 제한까지
- * 흘러가 버린다. 재시도 여유를 남기도록 넉넉하되 유한한 값으로 잡는다.
+ * 흘러가 버린다.
+ *
+ * 함수 실행시간 상한(Hobby 60초)보다 반드시 짧아야 한다 — 이 값이 상한보다
+ * 길면 느린 호출 한 번만으로 함수가 강제 종료되고, 상태 정리도 못 해서
+ * 보고서가 GENERATING에 갇힌다. Pro 등 더 긴 실행시간을 쓰면
+ * AI_REQUEST_TIMEOUT_MS로 올리면 된다.
  */
-const REQUEST_TIMEOUT_MS = Number(process.env.AI_REQUEST_TIMEOUT_MS ?? 150_000);
+export const REQUEST_TIMEOUT_MS = envDurationMs(
+  process.env.AI_REQUEST_TIMEOUT_MS,
+  25_000
+);
 
-function getClient(): OpenAI {
+/**
+ * generateText 한 번이 쓸 수 있는 총 시간(ms) — 재시도·백오프 대기까지 포함.
+ *
+ * 재시도(최대 3회, 0/5/15초 백오프)를 시간 제한 없이 돌리면 호출 하나가
+ * 100초를 넘길 수도 있어서, 60초 상한에서는 자체 중단 로직이 손도 못 써보고
+ * 함수가 죽는다. 남은 예산을 넘기는 시도·대기는 아예 시작하지 않는다.
+ */
+export const AI_CALL_BUDGET_MS = envDurationMs(
+  process.env.AI_CALL_BUDGET_MS,
+  40_000
+);
+
+function getClient(timeoutMs: number = REQUEST_TIMEOUT_MS): OpenAI {
   return new OpenAI({
     baseURL: "https://openrouter.ai/api/v1",
     apiKey: process.env.OPENROUTER_API_KEY ?? "",
-    timeout: REQUEST_TIMEOUT_MS,
+    timeout: timeoutMs,
     // 재시도는 callWithFallback에서 직접 제어한다(폴백 모델 전환 포함).
     maxRetries: 0,
     defaultHeaders: {
@@ -86,9 +119,10 @@ async function callOnce(
   model: string,
   messages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
   maxTokens: number,
-  temperature?: number
+  temperature?: number,
+  timeoutMs?: number
 ): Promise<OpenAI.Chat.Completions.ChatCompletion> {
-  const client = getClient();
+  const client = getClient(timeoutMs);
   const result = await client.chat.completions.create({
     model,
     max_tokens: maxTokens,
@@ -110,6 +144,17 @@ async function callWithFallback(
   maxTokens: number,
   temperature?: number
 ): Promise<{ result: OpenAI.Chat.Completions.ChatCompletion; usedModel: string }> {
+  // 이 호출 전체(1차 + 폴백 재시도 + 백오프 대기)에 허용된 마감 시각.
+  // 남은 시간을 넘기는 시도는 시작하지 않는다 — 함수가 강제 종료되는 것보다
+  // 일찍 실패를 돌려주는 편이 낫다(호출부가 저장·정리할 시간이 남는다).
+  const budgetEndsAt = Date.now() + AI_CALL_BUDGET_MS;
+  const remainingMs = () => budgetEndsAt - Date.now();
+  /** 남은 예산과 1회 타임아웃 중 짧은 쪽 — 예산이 없으면 null */
+  const attemptTimeout = (): number | null => {
+    const left = remainingMs();
+    return left <= 0 ? null : Math.min(REQUEST_TIMEOUT_MS, left);
+  };
+
   const describeError = (err: unknown) => {
     const e = err as { status?: number; name?: string; message?: string };
     return `${e?.name ?? "Error"}${e?.status ? ` ${e.status}` : ""}: ${e?.message ?? String(err)}`;
@@ -138,7 +183,13 @@ async function callWithFallback(
   };
 
   try {
-    const result = await callOnce(model, messages, maxTokens, temperature);
+    const result = await callOnce(
+      model,
+      messages,
+      maxTokens,
+      temperature,
+      attemptTimeout() ?? REQUEST_TIMEOUT_MS
+    );
     return { result, usedModel: model };
   } catch (err) {
     console.warn(`[AI] ${model} 1차 호출 실패 — ${describeError(err)}`);
@@ -168,17 +219,30 @@ async function callWithFallback(
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     if (attempt > 0) {
       const waitMs = BACKOFF_MS[attempt];
+      // 대기까지 하고 나면 호출할 시간이 안 남는 경우엔 대기 자체가 낭비다.
+      if (remainingMs() <= waitMs) {
+        console.warn(
+          `[AI] ${retryModel} 시간 예산 소진 — 재시도 중단(남은 ${Math.max(0, remainingMs())}ms)`
+        );
+        break;
+      }
       console.log(
         `[AI] ${retryModel} 재시도 ${attempt}/${MAX_ATTEMPTS - 1}, ${waitMs / 1000}초 대기...`
       );
       await sleep(waitMs);
+    }
+    const timeout = attemptTimeout();
+    if (timeout === null) {
+      console.warn(`[AI] ${retryModel} 시간 예산 소진 — 재시도 중단`);
+      break;
     }
     try {
       const result = await callOnce(
         retryModel,
         messages,
         fallbackTokens,
-        temperature
+        temperature,
+        timeout
       );
       return { result, usedModel: retryModel };
     } catch (err) {
@@ -188,7 +252,7 @@ async function callWithFallback(
     }
   }
 
-  throw lastErr;
+  throw lastErr ?? new Error(`AI 호출 시간 예산(${AI_CALL_BUDGET_MS}ms) 초과`);
 }
 
 export async function generateText(

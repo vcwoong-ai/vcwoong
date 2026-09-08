@@ -64,6 +64,10 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  // 결제 전 실패인지, "결제는 됐는데 뒷정리가 실패"인지 구분한다.
+  // 후자를 그냥 error로 돌려보내면 사용자가 다시 시도해 이중 결제된다.
+  let charged: { paymentKey: string; totalAmount: number } | null = null;
+
   try {
     const billing = await issueBillingKey(authKey, customerKey);
     const orderId = `sub-${session.user.id}-${cycle}-${Date.now()}`;
@@ -74,6 +78,7 @@ export async function GET(request: NextRequest) {
       orderId,
       cycle
     );
+    charged = charge;
 
     await recordPayment(
       session.user.id,
@@ -96,6 +101,21 @@ export async function GET(request: NextRequest) {
       )
     );
   } catch (error) {
+    if (charged) {
+      // 돈은 빠져나갔는데 구독 활성화·기록이 실패한 상태 — 사람이 직접
+      // 확인해야 하므로 결제키를 남겨 추적 가능하게 하고, 화면에서는
+      // 재시도 대신 문의를 안내한다.
+      console.error(
+        `[Payment] 결제 완료 후 처리 실패 — 수동 확인 필요 ` +
+          `user=${session.user.id} paymentKey=${charged.paymentKey} ` +
+          `amount=${charged.totalAmount} plan=${planKey}`,
+        error
+      );
+      return NextResponse.redirect(
+        new URL("/settings?payment=charged_not_activated", request.url)
+      );
+    }
+
     console.error("Payment success handler error:", error);
     return NextResponse.redirect(
       new URL("/settings?payment=error", request.url)

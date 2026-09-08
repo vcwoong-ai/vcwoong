@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Check, CreditCard, Loader2 } from "lucide-react";
 import { PLANS } from "@/lib/subscription";
 import type { PlanKey } from "@/lib/quotas";
-import { brandCustomerKey } from "@/lib/brand";
+import { brandCustomerKey, BRAND } from "@/lib/brand";
 import {
   PUBLIC_PLANS,
   monthlyEquivalent,
@@ -80,6 +80,13 @@ export function SubscriptionPlans({
       );
     } else if (payment === "not_configured") {
       setMessage("결제 시스템이 아직 설정되지 않았습니다. (TOSS_SECRET_KEY)");
+    } else if (payment === "charged_not_activated") {
+      // 결제는 성사됐는데 활성화가 실패한 경우 — 여기서 "다시 시도"를
+      // 안내하면 이중 결제로 이어진다.
+      setMessage(
+        `결제는 완료됐지만 플랜 활성화 처리에 실패했습니다. ` +
+          `다시 결제하지 마시고 ${BRAND.supportEmail}으로 문의해 주세요. 확인 후 바로 적용해 드립니다.`
+      );
     } else if (payment === "error") {
       setMessage("결제 처리 중 오류가 발생했습니다.");
     }

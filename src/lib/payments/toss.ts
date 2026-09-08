@@ -27,6 +27,16 @@ export function planAmount(planKey: string, cycle: BillingCycle = "monthly"): nu
 
 const TOSS_API = "https://api.tosspayments.com/v1";
 
+/**
+ * Toss API 호출 타임아웃(ms).
+ *
+ * 타임아웃이 없으면 응답이 늦을 때 함수 실행시간 상한(60초)에 걸려 강제
+ * 종료되는데, 그러면 catch로 내려가지도 못해 "결제는 됐는데 구독 활성화는
+ * 안 된" 상태를 로그로도 남기지 못한다. 정상 응답을 중간에 끊지 않도록
+ * 넉넉하게 잡되, 함수가 죽기 전에는 반드시 제어를 돌려받는다.
+ */
+const TOSS_TIMEOUT_MS = 20_000;
+
 function getAuthHeader(): string | null {
   const secretKey = process.env.TOSS_SECRET_KEY;
   if (!secretKey) return null;
@@ -52,6 +62,7 @@ export async function issueBillingKey(authKey: string, customerKey: string) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ authKey, customerKey }),
+    signal: AbortSignal.timeout(TOSS_TIMEOUT_MS),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.message ?? "Billing key issue failed");
@@ -83,6 +94,7 @@ export async function chargeBilling(
       orderId,
       orderName: `${BRAND.name} ${PLAN_NAMES[planKey] ?? planKey} ${cycleLabel} 구독`,
     }),
+    signal: AbortSignal.timeout(TOSS_TIMEOUT_MS),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.message ?? "Charge failed");
@@ -133,7 +145,10 @@ export async function getPayment(
   try {
     const res = await fetch(
       `${TOSS_API}/payments/${encodeURIComponent(paymentKey)}`,
-      { headers: { Authorization: auth } }
+      {
+        headers: { Authorization: auth },
+        signal: AbortSignal.timeout(TOSS_TIMEOUT_MS),
+      }
     );
     if (!res.ok) return null;
     const data = await res.json();

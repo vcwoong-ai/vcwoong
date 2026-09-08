@@ -21,7 +21,11 @@ import {
   type ParagraphProto,
 } from "./docx-xml";
 import type { TemplateSectionMap } from "./template-mapper";
-import { extractUnmappedContent, MAX_EXTRACTION_ATTEMPTS } from "./slide-extraction";
+import {
+  extractUnmappedContent,
+  MAX_EXTRACTION_ATTEMPTS,
+  createExtractionDeadline,
+} from "./slide-extraction";
 
 /**
  * 매핑표에 없는 헤딩도 텍스트 키워드로 SectionKey를 추정한다.
@@ -320,8 +324,11 @@ export async function reconstructDOCX(
   const extractedFromDocuments: string[] = [];
   if (input.documents && input.documents.length > 0) {
     let attempts = 0;
+    // 횟수뿐 아니라 시간도 제한한다 — 호출이 느리면 6번을 채우기 전에
+    // 함수 실행시간 상한을 넘겨 내보내기 전체가 실패한다.
+    const outOfTime = createExtractionDeadline();
     for (let idx = 0; idx < blocks.length; idx++) {
-      if (attempts >= MAX_EXTRACTION_ATTEMPTS) break;
+      if (attempts >= MAX_EXTRACTION_ATTEMPTS || outOfTime()) break;
       const b = blocks[idx];
       if (b.kind !== "p" || b.headingLevel === null || !b.text?.trim()) continue;
       if (headingMap.has(idx)) continue;

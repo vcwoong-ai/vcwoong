@@ -49,6 +49,9 @@ export async function sendEmail({
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ from: sender, to: [to], subject, html }),
+      // 메일 발송이 매달려서 가입·비밀번호 재설정 요청 전체가 함수
+      // 실행시간까지 끌려가면 안 된다 — 실패해도 상위 흐름은 계속된다.
+      signal: AbortSignal.timeout(10000),
     });
 
     if (!res.ok) {

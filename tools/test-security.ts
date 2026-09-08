@@ -11,6 +11,7 @@
 import { verifyTossWebhookSecret } from "../src/lib/payments/toss";
 import { clientIp } from "../src/lib/rate-limit";
 import { brandCustomerKey, parseCustomerKeyUserId } from "../src/lib/brand";
+import { isAllowedBlobUrl } from "../src/lib/storage";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -111,11 +112,80 @@ function testCustomerKey() {
   console.log("✅ customerKey 왕복 + 옛 접두사 호환 + 잘못된 접두사 거부");
 }
 
+/**
+ * 클라이언트가 보낸 Blob URL 검증.
+ *
+ * 큰 파일은 브라우저가 Blob으로 직접 올리고 그 URL만 서버로 보내는데,
+ * 서버는 이 URL을 그대로 fetch해서 본문을 파싱·저장한다. 검증이 없으면
+ * 로그인한 사용자가 서버에게 아무 주소나 대신 요청시킬 수 있고(SSRF),
+ * 응답 본문이 parsedText로 저장돼 그대로 열람까지 된다.
+ */
+function testBlobUrlValidation() {
+  const ok =
+    "https://abc123.public.blob.vercel-storage.com/deals/deal_1/uuid.pdf";
+  assert(isAllowedBlobUrl(ok, "deals/deal_1/"), "정상 Blob URL이 거부됨");
+  assert(
+    isAllowedBlobUrl(
+      "https://x.public.blob.vercel-storage.com/templates/uuid.docx",
+      "templates/"
+    ),
+    "정상 템플릿 Blob URL이 거부됨"
+  );
+
+  // 외부 주소 — SSRF의 핵심 차단 대상
+  assert(
+    !isAllowedBlobUrl("http://169.254.169.254/latest/meta-data/", "deals/d1/"),
+    "클라우드 메타데이터 주소가 통과됨"
+  );
+  assert(
+    !isAllowedBlobUrl("http://localhost:3000/api/internal", "deals/d1/"),
+    "내부 주소가 통과됨"
+  );
+  assert(
+    !isAllowedBlobUrl("https://evil.example.com/deals/d1/x.pdf", "deals/d1/"),
+    "임의 호스트가 경로만 맞으면 통과됨"
+  );
+  // 호스트 접미사를 흉내낸 도메인
+  assert(
+    !isAllowedBlobUrl(
+      "https://blob.vercel-storage.com.evil.example.com/deals/d1/x.pdf",
+      "deals/d1/"
+    ),
+    "접미사를 흉내낸 호스트가 통과됨"
+  );
+  // https가 아닌 스킴
+  assert(
+    !isAllowedBlobUrl("file:///etc/passwd", "deals/d1/"),
+    "file 스킴이 통과됨"
+  );
+
+  // 남의 딜 경로 — 권한 검사를 통과한 딜의 자리만 허용해야 한다
+  assert(
+    !isAllowedBlobUrl(
+      "https://x.public.blob.vercel-storage.com/deals/other_deal/x.pdf",
+      "deals/deal_1/"
+    ),
+    "다른 딜의 경로가 통과됨"
+  );
+  // 인코딩된 상위 경로 우회
+  assert(
+    !isAllowedBlobUrl(
+      "https://x.public.blob.vercel-storage.com/deals/deal_1/%2e%2e/other/x.pdf",
+      "deals/deal_1/"
+    ),
+    "인코딩된 상위 경로(..)가 통과됨"
+  );
+  assert(!isAllowedBlobUrl("not a url", "deals/d1/"), "URL이 아닌 값이 통과됨");
+
+  console.log("✅ 업로드 Blob URL 검증 (SSRF·타 딜 경로·스킴 우회 차단)");
+}
+
 function main() {
   console.log("\n=== DealMind 보안 로직 테스트 ===\n");
   testWebhookSecret();
   testClientIp();
   testCustomerKey();
+  testBlobUrlValidation();
   console.log("\n✅ 보안 로직 테스트 통과\n");
 }
 
