@@ -51,11 +51,16 @@ interface Deal {
 
 export function DealsPageClient({
   deals: initialDeals,
+  total,
+  pageSize,
   currentUserId,
   currentTeamId,
   role,
 }: {
   deals: Deal[];
+  /** 서버가 센 전체 딜 수 — 지금 몇 개를 보고 있는지 정확히 알려주기 위함 */
+  total: number;
+  pageSize: number;
   currentUserId: string;
   currentTeamId: string | null;
   role: string;
@@ -63,6 +68,10 @@ export function DealsPageClient({
   const router = useRouter();
   const [view, setView] = useState<"grid" | "kanban">("grid");
   const [search, setSearch] = useState("");
+  // 서버는 첫 페이지만 내려준다. 나머지는 여기서 이어 받아 누적한다.
+  const [loadedDeals, setLoadedDeals] = useState<Deal[]>(initialDeals);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
   const [compareIds, setCompareIds] = useState<string[]>([]);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   // 테스트로 만든 딜이 여러 개 쌓였을 때 하나씩 누르지 않고 골라서 한 번에
@@ -124,7 +133,8 @@ export function DealsPageClient({
   };
 
   const handleBulkDelete = async () => {
-    const targets = initialDeals.filter((d) => selectedIds.includes(d.id));
+    // 선택은 "더 보기"로 나중에 불러온 딜에도 걸릴 수 있으므로 누적 목록에서 찾는다
+    const targets = loadedDeals.filter((d) => selectedIds.includes(d.id));
     const ok = await confirm({
       title: `딜 ${targets.length}건을 삭제할까요?`,
       description:
@@ -161,7 +171,42 @@ export function DealsPageClient({
     router.refresh();
   };
 
-  const filtered = initialDeals.filter(
+  const hasMore = loadedDeals.length < total;
+
+  /**
+   * 다음 페이지를 이어 받는다.
+   *
+   * 검색은 지금까지 불러온 딜 안에서만 즉시 필터링되므로, 찾는 딜이
+   * 아직 안 불러온 뒷부분에 있을 수 있다 — 그래서 아래 안내 문구에
+   * "더 보기"를 함께 노출한다.
+   */
+  const handleLoadMore = async () => {
+    setLoadingMore(true);
+    setLoadMoreError(null);
+    try {
+      const nextPage = Math.floor(loadedDeals.length / pageSize) + 1;
+      const res = await fetch(
+        `/api/deals?page=${nextPage}&pageSize=${pageSize}`
+      );
+      if (!res.ok) throw new Error(`목록을 더 불러오지 못했습니다 (${res.status})`);
+      const json = (await res.json()) as { data?: Deal[] };
+      const next = json.data ?? [];
+      setLoadedDeals((prev) => {
+        // 그 사이 다른 곳에서 딜이 추가/삭제되면 같은 딜이 두 번 올 수
+        // 있다 — id 기준으로 중복을 걸러 화면이 깨지지 않게 한다.
+        const seen = new Set(prev.map((d) => d.id));
+        return [...prev, ...next.filter((d) => !seen.has(d.id))];
+      });
+    } catch (error) {
+      setLoadMoreError(
+        error instanceof Error ? error.message : "목록을 더 불러오지 못했습니다"
+      );
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  const filtered = loadedDeals.filter(
     (d) =>
       d.companyName.toLowerCase().includes(search.toLowerCase()) ||
       d.name.toLowerCase().includes(search.toLowerCase())
@@ -235,7 +280,7 @@ export function DealsPageClient({
       </div>
 
       {/* 빈 상태 */}
-      {initialDeals.length === 0 ? (
+      {loadedDeals.length === 0 ? (
         <div className="text-center py-16 text-gray-400">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -321,6 +366,28 @@ export function DealsPageClient({
             onStageChange={handleStageChange}
             canEditDeal={canEditDeal}
           />
+        </div>
+      )}
+
+      {/* 더 보기 — 검색이 "불러온 딜" 안에서만 도는 구조라, 아직 안 불러온
+          딜이 있다는 사실을 숨기지 않고 개수까지 같이 보여준다. */}
+      {loadedDeals.length > 0 && hasMore && (
+        <div className="flex flex-col items-center gap-2 pt-2">
+          <p className="text-xs text-gray-400">
+            전체 {total}개 중 {loadedDeals.length}개 표시 중
+            {search && " · 검색은 불러온 딜에서만 동작합니다"}
+          </p>
+          {loadMoreError && (
+            <p className="text-xs text-red-500">{loadMoreError}</p>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleLoadMore}
+            disabled={loadingMore}
+          >
+            {loadingMore ? "불러오는 중..." : `더 보기 (${total - loadedDeals.length}개 남음)`}
+          </Button>
         </div>
       )}
 

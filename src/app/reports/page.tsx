@@ -9,6 +9,7 @@ import { FileText, Clock, ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { ReportStatus } from "@prisma/client";
 import { getUserTeamContext, reportReadWhere } from "@/lib/team-access";
+import { REPORTS_PAGE_SIZE, resolveListLimit } from "@/lib/list-paging";
 
 const STATUS_DISPLAY: Record<
   ReportStatus,
@@ -32,21 +33,34 @@ const AGENT_LABEL: Record<string, string> = {
   FINTECH:       "Vault",
 };
 
-export default async function ReportsPage() {
+export default async function ReportsPage({
+  searchParams,
+}: {
+  searchParams: { limit?: string };
+}) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/login");
 
   const { teamId } = await getUserTeamContext(session.user.id);
-  const reports = await prisma.report.findMany({
-    where: reportReadWhere(session.user.id, teamId),
-    include: {
-      deal: {
-        select: { id: true, companyName: true, sector: true, teamId: true },
+  const where = reportReadWhere(session.user.id, teamId);
+  // 예전엔 상한 없이 전 보고서를 섹션까지 함께 조회했다. 첫 화면은
+  // REPORTS_PAGE_SIZE개만 보여주고, "더 보기"가 ?limit을 키운다.
+  const limit = resolveListLimit(searchParams?.limit, REPORTS_PAGE_SIZE);
+
+  const [reports, total] = await Promise.all([
+    prisma.report.findMany({
+      where,
+      include: {
+        deal: {
+          select: { id: true, companyName: true, sector: true, teamId: true },
+        },
+        sections: { select: { id: true, status: true } },
       },
-      sections: { select: { id: true, status: true } },
-    },
-    orderBy: { createdAt: "desc" },
-  });
+      orderBy: { createdAt: "desc" },
+      take: limit,
+    }),
+    prisma.report.count({ where }),
+  ]);
 
   const totalFinal = reports.filter(
     (r) => r.status === ReportStatus.FINAL || r.status === ReportStatus.EXPORTED
@@ -152,6 +166,21 @@ export default async function ReportsPage() {
                 </Card>
               );
             })}
+          </div>
+        )}
+
+        {/* 더 보기 — 링크(서버 렌더)라 자바스크립트 없이도 동작한다 */}
+        {total > reports.length && (
+          <div className="flex flex-col items-center gap-2 pt-2">
+            <p className="text-xs text-gray-400">
+              전체 {total}개 중 {reports.length}개 표시 중
+            </p>
+            <Link
+              href={`/reports?limit=${reports.length + REPORTS_PAGE_SIZE}`}
+              className="text-sm text-blue-600 hover:text-blue-800 font-medium border border-gray-200 rounded-lg px-4 py-2"
+            >
+              더 보기 ({total - reports.length}개 남음)
+            </Link>
           </div>
         )}
       </div>
