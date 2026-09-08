@@ -7,7 +7,12 @@
 import { searchPubMed, formatPubMedForPrompt } from "./pubmed";
 import { searchClinicalTrials, formatClinicalTrialsForPrompt } from "./clinical-trials";
 import { searchFdaDrugsByIndication, formatFdaForPrompt } from "./openfda";
-import { searchKiprisPatents, formatKiprisForPrompt } from "./kipris";
+import {
+  searchKiprisPatents,
+  formatKiprisForPrompt,
+  summarizePatentPortfolio,
+  formatPatentSummaryForPrompt,
+} from "./kipris";
 
 export interface BioExternalData {
   pubmedArticles: Awaited<ReturnType<typeof searchPubMed>>;
@@ -134,6 +139,9 @@ export function formatExternalDataForPrompt(data: BioExternalData): string {
     sections.push(formatFdaForPrompt(data.fdaDrugs, data.indication));
   }
   if (data.kiprisPatents.length > 0) {
+    // 요약(계산값)을 원본 목록보다 먼저 넣어, AI가 등록/출원 건수를
+    // 목록에서 직접 세다가 틀리지 않고 이 값을 그대로 인용하게 한다.
+    sections.push(formatPatentSummaryForPrompt(summarizePatentPortfolio(data.kiprisPatents)));
     sections.push(formatKiprisForPrompt(data.kiprisPatents));
   }
 
