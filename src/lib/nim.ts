@@ -51,7 +51,17 @@ export async function callNimModel(
   model: string,
   systemPrompt: string,
   userPrompt: string,
-  options: { maxTokens?: number; temperature?: number } = {}
+  options: {
+    maxTokens?: number;
+    temperature?: number;
+    /**
+     * 모델별 부가 파라미터 그대로 전달(예: 추론 모델의
+     * `{ chat_template_kwargs: { enable_thinking: true } }`). NIM
+     * 플레이그라운드의 코드 예시가 모델마다 요구하는 파라미터가 달라서
+     * 하드코딩하지 않고 호출부(NIM_MODEL_CONFIGS)에서 넘기게 한다.
+     */
+    extraBody?: Record<string, unknown>;
+  } = {}
 ): Promise<NimCallResult> {
   const apiKey = process.env.NVIDIA_NIM_API_KEY?.trim();
   if (!apiKey) {
@@ -75,6 +85,7 @@ export async function callNimModel(
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
       ],
+      ...options.extraBody,
     }),
     signal: AbortSignal.timeout(90_000),
   });
@@ -108,4 +119,41 @@ export async function listNimModels(): Promise<string[]> {
   const client = getNimClient();
   const res = await client.models.list();
   return res.data.map((m) => m.id).sort();
+}
+
+/**
+ * 모델별 필수/권장 파라미터.
+ *
+ * NIM은 모델마다 build.nvidia.com의 "코드 예시" 탭에 서로 다른 파라미터를
+ * 요구한다 — 특히 추론(reasoning) 모델은 `chat_template_kwargs`로 사고
+ * 과정 노출 여부를 켜고 꺼야 한다(모델마다 키 이름도 다르다: 일부는
+ * `enable_thinking`, DeepSeek 계열은 `thinking`). 하드코딩된 단일 호출
+ * 방식으로는 이런 모델을 아예 못 돌리므로, 확인된 예시를 그대로 옮겨서
+ * 모델 ID로 조회할 수 있게 한다. 새 모델을 테스트하다 여기 없는 모델이
+ * 필요하면 NIM 모델 페이지의 코드 예시를 보고 여기에 추가하면 된다.
+ */
+export const NIM_MODEL_CONFIGS: Record<
+  string,
+  { maxTokens?: number; extraBody?: Record<string, unknown> }
+> = {
+  "nvidia/nemotron-3-super-120b-a12b": {
+    maxTokens: 16384,
+    extraBody: { chat_template_kwargs: { enable_thinking: true } },
+  },
+  "nvidia/nemotron-3-ultra-550b-a55b": {
+    maxTokens: 16384,
+    extraBody: { chat_template_kwargs: { enable_thinking: true } },
+  },
+  "deepseek-ai/deepseek-v4-pro-0813": {
+    maxTokens: 16384,
+    extraBody: { chat_template_kwargs: { thinking: false } },
+  },
+};
+
+/** 모델별 설정이 있으면 합쳐서 돌려준다(없으면 빈 값 — callNimModel 기본값 사용) */
+export function getNimModelOptions(model: string): {
+  maxTokens?: number;
+  extraBody?: Record<string, unknown>;
+} {
+  return NIM_MODEL_CONFIGS[model] ?? {};
 }

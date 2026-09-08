@@ -34,7 +34,12 @@ import { SectionKey, AgentType, DealSector } from "@prisma/client";
 import { buildSectionPrompt, type SectionPromptContext } from "../src/prompts/section-prompts";
 import { getSystemPrompt } from "../src/prompts/system-prompts";
 import { generateText, isAIConfigured, MODEL as PRODUCTION_MODEL } from "../src/lib/claude";
-import { callNimModel, isNimConfigured, listNimModels } from "../src/lib/nim";
+import {
+  callNimModel,
+  isNimConfigured,
+  listNimModels,
+  getNimModelOptions,
+} from "../src/lib/nim";
 
 // 판단력이 가장 많이 필요한 섹션 위주로 기본값을 잡았다(재무추정/밸류/
 // 리스크/의견종합) — "단순 포맷팅 섹션은 지금 모델로 충분, 판단이
@@ -168,7 +173,16 @@ async function main() {
       for (const model of requested) {
         console.log(`[NIM] ${model} 호출 중...`);
         try {
-          const r = await callNimModel(model, systemPrompt, userPrompt);
+          // 모델별로 필요한 파라미터(추론 모델의 chat_template_kwargs 등)가
+          // 있으면 자동으로 섞어 넣는다 — src/lib/nim.ts의
+          // NIM_MODEL_CONFIGS 참고. 새 모델을 테스트하다 실패하면 그
+          // 모델의 NIM 코드 예시를 보고 거기에 추가하면 된다.
+          const r = await callNimModel(
+            model,
+            systemPrompt,
+            userPrompt,
+            getNimModelOptions(model)
+          );
           results.push({
             label: `[NIM] ${model}`,
             ok: true,
