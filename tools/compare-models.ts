@@ -11,12 +11,16 @@
  * 조회/비교용 스크립트다.
  *
  * 사용법:
- *   NVIDIA_NIM_API_KEY=nvapi-... NIM_MODELS="meta/llama-3.3-70b-instruct,deepseek-ai/deepseek-r1" \
- *     npm run compare-models
+ *   .env.local에 NVIDIA_NIM_API_KEY와(선택) NIM_MODELS="모델1,모델2"를
+ *   채운 뒤 `npm run compare-models`만 실행하면 된다 — 이 스크립트는
+ *   `--env-file-if-exists=.env.local`로 실행되게 npm script에 등록돼
+ *   있어서, 터미널에 셸 문법으로 환경변수를 직접 넘길 필요가 없다
+ *   (윈도우 cmd/PowerShell도 `VAR=value command` 문법을 못 쓰므로 이
+ *   방식이 아니면 플랫폼마다 다르게 써야 한다).
  *
  *   NIM_MODELS를 비워두면 NIM 계정에서 사용 가능한 모델 목록만 조회해서
  *   보여주고 끝난다 — 정확한 모델 ID는 NIM 카탈로그가 계속 바뀌므로
- *   직접 골라서 다시 실행해야 한다.
+ *   직접 골라서 .env.local에 채운 뒤 다시 실행해야 한다.
  *
  *   OPENROUTER_API_KEY가 설정돼 있으면 현재 프로덕션 모델(claude.ts의
  *   MODEL)도 베이스라인으로 같이 돌린다. 둘 다 없어도 실행은 되고,
