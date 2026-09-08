@@ -42,6 +42,9 @@ yarn-error.log*
 /screenshots/
 /scripts/
 
+# tools/compare-models.ts가 생성하는 모델 비교 결과(로컬 벤치마킹용)
+/tools/output/
+
 # vercel
 .vercel
 
