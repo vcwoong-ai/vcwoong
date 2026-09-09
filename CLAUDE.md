@@ -89,7 +89,7 @@ Phase별 상세 지시는 `docs/phases/` 참고:
 | Phase | 파일 | 핵심 |
 |-------|------|------|
 | 1 | `01-setup.md` | 프로젝트 초기화 |
-| 2 | `02-database.md` | Supabase + 인증 |
+| 2 | `02-database.md` | Prisma + NextAuth (Neon) |
 | 3 | `03-core-engine.md` | 파싱 + 공통 코어 |
 | 4 | `04-bio-agent.md` | Dr. Cell (BIO) |
 | 5 | `05-template-engine.md` | 양식 재현 |
