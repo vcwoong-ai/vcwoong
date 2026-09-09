@@ -281,25 +281,25 @@ export function getNimModelOptions(model: string): {
 /**
  * 보고서 화면의 "다른 모델로 비교" 버튼이 기본으로 돌릴 모델 목록.
  *
- * 2026-09 실제 카탈로그 전수 확인 후 고른 4개 — 각각 다른 관점을 커버한다:
- *   - openai/gpt-oss-20b: 가볍고 빠름, 실제 호출 테스트에서 이미 성공 확인
- *   - deepseek-ai/deepseek-v4-pro-0813: 프로덕션 기본값(deepseek-v4-flash,
- *     OpenRouter)과 같은 계열의 상위 모델 — "업그레이드할 가치가 있는가"에
- *     바로 답을 줌
+ * 애초에 deepseek-ai/deepseek-v4-pro-0813과 moonshotai/kimi-k3도 넣었었는데,
+ * 실사용 중 이 계정에서 두 모델 다 90초→180초 타임아웃, 스트리밍 전환까지
+ * 다 해봐도 매번 응답 없이 실패했다(반면 이 목록의 나머지 모델은 항상 빠르게
+ * 성공) — 클라이언트 쪽 요청 방식 문제가 아니라 이 계정에 그 두 모델의
+ * 용량/키가 정상 배정 안 된 것으로 보여 목록에서 뺐다. 나중에 그 계정
+ * 문제가 해소되면 다시 넣어볼 수 있다.
+ *
+ * 지금 기본 3개 — 전부 실제 호출로 성공 확인됨:
+ *   - openai/gpt-oss-20b: 가볍고 빠름
  *   - nvidia/nemotron-3-super-120b-a12b: 판단이 필요한 섹션(밸류/리스크/
  *     의견종합)용 대형 MoE 모델
- *   - moonshotai/kimi-k3: 위 세 개와 다른 랩의 추론 모델 — "검증"이 목적일
- *     때 계열이 다른 의견 하나를 더 보는 데 의미가 있음
+ *   - meta/muse-glimmer-30b: 중간 크기, 별도 파라미터 불필요
  *
- * nemotron-3-ultra-550b-a55b는 이미 설정은 돼 있지만 550B급이라 온디맨드
- * 버튼 응답으로는 너무 느릴 수 있어 기본 목록엔 넣지 않았다. 필요하면
  * NIM_COMPARISON_MODELS 환경변수(콤마 구분)로 완전히 바꿀 수 있다.
  */
 const DEFAULT_COMPARISON_MODELS = [
   "openai/gpt-oss-20b",
-  "deepseek-ai/deepseek-v4-pro-0813",
   "nvidia/nemotron-3-super-120b-a12b",
-  "moonshotai/kimi-k3",
+  "meta/muse-glimmer-30b",
 ];
 
 export function getComparisonModels(): string[] {
