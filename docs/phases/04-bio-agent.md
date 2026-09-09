@@ -175,7 +175,7 @@ export async function searchFDAApprovals(
 // MFDS (한국 식약처) 데이터 - API 없으므로 캐시된 주요 데이터 사용
 const MFDS_RECENT_APPROVALS: DrugApproval[] = [
   // 캐시된 한국 신약 승인 데이터
-  // 실제로는 Supabase에 별도 테이블로 관리
+  // 실제로는 Prisma 테이블로 관리
 ];
 
 export async function searchMFDSApprovals(indication: string, limit = 5) {

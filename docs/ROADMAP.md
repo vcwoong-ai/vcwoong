@@ -22,7 +22,7 @@
 
 ### Phase 2 — 데이터베이스 + 인증
 - **파일:** [phases/02-database.md](phases/02-database.md)
-- **산출물:** Supabase 클라이언트, 마이그레이션 SQL, RLS, 로그인/회원가입
+- **산출물:** Prisma 스키마, NextAuth 설정, team-access 접근 제어, 로그인/회원가입
 - **시간:** ~1시간
 
 ### Phase 3 — 문서 파싱 + 공통 분석 코어
@@ -72,6 +72,6 @@ MVP 핵심 기능이 구현되었습니다. 남은 작업:
 
 - Vercel 프로덕션 배포
 - Toss Payments 결제 연동
-- Supabase/PostgreSQL 프로덕션 DB 마이그레이션
+- Neon(PostgreSQL) 프로덕션 DB 마이그레이션
 
 자세한 가이드: `docs/PROJECT.md`, `DEPLOYMENT.md`

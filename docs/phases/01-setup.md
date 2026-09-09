@@ -35,7 +35,7 @@ DealMind라는 SaaS 프로젝트를 시작합니다. 차근차근 진행해주�
 
 - **Frontend:** Next.js 14 (App Router) + TypeScript + Tailwind CSS + shadcn/ui
 - **Backend:** Next.js API Routes
-- **DB:** Supabase (PostgreSQL + Storage + Auth)
+- **DB:** PostgreSQL(Neon 권장) + Prisma ORM, 인증은 NextAuth.js
 - **AI:** Anthropic Claude API (claude-sonnet-4-6)
 - **결제:** Toss Payments (한국)
 - **배포:** Vercel
@@ -64,7 +64,7 @@ npx create-next-app@latest . --typescript --tailwind --app --no-src-dir --import
 
 ### 2. 필수 패키지 설치
 ```bash
-npm install @anthropic-ai/sdk @supabase/supabase-js @supabase/ssr
+npm install @anthropic-ai/sdk prisma @prisma/client next-auth @auth/prisma-adapter bcryptjs
 npm install pdf-parse mammoth xlsx pptxgenjs docx
 npm install lucide-react class-variance-authority clsx tailwind-merge
 npm install zod react-hook-form @hookform/resolvers
@@ -107,7 +107,8 @@ npx shadcn@latest add button card input textarea select dialog tabs badge progre
     /fintech            - Vault
   /orchestrator         - 섹터 선택, 통합
 /lib
-  /supabase             - DB 클라이언트
+  /prisma               - DB 클라이언트(schema.prisma는 저장소 루트)
+  /auth                 - NextAuth 설정
   /anthropic            - Claude API 래퍼
   /pptx                 - PPTX 생성
   /docx                 - Word 생성
@@ -146,9 +147,9 @@ npx shadcn@latest add button card input textarea select dialog tabs badge progre
 `.env.local.example` 파일 생성:
 ```
 ANTHROPIC_API_KEY=
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
-SUPABASE_SERVICE_ROLE_KEY=
+DATABASE_URL=
+DIRECT_URL=
+NEXTAUTH_SECRET=
 
 # Phase 4 이후 추가
 PUBMED_API_KEY=

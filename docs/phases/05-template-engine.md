@@ -455,7 +455,7 @@ export async function rebuildDOCX(input: any): Promise<Buffer> {
   1. 양식 분석 + 매핑 조회
   2. content 데이터를 매핑된 필드에 채움
   3. rebuildPPTX 또는 rebuildDOCX 호출
-  4. Supabase Storage에 저장
+  4. Vercel Blob(또는 로컬 스토리지)에 저장
   5. signed URL 반환
 
 ## 8. UI - 양식 등록 페이지
