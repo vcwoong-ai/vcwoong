@@ -281,25 +281,28 @@ export function getNimModelOptions(model: string): {
 /**
  * 보고서 화면의 "다른 모델로 비교" 버튼이 기본으로 돌릴 모델 목록.
  *
- * 애초에 deepseek-ai/deepseek-v4-pro-0813과 moonshotai/kimi-k3도 넣었었는데,
- * 실사용 중 이 계정에서 두 모델 다 90초→180초 타임아웃, 스트리밍 전환까지
- * 다 해봐도 매번 응답 없이 실패했다(반면 이 목록의 나머지 모델은 항상 빠르게
- * 성공) — 클라이언트 쪽 요청 방식 문제가 아니라 이 계정에 그 두 모델의
- * 용량/키가 정상 배정 안 된 것으로 보여 목록에서 뺐다. 나중에 그 계정
- * 문제가 해소되면 다시 넣어볼 수 있다.
+ * deepseek-ai/deepseek-v4-pro-0813은 한동안 계속 실패해서(타임아웃 →
+ * "Function ... not found for account" 404) 계정/용량 문제로 보고 목록에서
+ * 뺐었는데, 원인은 따로 있었다 — .env.local의 NIM_MODEL_KEYS JSON이
+ * 문법 오류(콜론 누락)로 깨져 있어서 전 모델이 공용 키로 폴백되고 있었고,
+ * 공용 키가 이 모델엔 안 맞았던 것. JSON을 고치고 나니 51초 만에 정상
+ * 응답했다 — 그래서 다시 넣었다. 반대로 meta/muse-glimmer-30b는 같은
+ * 조건에서 타임아웃이 나서 뺐다 — 필요하면 나중에 다시 시도해볼 것.
  *
  * 지금 기본 3개 — 전부 실제 호출로 성공 확인됨:
- *   - openai/gpt-oss-20b: 가볍고 빠름
+ *   - openai/gpt-oss-20b: 가볍고 빠름 (단, 실제 비교에서 자료에 없는
+ *     수치를 지어내는 사례가 한 번 관측됨 — 출력을 그대로 신뢰하지 말 것)
  *   - nvidia/nemotron-3-super-120b-a12b: 판단이 필요한 섹션(밸류/리스크/
- *     의견종합)용 대형 MoE 모델
- *   - meta/muse-glimmer-30b: 중간 크기, 별도 파라미터 불필요
+ *     의견종합)용 대형 MoE 모델, 지금까지 가장 빠르고 안정적
+ *   - deepseek-ai/deepseek-v4-pro-0813: 프로덕션 기본값과 같은 계열의
+ *     상위 모델 — 분량이 조금 김(600~1,200자 지침 대비 초과 경향)
  *
  * NIM_COMPARISON_MODELS 환경변수(콤마 구분)로 완전히 바꿀 수 있다.
  */
 const DEFAULT_COMPARISON_MODELS = [
   "openai/gpt-oss-20b",
   "nvidia/nemotron-3-super-120b-a12b",
-  "meta/muse-glimmer-30b",
+  "deepseek-ai/deepseek-v4-pro-0813",
 ];
 
 export function getComparisonModels(): string[] {
