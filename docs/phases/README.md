@@ -11,7 +11,7 @@
 |------|------|------|--------|
 | 0 | `00-quickstart.md` | 5분 | 빠른 시작 |
 | 1 | `01-setup.md` | 30분 | 프로젝트 초기화 |
-| 2 | `02-database.md` | 1시간 | Supabase + 인증 |
+| 2 | `02-database.md` | 1시간 | Prisma + NextAuth (Neon) |
 | 3 | `03-core-engine.md` | 2시간 | 파싱 + 코어 |
 | 4 | `04-bio-agent.md` | 2시간 | Dr. Cell |
 | 5 | `05-template-engine.md` | 2시간 | 양식 재현 |

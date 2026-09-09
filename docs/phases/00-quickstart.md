@@ -20,7 +20,7 @@ mkdir ~/dealmind && cd ~/dealmind
 | 서비스 | 용도 | 가격 | 링크 |
 |---|---|---|---|
 | Anthropic API | Claude API 호출 | $5 크레딧 무료 | https://console.anthropic.com |
-| Supabase | DB + 인증 + 스토리지 | 무료 (500MB) | https://supabase.com |
+| Neon | PostgreSQL DB (Prisma + NextAuth로 인증) | 무료 (0.5GB) | https://neon.tech |
 | Vercel | 배포 | 무료 (취미용) | https://vercel.com |
 | GitHub | 코드 저장소 | 무료 | https://github.com |
 | Toss Payments | 결제 (나중에) | 가입 무료 | https://toss.im/business |
@@ -30,10 +30,9 @@ mkdir ~/dealmind && cd ~/dealmind
 `.env.local` 파일을 만들고 다음 값을 채워두세요:
 
 ```bash
-ANTHROPIC_API_KEY=sk-ant-api03-...
-NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
-SUPABASE_SERVICE_ROLE_KEY=eyJ...
+DATABASE_URL=postgresql://<user>:<password>@<project>-pooler.<region>.aws.neon.tech/<db>?sslmode=require
+DIRECT_URL=postgresql://<user>:<password>@<project>.<region>.aws.neon.tech/<db>?sslmode=require
+NEXTAUTH_SECRET=change-this-to-a-random-32-char-string
 ```
 
 ### 4. Claude Code 시작
@@ -113,7 +112,7 @@ Step 6: 02-database.md로 반복
 - Anthropic 콘솔에서 사용량 한도 설정 권장
 
 ### 데이터 보안
-- IR 자료는 민감 정보 → Supabase RLS 정책 철저히
+- IR 자료는 민감 정보 → team-access.ts의 접근 제어 쿼리(dealReadWhere 등) 철저히 점검
 - 베타 사용자에게 NDA 또는 사용 약관 동의 받기
 - API 키는 절대 GitHub에 커밋 X (.env.local 사용)
 
@@ -133,8 +132,8 @@ Step 6: 02-database.md로 반복
 ### "토큰 한도 초과"
 → 다음 주까지 기다리거나 Max 플랜 업그레이드 ($100/월)
 
-### "Supabase 마이그레이션 실패"
-→ Supabase 대시보드의 SQL Editor에서 직접 SQL 실행
+### "Prisma 마이그레이션 실패"
+→ `npx prisma migrate deploy`를 직접 실행해서 에러 메시지 확인
 
 ---
 

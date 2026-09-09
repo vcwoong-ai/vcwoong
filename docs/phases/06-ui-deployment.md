@@ -249,7 +249,7 @@ export async function checkQuota(userId: string, action: 'report' | 'template'):
   used: number;
   limit: number;
 }> {
-  // Supabase에서 현재 월 사용량 조회
+  // Prisma(UsageLog)로 현재 월 사용량 조회
   // PLAN_LIMITS와 비교
   // 결과 반환
 }
@@ -304,7 +304,7 @@ export const metadata = {
 배포 가이드 문서 `/DEPLOYMENT.md` 작성:
 1. GitHub 레포 연결
 2. Vercel 환경 변수 설정 (목록)
-3. Supabase migration 실행
+3. Prisma migration 실행 (`npx prisma migrate deploy`)
 4. 도메인 설정
 5. Toss Payments 운영 키 설정
 
