@@ -114,10 +114,12 @@ export async function callNimModel(
      */
     extraBody?: Record<string, unknown>;
     /**
-     * 이 호출 하나가 기다릴 최대 시간(ms). 기본 90초는 로컬 CLI
-     * 비교(tools/compare-models.ts)용이고, Vercel 함수 안에서 부르는
-     * 곳(예: 보고서 화면의 온디맨드 비교)은 함수 실행시간 상한(Hobby
-     * 60초)보다 확실히 짧게 넘겨야 한다.
+     * 이 호출 하나가 기다릴 최대 시간(ms). 기본 180초는 로컬 CLI
+     * 비교(tools/compare-models.ts)용이다 — NIM 온디맨드 모델은 콜드
+     * 스타트(첫 호출 시 GPU 인스턴스를 새로 띄움) 때문에 90초로는 부족한
+     * 경우가 실제로 있어서 늘렸다. Vercel 함수 안에서 부르는 곳(예: 보고서
+     * 화면의 온디맨드 비교)은 이 기본값을 쓰지 않고 함수 실행시간 상한
+     * (Hobby 60초)보다 짧은 값을 명시적으로 넘긴다 — 거기는 건드리지 말 것.
      */
     timeoutMs?: number;
   } = {}
@@ -140,7 +142,7 @@ export async function callNimModel(
       ],
       ...options.extraBody,
     }),
-    signal: AbortSignal.timeout(options.timeoutMs ?? 90_000),
+    signal: AbortSignal.timeout(options.timeoutMs ?? 180_000),
   });
 
   const rawText = await res.text();
