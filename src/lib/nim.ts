@@ -1,12 +1,14 @@
 /**
- * NVIDIA NIM(build.nvidia.com) 호출 — 모델 벤치마킹 전용.
+ * NVIDIA NIM(build.nvidia.com) 호출 — 모델 벤치마킹·비교 전용.
  *
- * 프로덕션 생성 파이프라인(claude.ts)과는 완전히 분리돼 있다. 목적이
- * 다르기 때문이다: claude.ts는 실제 보고서를 만드는 단일 프로바이더
- * 경로이고, 이 파일은 "다른 모델로 같은 프롬프트를 돌리면 결과가 얼마나
- * 다른가"를 사람이 직접 비교해보기 위한 도구다. tools/compare-models.ts
- * 에서만 사용한다 — report-generation.ts 등 실제 생성 경로에서 import하지
- * 말 것.
+ * 실제 보고서 내용을 만드는 경로는 여전히 claude.ts(OpenRouter) 단일
+ * 경로뿐이다 — 이 파일이 만든 결과가 reportSection.content에 저장되는
+ * 일은 없다. 두 곳에서 쓴다:
+ *   1. tools/compare-models.ts — CLI로 로컬에서 여러 모델을 비교
+ *   2. src/app/api/reports/[id]/sections/compare/route.ts — 보고서
+ *      화면의 "다른 모델로 비교" 버튼(온디맨드, 읽기 전용 — 결과를 클릭해도
+ *      섹션 내용이 바뀌지 않는다). 어떤 모델을 프로덕션에 쓸지 판단하기
+ *      위한 참고 자료일 뿐이다.
  *
  * NIM은 OpenAI 호환 API라 openai 패키지를 그대로 쓴다.
  */
@@ -111,6 +113,13 @@ export async function callNimModel(
      * 하드코딩하지 않고 호출부(NIM_MODEL_CONFIGS)에서 넘기게 한다.
      */
     extraBody?: Record<string, unknown>;
+    /**
+     * 이 호출 하나가 기다릴 최대 시간(ms). 기본 90초는 로컬 CLI
+     * 비교(tools/compare-models.ts)용이고, Vercel 함수 안에서 부르는
+     * 곳(예: 보고서 화면의 온디맨드 비교)은 함수 실행시간 상한(Hobby
+     * 60초)보다 확실히 짧게 넘겨야 한다.
+     */
+    timeoutMs?: number;
   } = {}
 ): Promise<NimCallResult> {
   const apiKey = resolveApiKeyForModel(model);
@@ -131,7 +140,7 @@ export async function callNimModel(
       ],
       ...options.extraBody,
     }),
-    signal: AbortSignal.timeout(90_000),
+    signal: AbortSignal.timeout(options.timeoutMs ?? 90_000),
   });
 
   const rawText = await res.text();
@@ -211,4 +220,36 @@ export function getNimModelOptions(model: string): {
   extraBody?: Record<string, unknown>;
 } {
   return NIM_MODEL_CONFIGS[model] ?? {};
+}
+
+/**
+ * 보고서 화면의 "다른 모델로 비교" 버튼이 기본으로 돌릴 모델 목록.
+ *
+ * 2026-09 실제 카탈로그 전수 확인 후 고른 4개 — 각각 다른 관점을 커버한다:
+ *   - openai/gpt-oss-20b: 가볍고 빠름, 실제 호출 테스트에서 이미 성공 확인
+ *   - deepseek-ai/deepseek-v4-pro-0813: 프로덕션 기본값(deepseek-v4-flash,
+ *     OpenRouter)과 같은 계열의 상위 모델 — "업그레이드할 가치가 있는가"에
+ *     바로 답을 줌
+ *   - nvidia/nemotron-3-super-120b-a12b: 판단이 필요한 섹션(밸류/리스크/
+ *     의견종합)용 대형 MoE 모델
+ *   - moonshotai/kimi-k3: 위 세 개와 다른 랩의 추론 모델 — "검증"이 목적일
+ *     때 계열이 다른 의견 하나를 더 보는 데 의미가 있음
+ *
+ * nemotron-3-ultra-550b-a55b는 이미 설정은 돼 있지만 550B급이라 온디맨드
+ * 버튼 응답으로는 너무 느릴 수 있어 기본 목록엔 넣지 않았다. 필요하면
+ * NIM_COMPARISON_MODELS 환경변수(콤마 구분)로 완전히 바꿀 수 있다.
+ */
+const DEFAULT_COMPARISON_MODELS = [
+  "openai/gpt-oss-20b",
+  "deepseek-ai/deepseek-v4-pro-0813",
+  "nvidia/nemotron-3-super-120b-a12b",
+  "moonshotai/kimi-k3",
+];
+
+export function getComparisonModels(): string[] {
+  const fromEnv = (process.env.NIM_COMPARISON_MODELS ?? "")
+    .split(",")
+    .map((m) => m.trim())
+    .filter(Boolean);
+  return fromEnv.length > 0 ? fromEnv : DEFAULT_COMPARISON_MODELS;
 }

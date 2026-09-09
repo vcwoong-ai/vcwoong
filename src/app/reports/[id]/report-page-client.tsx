@@ -175,9 +175,11 @@ function GeneratingView({
 export function ReportPageClient({
   report,
   canEdit = true,
+  nimConfigured = false,
 }: {
   report: Report;
   canEdit?: boolean;
+  nimConfigured?: boolean;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -475,6 +477,7 @@ export function ReportPageClient({
         }
         improveRequest={canEdit ? improveRequest : null}
         onImproveHandled={() => setImproveRequest(null)}
+        nimConfigured={nimConfigured}
       />
     </div>
   );

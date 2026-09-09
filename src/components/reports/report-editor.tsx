@@ -16,6 +16,8 @@ import {
   BarChart2,
   Printer,
   RefreshCw,
+  GitCompare,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SECTION_META, getKoreanVisualWidth } from "@/types";
@@ -58,6 +60,16 @@ interface ReportEditorProps {
   onImproveHandled?: () => void;
   /** 조회 전용 (팀 심사역 등) */
   readOnly?: boolean;
+  /** NVIDIA NIM 설정 여부 — false면 "다른 모델로 비교" 버튼 자체를 숨긴다 */
+  nimConfigured?: boolean;
+}
+
+interface CompareModelResult {
+  model: string;
+  ok: boolean;
+  content?: string;
+  tokensUsed?: number;
+  error?: string;
 }
 
 export function ReportEditor({
@@ -76,6 +88,7 @@ export function ReportEditor({
   improveRequest,
   onImproveHandled,
   readOnly = false,
+  nimConfigured = false,
 }: ReportEditorProps) {
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
   const toast = useToast();
@@ -90,6 +103,14 @@ export function ReportEditor({
     sectionKey: string;
     score: number;
   } | null>(null);
+  const [comparingKey, setComparingKey] = useState<string | null>(null);
+  const [openCompareKey, setOpenCompareKey] = useState<string | null>(null);
+  const [compareResults, setCompareResults] = useState<
+    Record<string, CompareModelResult[]>
+  >({});
+  const [compareError, setCompareError] = useState<
+    Record<string, string | undefined>
+  >({});
   const handledImproveToken = useRef<number | null>(null);
 
   // 서버에서 섹션이 갱신되면(재생성·일괄개선 후 refresh) 로컬 상태를 다시 맞춘다
@@ -242,6 +263,47 @@ export function ReportEditor({
       });
     } finally {
       setRegeneratingKey(null);
+    }
+  };
+
+  /**
+   * "다른 모델로 비교" — 지금 섹션과 완전히 같은 프롬프트를 NIM의 다른
+   * 모델 여러 개로 병렬 호출해서 나란히 보여준다. 읽기 전용이라 결과가
+   * 나와도 섹션 내용은 그대로다(교체 기능 없음).
+   */
+  const compareSection = async (section: Section) => {
+    if (openCompareKey === section.sectionKey) {
+      setOpenCompareKey(null);
+      return;
+    }
+    setOpenCompareKey(section.sectionKey);
+    if (compareResults[section.sectionKey] || comparingKey) return;
+
+    setComparingKey(section.sectionKey);
+    setCompareError((prev) => ({ ...prev, [section.sectionKey]: undefined }));
+    try {
+      const response = await fetch(`/api/reports/${reportId}/sections/compare`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sectionKey: section.sectionKey }),
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error ?? "모델 비교 실패");
+      }
+      const { data } = await response.json();
+      setCompareResults((prev) => ({
+        ...prev,
+        [section.sectionKey]: data.results ?? [],
+      }));
+    } catch (error) {
+      setCompareError((prev) => ({
+        ...prev,
+        [section.sectionKey]:
+          error instanceof Error ? error.message : "다시 시도해 주세요",
+      }));
+    } finally {
+      setComparingKey(null);
     }
   };
 
@@ -446,6 +508,22 @@ export function ReportEditor({
                           )}
                           재생성
                         </Button>
+                        {nimConfigured && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => compareSection(section)}
+                            disabled={comparingKey !== null && comparingKey !== section.sectionKey}
+                            title="같은 프롬프트를 다른 모델로도 호출해 비교(읽기 전용)"
+                          >
+                            {comparingKey === section.sectionKey ? (
+                              <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                            ) : (
+                              <GitCompare className="w-3 h-3 mr-1" />
+                            )}
+                            다른 모델로 비교
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="sm"
@@ -521,6 +599,60 @@ export function ReportEditor({
                   </div>
                 )}
               </CardContent>
+              {openCompareKey === section.sectionKey && (
+                <CardContent className="pt-0 border-t">
+                  <div className="flex items-center justify-between mb-3 mt-3">
+                    <p className="text-xs font-medium text-gray-500">
+                      다른 모델 비교 결과 (읽기 전용 — 클릭해도 섹션 내용은 바뀌지 않습니다)
+                    </p>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setOpenCompareKey(null)}
+                    >
+                      <X className="w-3 h-3 mr-1" />
+                      닫기
+                    </Button>
+                  </div>
+                  {comparingKey === section.sectionKey ? (
+                    <div className="flex items-center gap-2 text-sm text-gray-500 py-6 justify-center">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      여러 모델을 동시에 호출하는 중 — 최대 45초 정도 걸릴 수 있습니다
+                    </div>
+                  ) : compareError[section.sectionKey] ? (
+                    <p className="text-sm text-red-600 py-2">
+                      {compareError[section.sectionKey]}
+                    </p>
+                  ) : (
+                    <div className="space-y-3">
+                      {(compareResults[section.sectionKey] ?? []).map((r) => (
+                        <div
+                          key={r.model}
+                          className="rounded-lg border border-gray-200 p-3"
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs font-mono font-medium text-gray-700">
+                              {r.model}
+                            </span>
+                            {r.ok && (
+                              <span className="text-xs text-gray-400">
+                                {getKoreanVisualWidth(r.content ?? "").toLocaleString()}자
+                              </span>
+                            )}
+                          </div>
+                          {r.ok ? (
+                            <Markdown content={r.content ?? ""} />
+                          ) : (
+                            <p className="text-xs text-red-600">
+                              실패: {r.error}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              )}
             </Card>
           );
         })}

@@ -33,7 +33,7 @@ import {
   INBOUND_STATUS_TONE,
   SOURCE_LABEL,
   scoreTone,
-} from "@/lib/sourcing";
+} from "@/lib/sourcing-shared";
 import type { DealSourceType, InboundStatus } from "@prisma/client";
 
 interface Lead {

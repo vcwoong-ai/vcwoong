@@ -13,7 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, RefreshCw, Gauge } from "lucide-react";
-import { SCORE_DIMENSIONS, scoreLabel, type ScoreDimensionKey } from "@/lib/deal-scoring";
+import { SCORE_DIMENSIONS, scoreLabel, type ScoreDimensionKey } from "@/lib/deal-scoring-shared";
 
 interface DealScore {
   overall: number;

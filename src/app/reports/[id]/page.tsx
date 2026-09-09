@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { AppLayout } from "@/components/layout/app-layout";
 import { ReportPageClient } from "./report-page-client";
 import { getUserTeamContext, reportReadWhere, canEditResource } from "@/lib/team-access";
+import { isNimConfigured } from "@/lib/nim";
 
 export default async function ReportPage({
   params,
@@ -43,6 +44,7 @@ export default async function ReportPage({
         key={report.id}
         report={JSON.parse(JSON.stringify(report))}
         canEdit={canEdit}
+        nimConfigured={isNimConfigured()}
       />
     </AppLayout>
   );

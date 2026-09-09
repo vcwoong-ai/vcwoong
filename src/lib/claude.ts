@@ -5,9 +5,11 @@
  *   1. AI_MODEL (기본: deepseek/deepseek-v4-flash-0731)
  *   2. 실패(429/5xx/타임아웃, 또는 모델 ID·인증 오류) → AI_FALLBACK_MODEL
  *
- * 모든 호출은 OpenRouter(OPENROUTER_API_KEY)로 나간다.
+ * 모든 호출은 OpenRouter(OPENROUTER_API_KEY)로 나간다 — withModelOverride로
+ * 감싼 구간만 예외(아래 참고).
  */
 
+import { AsyncLocalStorage } from "node:async_hooks";
 import OpenAI from "openai";
 import { generateMockContent } from "./mock-generator";
 import { BRAND } from "./brand";
@@ -114,6 +116,38 @@ export interface GenerateTextResult {
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * generateText가 실제로 OpenRouter를 부르는 대신 이 함수로 대체되도록
+ * 하는 훅. 8개 섹터 에이전트(bio-agent.ts 등)는 전부 이 파일의
+ * generateText를 직접 import해서 호출하는 구조라, 에이전트 각각을 고치지
+ * 않고도 "같은 프롬프트를 다른 모델로 호출"을 가능하게 하려면 이 함수
+ * 자체에 훅을 둬야 한다 — 그래야 각 에이전트의 섹터 특화 프롬프트(BIO의
+ * rNPV, IT의 SaaS 지표 등)가 그대로 재사용된다.
+ *
+ * AsyncLocalStorage를 쓰는 이유: 요청마다(그리고 같은 요청 안에서 여러
+ * 모델을 병렬로 부를 때도) 서로 다른 override가 섞이지 않아야 한다.
+ * Node의 AsyncLocalStorage는 각 run() 호출의 비동기 실행 흐름에만
+ * store를 노출하므로, Promise.allSettled로 여러 모델을 동시에 돌려도
+ * 각자 자기 override만 보게 된다(동시 요청 간에도 마찬가지).
+ *
+ * 현재 유일한 사용처: 보고서 화면의 "다른 모델로 비교" 기능
+ * (src/app/api/reports/[id]/sections/compare/route.ts) — 실제 보고서
+ * 저장 경로(report-generation.ts)는 이 훅을 쓰지 않는다.
+ */
+type ModelCallOverride = (
+  messages: ClaudeMessage[],
+  options: ClaudeOptions
+) => Promise<GenerateTextResult>;
+
+const modelOverrideStorage = new AsyncLocalStorage<ModelCallOverride>();
+
+export function withModelOverride<T>(
+  override: ModelCallOverride,
+  fn: () => Promise<T>
+): Promise<T> {
+  return modelOverrideStorage.run(override, fn);
+}
 
 async function callOnce(
   model: string,
@@ -259,6 +293,9 @@ export async function generateText(
   messages: ClaudeMessage[],
   options: ClaudeOptions = {}
 ): Promise<GenerateTextResult> {
+  const override = modelOverrideStorage.getStore();
+  if (override) return override(messages, options);
+
   if (!isAIConfigured()) {
     const content = generateMockContent(messages);
     await sleep(400);

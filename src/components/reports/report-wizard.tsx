@@ -23,7 +23,7 @@ import {
   Brain,
 } from "lucide-react";
 import { AgentType, DealSector } from "@prisma/client";
-import { AGENT_META } from "@/agents";
+import { AGENT_META } from "@/agents/agent-meta";
 import { cn } from "@/lib/utils";
 
 interface Template {
