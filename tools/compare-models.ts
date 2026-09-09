@@ -26,6 +26,31 @@
  *   MODEL)도 베이스라인으로 같이 돌린다. 둘 다 없어도 실행은 되고,
  *   prompt.txt만 생성해서 NIM 플레이그라운드에 직접 붙여넣을 수 있다.
  *
+ * 실제 회사 자료(IR 덱 등)로 테스트하려면:
+ *   비공개 정보가 섞인 실제 딜 자료를 이 파일(git 추적 대상)에 직접
+ *   박아넣지 않는다 — 대신 `tools/local-input/compare-context.json`
+ *   (gitignore 처리됨, 커밋되지 않음)에 아래 형태로 채워두면 그 파일을
+ *   읽어서 사용한다:
+ *     {
+ *       "companyName": "...", "sector": "IT",
+ *       "investRound": "...", "investAmount": 80, "valuation": 600,
+ *       "documentContext": "...", "additionalContext": "..."
+ *     }
+ *   이 파일이 없으면 아래 내장된 가상 BIO 샘플로 대체 실행된다.
+ *
+ * 관련 환경변수:
+ *   - COMPARE_CONTEXT_FILE: compare-context.json 경로를 바꾸고 싶을 때
+ *   - COMPARE_SECTION: 비교할 섹션(SectionKey). 외부 컨텍스트를 쓸 땐
+ *     기본값 MARKET_ANALYSIS, 내장 샘플일 땐 기본값 OPINION_SUMMARY
+ *   - COMPARE_AGENT_SECTOR: 시스템 프롬프트에 쓸 섹터 에이전트
+ *     (AgentType/DealSector 키, 예: IT/BIO/DEEPTECH/MANUFACTURING/
+ *     CONTENT/FINTECH/GENERAL). 외부 컨텍스트 기본값 IT, 내장 샘플
+ *     기본값 BIO
+ *   - COMPARE_MAX_CONTENT=1: 프롬프트의 "분량은 600~1,200자 내외" 지침을
+ *     이 비교 실행에서만 무시하고, 모델이 자료에서 뽑아낼 수 있는 내용을
+ *     최대한 상세히 쓰도록 지시를 덧붙인다(각 모델이 얼마나 풍부한
+ *     아웃풋을 내는지 비교하려는 목적). max_tokens도 같이 올려준다.
+ *
  * 섹션·회사 정보를 바꾸려면 아래 SAMPLE_* 상수를 수정하면 된다.
  */
 import fs from "fs";
@@ -41,13 +66,47 @@ import {
   getNimModelOptions,
 } from "../src/lib/nim";
 
+const CONTEXT_FILE =
+  process.env.COMPARE_CONTEXT_FILE ??
+  path.join(process.cwd(), "tools", "local-input", "compare-context.json");
+
+interface ExternalCompareContext extends SectionPromptContext {
+  // additionalContext 등은 SectionPromptContext에 이미 있음
+}
+
+function loadExternalContext(): ExternalCompareContext | null {
+  if (!fs.existsSync(CONTEXT_FILE)) return null;
+  try {
+    const raw = JSON.parse(fs.readFileSync(CONTEXT_FILE, "utf-8"));
+    console.log(`[컨텍스트] 로컬 파일에서 로드: ${CONTEXT_FILE}`);
+    return raw as ExternalCompareContext;
+  } catch (error) {
+    console.error(
+      `[경고] ${CONTEXT_FILE} 파싱 실패 — 내장 샘플로 대체합니다:`,
+      error instanceof Error ? error.message : error
+    );
+    return null;
+  }
+}
+
+const EXTERNAL_CONTEXT = loadExternalContext();
+const MAX_CONTENT_MODE = /^(1|true|yes)$/i.test(process.env.COMPARE_MAX_CONTENT ?? "");
+
 // 판단력이 가장 많이 필요한 섹션 위주로 기본값을 잡았다(재무추정/밸류/
 // 리스크/의견종합) — "단순 포맷팅 섹션은 지금 모델로 충분, 판단이
 // 필요한 섹션만 강한 모델로 바꿀 가치가 있는가"를 보려는 목적이라.
+// 단, 외부(실제) 자료를 쓸 때는 시장분석처럼 뽑아낼 내용이 많은 섹션이
+// "얼마나 많은 내용을 담아내는가" 비교에 더 적합해 기본값을 다르게 잡았다.
 const SAMPLE_SECTION: SectionKey =
-  (process.env.COMPARE_SECTION as SectionKey) ?? SectionKey.OPINION_SUMMARY;
+  (process.env.COMPARE_SECTION as SectionKey) ??
+  (EXTERNAL_CONTEXT ? SectionKey.MARKET_ANALYSIS : SectionKey.OPINION_SUMMARY);
 
-const SAMPLE_CONTEXT: SectionPromptContext = {
+const SECTOR_KEY = (process.env.COMPARE_AGENT_SECTOR as keyof typeof AgentType) ??
+  (EXTERNAL_CONTEXT ? "IT" : "BIO");
+const AGENT_TYPE: AgentType = AgentType[SECTOR_KEY] ?? AgentType.BIO;
+const DEAL_SECTOR: DealSector = (DealSector[SECTOR_KEY as keyof typeof DealSector] as DealSector) ?? DealSector.BIO;
+
+const SAMPLE_CONTEXT_BIO: SectionPromptContext = {
   companyName: "㈜테라젠셀",
   sector: "BIO",
   investRound: "Series B",
@@ -82,6 +141,29 @@ const SAMPLE_CONTEXT: SectionPromptContext = {
     "밸류에이션 섹션에서 비교기업 대비 30% 할인된 진입가로 평가함",
 };
 
+const SAMPLE_CONTEXT: SectionPromptContext = EXTERNAL_CONTEXT ?? SAMPLE_CONTEXT_BIO;
+
+// "최대한 많은 내용을 뽑아내서 모델별 아웃풋 풍부함을 비교"하려는 목적의
+// 실행에서는, section-prompts.ts가 모든 섹션에 공통으로 박아넣는
+// "분량은 600~1,200자 내외" 지침을 이 프롬프트 뒤에 반박 지침을 덧붙여
+// 무력화한다(프롬프트 뒤쪽 지침이 우선 적용되는 경향을 이용). 프로덕션
+// section-prompts.ts 자체는 건드리지 않는다 — 이 스크립트에서만 적용.
+const MAX_CONTENT_INSTRUCTION = `
+
+## [비교 테스트 전용 지침 — 위 "분량은 600~1,200자 내외" 지침보다 이 지침을 우선하세요]
+이번 실행은 모델별 출력 "풍부함"을 비교하기 위한 벤치마크입니다. 분량
+제한은 적용하지 않습니다. 대신:
+- 제공된 자료에 있는 모든 유의미한 수치·날짜·기관명·건수·비교 항목을
+  빠짐없이 반영해 가능한 한 상세하게 작성하세요. 요약하지 말고 풀어
+  쓰세요.
+- 표면적 결론이 아니라 근거(어느 자료의 어떤 수치인지)까지 구체적으로
+  제시하세요.
+- 필요하면 섹션 내부를 소제목으로 나눠 구조화하세요.
+- 자료에 상충되는 수치가 있으면 임의로 하나를 고르지 말고 둘 다
+  제시한 뒤 "확인 필요"라고 표시하세요.`;
+
+const BASE_MAX_TOKENS = MAX_CONTENT_MODE ? 8192 : 4096;
+
 interface CompareResult {
   label: string;
   ok: boolean;
@@ -104,8 +186,15 @@ async function main() {
   );
   fs.mkdirSync(outDir, { recursive: true });
 
-  const systemPrompt = getSystemPrompt(AgentType.BIO, DealSector.BIO);
-  const userPrompt = buildSectionPrompt(SAMPLE_SECTION, SAMPLE_CONTEXT);
+  const systemPrompt = getSystemPrompt(AGENT_TYPE, DEAL_SECTOR);
+  const userPrompt =
+    buildSectionPrompt(SAMPLE_SECTION, SAMPLE_CONTEXT) +
+    (MAX_CONTENT_MODE ? MAX_CONTENT_INSTRUCTION : "");
+
+  console.log(
+    `[설정] 섹션=${SAMPLE_SECTION} 섹터=${AGENT_TYPE} 회사=${SAMPLE_CONTEXT.companyName}` +
+      (MAX_CONTENT_MODE ? " (최대 분량 모드)" : "")
+  );
 
   fs.writeFileSync(
     path.join(outDir, "prompt.txt"),
@@ -124,7 +213,7 @@ async function main() {
     try {
       const r = await generateText([{ role: "user", content: userPrompt }], {
         systemPrompt,
-        maxTokens: 4096,
+        maxTokens: BASE_MAX_TOKENS,
         temperature: 0.35,
       });
       results.push({
@@ -177,12 +266,11 @@ async function main() {
           // 있으면 자동으로 섞어 넣는다 — src/lib/nim.ts의
           // NIM_MODEL_CONFIGS 참고. 새 모델을 테스트하다 실패하면 그
           // 모델의 NIM 코드 예시를 보고 거기에 추가하면 된다.
-          const r = await callNimModel(
-            model,
-            systemPrompt,
-            userPrompt,
-            getNimModelOptions(model)
-          );
+          const modelOptions = getNimModelOptions(model);
+          const r = await callNimModel(model, systemPrompt, userPrompt, {
+            ...modelOptions,
+            maxTokens: Math.max(modelOptions.maxTokens ?? 0, BASE_MAX_TOKENS),
+          });
           results.push({
             label: `[NIM] ${model}`,
             ok: true,
