@@ -98,6 +98,16 @@ export interface NimCallResult {
  * ("404 status code (no body)") 실제 응답 본문을 정확히 보여주지 않아서,
  * 계정/권한 문제인지 모델 이름 문제인지 구분이 안 됐다. 원본 응답 텍스트를
  * 그대로 예외 메시지에 담아 진단할 수 있게 한다.
+ *
+ * 항상 스트리밍(`stream: true`)으로 요청한다 — 실사용 중 확인된 것: 일부
+ * 모델(kimi-k3, deepseek-v4-pro-0813)은 스트리밍 없이 부르면 응답을 끝까지
+ * 만들 때까지 아무것도 안 주고 있다가 우리 쪽 타임아웃(180초)에 걸려
+ * 죽는다 — 90초→180초로 늘려도 이 두 모델은 그대로 실패했다. kimi-k3의
+ * NIM 공식 코드 예시도 기본값이 `stream=True`다. 나머지 모델(gpt-oss-20b,
+ * nemotron 계열)은 스트리밍 여부와 무관하게 잘 되므로, 모든 모델에 대해
+ * 스트리밍으로 통일해도 안전하다 — 호출부는 이 함수가 내부적으로 어떻게
+ * 받아오는지 몰라도 되고(반환 타입 동일), 청크를 모아 하나의 문자열로
+ * 합쳐서 돌려준다.
  */
 export async function callNimModel(
   model: string,
@@ -131,6 +141,7 @@ export async function callNimModel(
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
+      Accept: "text/event-stream",
     },
     body: JSON.stringify({
       model,
@@ -140,13 +151,17 @@ export async function callNimModel(
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
       ],
+      stream: true,
+      // 스트리밍 마지막 청크에 usage를 함께 달라고 요청(OpenAI 호환
+      // 파라미터) — 없으면 토큰 수를 알 방법이 없다.
+      stream_options: { include_usage: true },
       ...options.extraBody,
     }),
     signal: AbortSignal.timeout(options.timeoutMs ?? 180_000),
   });
 
-  const rawText = await res.text();
   if (!res.ok) {
+    const rawText = await res.text();
     const requestId = res.headers.get("x-request-id") ?? res.headers.get("nvcf-reqid");
     throw new Error(
       `HTTP ${res.status} ${res.statusText}` +
@@ -155,16 +170,55 @@ export async function callNimModel(
     );
   }
 
-  const data = JSON.parse(rawText) as {
-    choices?: Array<{ message?: { content?: string } }>;
-    usage?: { prompt_tokens?: number; completion_tokens?: number };
-  };
+  if (!res.body) {
+    throw new Error(`${model}: 스트리밍 응답 본문이 없습니다`);
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let content = "";
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? ""; // 아직 안 끝난 마지막 줄은 다음 청크로 넘긴다
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith("data:")) continue;
+      const data = trimmed.slice(5).trim();
+      if (data === "[DONE]") continue;
+
+      let json: {
+        choices?: Array<{ delta?: { content?: string } }>;
+        usage?: { prompt_tokens?: number; completion_tokens?: number };
+      };
+      try {
+        json = JSON.parse(data);
+      } catch {
+        continue; // 청크 경계에서 잘린 불완전한 JSON은 건너뛴다
+      }
+
+      const delta = json.choices?.[0]?.delta?.content;
+      if (delta) content += delta;
+      if (json.usage) {
+        inputTokens = json.usage.prompt_tokens ?? inputTokens;
+        outputTokens = json.usage.completion_tokens ?? outputTokens;
+      }
+    }
+  }
 
   return {
     model,
-    content: data.choices?.[0]?.message?.content ?? "",
-    inputTokens: data.usage?.prompt_tokens ?? 0,
-    outputTokens: data.usage?.completion_tokens ?? 0,
+    content,
+    inputTokens,
+    outputTokens,
     elapsedMs: Date.now() - startedAt,
   };
 }
