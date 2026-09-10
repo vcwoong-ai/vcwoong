@@ -1,60 +1,23 @@
 /**
- * In-memory progress tracking for async report generation.
- * NOTE: works for single-process (local dev / single container).
- * For multi-instance production, replace with Redis/Upstash.
+ * 보고서 생성 진행 상황 — Report.currentSectionTitle 컬럼에 저장한다.
+ *
+ * 예전엔 in-memory Map이었는데, Vercel 서버리스에서는 /run(쓰기)과
+ * /status(읽기)가 각각 다른 인스턴스에서 실행될 수 있어 한 인스턴스가 적은
+ * 진행률을 다른 인스턴스가 보지 못하는 문제가 있었다. 완성된 섹션 수는 이미
+ * ReportSection 테이블(DB)로 세고 있으므로, 여기서는 "지금 어느 섹션을
+ * 만들고 있는지"만 Report 행에 얹어 모든 인스턴스가 같은 값을 보게 한다.
+ *
+ * 실패해도 진행률 문구가 살짝 부정확해질 뿐 생성 자체는 계속돼야 하므로
+ * 쓰기는 fire-and-forget(.catch 무시)이다 — 호출부가 await로 기다릴 필요가
+ * 없어 섹션 루프의 타이밍에 영향을 주지 않는다.
  */
+import { prisma } from "./prisma";
 
-export interface GenerationProgress {
-  reportId: string;
-  completed: number;
-  total: number;
-  currentSection: string;
-  status: "generating" | "completed" | "error";
-  error?: string;
-}
-
-const store = new Map<string, GenerationProgress>();
-
-export function initProgress(reportId: string, total: number): void {
-  store.set(reportId, {
-    reportId,
-    completed: 0,
-    total,
-    currentSection: "준비 중...",
-    status: "generating",
-  });
-}
-
-export function updateProgress(
+export function setCurrentSection(
   reportId: string,
-  completed: number,
-  currentSection: string
+  sectionTitle: string | null
 ): void {
-  const prev = store.get(reportId);
-  if (!prev) return;
-  store.set(reportId, { ...prev, completed, currentSection });
-}
-
-export function completeProgress(reportId: string): void {
-  const prev = store.get(reportId);
-  if (!prev) return;
-  store.set(reportId, {
-    ...prev,
-    completed: prev.total,
-    currentSection: "완료",
-    status: "completed",
-  });
-  // Auto-cleanup after 5 min
-  setTimeout(() => store.delete(reportId), 5 * 60 * 1000);
-}
-
-export function errorProgress(reportId: string, error: string): void {
-  const prev = store.get(reportId);
-  if (!prev) return;
-  store.set(reportId, { ...prev, status: "error", error });
-  setTimeout(() => store.delete(reportId), 5 * 60 * 1000);
-}
-
-export function getProgress(reportId: string): GenerationProgress | undefined {
-  return store.get(reportId);
+  prisma.report
+    .update({ where: { id: reportId }, data: { currentSectionTitle: sectionTitle } })
+    .catch(() => {});
 }

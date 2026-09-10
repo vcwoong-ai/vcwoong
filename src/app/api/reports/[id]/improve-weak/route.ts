@@ -18,6 +18,13 @@ import {
   permissionDeniedMessage,
 } from "@/lib/team-access";
 
+// AI 호출 라우트 — 기본 함수 실행시간(플랫폼 기본값, Hobby 플랜은 10초)로는
+// 턱없이 부족하다. 다만 이 라우트는 섹션을 최대 5개까지 "순차" 재생성하는
+// 구조라 60초를 줘도 최악의 경우(섹션당 AI_CALL_BUDGET_MS 40초 x 5)는 여전히
+// 넘칠 수 있다 — 남은 위험은 그대로 남겨두고(아래 report-generation.ts 같은
+// 재개형 구조 도입은 이번 범위 밖) 우선 Hobby 상한만큼은 확보해 둔다.
+export const maxDuration = 60;
+
 const bodySchema = z.object({
   /** 개선할 최대 섹션 수 (기본 3) */
   maxSections: z.number().int().min(1).max(5).optional(),

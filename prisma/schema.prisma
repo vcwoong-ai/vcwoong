@@ -198,6 +198,12 @@ model Report {
   status      ReportStatus @default(PENDING)
   exportUrl   String?
   generatedAt DateTime?
+  // 지금 생성 중인 섹션 제목(예: "투자개요") — 여러 서버리스 인스턴스가
+  // /run(쓰기)과 /status(읽기)를 각각 다른 인스턴스에서 처리할 수 있어
+  // in-memory 진행률 저장소로는 서로의 진행 상황을 볼 수 없었다. 완성된
+  // 섹션 수는 이미 ReportSection 테이블로 세므로, 여기엔 "현재 섹션명"만
+  // 둔다. 생성 중이 아니면 null.
+  currentSectionTitle String?
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 

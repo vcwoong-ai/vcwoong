@@ -18,6 +18,10 @@ import {
   permissionDeniedMessage,
 } from "@/lib/team-access";
 
+// AI 호출 라우트 — 기본 함수 실행시간(플랫폼 기본값, Hobby 플랜은 10초)로는
+// 부족해 다른 AI 호출 라우트와 동일하게 60초로 맞춰둔다.
+export const maxDuration = 60;
+
 const bodySchema = z.object({
   sectionKey: z.nativeEnum(SectionKey),
   /** 사용자가 직접 넣는 재생성 포커스 */
