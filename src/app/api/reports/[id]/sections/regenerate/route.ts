@@ -11,6 +11,7 @@ import {
 } from "@/lib/shared-facts";
 import { evaluateSection } from "@/lib/report-quality";
 import { checkQuota } from "@/lib/quotas";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { buildPriorSectionSummary } from "@/lib/section-context";
 import {
   getUserTeamContext,
@@ -67,8 +68,24 @@ export async function POST(
       );
     }
 
+    // quota(월 한도)는 "이번 달 새로 만든 보고서 수"만 세서 이미 완성된
+    // 보고서의 섹션 재생성 호출을 막지 못한다(status가 PENDING이 아니면
+    // 이 조건 자체가 항상 거짓이었다 — 사실상 quota 체크가 무력화돼 있었음).
+    // rate limit을 실질적인 방어선으로 둔다.
+    const rate = await checkRateLimit(
+      `section-regen:${session.user.id}`,
+      RATE_LIMITS.sectionRegenerate.limit,
+      RATE_LIMITS.sectionRegenerate.windowMs
+    );
+    if (!rate.allowed) {
+      return NextResponse.json(
+        { error: "섹션 재생성 요청이 너무 잦습니다. 잠시 후 다시 시도해 주세요." },
+        { status: 429, headers: { "Retry-After": String(rate.retryAfterSec) } }
+      );
+    }
+
     const quota = await checkQuota(session.user.id, "report");
-    if (!quota.allowed && report.status === "PENDING") {
+    if (!quota.allowed) {
       return NextResponse.json({ error: quota.message }, { status: 429 });
     }
 

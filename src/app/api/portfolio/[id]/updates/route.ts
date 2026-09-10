@@ -4,6 +4,7 @@ import { z } from "zod";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateText } from "@/lib/claude";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { comparePeriod, currentPeriod } from "@/lib/portfolio";
 import {
   getUserTeamContext,
@@ -66,6 +67,18 @@ export async function POST(
   let concerns = parsed.data.concerns;
 
   if (parsed.data.autoSummarize) {
+    const rate = await checkRateLimit(
+      `portfolio-summarize:${session.user.id}`,
+      RATE_LIMITS.portfolioAutoSummarize.limit,
+      RATE_LIMITS.portfolioAutoSummarize.windowMs
+    );
+    if (!rate.allowed) {
+      return NextResponse.json(
+        { error: "자동 요약 요청이 너무 잦습니다. 잠시 후 다시 시도해 주세요." },
+        { status: 429, headers: { "Retry-After": String(rate.retryAfterSec) } }
+      );
+    }
+
     const kpiLines = [...company.kpis]
       .sort((a, b) => comparePeriod(a.period, b.period))
       .slice(-16)

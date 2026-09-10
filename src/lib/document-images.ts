@@ -10,6 +10,7 @@
  * 범위를 DOCX·PPTX로 좁혔다 — IR 자료 대부분이 이 두 형식이라 실사용
  * 커버리지는 크게 안 줄어든다.
  */
+import { readZipEntrySafe } from "./zip-safety";
 
 export interface ExtractedImage {
   /** zip 안 원래 파일명 (image3.png 등) — 확장자 판별용 */
@@ -24,6 +25,12 @@ const MIN_IMAGE_BYTES = 8 * 1024;
 
 /** 문서 하나에서 너무 많은 이미지를 꺼내면 보고서가 부록으로 도배된다 */
 const MAX_IMAGES_PER_DOCUMENT = 6;
+
+/**
+ * 미디어 파일 하나의 압축 해제 후 크기 상한. 정상적인 이미지·짧은 클립도
+ * 이 안에 들어오고, 조작된 압축 해제 폭탄(zip bomb)만 걸러낸다.
+ */
+const MAX_MEDIA_ENTRY_BYTES = 100 * 1024 * 1024; // 100MB
 
 const EXT_MIME: Record<string, string> = {
   png: "image/png",
@@ -61,8 +68,12 @@ async function extractFromZipMediaFolder(
     const mimeType = EXT_MIME[ext];
     if (!mimeType) continue; // 지원 안 하는 포맷(wmf/emf 등)은 건너뜀
 
-    const content = await zip.files[name].async("nodebuffer");
-    if (content.length < MIN_IMAGE_BYTES) continue;
+    const content = await readZipEntrySafe(
+      zip.files[name],
+      "nodebuffer",
+      MAX_MEDIA_ENTRY_BYTES
+    );
+    if (!content || content.length < MIN_IMAGE_BYTES) continue;
 
     images.push({ name, buffer: content, mimeType, sizeBytes: content.length });
   }

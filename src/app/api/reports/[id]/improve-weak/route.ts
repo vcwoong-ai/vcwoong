@@ -11,6 +11,7 @@ import {
 } from "@/lib/shared-facts";
 import { evaluateReport, evaluateSection } from "@/lib/report-quality";
 import { checkQuota } from "@/lib/quotas";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { buildPriorSectionSummary } from "@/lib/section-context";
 import {
   getUserTeamContext,
@@ -75,6 +76,21 @@ export async function POST(
       return NextResponse.json(
         { error: "개선할 섹션이 없습니다" },
         { status: 400 }
+      );
+    }
+
+    // quota(월 한도)는 "이번 달 새로 만든 보고서 수"만 세서, 이미 만든
+    // 보고서에 반복 호출되는 이 라우트(건당 AI 호출 최대 5회)를 막지
+    // 못한다. rate limit을 실질적인 방어선으로 둔다.
+    const rate = await checkRateLimit(
+      `improve-weak:${session.user.id}`,
+      RATE_LIMITS.improveWeak.limit,
+      RATE_LIMITS.improveWeak.windowMs
+    );
+    if (!rate.allowed) {
+      return NextResponse.json(
+        { error: "약한 섹션 개선 요청이 너무 잦습니다. 잠시 후 다시 시도해 주세요." },
+        { status: 429, headers: { "Retry-After": String(rate.retryAfterSec) } }
       );
     }
 

@@ -4,6 +4,7 @@ import { InboundStatus } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { screenInboundDeal } from "@/lib/sourcing";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import {
   getUserTeamContext,
   inboundWriteWhere,
@@ -35,6 +36,18 @@ export async function POST(
     return NextResponse.json(
       { error: permissionDeniedMessage("edit") },
       { status: 403 }
+    );
+  }
+
+  const rate = await checkRateLimit(
+    `sourcing-screen:${session.user.id}`,
+    RATE_LIMITS.sourcingScreen.limit,
+    RATE_LIMITS.sourcingScreen.windowMs
+  );
+  if (!rate.allowed) {
+    return NextResponse.json(
+      { error: "스크리닝 요청이 너무 잦습니다. 잠시 후 다시 시도해 주세요." },
+      { status: 429, headers: { "Retry-After": String(rate.retryAfterSec) } }
     );
   }
 

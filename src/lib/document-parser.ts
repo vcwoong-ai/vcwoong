@@ -2,6 +2,7 @@
  * Document parsing utilities for DOCX, PDF, and XLSX files.
  * Extracts plain text for AI processing.
  */
+import { readZipEntrySafe } from "./zip-safety";
 
 /**
  * 추출된 텍스트가 이 길이 미만이면 "이미지/스캔 위주라 AI가 내용을 거의
@@ -171,6 +172,13 @@ function extractTextRuns(xmlContent: string): string {
     .join(" ");
 }
 
+/**
+ * 슬라이드 XML 하나의 압축 해제 후 크기 상한. 실제 슬라이드 XML은 아무리
+ * 텍스트가 많아도 수백 KB를 넘지 않으므로, 이 이상은 조작된 압축 해제
+ * 폭탄(zip bomb)으로 보고 건너뛴다.
+ */
+const MAX_SLIDE_XML_BYTES = 20 * 1024 * 1024; // 20MB
+
 async function parsePPTX(
   buffer: Buffer
 ): Promise<{ text: string; metadata: Record<string, unknown>; warning?: string }> {
@@ -196,8 +204,12 @@ async function parsePPTX(
   const slideTexts: string[] = [];
 
   for (let i = 0; i < slideFiles.length; i++) {
-    const xmlContent = await zip.files[slideFiles[i]].async("text");
-    const slideText = extractTextRuns(xmlContent);
+    const xmlContent = await readZipEntrySafe(
+      zip.files[slideFiles[i]],
+      "text",
+      MAX_SLIDE_XML_BYTES
+    );
+    const slideText = xmlContent ? extractTextRuns(xmlContent) : "";
 
     if (slideText) {
       slideTexts.push(`[슬라이드 ${i + 1}]\n${slideText}`);
@@ -205,8 +217,12 @@ async function parsePPTX(
 
     const notesFile = notesFiles.get(i + 1);
     if (notesFile) {
-      const notesXml = await zip.files[notesFile].async("text");
-      const notesText = extractTextRuns(notesXml);
+      const notesXml = await readZipEntrySafe(
+        zip.files[notesFile],
+        "text",
+        MAX_SLIDE_XML_BYTES
+      );
+      const notesText = notesXml ? extractTextRuns(notesXml) : "";
       if (notesText) {
         slideTexts.push(`[슬라이드 ${i + 1} 발표자 노트]\n${notesText}`);
       }

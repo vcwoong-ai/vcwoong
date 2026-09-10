@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { parseInboundEmail } from "@/lib/email-parser";
 import { guessSector } from "@/lib/sourcing";
+import { secureCompare } from "@/lib/secure-compare";
 
 const bodySchema = z.object({
   rawEmail: z.string().min(20),
@@ -18,7 +19,7 @@ export async function POST(request: NextRequest) {
   const secret = request.headers.get("x-webhook-secret");
   const expected = process.env.SOURCING_WEBHOOK_SECRET;
 
-  if (!expected || secret !== expected) {
+  if (!expected || !secret || !secureCompare(secret, expected)) {
     return NextResponse.json({ error: "Webhook 인증 실패" }, { status: 401 });
   }
 

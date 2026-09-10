@@ -2,6 +2,7 @@ import { SubscriptionPlan } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { BRAND } from "@/lib/brand";
 import { yearlyPriceFromMonthly, type BillingCycle } from "@/lib/plans";
+import { secureCompare } from "@/lib/secure-compare";
 
 export const PLAN_PRICES: Record<string, number> = {
   solo: 99000,
@@ -124,9 +125,10 @@ export function verifyTossWebhookSecret(
 ): boolean {
   const expected = expectedSecret?.trim();
   if (!expected) return false;
-  return TOSS_WEBHOOK_SECRET_HEADERS.some(
-    (header) => headers.get(header)?.trim() === expected
-  );
+  return TOSS_WEBHOOK_SECRET_HEADERS.some((header) => {
+    const value = headers.get(header)?.trim();
+    return Boolean(value) && secureCompare(value!, expected);
+  });
 }
 
 /**
