@@ -6,6 +6,10 @@
   "functions": {
     "src/app/api/reports/[id]/run/route.ts": { "maxDuration": 240 },
     "src/app/api/deals/[id]/reports/route.ts": { "maxDuration": 240 },
+    "src/app/api/cron/resume-generations/route.ts": { "maxDuration": 240 },
     "src/app/api/upload/route.ts": { "maxDuration": 60 }
-  }
+  },
+  "crons": [
+    { "path": "/api/cron/resume-generations", "schedule": "* * * * *" }
+  ]
 }

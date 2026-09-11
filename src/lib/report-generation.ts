@@ -61,6 +61,70 @@ const GENERATION_BUDGET_MS = envDurationMs(
 export const STALE_GENERATION_MS = Math.max(GENERATION_BUDGET_MS * 1.5, 90_000);
 
 /**
+ * 서버 측(cron) 자동 재개 시도 상한. 브라우저 폴링의 MAX_AUTO_RESUMES(20,
+ * report-wizard.tsx)와 같은 역할이지만 cron은 매 tick이 새 stateless
+ * invocation이라 진행 여부를 메모리로 비교할 수 없다 — 대신 DB에 남긴
+ * Report.autoResumeCount로 상한을 건다. 정상적인 보고서는 1~2회 안에
+ * 끝나므로(실측 섹션당 17~20초, 예산 180초 기준) 30회는 "진짜 계속
+ * 실패하는" 딜만 걸러내기 위한 넉넉한 여유값이다.
+ */
+export const MAX_AUTO_RESUME_ATTEMPTS = 30;
+
+/**
+ * 보고서 하나를 원자적으로 "지금부터 내가 생성한다"고 선점한다.
+ *
+ * /run 라우트(브라우저 트리거)와 cron 라우트(서버 트리거)가 동시에 같은
+ * report를 재개하려 시도할 수 있어(사용자가 탭을 열어둔 채 cron도 같은
+ * 순간 돈 경우 등), 조건부 updateMany 하나로 승자만 GENERATING을 잡게
+ * 한다 — 진 쪽은 count=0을 받고 그대로 넘어간다(중복 생성/토큰 이중 소비
+ * 없음). GENERATING인데 오래 갱신이 없으면(멈춘 것으로 판단) 그것도
+ * 재선점 대상에 포함한다.
+ */
+export async function claimPendingGeneration(reportId: string): Promise<boolean> {
+  const claimed = await prisma.report.updateMany({
+    where: {
+      id: reportId,
+      OR: [
+        { status: { not: ReportStatus.GENERATING } },
+        {
+          status: ReportStatus.GENERATING,
+          updatedAt: { lt: new Date(Date.now() - STALE_GENERATION_MS) },
+        },
+      ],
+    },
+    data: { status: ReportStatus.GENERATING },
+  });
+  return claimed.count > 0;
+}
+
+export interface ResumeCandidate {
+  id: string;
+  completedSections: number;
+  autoResumeCount: number;
+}
+
+/**
+ * cron이 실제로 손댈 후보만 순수하게 걸러낸다(DB/네트워크 없음 — 네트워크
+ * 없이 단위 테스트 가능하도록 claimPendingGeneration과 분리했다).
+ *
+ * - completedSections >= totalSections: 이미 끝난 보고서(정상 경로라면
+ *   status가 PENDING/GENERATING일 수 없지만, 방어적으로 제외).
+ * - autoResumeCount >= maxAutoResumeAttempts: 반복 실패로 상한 도달 —
+ *   더 이상 자동 재시도하지 않고 사용자가 직접 "다시 시도"를 누르게 둔다
+ *   (무한 재시도로 비용이 새는 것을 막는다).
+ */
+export function selectResumableCandidates(
+  candidates: ResumeCandidate[],
+  opts: { totalSections: number; maxAutoResumeAttempts: number }
+): ResumeCandidate[] {
+  return candidates.filter(
+    (c) =>
+      c.completedSections < opts.totalSections &&
+      c.autoResumeCount < opts.maxAutoResumeAttempts
+  );
+}
+
+/**
  * 의견종합 끝에 붙이는 자동 품질 메모 — 재생성 시 중복 누적을 막으려고
  * 다시 붙이기 전에 이 패턴으로 기존 메모를 떼어낸다.
  * (`*자동 품질 점수: 82/100 · …*` 형태, 문서 맨 끝에만 존재)
