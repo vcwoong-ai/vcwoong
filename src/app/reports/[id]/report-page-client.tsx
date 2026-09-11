@@ -439,6 +439,7 @@ export function ReportPageClient({
         <ReportEvidencePanel
           reportId={report.id}
           refreshKey={qualityRefreshKey}
+          canEdit={canEdit}
         />
       )}
 

@@ -252,7 +252,8 @@ function stripCaveats(sentence: string): string {
     .trim();
 }
 
-function isUnverifiable(sentence: string): boolean {
+/** evidence.ts의 claim 추출도 같은 "확인 필요" 문장 제외 규칙을 쓴다 */
+export function isUnverifiable(sentence: string): boolean {
   const core = stripCaveats(sentence);
   return UNVERIFIABLE_MARKERS.some((m) => core.includes(m));
 }
@@ -261,8 +262,11 @@ function isUnverifiable(sentence: string): boolean {
  * 문장 단위로 나눈다. "18.5%"처럼 숫자 뒤에 오는 마침표(소수점)는 문장
  * 끝이 아니므로 분리하지 않는다 — 마침표 뒤에 숫자가 바로 오면 소수점으로
  * 보고 건너뛴다.
+ *
+ * evidence.ts(질적 claim 추출)도 이 함수를 재사용한다 — 문장 분리·마크다운
+ * 제거 로직을 중복 구현하지 않기 위함.
  */
-function splitSentences(content: string): string[] {
+export function splitSentences(content: string): string[] {
   return content
     .split(/\n+/)
     .flatMap((line) => line.split(/\.(?!\d)\s*/))

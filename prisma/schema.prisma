@@ -211,6 +211,7 @@ model Report {
   template Template?       @relation(fields: [templateId], references: [id])
   sections ReportSection[]
   deepDive ReportDeepDive?
+  evidenceCheck ReportEvidenceCheck?
 
   @@index([dealId])
   @@index([templateId])
@@ -225,6 +226,22 @@ model ReportDeepDive {
   reportId   String   @unique
   /// [{ claim, verdict, rationale, sources: [{title,url,source}] }, ...]
   claims     Json
+  modelUsed  String
+  computedAt DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+}
+
+/// 근거 추적(evidence.ts) 중 deterministic 매칭(숫자 색인·키워드 겹침)으로
+/// 못 찾은 claim만 골라 AI로 재확인한 결과 캐시. ReportDeepDive와 같은
+/// 구조(보고서 1건당 최신 결과 하나) — /evidence GET마다 AI를 다시 부르지
+/// 않기 위해 저장해둔다(evidence-ai.ts, /api/reports/[id]/evidence/verify 참고).
+model ReportEvidenceCheck {
+  id         String   @id @default(cuid())
+  reportId   String   @unique
+  /// AiClaimVerdict[] — { claimKey, confidence, rationale, documentName?, location?, snippet? }
+  verdicts   Json
   modelUsed  String
   computedAt DateTime @default(now())
   updatedAt  DateTime @updatedAt

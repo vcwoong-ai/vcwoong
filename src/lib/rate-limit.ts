@@ -110,4 +110,6 @@ export const RATE_LIMITS = {
   detectSector: { limit: 30, windowMs: 60 * 60 * 1000 },
   /** 포트폴리오 분기노트 AI 자동요약(AI 호출 1회): 사용자당 1시간 20회 */
   portfolioAutoSummarize: { limit: 20, windowMs: 60 * 60 * 1000 },
+  /** 근거 추적 AI 보강 검증(건당 최대 5회 AI 호출): 사용자당 1시간 10회 */
+  evidenceVerify: { limit: 10, windowMs: 60 * 60 * 1000 },
 } as const;

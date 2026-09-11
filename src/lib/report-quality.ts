@@ -2,6 +2,7 @@
  * IC 보고서 섹션 품질 검증.
  * 생성 후 길이·환각 신호·구조·공유팩트 일치 점수를 산출한다.
  */
+import type { ClaimConfidence } from "./evidence";
 
 export interface SectionQuality {
   sectionKey: string;
@@ -26,6 +27,36 @@ export interface ReportQualitySummary {
     checked: number;
     matched: number;
     missing: string[];
+  };
+  /** evidence.ts 근거 추적 결과 요약(전달했을 때만) — hallucination 위험도 연결용 */
+  evidenceSummary?: EvidenceQualitySummary;
+}
+
+/**
+ * evidence.ts의 confidence 등급을 hallucination 위험 관점으로 재분류한다.
+ *
+ *   HIGH        → supported        (근거 확인됨)
+ *   MEDIUM      → needsReview       (근거는 있으나 확신도가 낮음)
+ *   LOW         → warning           (약한 근거 — 주의 필요)
+ *   UNSUPPORTED → highRiskHallucination (근거 없음 — 환각 위험 높음)
+ */
+export interface EvidenceQualitySummary {
+  checked: number;
+  supported: number;
+  needsReview: number;
+  warning: number;
+  highRiskHallucination: number;
+}
+
+export function summarizeEvidenceForQuality(
+  claims: Array<{ confidence: ClaimConfidence }>
+): EvidenceQualitySummary {
+  return {
+    checked: claims.length,
+    supported: claims.filter((c) => c.confidence === "HIGH").length,
+    needsReview: claims.filter((c) => c.confidence === "MEDIUM").length,
+    warning: claims.filter((c) => c.confidence === "LOW").length,
+    highRiskHallucination: claims.filter((c) => c.confidence === "UNSUPPORTED").length,
   };
 }
 
@@ -190,7 +221,13 @@ export function evaluateReport(
     metrics?: Record<string, string>;
     terms?: Record<string, string>;
     clinicalPhase?: string;
-  }
+  },
+  /**
+   * evidence.ts로 미리 계산해둔 근거 추적 결과(선택). 넘기지 않으면 기존과
+   * 완전히 동일하게 동작한다 — 이번 Phase에서 report-generation.ts의 실제
+   * 호출부는 아직 이 값을 넘기지 않는다(전체 채점 체계 재설계는 범위 밖).
+   */
+  evidenceSummary?: EvidenceQualitySummary
 ): ReportQualitySummary {
   const evaluated = sections.map((s) =>
     evaluateSection(s.sectionKey, s.content)
@@ -247,12 +284,28 @@ export function evaluateReport(
     }
   }
 
+  if (evidenceSummary && evidenceSummary.checked > 0) {
+    const hallucinationRatio =
+      evidenceSummary.highRiskHallucination / evidenceSummary.checked;
+    // factConsistency와 같은 폭(최대 ±8)으로 제한 — 근거 추적 하나만으로
+    // 점수가 크게 요동치지 않게 한다(전체 채점 체계 재설계는 이번 범위 밖).
+    if (hallucinationRatio > 0.4) {
+      overallScore = Math.max(0, overallScore - 8);
+      criticalIssues.push(
+        `[EVIDENCE] 근거 없는 주장 비율이 높습니다 (${evidenceSummary.highRiskHallucination}/${evidenceSummary.checked})`
+      );
+    } else if (hallucinationRatio === 0 && evidenceSummary.supported / evidenceSummary.checked >= 0.8) {
+      overallScore = Math.min(100, overallScore + 3);
+    }
+  }
+
   return {
     overallScore,
     sections: evaluated,
     criticalIssues,
     suggestions,
     factConsistency,
+    evidenceSummary,
   };
 }
 

@@ -143,20 +143,31 @@ async function parsePDF(
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { PDFParse } = require("pdf-parse") as {
     PDFParse: new (opts: { data: Buffer }) => {
-      getText: () => Promise<{ text: string; total: number }>;
+      getText: () => Promise<{
+        text: string;
+        total: number;
+        pages: Array<{ num: number; text: string }>;
+      }>;
       destroy: () => Promise<void>;
     };
   };
   const parser = new PDFParse({ data: buffer });
   try {
     const result = await parser.getText();
+    // 페이지별 텍스트를 [페이지 N] 표시로 이어붙인다(PPTX의 [슬라이드 N],
+    // XLSX의 [시트: X]와 같은 관례) — evidence.ts가 근거 위치(몇 페이지)를
+    // 실제 pdf-parse 메타데이터로만 채우고, 추정으로 지어내지 않게 한다.
+    const text =
+      result.pages.length > 0
+        ? result.pages.map((p) => `[페이지 ${p.num}]\n${p.text}`).join("\n\n")
+        : result.text;
     return {
-      text: result.text,
+      text,
       metadata: {
         type: "pdf",
         numPages: result.total,
       },
-      warning: buildLowTextWarning(result.text, "pdf"),
+      warning: buildLowTextWarning(text, "pdf"),
     };
   } finally {
     await parser.destroy();
