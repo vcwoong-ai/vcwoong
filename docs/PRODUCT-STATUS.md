@@ -3,6 +3,61 @@
 5축 차별화 기준으로 현재 무엇이 동작하고 무엇이 남았는지 정리한 문서입니다.
 다른 환경(예: Claude)에서 작업한 내용과 병합할 때 기준점으로 사용하세요.
 
+## -2. VC/PE Track 아키텍처 및 PE Engine 설계 (2026-09-11, 설계만 — 미구현)
+
+Production 전체 감사 결과, 랜딩페이지의 VC/PE·M&A 트랙 선택은 **UI 배지("Coming
+soon")뿐** — `prisma/schema.prisma`에 track/PE 관련 필드 0건, `SCORE_DIMENSIONS`도
+VC 전용 6개뿐. `/register`도 `?track=` 쿼리를 안 읽음. PE는 코드가 전혀 없다(VC의
+복사본도 아닌, 더 이전 단계). 이 섹션은 향후 PE Engine을 실제로 만들 때의 설계
+기준점이다 — 이번 라운드에서는 구현하지 않는다.
+
+### 공통 엔진 (이미 도메인 무관하게 설계돼 있어 그대로 재사용)
+
+```
+Document → Extraction → Evidence → Analysis → Risk → Questions → IC Review → Decision
+```
+- document parsing, `evidence.ts`, report generation(`generateSectionsAsync`),
+  `ic-questions.ts`, `ic-review.ts`, auth, billing, team-access — 전부 섹터/트랙
+  무관. VC 전용 로직이 섞여 있지 않아 PE에도 그대로 얹을 수 있다.
+
+### VC Engine (구현됨)
+
+`SCORE_DIMENSIONS`(marketSize/team/product/businessModel/financials/moat) +
+6개 섹터 에이전트. `deal-scoring.ts` → `deal-scoring-evidence.ts` →
+`ic-questions.ts` → `ic-review.ts`로 이미 연결돼 있음(Phase 6에서 확인).
+
+### PE Engine (설계만 — 핵심 원칙: AI와 결정론적 계산을 분리)
+
+VC를 복사해서 만들면 안 된다 — PE는 재무 정확성이 생명이라 **IRR/MOIC/LBO
+숫자를 AI가 직접 계산하게 두면 안 된다.**
+
+| 계층 | 역할 | 담당 |
+|------|------|------|
+| AI | 문서에서 숫자·가정 추출, QoE(Quality of Earnings) 후보 식별, 리스크 식별, IC 질문 생성 | 기존 evidence.ts/ic-questions.ts 패턴 재사용 |
+| 결정론적 엔진(신규) | EBITDA, FCF, Net Debt, Entry EV, Entry/Exit Multiple, Debt Paydown, IRR, MOIC, Sensitivity, Downside | AI 호출 없는 순수 계산 함수 — deal-scoring-evidence.ts와 같은 성격 |
+
+**재사용 가능 자산**: `fund-analytics.ts`의 Newton-Raphson XIRR 솔버가
+불규칙 현금흐름을 처리하므로 LBO IRR 계산의 코어로 재사용 가능. 워터폴
+시뮬레이터도 배수×시점 민감도 그리드 로직을 그대로 응용 가능. 반대로
+`irr-calculator.ts`(공개 리드젠 도구)는 "투자금 → N년 뒤 단일 회수" 단순
+연복리 가정이라 LBO 진입/퇴출 다중 현금흐름 구조에는 **부적합** — 혼동
+주의.
+
+**PE 평가 차원(안)**: Business Quality, Revenue Quality, EBITDA, FCF, Net
+Debt, Working Capital, Capex, Management, Leverage, Entry Multiple, Exit
+Multiple, Debt Paydown, IRR, MOIC, Downside — VC의 6차원과 겹치지 않는
+완전히 별도 세트. `SCORE_DIMENSIONS`와 같은 형태(`{key, label, desc}`)로
+`PE_SCORE_DIMENSIONS`를 신설하고, `ic-review.ts`의 Investment
+Signal/Key Strength/Key Risk 선정 로직은 트랙 무관하게 재사용 가능(입력
+차원 배열만 바뀌면 됨 — 코드 자체는 이미 `ScoreDimensionKey` 제네릭하게
+설계돼 있어 구조 변경 최소).
+
+**다음 단계(구현 시)**: `/register`가 `?track=` 파라미터를 실제로
+읽어 팀/딜 레벨에 track을 저장 → 딜 생성 시 track에 따라
+`SCORE_DIMENSIONS` vs `PE_SCORE_DIMENSIONS` 분기 → PE 전용 deterministic
+계산 모듈(`src/lib/pe-financials.ts` 등, 신규) 추가. 이번 라운드에서는
+코드 작성 안 함.
+
 ## -1. VCNote 갭 해소 (2026-08-11 추가)
 
 VCNote 실제 사이트 확인 후 "뒤처진 것"으로 기록했던 항목들을 처리했다.
