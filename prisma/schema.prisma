@@ -216,6 +216,7 @@ model Report {
   sections ReportSection[]
   deepDive ReportDeepDive?
   evidenceCheck ReportEvidenceCheck?
+  icQuestions ReportIcQuestions?
 
   @@index([dealId])
   @@index([templateId])
@@ -246,6 +247,23 @@ model ReportEvidenceCheck {
   reportId   String   @unique
   /// AiClaimVerdict[] — { claimKey, confidence, rationale, documentName?, location?, snippet? }
   verdicts   Json
+  modelUsed  String
+  computedAt DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+}
+
+/// IC(투자심의위원회) 질문 — DealScore.evidenceAssessment(Phase 4)에서 결정적으로
+/// 도출한 질문 후보를 필요시 AI로 문장만 다듬은 결과. ReportDeepDive/
+/// ReportEvidenceCheck와 같은 구조(보고서 1건당 최신 결과 하나) —
+/// ic-questions.ts, /api/reports/[id]/ic-questions/generate 참고.
+model ReportIcQuestions {
+  id         String   @id @default(cuid())
+  reportId   String   @unique
+  /// IcQuestion[] — { id, category, question, whyItMatters, trigger, priority,
+  /// relatedDimension?, relatedClaim?, relatedEvidence?, suggestedAnswerType, source }
+  questions  Json
   modelUsed  String
   computedAt DateTime @default(now())
   updatedAt  DateTime @updatedAt

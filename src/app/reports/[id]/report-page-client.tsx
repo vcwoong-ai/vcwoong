@@ -7,6 +7,7 @@ import { ReportEditor } from "@/components/reports/report-editor";
 import { ReportQualityPanel } from "@/components/reports/report-quality-panel";
 import { ReportEvidencePanel } from "@/components/reports/report-evidence-panel";
 import { ReportDeepDivePanel } from "@/components/reports/report-deep-dive-panel";
+import { IcQuestionsPanel } from "@/components/reports/ic-questions-panel";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -445,6 +446,10 @@ export function ReportPageClient({
 
       {report.sections.length > 0 && (
         <ReportDeepDivePanel reportId={report.id} canEdit={canEdit} />
+      )}
+
+      {report.sections.length > 0 && (
+        <IcQuestionsPanel reportId={report.id} canEdit={canEdit} />
       )}
 
       {batchNote && (

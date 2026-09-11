@@ -112,4 +112,6 @@ export const RATE_LIMITS = {
   portfolioAutoSummarize: { limit: 20, windowMs: 60 * 60 * 1000 },
   /** 근거 추적 AI 보강 검증(건당 최대 5회 AI 호출): 사용자당 1시간 10회 */
   evidenceVerify: { limit: 10, windowMs: 60 * 60 * 1000 },
+  /** IC 질문 생성(건당 배치 AI 호출 최대 1회): 사용자당 1시간 20회 */
+  icQuestions: { limit: 20, windowMs: 60 * 60 * 1000 },
 } as const;

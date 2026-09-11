@@ -208,6 +208,7 @@ model Report {
   sections ReportSection[]
   deepDive ReportDeepDive?
   evidenceCheck ReportEvidenceCheck?
+  icQuestions ReportIcQuestions?
 
   @@index([dealId])
   @@index([templateId])
@@ -234,6 +235,17 @@ model ReportEvidenceCheck {
   id         String   @id @default(cuid())
   reportId   String   @unique
   verdicts   Json
+  modelUsed  String
+  computedAt DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+}
+
+model ReportIcQuestions {
+  id         String   @id @default(cuid())
+  reportId   String   @unique
+  questions  Json
   modelUsed  String
   computedAt DateTime @default(now())
   updatedAt  DateTime @updatedAt

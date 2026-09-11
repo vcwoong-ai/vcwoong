@@ -41,6 +41,12 @@ export interface DimensionEvidenceAssessment {
     documentName?: string;
     location?: string;
   }>;
+  /**
+   * 근거를 못 찾은 claim만 최대 3개(keyEvidence는 확신도 높은 순이라 이
+   * 항목이 밀려날 수 있다 — IC Questions(Phase 5)가 "근거 없는 핵심
+   * 주장"을 놓치지 않으려면 이게 따로 필요하다).
+   */
+  unsupportedClaims: Array<{ raw: string }>;
 }
 
 export type RiskFlag =
@@ -146,6 +152,11 @@ function assessDimension(
       location: c.source?.location,
     }));
 
+  const unsupportedClaims = claims
+    .filter((c) => c.confidence === "UNSUPPORTED")
+    .slice(0, 3)
+    .map((c) => ({ raw: c.raw }));
+
   return {
     dimension,
     score,
@@ -157,6 +168,7 @@ function assessDimension(
     claimsTotal: claims.length,
     claimsSupported: supported.length,
     keyEvidence,
+    unsupportedClaims,
   };
 }
 
