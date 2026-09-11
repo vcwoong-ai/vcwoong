@@ -172,7 +172,8 @@ function assessDimension(
   };
 }
 
-const DIMENSION_FLAG: Record<ScoreDimensionKey, RiskFlag> = {
+/** ic-review.ts가 risk flag → 관련 dimension 역매핑에 재사용한다 */
+export const DIMENSION_FLAG: Record<ScoreDimensionKey, RiskFlag> = {
   marketSize: "MARKET_EVIDENCE_GAP",
   team: "TEAM_EVIDENCE_GAP",
   product: "PRODUCT_EVIDENCE_GAP",
