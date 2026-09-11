@@ -125,6 +125,50 @@ export function demoScore(input: DealScoringInput): DealScoreResult {
   return { overall, ...dims, rationale, modelUsed: "demo-mock" };
 }
 
+/**
+ * 동일 섹터/스테이지 벤치마크.
+ *
+ * 외부 벤치마크 DB나 유료 API 없이, 이 계정(본인+팀 공유)이 실제로 채점한
+ * 같은 섹터/스테이지 딜들과만 비교한다. 비교 대상이 적으면(3건 미만)
+ * percentile이 통계적으로 의미가 없으므로, 가짜 백분위나 "시장 평균"을
+ * 만들지 않고 데이터 부족을 명시한다.
+ */
+const MIN_BENCHMARK_SAMPLE = 3;
+
+export interface SectorStageBenchmark {
+  status: "ok" | "insufficient_data";
+  comparableCount: number;
+  minRequired: number;
+  /** 이 딜의 overall이 비교군에서 몇 %ile인지(0~100, 낮을수록 하위) */
+  percentile?: number;
+  sectorStageAverage?: number;
+}
+
+export function computeSectorStageBenchmark(
+  thisOverall: number,
+  comparableOveralls: number[]
+): SectorStageBenchmark {
+  if (comparableOveralls.length < MIN_BENCHMARK_SAMPLE) {
+    return {
+      status: "insufficient_data",
+      comparableCount: comparableOveralls.length,
+      minRequired: MIN_BENCHMARK_SAMPLE,
+    };
+  }
+  const below = comparableOveralls.filter((s) => s < thisOverall).length;
+  const percentile = Math.round((below / comparableOveralls.length) * 100);
+  const sectorStageAverage = Math.round(
+    comparableOveralls.reduce((a, b) => a + b, 0) / comparableOveralls.length
+  );
+  return {
+    status: "ok",
+    comparableCount: comparableOveralls.length,
+    minRequired: MIN_BENCHMARK_SAMPLE,
+    percentile,
+    sectorStageAverage,
+  };
+}
+
 /** 딜 목록 화면 등에서 재사용하는 표시용 헬퍼 */
 export function scoreLabel(overall: number): { label: string; tone: string } {
   if (overall >= 75) return { label: "매력적", tone: "bg-green-50 text-green-700 border-green-200" };

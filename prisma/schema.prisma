@@ -142,6 +142,10 @@ model DealScore {
   /// 차원별 한 줄 근거: { marketSize: "...", team: "...", ... }
   rationale     Json
   modelUsed     String
+  /// evidence.ts 근거 추적과 연결한 확신도·커버리지·risk flag·IC 요약
+  /// (ScoreEvidenceAssessment, deal-scoring-evidence.ts). 기존 점수 재계산 전
+  /// 저장분에는 없을 수 있어 nullable — 없으면 UI가 "평가 안 됨"으로 표시.
+  evidenceAssessment Json?
   computedAt    DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

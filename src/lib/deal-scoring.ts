@@ -32,6 +32,8 @@ export {
   parseScoreResponse,
   demoScore,
   scoreLabel,
+  computeSectorStageBenchmark,
+  type SectorStageBenchmark,
 } from "@/lib/deal-scoring-shared";
 
 function buildPrompt(input: DealScoringInput): string {
