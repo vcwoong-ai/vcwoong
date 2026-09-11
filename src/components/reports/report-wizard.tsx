@@ -62,6 +62,43 @@ interface GenerationProgress {
   status: "generating" | "completed" | "error";
 }
 
+// report-generation.ts는 함수 실행시간 상한(GENERATION_BUDGET_MS) 소진 시
+// 완성된 섹션까지 저장하고 스스로 멈춘다(정상 checkpoint, 실제 오류 아님) —
+// 총 섹션 수(10개)보다 넉넉한 상한을 둬서 섹션 하나가 여러 checkpoint를
+// 거쳐도(느린 모델 등) 자동 재개가 막히지 않게 하되, 무한 루프는 방지한다.
+export const MAX_AUTO_RESUMES = 20;
+
+export type ResumePollAction =
+  | "completed"
+  | "auto-resume"
+  | "continue-generating"
+  | "error";
+
+/**
+ * 폴링 결과 하나를 받아 다음 행동을 결정하는 순수 함수(네트워크 호출 없음) —
+ * tools/test-report-wizard-resume.ts에서 checkpoint/실제 오류/무한 루프
+ * 방지 시나리오를 컴포넌트 렌더링 없이 검증할 수 있도록 분리했다.
+ *
+ * status="error"는 report-generation.ts가 시간 예산 소진으로 스스로 멈춘
+ * 정상 checkpoint(completed>0, completed<total)와 실제 오류를 구분하지
+ * 않고 그대로 내려준다 — 여기서 completed 수 + 이전 재개 이후 진행 여부로
+ * 구분한다. progress가 마지막 재개 시점보다 늘지 않았으면(무한 루프 방지)
+ * 또는 재개 횟수 상한을 넘었으면 실제 오류로 취급한다.
+ */
+export function decideResumeAction(
+  prog: GenerationProgress,
+  state: { autoResumeCount: number; lastResumedCompleted: number; maxAutoResumes?: number }
+): ResumePollAction {
+  if (prog.status === "completed") return "completed";
+  if (prog.status !== "error") return "continue-generating";
+
+  const isCheckpoint = prog.completed > 0 && prog.completed < prog.total;
+  const madeProgress = prog.completed > state.lastResumedCompleted;
+  const withinLimit = state.autoResumeCount < (state.maxAutoResumes ?? MAX_AUTO_RESUMES);
+
+  return isCheckpoint && madeProgress && withinLimit ? "auto-resume" : "error";
+}
+
 export function ReportWizard({ deal, open, onClose }: WizardProps) {
   const router = useRouter();
   const [step, setStep] = useState(1); // 1: 에이전트 선택, 2: 양식 선택, 3: 생성
@@ -141,6 +178,14 @@ export function ReportWizard({ deal, open, onClose }: WizardProps) {
       const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
       let consecutiveErrors = 0;
       let finalStatus: GenerationProgress["status"] | "dropped" = "generating";
+      // Vercel 함수 실행시간 상한 때문에 report-generation.ts가 예산
+      // (GENERATION_BUDGET_MS) 소진 시 "실패"가 아니라 스스로 멈추고
+      // status="error"로 보고한다(완성된 섹션 수 > 0인 정상 checkpoint) —
+      // 이 경우를 진짜 오류와 구분해 자동으로 /run을 다시 호출해 이어서
+      // 생성한다. 무한 루프 방지: 시도 횟수 상한 + 매번 완료 섹션 수가
+      // 실제로 늘었는지 확인(안 늘면 진짜 멈춘 것으로 보고 중단).
+      let autoResumeCount = 0;
+      let lastResumedCompleted = -1;
 
       while (!pollAbortRef.current) {
         try {
@@ -152,10 +197,35 @@ export function ReportWizard({ deal, open, onClose }: WizardProps) {
             data: GenerationProgress;
           };
           consecutiveErrors = 0;
-          setProgress(prog);
-          if (prog.status === "completed" || prog.status === "error") {
-            finalStatus = prog.status;
+
+          const action = decideResumeAction(prog, { autoResumeCount, lastResumedCompleted });
+
+          if (action === "completed") {
+            setProgress(prog);
+            finalStatus = "completed";
             break;
+          }
+
+          if (action === "auto-resume") {
+            autoResumeCount += 1;
+            lastResumedCompleted = prog.completed;
+            // 오류로 보이지 않도록 "생성 중"으로 표시한 채 이어서 생성을 요청한다.
+            setProgress({ ...prog, status: "generating", currentSection: "다음 섹션 이어서 생성 중..." });
+            const resumeRes = await fetch(`/api/reports/${id}/run`, {
+              method: "POST",
+            }).catch(() => null);
+            // 409 = 다른 요청이 이미 재개 중 — 실패로 보지 않고 계속 폴링한다.
+            if (!resumeRes || (!resumeRes.ok && resumeRes.status !== 409)) {
+              setProgress(prog);
+              finalStatus = "error";
+              break;
+            }
+          } else if (action === "error") {
+            setProgress(prog);
+            finalStatus = "error";
+            break;
+          } else {
+            setProgress(prog);
           }
         } catch {
           // 일시적 오류로 곧장 실패 처리하지 않는다.
