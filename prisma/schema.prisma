@@ -208,6 +208,12 @@ model Report {
   // 섹션 수는 이미 ReportSection 테이블로 세므로, 여기엔 "현재 섹션명"만
   // 둔다. 생성 중이 아니면 null.
   currentSectionTitle String?
+  // 서버 측(cron) 자동 재개 시도 횟수 — 브라우저 폴링(client-only, in-memory
+  // MAX_AUTO_RESUMES)과 달리 cron은 매 tick마다 새 invocation(상태 없음)이라
+  // "무한 재시도" 방지를 위해 DB에 횟수를 남겨야 한다. 실패가 반복되는
+  // 보고서를 영원히 재시도하지 않도록 상한(MAX_AUTO_RESUME_ATTEMPTS)과 함께
+  // 쓴다. 새로 생성되거나 "재생성"(mode=restart) 시 0으로 리셋된다.
+  autoResumeCount Int @default(0)
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 

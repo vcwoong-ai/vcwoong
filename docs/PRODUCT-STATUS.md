@@ -3,6 +3,39 @@
 5축 차별화 기준으로 현재 무엇이 동작하고 무엇이 남았는지 정리한 문서입니다.
 다른 환경(예: Claude)에서 작업한 내용과 병합할 때 기준점으로 사용하세요.
 
+## -3. 보고서 생성 checkpoint 자동 재개 — 브라우저 비의존화 (2026-09-11)
+
+기존: `report-generation.ts`가 시간 예산(180초) 소진 시 완성된 섹션까지
+저장하고 스스로 멈추면(checkpoint, `Report.status=PENDING`), 그 다음
+invocation을 트리거하는 건 **브라우저 폴링뿐**이었다 — 탭을 닫거나
+새로고침하면 아무도 이어받지 않아 보고서가 PENDING에 영구히 멈췄다(가장
+유력했던 "생성 중 오류" 증상의 실제 원인, 관련 PR #64로 두 UI 화면 모두
+자동 재개는 우선 맞춰둠).
+
+이번에 서버 측 안전망을 추가했다:
+
+- `/api/cron/resume-generations`(신규, Vercel Cron 매 1분, `CRON_SECRET`으로
+  인증) — PENDING(checkpoint) 또는 오래 멈춘 GENERATING 보고서를 찾아
+  **브라우저 없이** `generateSectionsAsync`를 직접 호출해 이어서 생성한다.
+- `claimPendingGeneration()`(report-generation.ts, 신규 export) — 브라우저
+  트리거(`/run`)와 cron 트리거가 같은 원자적 락(조건부 `updateMany`)을
+  공유해, 둘이 동시에 같은 보고서를 재개하려 해도 하나만 성공한다(중복
+  생성/토큰 이중 소비 없음).
+- `Report.autoResumeCount`(신규 컬럼) — cron은 매 tick이 stateless라
+  브라우저의 in-memory `MAX_AUTO_RESUMES`처럼 진행 여부를 메모리로 비교할
+  수 없다. 대신 DB에 시도 횟수를 남기고 상한(30)에서 멈춰 무한 재시도를
+  막는다.
+
+브라우저 폴링(report-wizard.tsx/report-page-client.tsx)은 그대로 유지 —
+탭이 열려 있으면 즉시(수 초 내) 재개돼 더 빠르고, cron은 탭이 없어도
+최대 1분 안에 반드시 이어받는 하위 안전망이다. **브라우저는 더 이상
+"없으면 생성이 영영 멈추는" 구조적 의존이 아니라 가속 경로다.**
+
+Production 검증 필요(이 세션은 egress 정책상 Production URL 접근 불가):
+Vercel 대시보드에서 `CRON_SECRET` env var 설정 확인 + Cron Jobs 탭에서
+실제 tick이 도는지, 탭을 닫은 상태에서도 checkpoint된 보고서가 저절로
+COMPLETE 되는지.
+
 ## -2. VC/PE Track 아키텍처 및 PE Engine 설계 (2026-09-11, 설계만 — 미구현)
 
 Production 전체 감사 결과, 랜딩페이지의 VC/PE·M&A 트랙 선택은 **UI 배지("Coming

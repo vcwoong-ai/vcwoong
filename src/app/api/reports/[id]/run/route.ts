@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { ReportStatus } from "@prisma/client";
 import {
   generateSectionsAsync,
+  claimPendingGeneration,
   STALE_GENERATION_MS,
 } from "@/lib/report-generation";
 import { checkQuota } from "@/lib/quotas";
@@ -103,29 +104,24 @@ export async function POST(
   }
 
   // 동시 요청이 둘 다 통과하지 않도록 조건부 업데이트로 락을 건다.
-  // stale(멈춘) GENERATING 상태도 재시도 대상에 포함한다.
-  const claimed = await prisma.report.updateMany({
-    where: {
-      id: report.id,
-      OR: [
-        { status: { not: ReportStatus.GENERATING } },
-        {
-          status: ReportStatus.GENERATING,
-          updatedAt: { lt: new Date(Date.now() - STALE_GENERATION_MS) },
-        },
-      ],
-    },
-    data: { status: ReportStatus.GENERATING },
-  });
-  if (claimed.count === 0) {
+  // stale(멈춘) GENERATING 상태도 재시도 대상에 포함한다 — cron
+  // (/api/cron/resume-generations)도 같은 함수로 동일하게 선점하므로,
+  // 브라우저와 cron이 같은 순간 재개를 시도해도 한쪽만 성공한다.
+  const claimedOk = await claimPendingGeneration(report.id);
+  if (!claimedOk) {
     return NextResponse.json({ error: "이미 생성 중입니다" }, { status: 409 });
   }
 
   // 재생성이면 기존 섹션을 비운다. 락을 잡은 뒤에 지워야 동시 요청이
-  // 남의 섹션을 지우는 일이 없다.
+  // 남의 섹션을 지우는 일이 없다. autoResumeCount도 리셋 — 사용자가
+  // 명시적으로 다시 시작한 것이라 이전 실패 이력을 지운다.
   if (mode === "restart") {
     const removed = await prisma.reportSection.deleteMany({
       where: { reportId: report.id },
+    });
+    await prisma.report.update({
+      where: { id: report.id },
+      data: { autoResumeCount: 0 },
     });
     console.log(
       `[Report] report=${report.id} 재생성 — 기존 섹션 ${removed.count}개 삭제`

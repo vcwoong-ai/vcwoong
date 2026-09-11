@@ -17,6 +17,8 @@ import {
   resolveFallbackChain,
   DEFAULT_FALLBACK_CHAIN,
   MAX_FALLBACK_MODELS,
+  AI_CALL_BUDGET_MS,
+  REQUEST_TIMEOUT_MS,
   type ModelChainDeps,
 } from "../src/lib/claude";
 
@@ -29,7 +31,9 @@ function assert(cond: boolean, msg: string) {
  * "시간이 흐른 것"으로 치고 즉시 resolve한다(테스트가 실제로 몇 초씩
  * 기다리지 않게 함).
  */
-function fakeDeps(totalBudgetMs: number): ModelChainDeps & { elapsedMs: () => number } {
+function fakeDeps(
+  totalBudgetMs: number
+): ModelChainDeps & { elapsedMs: () => number; advance: (ms: number) => void } {
   let elapsed = 0;
   return {
     remainingMs: () => totalBudgetMs - elapsed,
@@ -41,6 +45,13 @@ function fakeDeps(totalBudgetMs: number): ModelChainDeps & { elapsedMs: () => nu
       elapsed += ms;
     },
     elapsedMs: () => elapsed,
+    // 실제 API 호출은 sleep() 없이도 벽시계 시간을 쓴다(callOnce의 fetch
+    // 자체가 시간을 소비) — 이 fake 하네스는 sleep()만 시간을 흘려보내므로,
+    // "호출 자체가 시간을 다 쓴다"를 재현하려는 테스트는 콜백 안에서 이
+    // advance()를 직접 불러 시뮬레이션한다.
+    advance: (ms: number) => {
+      elapsed += ms;
+    },
   };
 }
 
@@ -77,10 +88,46 @@ async function testPrimarySuccessNoFallback() {
   console.log("✅ Primary 성공 → fallback 호출 없음");
 }
 
-/** 2. Primary timeout → 같은 모델 retry → 성공 */
-async function testPrimaryTimeoutThenRetrySucceeds() {
+/**
+ * 2. Primary timeout → 기본값(MODEL_ATTEMPTS=1)으로는 같은 모델을 재시도하지
+ * 않고 곧바로 다음 모델로 넘어간다.
+ *
+ * 예전엔 여기서 같은 모델을 1회 더 재시도했는데, attemptTimeout()이 "남은
+ * 예산 전부"를 다음 시도에 넘겨주는 구조라 실제 프로덕션에서 1차 모델이
+ * 타임아웃 나면 재시도가 남은 예산을 전부 써버려 정작 폴백 모델은 단 한
+ * 번도 호출되지 못하는 사고로 이어졌다(2026-09-11 실측 — claude.ts의
+ * MODEL_ATTEMPTS 주석 참고). 그래서 기본 동작을 "실패하면 곧장 다음
+ * 모델"로 바꿨다 — 재시도 자체가 불필요해진 게 아니라(runModelChain은
+ * attemptsPerModel을 여전히 지원), 그게 기본값이 아니게 됐을 뿐이다.
+ */
+async function testPrimaryTimeoutSkipsRetryGoesToFallback() {
   const calls: string[] = [];
   const deps = fakeDeps(60_000);
+  const { usedModel } = await runModelChain(
+    ["primary", "fallback-a"],
+    async (model) => {
+      calls.push(model);
+      if (model === "primary") throw timeoutError();
+      return "ok";
+    },
+    deps
+  );
+  assert(usedModel === "fallback-a", `fallback-a가 성공해야 하는데 usedModel=${usedModel}`);
+  assert(
+    calls.join(",") === "primary,fallback-a",
+    `기본값(재시도 없음)으로 primary 1회 실패 후 곧장 fallback-a로 넘어가야 하는데: ${calls.join(",")}`
+  );
+  console.log("✅ Primary timeout → 기본값은 같은 모델 재시도 없이 곧장 fallback으로 전환");
+}
+
+/**
+ * 2b. attemptsPerModel을 명시적으로 넘기면 같은 모델 재시도 자체는 여전히
+ * 동작한다 — 이번 변경이 재시도 "기능"을 없앤 게 아니라 기본값만 바꿨음을
+ * 증명한다.
+ */
+async function testExplicitAttemptsPerModelStillRetries() {
+  const calls: string[] = [];
+  const deps: ModelChainDeps = { ...fakeDeps(60_000), attemptsPerModel: 2 };
   const { usedModel } = await runModelChain(
     ["primary", "fallback-a"],
     async (model) => {
@@ -91,12 +138,12 @@ async function testPrimaryTimeoutThenRetrySucceeds() {
     deps
   );
   assert(usedModel === "primary", `재시도 성공인데 usedModel이 ${usedModel}(같은 모델이어야 함)`);
-  assert(calls.join(",") === "primary,primary", `같은 모델로 재시도해야 하는데: ${calls.join(",")}`);
-  console.log("✅ Primary timeout → 같은 모델 retry → 성공");
+  assert(calls.join(",") === "primary,primary", `attemptsPerModel:2를 명시했는데 재시도가 없음: ${calls.join(",")}`);
+  console.log("✅ attemptsPerModel을 명시하면 같은 모델 재시도 기능 자체는 여전히 동작");
 }
 
-/** 3. Primary timeout → retry도 실패 → fallback #1 성공 */
-async function testPrimaryRetryExhaustedThenFallbackSucceeds() {
+/** 3. Primary 실패 → fallback #1 성공 (기본값: 재시도 없이 바로 다음 모델) */
+async function testPrimaryFailsThenFallbackSucceeds() {
   const calls: string[] = [];
   const deps = fakeDeps(60_000);
   const { usedModel } = await runModelChain(
@@ -110,10 +157,10 @@ async function testPrimaryRetryExhaustedThenFallbackSucceeds() {
   );
   assert(usedModel === "fallback-a", `fallback-a가 성공해야 하는데 usedModel=${usedModel}`);
   assert(
-    calls.join(",") === "primary,primary,fallback-a",
-    `primary 2회 재시도 후 fallback-a로 넘어가야 하는데: ${calls.join(",")}`
+    calls.join(",") === "primary,fallback-a",
+    `primary 1회 실패 후 곧장 fallback-a로 넘어가야 하는데: ${calls.join(",")}`
   );
-  console.log("✅ Primary timeout → retry 실패 → fallback #1 성공");
+  console.log("✅ Primary 실패 → fallback #1 성공");
 }
 
 /** 4. Primary 실패 → fallback #1 실패 → fallback #2 성공 */
@@ -131,7 +178,7 @@ async function testChainFallsThroughTwoFallbacks() {
   );
   assert(usedModel === "fallback-b", `fallback-b가 성공해야 하는데 usedModel=${usedModel}`);
   assert(
-    calls.join(",") === "primary,primary,fallback-a,fallback-a,fallback-b",
+    calls.join(",") === "primary,fallback-a,fallback-b",
     `체인이 primary→fallback-a→fallback-b 순서로 넘어가야 하는데: ${calls.join(",")}`
   );
   console.log("✅ Primary 실패 → fallback#1 실패 → fallback#2 성공");
@@ -152,12 +199,51 @@ async function testFallbackModelUnavailableSkipsToNext() {
     deps
   );
   assert(usedModel === "fallback-b", `fallback-b가 성공해야 하는데 usedModel=${usedModel}`);
-  // fallback-a-dead는 404라 재시도 없이 "1번만" 불려야 한다(primary는 timeout이라 2번)
   assert(
-    calls.join(",") === "primary,primary,fallback-a-dead,fallback-b",
-    `404 모델을 반복 재시도하지 않고 바로 다음으로 넘어가야 하는데: ${calls.join(",")}`
+    calls.join(",") === "primary,fallback-a-dead,fallback-b",
+    `어느 모델도 반복 재시도하지 않고(기본값) 순서대로 넘어가야 하는데: ${calls.join(",")}`
   );
   console.log("✅ Fallback 모델 404(model unavailable) → 같은 모델 반복 재시도 없이 다음 fallback으로 즉시 이동");
+}
+
+/**
+ * 5b. 회귀 테스트 — 실제 프로덕션 값(AI_CALL_BUDGET_MS, REQUEST_TIMEOUT_MS)
+ * 그대로, primary가 REQUEST_TIMEOUT_MS 꽉 채워 타임아웃 나도 폴백 모델이
+ * "의미 있는" 시간(0이 아닌)을 받는지 확인한다. MODEL_ATTEMPTS=2였을 때는
+ * primary 재시도(최대 25s + 3s backoff + 남은 예산 전부)가 예산을 전부
+ * 써서 폴백이 attemptTimeout()=null을 받아 단 한 번도 호출되지 못했다
+ * (2026-09-11 프로덕션 사고, claude.ts의 MODEL_ATTEMPTS 주석 참고) — 지금은
+ * 재시도가 기본으로 꺼져 있어 폴백이 실제로 (AI_CALL_BUDGET_MS -
+ * REQUEST_TIMEOUT_MS)만큼의 시간을 받는다.
+ */
+async function testFallbackGetsRealBudgetAfterPrimaryTimesOut() {
+  const deps = fakeDeps(AI_CALL_BUDGET_MS);
+  const timeoutsSeen: Array<number | null> = [];
+  const { usedModel } = await runModelChain(
+    ["primary", "fallback-a"],
+    async (model, timeout) => {
+      timeoutsSeen.push(timeout);
+      if (model === "primary") {
+        deps.advance(REQUEST_TIMEOUT_MS); // primary가 타임아웃 꽉 채워 실패
+        throw timeoutError();
+      }
+      return "ok";
+    },
+    deps
+  );
+  assert(usedModel === "fallback-a", `fallback-a가 성공해야 하는데 usedModel=${usedModel}`);
+  const fallbackTimeout = timeoutsSeen[1];
+  assert(
+    fallbackTimeout !== null && fallbackTimeout > 0,
+    `fallback이 시도할 시간을 못 받음(timeout=${fallbackTimeout}) — primary 재시도가 예산을 전부 태운 옛 버그 재발`
+  );
+  assert(
+    fallbackTimeout === AI_CALL_BUDGET_MS - REQUEST_TIMEOUT_MS,
+    `fallback에게 남은 예산 전부(${AI_CALL_BUDGET_MS - REQUEST_TIMEOUT_MS}ms)가 아니라 ${fallbackTimeout}ms만 주어짐`
+  );
+  console.log(
+    `✅ primary가 REQUEST_TIMEOUT_MS(${REQUEST_TIMEOUT_MS}ms) 꽉 채워 실패해도 fallback이 ${fallbackTimeout}ms를 받음(실제 프로덕션 사고 재발 방지)`
+  );
 }
 
 /** 6. 모든 모델 실패 → 최종 에러 반환 */
@@ -200,14 +286,17 @@ async function testAbortErrorDrivesChainForward() {
 /** 8. 시간 예산 초과 → 추가 모델 호출 금지 */
 async function testBudgetExhaustionStopsFurtherCalls() {
   const calls: string[] = [];
-  // 예산을 아주 짧게 잡아, 1번째 실패 이후 재시도/다음 모델을 위한 여유가 없게 한다.
-  const deps = fakeDeps(1); // 1ms — 첫 시도 이후 즉시 소진
+  // 실제 API 호출 1번이 예산을 전부 써버리는 상황을 재현한다(=프로덕션에서
+  // 실제로 발생한 사고 패턴 — 첫 시도가 REQUEST_TIMEOUT_MS만큼 걸려서
+  // 타임아웃 나면, 남은 예산이 0이라 다음 모델은 시도조차 못 한다).
+  const deps = fakeDeps(10_000);
   let thrown: unknown;
   try {
     await runModelChain(
       ["primary", "fallback-a", "fallback-b"],
       async (model) => {
         calls.push(model);
+        deps.advance(10_000); // 이 호출이 예산을 전부 소비했다고 시뮬레이션
         throw timeoutError();
       },
       deps
@@ -276,10 +365,12 @@ function testSingleFallbackEnvBackwardCompatible() {
 async function main() {
   console.log("\n=== DealMind OpenRouter 멀티 폴백 체인 테스트 ===\n");
   await testPrimarySuccessNoFallback();
-  await testPrimaryTimeoutThenRetrySucceeds();
-  await testPrimaryRetryExhaustedThenFallbackSucceeds();
+  await testPrimaryTimeoutSkipsRetryGoesToFallback();
+  await testExplicitAttemptsPerModelStillRetries();
+  await testPrimaryFailsThenFallbackSucceeds();
   await testChainFallsThroughTwoFallbacks();
   await testFallbackModelUnavailableSkipsToNext();
+  await testFallbackGetsRealBudgetAfterPrimaryTimesOut();
   await testAllModelsFailReturnsFinalError();
   await testAbortErrorDrivesChainForward();
   await testBudgetExhaustionStopsFurtherCalls();

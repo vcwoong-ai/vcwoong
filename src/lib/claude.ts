@@ -205,6 +205,21 @@ export function withModelOverride<T>(
   return modelOverrideStorage.run(override, fn);
 }
 
+/**
+ * OpenRouter가 HTTP 200 + 정상 형태의 response를 주고도 실제 본문(content)이
+ * 비어 있을 때 던진다(업스트림 일시 장애, 특정 모델의 빈 completion 등 —
+ * 실제로 관측된 적 있는 실패 모드). 이걸 그냥 통과시키면 "AI 호출 성공"과
+ * "섹션 성공"이 갈라져, 빈 섹션이 조용히 COMPLETE로 저장된다. isRetryableAIError가
+ * 이 타입도 재시도/폴백 대상으로 인식하게 해서, 기존 재시도·폴백 경로를
+ * 그대로 태운다(별도 처리 경로를 새로 만들지 않음).
+ */
+export class EmptyAIResponseError extends Error {
+  constructor(model: string) {
+    super(`${model}이(가) 빈 응답을 반환함`);
+    this.name = "EmptyAIResponseError";
+  }
+}
+
 async function callOnce(
   model: string,
   messages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
@@ -220,7 +235,7 @@ async function callOnce(
   // 조용히 아무 효과가 없었을 가능성을 배제할 수 없어(NIM 연동에서도 같은
   // 증상을 AbortSignal로 고친 전례가 있음), 명시적 AbortSignal을 이중으로
   // 건다 — 둘 중 하나만 동작해도 요청이 멈추지 않는 사고를 막는다.
-  const result = await client.chat.completions.create(
+  const result = (await client.chat.completions.create(
     {
       model,
       max_tokens: maxTokens,
@@ -229,8 +244,17 @@ async function callOnce(
       ...(typeof temperature === "number" ? { temperature } : {}),
     } as Parameters<OpenAI["chat"]["completions"]["create"]>[0],
     { signal: AbortSignal.timeout(effectiveTimeout) }
-  );
-  return result as OpenAI.Chat.Completions.ChatCompletion;
+  )) as OpenAI.Chat.Completions.ChatCompletion;
+
+  // HTTP 200 + 정상 JSON이어도 content가 비어 있으면(공백만 포함해도) 성공이
+  // 아니다 — 여기서 걸러야 report-generation.ts가 빈 섹션을 "성공"으로 저장하지
+  // 않는다. JSON 파싱이 필요한 게 아니라 이미 파싱된 값의 최소 유효성만 본다.
+  const content = result.choices?.[0]?.message?.content;
+  if (!content || content.trim().length === 0) {
+    throw new EmptyAIResponseError(model);
+  }
+
+  return result;
 }
 
 /**
@@ -254,6 +278,13 @@ export function isRetryableAIError(err: unknown): boolean {
   // 타임아웃이 나도 폴백 모델로 못 넘어가고 1차 시도에서 바로 실패한다
   // (report generation 전체가 섹션 0개에서 죽는 사고로 이어짐).
   if (err instanceof DOMException && err.name === "AbortError") {
+    return true;
+  }
+  // 빈 응답(EmptyAIResponseError)도 같은 모델 재시도 → 폴백 전환 대상이다 —
+  // 일시적 업스트림 문제일 수도 있고, 그 모델이 계속 비어 있으면 다음
+  // 모델로 넘어가는 게 맞다(모델 ID/인증 문제와 달리 "이 모델 자체가
+  // 못 쓴다"고 단정할 근거는 없어 완전히 건너뛰지 않고 먼저 재시도한다).
+  if (err instanceof EmptyAIResponseError) {
     return true;
   }
   return (
@@ -280,10 +311,21 @@ function describeAIError(err: unknown): string {
   return `${kind}${e?.status ? ` ${e.status}` : ""}: ${e?.message ?? String(err)}`;
 }
 
-/** 모델 하나당 재시도 횟수를 짧게 유지한다 — 섹션 10개를 순차 생성하는
- * 구조라 한 섹션이 재시도로 시간을 다 잡아먹으면 나머지 섹션이 실행조차
- * 못 한다. 체인 길이가 늘어난 만큼 모델당 시도는 줄여서 총 비용을 맞춘다. */
-export const MODEL_ATTEMPTS = 2;
+/**
+ * 모델 하나당 시도 횟수. 예전엔 2(같은 모델로 1회 재시도 후 폴백)였는데,
+ * 실제 프로덕션 사고로 이게 구조적 결함임이 드러났다: attemptTimeout()이
+ * "남은 예산 전부"를 다음 시도에 그대로 넘겨주기 때문에, 1차 모델이
+ * REQUEST_TIMEOUT_MS(25s)로 타임아웃 나면 재시도가 남은 예산(AI_CALL_BUDGET_MS
+ * 40s 기준 약 12s)을 전부 써버리고, 그 다음 실제 폴백 모델(openrouter/free
+ * 등)에는 시도할 시간이 0으로 남아 단 한 번도 호출되지 못한 채 섹션
+ * 전체가 실패했다(2026-09-11, report=cmtx2vv9s... 로그로 실측 확인 —
+ * duration=40.0s 전부가 primary 재시도에 소진, "openrouter/free로 전환"
+ * 로그만 찍히고 실제 호출은 없었음). 폴백 체인을 만든 취지 자체(1차
+ * 모델에 문제가 있을 때 다른 모델로 살리기)가 같은 모델 재시도 때문에
+ * 무력화된 것 — 그래서 모델당 시도를 1로 줄여, 실패 시 재시도 대신
+ * 곧바로 다음 모델(실제로 다른 모델)에 남은 예산을 준다.
+ */
+export const MODEL_ATTEMPTS = 1;
 export const CHAIN_BACKOFF_MS = [0, 3_000];
 
 export interface ModelChainDeps {
