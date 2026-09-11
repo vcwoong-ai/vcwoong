@@ -4,8 +4,8 @@
   "framework": "nextjs",
   "regions": ["icn1"],
   "functions": {
-    "src/app/api/reports/[id]/run/route.ts": { "maxDuration": 60 },
-    "src/app/api/deals/[id]/reports/route.ts": { "maxDuration": 60 },
+    "src/app/api/reports/[id]/run/route.ts": { "maxDuration": 240 },
+    "src/app/api/deals/[id]/reports/route.ts": { "maxDuration": 240 },
     "src/app/api/upload/route.ts": { "maxDuration": 60 }
   }
 }

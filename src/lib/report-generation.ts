@@ -8,7 +8,7 @@ import {
   formatSharedFactsForPrompt,
 } from "@/lib/shared-facts";
 import { evaluateReport } from "@/lib/report-quality";
-import { REQUEST_TIMEOUT_MS, envDurationMs } from "@/lib/claude";
+import { REQUEST_TIMEOUT_MS, envDurationMs, MODEL } from "@/lib/claude";
 
 export interface DealForGeneration {
   id: string;
@@ -26,15 +26,21 @@ export interface DealForGeneration {
  * Vercel 함수는 maxDuration에서 강제 종료되는데, 그렇게 죽으면 상태
  * 정리도 못 하고 GENERATING에 멈춘 채로 남는다. 그보다 일찍 스스로
  * 멈춰서 만든 섹션까지 저장하고 상태를 정리하면, 사용자가 "다시 시도"를
- * 눌렀을 때 남은 섹션만 이어서 만들 수 있다.
+ * 눌렀을 때 남은 섹션만 이어서 만들 수 있다 — 이 checkpoint/resume
+ * 구조 자체는 Pro 전환 후에도 그대로 유지한다(한 요청에서 10개 섹션을
+ * 전부 끝내도록 강제하지 않음 — 무제한 request가 아니라 매 invocation이
+ * 더 많은 섹션을 처리할 수 있게 여유만 늘리는 것).
  *
- * 기본값은 Hobby 플랜의 함수 실행시간 상한(60초) 기준 — vercel.json의
- * maxDuration도 60으로 맞춰뒀다. Pro로 돌아가면(더 긴 실행시간 가능)
- * REPORT_GENERATION_BUDGET_MS 환경변수로 늘리면 된다(코드 변경 불필요).
+ * 기본값은 Vercel Pro 기준(vercel.json의 maxDuration=240s와 짝을 맞춤) —
+ * 실측 섹션당 평균 17~20초 기준으로 한 번의 실행에서 최소 4개 섹션을
+ * 안정적으로 처리할 수 있는 값이다. maxDuration보다 반드시 짧아야 하고,
+ * 아래 루프의 worst-case 계산(budget - REQUEST_TIMEOUT_MS + AI_CALL_BUDGET_MS)이
+ * maxDuration을 넘지 않는지 값을 바꿀 때마다 다시 확인할 것.
+ * REPORT_GENERATION_BUDGET_MS 환경변수로 더 늘릴 수 있다(코드 변경 불필요).
  */
 const GENERATION_BUDGET_MS = envDurationMs(
   process.env.REPORT_GENERATION_BUDGET_MS,
-  40_000
+  180_000
 );
 
 /**
@@ -43,12 +49,16 @@ const GENERATION_BUDGET_MS = envDurationMs(
  * 함수가 강제 종료되면 상태를 정리하지 못해 GENERATING으로 남는데, 그걸
  * 영원히 "생성 중"으로 취급하면 해당 딜은 새 보고서를 만들 수 없게 된다.
  *
- * 예전엔 15분 고정이었는데, 함수 실행시간 상한이 60초인 Hobby에서는 이미
- * 죽은 게 확실한 생성 때문에 사용자가 15분을 기다려야 했다. 실제 실행이
- * 시간 예산을 넘길 수 없으므로 예산의 3배(최소 90초)면 정상 진행 중인
- * 생성을 멈춘 것으로 오판하지 않으면서 훨씬 빨리 재시도할 수 있다.
+ * 배수는 GENERATION_BUDGET_MS가 아니라 실제 강제 종료 한도(vercel.json의
+ * maxDuration)에 맞춰 잡아야 한다 — 배수(예산의 3배)를 고정해두면
+ * 예산을 올릴 때마다 대기시간이 같이 커진다(40초 예산 시절엔 3배=120초로
+ * 적당했지만, 180초 예산에 그대로 곱하면 540초=9분이 되어 실제 강제
+ * 종료 한도(240초)보다 훨씬 길게 사용자를 기다리게 한다 — Pro 전환 시
+ * 실제로 겪은 회귀). 1.5배(최소 90초)면 예산(180초)보다 90초 여유가
+ * 있어 "죽었다 확신"에 충분하면서도, maxDuration(240초)을 크게 넘기지
+ * 않는다.
  */
-export const STALE_GENERATION_MS = Math.max(GENERATION_BUDGET_MS * 3, 90_000);
+export const STALE_GENERATION_MS = Math.max(GENERATION_BUDGET_MS * 1.5, 90_000);
 
 /**
  * 의견종합 끝에 붙이는 자동 품질 메모 — 재생성 시 중복 누적을 막으려고
@@ -65,8 +75,13 @@ export async function generateSectionsAsync(
   userId?: string
 ) {
   const total = SECTION_META.length;
-  const deadline = Date.now() + GENERATION_BUDGET_MS;
+  const invocationStartedAt = Date.now();
+  const deadline = invocationStartedAt + GENERATION_BUDGET_MS;
+  const elapsedSec = () => ((Date.now() - invocationStartedAt) / 1000).toFixed(1);
   setCurrentSection(reportId, "준비 중...");
+  console.log(
+    `[GENERATION] report=${reportId} deal=${deal.id} invocation_start budget=${(GENERATION_BUDGET_MS / 1000).toFixed(0)}s total=${total}`
+  );
 
   try {
     const agent = getAgent(agentType, deal.sector);
@@ -124,12 +139,17 @@ export async function generateSectionsAsync(
         // 최악의 경우를 계산하면: 마지막으로 시작 가능한 시점은
         // (예산 - 1회 타임아웃)이고 거기서 재시도까지 다 쓰면
         // AI_CALL_BUDGET_MS가 더 걸린다. 기본값 기준
-        // 40s - 25s + 40s = 55s로 Hobby 상한(60초) 안에 들어온다.
-        // 여유를 재시도 최악값(AI_CALL_BUDGET_MS)으로 잡으면 한 번 실행에
-        // 섹션 한 개도 못 만들어 사용자가 "다시 시도"만 반복하게 된다.
+        // 180s - 25s + 40s = 195s로 vercel.json의 maxDuration(240s)
+        // 안에 45초 여유를 두고 들어온다(DB 저장·품질평가 등 나머지 처리
+        // 시간). 여유를 재시도 최악값(AI_CALL_BUDGET_MS)으로 잡으면 한 번
+        // 실행에 섹션 하나도 못 만들어 사용자가 "다시 시도"만 반복하게
+        // 된다 — 그래서 더 짧은 REQUEST_TIMEOUT_MS를 기준으로 삼는다.
         if (deadline - Date.now() < REQUEST_TIMEOUT_MS) {
           console.warn(
             `[Gen] report=${reportId} 시간 예산 소진 — ${i}/${total} 섹션까지 저장하고 중단(재시도 시 이어서 생성)`
+          );
+          console.log(
+            `[GENERATION] report=${reportId} invocation_end status=checkpoint sections=${i}/${total} elapsed=${elapsedSec()}s checkpoint_saved=true resume_expected=true`
           );
           await prisma.report.update({
             where: { id: reportId },
@@ -150,31 +170,50 @@ export async function generateSectionsAsync(
           ? "\n## 마감 섹션 지침\n- 공유 팩트·이전 섹션 수치를 그대로 인용할 것\n- 투자조건은 텀시트 표+보호조항, 의견종합은 권고 라벨 필수\n"
           : "";
 
-        result = await agent.generateSection(
-          {
-            dealId: deal.id,
-            companyName: deal.companyName,
-            sector: deal.sector,
-            agentType,
-            investRound: deal.investRound ?? undefined,
-            investAmount: deal.investAmount ?? undefined,
-            valuation: deal.valuation ?? undefined,
-            documents: deal.documents,
-            additionalContext: [
-              factsBlock,
-              continuity,
-              closingHint,
-              additionalContext,
-            ]
-              .filter(Boolean)
-              .join("\n\n"),
-          },
-          sectionKey
-        );
+        try {
+          result = await agent.generateSection(
+            {
+              dealId: deal.id,
+              companyName: deal.companyName,
+              sector: deal.sector,
+              agentType,
+              investRound: deal.investRound ?? undefined,
+              investAmount: deal.investAmount ?? undefined,
+              valuation: deal.valuation ?? undefined,
+              documents: deal.documents,
+              additionalContext: [
+                factsBlock,
+                continuity,
+                closingHint,
+                additionalContext,
+              ]
+                .filter(Boolean)
+                .join("\n\n"),
+            },
+            sectionKey
+          );
+        } catch (err) {
+          // 실패해도 재시도/폴백은 이미 agent.generateSection 안(claude.ts의
+          // runModelChain)에서 전부 소진된 뒤라, 여기서는 로그만 남기고
+          // 그대로 다시 던진다 — 바깥 catch가 기존과 동일하게 report를
+          // PENDING으로 되돌린다(재시도 시 이어서 생성).
+          console.warn(
+            `[GENERATION] report=${reportId} section=${i + 1}/${total} model=? ` +
+              `duration=${((Date.now() - startedAt) / 1000).toFixed(1)}s success=false ` +
+              `elapsed=${elapsedSec()}s error=${err instanceof Error ? err.constructor.name : "Error"}`
+          );
+          throw err;
+        }
 
+        const fallbackUsed = Boolean(result.modelUsed) && result.modelUsed !== MODEL;
         console.log(
           `[Gen] report=${reportId} ${i + 1}/${total} ${meta.title} 완료 ` +
             `(${Math.round((Date.now() - startedAt) / 1000)}초, ${result.tokensUsed} tokens, ${result.modelUsed ?? "?"})`
+        );
+        console.log(
+          `[GENERATION] report=${reportId} section=${i + 1}/${total} model=${result.modelUsed ?? "?"} ` +
+            `fallback=${fallbackUsed} duration=${((Date.now() - startedAt) / 1000).toFixed(1)}s ` +
+            `success=true elapsed=${elapsedSec()}s`
         );
 
         // 섹션이 완성되는 즉시 저장한다 — 진행률 화면이 실시간으로 반영되고,
@@ -276,6 +315,10 @@ export async function generateSectionsAsync(
       });
     }
 
+    console.log(
+      `[GENERATION] report=${reportId} invocation_end status=completed sections=${total}/${total} elapsed=${elapsedSec()}s`
+    );
+
     await prisma.report.update({
       where: { id: reportId },
       data: {
@@ -286,6 +329,9 @@ export async function generateSectionsAsync(
     });
   } catch (error) {
     console.error("Section generation error:", error);
+    console.log(
+      `[GENERATION] report=${reportId} invocation_end status=failed elapsed=${elapsedSec()}s checkpoint_saved=true resume_expected=true`
+    );
     await prisma.report.update({
       where: { id: reportId },
       data: { status: ReportStatus.PENDING, currentSectionTitle: null },

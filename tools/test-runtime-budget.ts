@@ -2,7 +2,7 @@
  * 실행시간 예산·월 한도 경계 검증.
  *
  * 배경(실제로 있었던 문제):
- * - Hobby 플랜은 함수 실행시간이 60초로 강제 상한인데, AI 호출 타임아웃이
+ * - Hobby 플랜은 함수 실행시간이 60초로 강제 상한이었는데, AI 호출 타임아웃이
  *   150초로 잡혀 있어서 느린 호출 한 번이면 함수가 강제 종료됐다. 그렇게
  *   죽으면 상태 정리를 못 해 보고서가 GENERATING에 갇힌다.
  * - 시간 예산을 환경변수로 받는데 `Number("")`는 0, `Number("30s")`는 NaN이라
@@ -10,6 +10,13 @@
  *   못하는(0) 상태가 된다.
  * - 월 한도를 서버 로컬(UTC) 기준으로 세서, 한국 시간으로 달이 바뀐 뒤에도
  *   9시간 동안 지난달 사용량이 함께 잡혔다.
+ *
+ * 2026-09-11 Pro 전환: vercel.json의 maxDuration을 60초 → 240초로,
+ * report-generation.ts의 GENERATION_BUDGET_MS 기본값을 40초 → 180초로
+ * 올렸다(Vercel Pro 실제 지원 한도는 최대 800초지만, 실측 섹션당 17~20초
+ * 기준 4개 섹션을 안정적으로 처리할 수 있는 값만 필요해 240초로 보수적으로
+ * 잡음). 이 테스트의 "함수 상한" 기준값도 함께 갱신 — vercel.json은 JSON이라
+ * TS에서 직접 import할 수 없으므로, 값이 바뀌면 이 상수도 같이 바꿔야 한다.
  *
  * Usage: npm run test:runtime-budget
  */
@@ -25,8 +32,10 @@ function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
 }
 
-/** Hobby 플랜의 함수 실행시간 상한 */
-const HOBBY_FUNCTION_LIMIT_MS = 60_000;
+/** vercel.json의 report generation 관련 route(maxDuration) — 값이 바뀌면 여기도 같이 바꿀 것 */
+const FUNCTION_LIMIT_MS = 240_000;
+/** report-generation.ts의 GENERATION_BUDGET_MS 코드 기본값과 동일하게 유지 */
+const DEFAULT_GENERATION_BUDGET_MS = 180_000;
 
 function testEnvDurationParsing() {
   assert(envDurationMs("30000", 1000) === 30_000, "정상 숫자 문자열을 못 읽음");
@@ -42,19 +51,21 @@ function testEnvDurationParsing() {
 
 function testAiTimeoutFitsFunctionLimit() {
   assert(
-    REQUEST_TIMEOUT_MS < HOBBY_FUNCTION_LIMIT_MS,
-    `AI 1회 호출 타임아웃(${REQUEST_TIMEOUT_MS}ms)이 함수 상한(${HOBBY_FUNCTION_LIMIT_MS}ms) 이상 — ` +
+    REQUEST_TIMEOUT_MS < FUNCTION_LIMIT_MS,
+    `AI 1회 호출 타임아웃(${REQUEST_TIMEOUT_MS}ms)이 함수 상한(${FUNCTION_LIMIT_MS}ms) 이상 — ` +
       "느린 호출 한 번으로 함수가 강제 종료된다"
   );
   assert(
-    AI_CALL_BUDGET_MS < HOBBY_FUNCTION_LIMIT_MS,
+    AI_CALL_BUDGET_MS < FUNCTION_LIMIT_MS,
     `AI 호출 총 예산(${AI_CALL_BUDGET_MS}ms)이 함수 상한 이상 — 재시도가 함수를 넘긴다`
   );
   assert(
     REQUEST_TIMEOUT_MS <= AI_CALL_BUDGET_MS,
     "1회 타임아웃이 총 예산보다 길다 — 총 예산이 무의미해짐"
   );
-  console.log("✅ AI 호출 타임아웃·총 예산이 함수 실행시간 상한(60초) 안에 들어옴");
+  console.log(
+    `✅ AI 호출 타임아웃·총 예산이 함수 실행시간 상한(${FUNCTION_LIMIT_MS / 1000}초) 안에 들어옴`
+  );
 }
 
 /**
@@ -62,12 +73,14 @@ function testAiTimeoutFitsFunctionLimit() {
  * 최악의 경우 = 마지막 시작 가능 시점 + 재시도까지 다 쓴 시간.
  */
 function testWorstCaseRunFitsFunctionLimit() {
-  const budget = Number(process.env.REPORT_GENERATION_BUDGET_MS ?? 40_000);
+  const budget = Number(
+    process.env.REPORT_GENERATION_BUDGET_MS ?? DEFAULT_GENERATION_BUDGET_MS
+  );
   const latestStart = budget - REQUEST_TIMEOUT_MS;
   const worstCase = latestStart + AI_CALL_BUDGET_MS;
   assert(
-    worstCase <= HOBBY_FUNCTION_LIMIT_MS,
-    `최악의 경우 실행시간 ${worstCase}ms가 함수 상한 ${HOBBY_FUNCTION_LIMIT_MS}ms 초과 ` +
+    worstCase <= FUNCTION_LIMIT_MS,
+    `최악의 경우 실행시간 ${worstCase}ms가 함수 상한 ${FUNCTION_LIMIT_MS}ms 초과 ` +
       `(예산 ${budget} - 타임아웃 ${REQUEST_TIMEOUT_MS} + 총예산 ${AI_CALL_BUDGET_MS})`
   );
   assert(
@@ -87,7 +100,7 @@ function testStaleWindowIsNotAbsurdlyLong() {
   );
   assert(
     STALE_GENERATION_MS <= 5 * 60 * 1000,
-    `stale 판정이 ${STALE_GENERATION_MS}ms — 60초짜리 실행이 죽었을 때 너무 오래 잠긴다`
+    `stale 판정이 ${STALE_GENERATION_MS}ms — 함수가 죽었을 때 너무 오래 잠긴다(함수 상한 ${FUNCTION_LIMIT_MS / 1000}초보다 훨씬 길면 안 됨)`
   );
   console.log(
     `✅ 멈춘 생성 재시도 대기시간이 ${STALE_GENERATION_MS / 1000}초 (예전 15분에서 단축)`
