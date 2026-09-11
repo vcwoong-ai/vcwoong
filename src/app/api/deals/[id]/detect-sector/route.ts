@@ -3,11 +3,16 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateText, isAIConfigured } from "@/lib/claude";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import {
   getUserTeamContext,
   dealWriteWhere,
   permissionDeniedMessage,
 } from "@/lib/team-access";
+
+// AI 호출 라우트 — 기본 함수 실행시간(플랫폼 기본값, Hobby 플랜은 10초)로는
+// 부족해 다른 AI 호출 라우트와 동일하게 60초로 맞춰둔다.
+export const maxDuration = 60;
 
 const SECTOR_LABELS: Record<string, string> = {
   BIO: "바이오/헬스케어",
@@ -69,6 +74,18 @@ export async function POST(
 
   if (!deal.documents.length) {
     return NextResponse.json({ error: "업로드된 문서가 없습니다" }, { status: 400 });
+  }
+
+  const rate = await checkRateLimit(
+    `detect-sector:${session.user.id}`,
+    RATE_LIMITS.detectSector.limit,
+    RATE_LIMITS.detectSector.windowMs
+  );
+  if (!rate.allowed) {
+    return NextResponse.json(
+      { error: "섹터 감지 요청이 너무 잦습니다. 잠시 후 다시 시도해 주세요." },
+      { status: 429, headers: { "Retry-After": String(rate.retryAfterSec) } }
+    );
   }
 
   // Build document excerpt (max 3000 chars)

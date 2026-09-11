@@ -2,12 +2,7 @@ import { AgentType, DealSector, ReportStatus } from "@prisma/client";
 import { getAgent } from "@/agents";
 import { SECTION_META, type GenerationResult } from "@/types";
 import { prisma } from "@/lib/prisma";
-import {
-  initProgress,
-  updateProgress,
-  completeProgress,
-  errorProgress,
-} from "@/lib/generation-progress";
+import { setCurrentSection } from "@/lib/generation-progress";
 import {
   extractSharedFacts,
   formatSharedFactsForPrompt,
@@ -71,7 +66,7 @@ export async function generateSectionsAsync(
 ) {
   const total = SECTION_META.length;
   const deadline = Date.now() + GENERATION_BUDGET_MS;
-  initProgress(reportId, total);
+  setCurrentSection(reportId, "준비 중...");
 
   try {
     const agent = getAgent(agentType, deal.sector);
@@ -104,7 +99,7 @@ export async function generateSectionsAsync(
     for (let i = 0; i < sectionKeys.length; i++) {
       const sectionKey = sectionKeys[i];
       const meta = SECTION_META.find((m) => m.key === sectionKey)!;
-      updateProgress(reportId, i, meta.title);
+      setCurrentSection(reportId, meta.title);
 
       const isClosing =
         sectionKey === "OPINION_SUMMARY" ||
@@ -138,12 +133,8 @@ export async function generateSectionsAsync(
           );
           await prisma.report.update({
             where: { id: reportId },
-            data: { status: ReportStatus.PENDING },
+            data: { status: ReportStatus.PENDING, currentSectionTitle: null },
           });
-          errorProgress(
-            reportId,
-            `시간이 초과되어 ${i}/${total} 섹션까지 저장했습니다. "다시 시도"를 누르면 남은 섹션부터 이어서 생성합니다.`
-          );
           return;
         }
 
@@ -287,16 +278,17 @@ export async function generateSectionsAsync(
 
     await prisma.report.update({
       where: { id: reportId },
-      data: { status: ReportStatus.DRAFT, generatedAt: new Date() },
+      data: {
+        status: ReportStatus.DRAFT,
+        generatedAt: new Date(),
+        currentSectionTitle: null,
+      },
     });
-
-    completeProgress(reportId);
   } catch (error) {
     console.error("Section generation error:", error);
-    errorProgress(reportId, String(error));
     await prisma.report.update({
       where: { id: reportId },
-      data: { status: ReportStatus.PENDING },
+      data: { status: ReportStatus.PENDING, currentSectionTitle: null },
     });
   }
 }

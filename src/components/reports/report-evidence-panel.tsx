@@ -1,11 +1,20 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { SECTION_META } from "@/types";
-import { Loader2, FileSearch, AlertTriangle, FileText, PenLine } from "lucide-react";
+import {
+  Loader2,
+  FileSearch,
+  AlertTriangle,
+  FileText,
+  PenLine,
+  Sparkles,
+} from "lucide-react";
 
 type EvidenceStatus = "document" | "deal" | "unverified";
+type ClaimConfidence = "HIGH" | "MEDIUM" | "LOW" | "UNSUPPORTED";
 
 interface NumericClaim {
   sectionKey: string;
@@ -14,13 +23,16 @@ interface NumericClaim {
   value: string;
   unit: string;
   status: EvidenceStatus;
-  source?: { documentName: string; snippet: string };
+  claimType: "numeric" | "qualitative";
+  confidence: ClaimConfidence;
+  source?: { documentName: string; location?: string; snippet: string };
 }
 
 interface EvidenceData {
   claims: NumericClaim[];
   totals: { checked: number; document: number; deal: number; unverified: number };
   coverage: number;
+  confidenceTotals: Record<ClaimConfidence, number>;
   documentCount: number;
 }
 
@@ -45,24 +57,35 @@ const STATUS_META: Record<
   },
 };
 
+/** hallucination 위험도 관점 — report-quality.ts의 summarizeEvidenceForQuality와 짝 */
+const CONFIDENCE_META: Record<ClaimConfidence, { label: string; className: string }> = {
+  HIGH: { label: "확신 높음", className: "bg-green-50 text-green-700 border-green-200" },
+  MEDIUM: { label: "검토 필요", className: "bg-amber-50 text-amber-700 border-amber-200" },
+  LOW: { label: "약한 근거", className: "bg-orange-50 text-orange-700 border-orange-200" },
+  UNSUPPORTED: { label: "환각 위험", className: "bg-red-50 text-red-700 border-red-200" },
+};
+
 const sectionTitle = (key: string) =>
   SECTION_META.find((s) => s.key === key)?.title ?? key;
 
 export function ReportEvidencePanel({
   reportId,
   refreshKey = 0,
+  canEdit = false,
 }: {
   reportId: string;
   /** 섹션 재생성 후 증가시켜 근거를 다시 계산한다 */
   refreshKey?: number;
+  canEdit?: boolean;
 }) {
   const [data, setData] = useState<EvidenceData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [verifying, setVerifying] = useState(false);
   const [onlyUnverified, setOnlyUnverified] = useState(true);
   const [expanded, setExpanded] = useState(false);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
@@ -85,7 +108,26 @@ export function ReportEvidencePanel({
     return () => {
       cancelled = true;
     };
-  }, [reportId, refreshKey]);
+  }, [reportId]);
+
+  useEffect(() => load(), [load, refreshKey]);
+
+  const verifyWithAi = async () => {
+    setVerifying(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/reports/${reportId}/evidence/verify`, {
+        method: "POST",
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "AI 검증 실패");
+      setData(json.data);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "AI 검증 실패");
+    } finally {
+      setVerifying(false);
+    }
+  };
 
   const visible = useMemo(() => {
     if (!data) return [];
@@ -104,7 +146,7 @@ export function ReportEvidencePanel({
     );
   }
 
-  if (error) {
+  if (error && !data) {
     return (
       <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
         {error}
@@ -116,6 +158,7 @@ export function ReportEvidencePanel({
 
   const { totals, coverage } = data;
   const filteredCount = onlyUnverified ? totals.unverified : totals.checked;
+  const unsupportedCount = data.confidenceTotals?.UNSUPPORTED ?? totals.unverified;
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-5">
@@ -128,8 +171,8 @@ export function ReportEvidencePanel({
       </div>
 
       <p className="text-xs text-gray-500 mt-2 leading-relaxed">
-        보고서에 쓰인 수치 {totals.checked}개를 업로드 자료 {data.documentCount}건과
-        대조했습니다. &lsquo;문서 확인&rsquo;은 같은 값이 자료에 있다는 뜻이지 해석까지
+        보고서에 쓰인 수치·핵심 주장 {totals.checked}건을 업로드 자료 {data.documentCount}건과
+        대조했습니다. &lsquo;문서 확인&rsquo;은 같은 값/취지가 자료에 있다는 뜻이지 해석까지
         맞다는 보증은 아닙니다. &lsquo;근거 없음&rsquo;은 투자심의위원회 전에 반드시 직접 확인하세요.
       </p>
 
@@ -152,6 +195,12 @@ export function ReportEvidencePanel({
         })}
       </div>
 
+      {error && (
+        <p className="mt-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1.5">
+          {error}
+        </p>
+      )}
+
       <div className="mt-3 flex items-center gap-3 flex-wrap">
         <button
           type="button"
@@ -170,15 +219,16 @@ export function ReportEvidencePanel({
 
       {visible.length === 0 ? (
         <p className="mt-3 text-sm text-green-700">
-          근거 없는 수치가 없습니다. 모든 숫자가 자료나 딜 입력값으로 되짚어집니다.
+          근거 없는 주장이 없습니다. 모든 숫자·핵심 주장이 자료나 딜 입력값으로 되짚어집니다.
         </p>
       ) : (
         <ul className="mt-3 space-y-2">
           {visible.map((c, i) => {
             const meta = STATUS_META[c.status];
+            const confMeta = CONFIDENCE_META[c.confidence];
             return (
               <li
-                key={`${c.sectionKey}-${c.value}-${c.unit}-${i}`}
+                key={`${c.sectionKey}-${c.claimType}-${c.value}-${c.unit}-${i}`}
                 className="rounded border border-gray-100 bg-gray-50/60 px-3 py-2"
               >
                 <div className="flex items-start justify-between gap-2 flex-wrap">
@@ -191,15 +241,25 @@ export function ReportEvidencePanel({
                       {sectionTitle(c.sectionKey)}
                     </span>
                   </div>
-                  <span
-                    className={`text-[11px] rounded border px-1.5 py-0.5 shrink-0 ${meta.className}`}
-                  >
-                    {meta.label}
-                  </span>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span
+                      className={`text-[11px] rounded border px-1.5 py-0.5 ${confMeta.className}`}
+                    >
+                      {confMeta.label}
+                    </span>
+                    <span
+                      className={`text-[11px] rounded border px-1.5 py-0.5 ${meta.className}`}
+                    >
+                      {meta.label}
+                    </span>
+                  </div>
                 </div>
                 {c.source && (
                   <p className="mt-1 text-[11px] text-gray-500 break-words">
-                    <span className="text-gray-400">{c.source.documentName}</span>
+                    <span className="text-gray-400">
+                      {c.source.documentName}
+                      {c.source.location ? ` · ${c.source.location}` : ""}
+                    </span>
                     {" — "}
                     {c.source.snippet}
                   </p>
@@ -218,6 +278,23 @@ export function ReportEvidencePanel({
         >
           {filteredCount - visible.length}건 더 보기
         </button>
+      )}
+
+      {canEdit && unsupportedCount > 0 && (
+        <Button
+          size="sm"
+          variant="outline"
+          className="mt-3"
+          onClick={verifyWithAi}
+          disabled={verifying}
+        >
+          {verifying ? (
+            <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+          ) : (
+            <Sparkles className="w-3.5 h-3.5 mr-1.5" />
+          )}
+          근거 없음 {Math.min(unsupportedCount, 5)}건 AI로 재확인
+        </Button>
       )}
     </div>
   );

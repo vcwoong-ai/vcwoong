@@ -9,9 +9,11 @@
  * Usage: npm run test:security
  */
 import { verifyTossWebhookSecret } from "../src/lib/payments/toss";
-import { clientIp } from "../src/lib/rate-limit";
+import { clientIp, RATE_LIMITS } from "../src/lib/rate-limit";
 import { brandCustomerKey, parseCustomerKeyUserId } from "../src/lib/brand";
 import { isAllowedBlobUrl } from "../src/lib/storage";
+import { secureCompare } from "../src/lib/secure-compare";
+import { readZipEntrySafe } from "../src/lib/zip-safety";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -180,13 +182,98 @@ function testBlobUrlValidation() {
   console.log("✅ 업로드 Blob URL 검증 (SSRF·타 딜 경로·스킴 우회 차단)");
 }
 
-function main() {
+/**
+ * 타이밍 공격에 안전한 문자열 비교(secureCompare).
+ *
+ * 웹훅 시크릿(sourcing/webhook, sourcing/poll, Toss)이 전부 이 함수로 통일돼
+ * 있다 — `===` 비교로 되돌아가면 응답 시간차로 시크릿을 한 글자씩 추론할
+ * 여지가 다시 생기므로, 동작 자체를 회귀 테스트로 고정해둔다.
+ */
+function testSecureCompare() {
+  assert(secureCompare("s3cret", "s3cret"), "동일한 문자열이 다르다고 판정됨");
+  assert(!secureCompare("s3cret", "wrong!"), "다른 문자열(같은 길이)이 같다고 판정됨");
+  assert(!secureCompare("s3cret", "s3cre"), "길이가 다른 문자열이 같다고 판정됨");
+  assert(!secureCompare("", "s3cret"), "빈 문자열이 통과됨");
+  assert(secureCompare("", ""), "빈 문자열 두 개가 다르다고 판정됨");
+  console.log("✅ secureCompare (타이밍 공격에 안전한 시크릿 비교)");
+}
+
+/**
+ * 압축 해제 폭탄(zip bomb) 방어 — readZipEntrySafe.
+ *
+ * 실제 JSZip 없이도, ZipObject가 노출하는 `_data.uncompressedSize`(중앙
+ * 디렉터리에 적힌, 압축 풀기 전부터 알 수 있는 값)만으로 상한을 거르는
+ * 핵심 로직을 검증한다 — document-parser.ts(PPTX 슬라이드)·
+ * document-images.ts(임베드 이미지)가 공통으로 쓴다.
+ */
+async function testZipBombGuard() {
+  const fakeEntry = (uncompressedSize: number, payload: string) => ({
+    _data: { uncompressedSize },
+    async: async (type: "text" | "nodebuffer") =>
+      type === "text" ? payload : Buffer.from(payload),
+  });
+
+  const small = await readZipEntrySafe(fakeEntry(100, "정상 슬라이드"), "text", 1000);
+  assert(small === "정상 슬라이드", "상한 이내 항목을 읽지 못함");
+
+  const bomb = await readZipEntrySafe(
+    fakeEntry(5_000_000_000, "폭탄"),
+    "text",
+    1000
+  );
+  assert(bomb === null, "압축 해제 후 크기가 상한을 넘는 항목을 그대로 읽어버림(zip bomb 무방비)");
+
+  // 크기 정보 자체가 없으면(내부 필드 변경 등) 안전하게 통과시킨다(fail-open)
+  const noSizeInfo = await readZipEntrySafe(
+    { async: async () => "정상 처리" } as never,
+    "text",
+    1000
+  );
+  assert(noSizeInfo === "정상 처리", "크기 정보 없는 정상 항목까지 막아버림");
+
+  const missing = await readZipEntrySafe(undefined, "text", 1000);
+  assert(missing === null, "존재하지 않는 항목에서 예외 없이 null을 반환하지 않음");
+
+  console.log("✅ 압축 해제 폭탄(zip bomb) 방어 — 상한 초과 항목만 건너뜀");
+}
+
+/**
+ * AI 비용 남용 방지 rate limit 항목들이 실수로 지워지지 않았는지 확인한다.
+ *
+ * 이 5개는 quota(월 보고서 생성 수)로는 막히지 않는 경로였다 — 이미 만든
+ * 보고서/딜/리드에 반복 호출해도 quota 카운터가 늘지 않기 때문에, rate
+ * limit이 사실상 유일한 방어선이다(자세한 배경은 각 라우트 주석 참고).
+ */
+function testAiAbuseRateLimitsExist() {
+  const required: Array<keyof typeof RATE_LIMITS> = [
+    "sectionRegenerate",
+    "improveWeak",
+    "sourcingScreen",
+    "detectSector",
+    "portfolioAutoSummarize",
+  ];
+  for (const key of required) {
+    const limit = RATE_LIMITS[key];
+    assert(Boolean(limit), `RATE_LIMITS.${key}가 없음 — AI 비용 남용 방어선이 빠짐`);
+    assert(limit.limit > 0 && limit.limit <= 100, `RATE_LIMITS.${key}.limit이 비정상: ${limit.limit}`);
+    assert(limit.windowMs > 0, `RATE_LIMITS.${key}.windowMs가 비정상: ${limit.windowMs}`);
+  }
+  console.log("✅ AI 비용 남용 방지 rate limit 5종 존재 (regenerate/improve-weak/screen/detect-sector/portfolio)");
+}
+
+async function main() {
   console.log("\n=== DealMind 보안 로직 테스트 ===\n");
   testWebhookSecret();
   testClientIp();
   testCustomerKey();
   testBlobUrlValidation();
+  testSecureCompare();
+  await testZipBombGuard();
+  testAiAbuseRateLimitsExist();
   console.log("\n✅ 보안 로직 테스트 통과\n");
 }
 
-main();
+main().catch((e) => {
+  console.error("❌", e instanceof Error ? e.message : e);
+  process.exit(1);
+});

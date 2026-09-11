@@ -156,15 +156,63 @@ async function callOnce(
   temperature?: number,
   timeoutMs?: number
 ): Promise<OpenAI.Chat.Completions.ChatCompletion> {
-  const client = getClient(timeoutMs);
-  const result = await client.chat.completions.create({
-    model,
-    max_tokens: maxTokens,
-    messages,
-    stream: false,
-    ...(typeof temperature === "number" ? { temperature } : {}),
-  } as Parameters<OpenAI["chat"]["completions"]["create"]>[0]);
+  const effectiveTimeout = timeoutMs ?? REQUEST_TIMEOUT_MS;
+  const client = getClient(effectiveTimeout);
+  // OpenAI SDK의 client-level timeout 옵션에만 의존하지 않는다 — 실제
+  // 프로덕션 타임아웃 장애에서, 재시도/폴백 로직이 남기는 경고 로그가 전혀
+  // 없이 함수가 통째로 60초 만에 강제 종료된 사례가 있었다. SDK 옵션이
+  // 조용히 아무 효과가 없었을 가능성을 배제할 수 없어(NIM 연동에서도 같은
+  // 증상을 AbortSignal로 고친 전례가 있음), 명시적 AbortSignal을 이중으로
+  // 건다 — 둘 중 하나만 동작해도 요청이 멈추지 않는 사고를 막는다.
+  const result = await client.chat.completions.create(
+    {
+      model,
+      max_tokens: maxTokens,
+      messages,
+      stream: false,
+      ...(typeof temperature === "number" ? { temperature } : {}),
+    } as Parameters<OpenAI["chat"]["completions"]["create"]>[0],
+    { signal: AbortSignal.timeout(effectiveTimeout) }
+  );
   return result as OpenAI.Chat.Completions.ChatCompletion;
+}
+
+/**
+ * 재시도 가능한 에러 판별 (네트워크·타임아웃·업스트림 과부하).
+ *
+ * 예전엔 `err.name === "APIConnectionTimeoutError"` 같은 문자열 비교였는데,
+ * OpenAI SDK가 던지는 이 에러들은 전부 인스턴스의 `.name`이 "Error"로
+ * 고정돼 있어(서브클래스에서 따로 지정하지 않음 — 실측 확인함) 이 비교는
+ * 한 번도 true가 될 수 없었다. 즉 타임아웃이 나도 폴백 모델로 못 넘어가고
+ * 그대로 실패했다는 뜻이다. instanceof로 판별해야 실제로 동작한다.
+ */
+export function isRetryableAIError(err: unknown): boolean {
+  const e = err as { status?: number };
+  if (e?.status === 429 || e?.status === 503 || e?.status === 502 || e?.status === 500) {
+    return true;
+  }
+  return (
+    err instanceof OpenAI.APIConnectionTimeoutError ||
+    err instanceof OpenAI.APIConnectionError ||
+    err instanceof OpenAI.APIUserAbortError
+  );
+}
+
+/**
+ * 모델 ID 오타·미지원 모델(400/404)이나 키 문제(401/403)는 같은 모델로
+ * 재시도해봐야 소용없지만, 폴백 모델로는 살릴 수 있다. 이걸 구분하지 않으면
+ * 모델 ID 하나 잘못 넣었을 때 보고서 생성 전체가 죽는다.
+ */
+export function shouldTryFallbackModel(err: unknown): boolean {
+  const s = (err as { status?: number })?.status;
+  return isRetryableAIError(err) || s === 400 || s === 401 || s === 403 || s === 404;
+}
+
+/** 에러 종류 + 상태코드 + 메시지를 로그용 한 줄로 (constructor.name 사용 이유는 isRetryableAIError 주석 참고) */
+function describeAIError(err: unknown): string {
+  const e = err as { status?: number; message?: string };
+  const kind = err instanceof Error ? err.constructor.name : "Error";
+  return `${kind}${e?.status ? ` ${e.status}` : ""}: ${e?.message ?? String(err)}`;
 }
 
 /**
@@ -189,33 +237,6 @@ async function callWithFallback(
     return left <= 0 ? null : Math.min(REQUEST_TIMEOUT_MS, left);
   };
 
-  const describeError = (err: unknown) => {
-    const e = err as { status?: number; name?: string; message?: string };
-    return `${e?.name ?? "Error"}${e?.status ? ` ${e.status}` : ""}: ${e?.message ?? String(err)}`;
-  };
-
-  const isRetryable = (err: unknown) => {
-    const e = err as { status?: number; name?: string };
-    if (e?.status === 429 || e?.status === 503 || e?.status === 502 || e?.status === 500) {
-      return true;
-    }
-    // 타임아웃·연결 실패도 재시도 대상 — 이걸 빼두면 업스트림이 응답하지
-    // 않을 때 폴백 모델로 넘어가지도 못하고 그대로 실패한다.
-    return (
-      e?.name === "APIConnectionTimeoutError" ||
-      e?.name === "APIConnectionError" ||
-      e?.name === "AbortError"
-    );
-  };
-
-  // 모델 ID 오타·미지원 모델(400/404)이나 키 문제(401/403)는 같은 모델로
-  // 재시도해봐야 소용없지만, 폴백 모델로는 살릴 수 있다. 이걸 구분하지 않으면
-  // 모델 ID 하나 잘못 넣었을 때 보고서 생성 전체가 죽는다.
-  const shouldTryFallback = (err: unknown) => {
-    const s = (err as { status?: number })?.status;
-    return isRetryable(err) || s === 400 || s === 401 || s === 403 || s === 404;
-  };
-
   try {
     const result = await callOnce(
       model,
@@ -226,8 +247,8 @@ async function callWithFallback(
     );
     return { result, usedModel: model };
   } catch (err) {
-    console.warn(`[AI] ${model} 1차 호출 실패 — ${describeError(err)}`);
-    if (!shouldTryFallback(err)) throw err;
+    console.warn(`[AI] ${model} 1차 호출 실패 — ${describeAIError(err)}`);
+    if (!shouldTryFallbackModel(err)) throw err;
     if (isFreeModel(model) && model !== FALLBACK_MODEL) {
       console.log(`[AI] 무료 모델 레이트리밋 → ${FALLBACK_MODEL}로 전환`);
     } else {
@@ -281,8 +302,8 @@ async function callWithFallback(
       return { result, usedModel: retryModel };
     } catch (err) {
       lastErr = err;
-      console.warn(`[AI] ${retryModel} 실패 — ${describeError(err)}`);
-      if (!isRetryable(err)) break;
+      console.warn(`[AI] ${retryModel} 실패 — ${describeAIError(err)}`);
+      if (!isRetryableAIError(err)) break;
     }
   }
 

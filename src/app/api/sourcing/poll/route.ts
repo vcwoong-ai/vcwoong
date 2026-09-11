@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/prisma";
 import { pollInboxDirectory, pollImapMailbox } from "@/lib/imap-poll";
 import { authOptions } from "@/lib/auth";
+import { secureCompare } from "@/lib/secure-compare";
 
 async function runPollForUser(userId: string) {
   const results = [];
@@ -41,7 +42,7 @@ export async function POST(request: NextRequest) {
   const secret = request.headers.get("x-webhook-secret");
   const expected = process.env.SOURCING_WEBHOOK_SECRET;
 
-  if (!expected || secret !== expected) {
+  if (!expected || !secret || !secureCompare(secret, expected)) {
     return NextResponse.json({ error: "인증 실패" }, { status: 401 });
   }
 

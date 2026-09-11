@@ -96,4 +96,22 @@ export const RATE_LIMITS = {
   dealScoring: { limit: 20, windowMs: 60 * 60 * 1000 },
   /** 딥다이브 검증(주장당 검색+AI 호출, 건당 최대 5회): 사용자당 1시간 10회 */
   deepDive: { limit: 10, windowMs: 60 * 60 * 1000 },
+  /**
+   * 섹션 재생성(AI 호출 1회) — quota(월 한도)는 "이번 달 새로 만든 보고서
+   * 수"만 세기 때문에, 이미 만들어진 보고서의 섹션을 계속 재생성하는
+   * 호출은 quota로 막히지 않는다. rate limit이 사실상 유일한 방어선이다.
+   */
+  sectionRegenerate: { limit: 20, windowMs: 60 * 60 * 1000 },
+  /** 약한 섹션 일괄 개선(건당 AI 호출 최대 5회) — 위와 같은 이유로 필요 */
+  improveWeak: { limit: 10, windowMs: 60 * 60 * 1000 },
+  /** 인바운드 딜 AI 스크리닝(AI 호출 1회): 사용자당 1시간 30회 */
+  sourcingScreen: { limit: 30, windowMs: 60 * 60 * 1000 },
+  /** 섹터 자동 감지(AI 호출 1회, 토큰 적음): 사용자당 1시간 30회 */
+  detectSector: { limit: 30, windowMs: 60 * 60 * 1000 },
+  /** 포트폴리오 분기노트 AI 자동요약(AI 호출 1회): 사용자당 1시간 20회 */
+  portfolioAutoSummarize: { limit: 20, windowMs: 60 * 60 * 1000 },
+  /** 근거 추적 AI 보강 검증(건당 최대 5회 AI 호출): 사용자당 1시간 10회 */
+  evidenceVerify: { limit: 10, windowMs: 60 * 60 * 1000 },
+  /** IC 질문 생성(건당 배치 AI 호출 최대 1회): 사용자당 1시간 20회 */
+  icQuestions: { limit: 20, windowMs: 60 * 60 * 1000 },
 } as const;

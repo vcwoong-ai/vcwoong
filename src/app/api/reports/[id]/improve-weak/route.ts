@@ -11,12 +11,20 @@ import {
 } from "@/lib/shared-facts";
 import { evaluateReport, evaluateSection } from "@/lib/report-quality";
 import { checkQuota } from "@/lib/quotas";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { buildPriorSectionSummary } from "@/lib/section-context";
 import {
   getUserTeamContext,
   reportWriteWhere,
   permissionDeniedMessage,
 } from "@/lib/team-access";
+
+// AI 호출 라우트 — 기본 함수 실행시간(플랫폼 기본값, Hobby 플랜은 10초)로는
+// 턱없이 부족하다. 다만 이 라우트는 섹션을 최대 5개까지 "순차" 재생성하는
+// 구조라 60초를 줘도 최악의 경우(섹션당 AI_CALL_BUDGET_MS 40초 x 5)는 여전히
+// 넘칠 수 있다 — 남은 위험은 그대로 남겨두고(아래 report-generation.ts 같은
+// 재개형 구조 도입은 이번 범위 밖) 우선 Hobby 상한만큼은 확보해 둔다.
+export const maxDuration = 60;
 
 const bodySchema = z.object({
   /** 개선할 최대 섹션 수 (기본 3) */
@@ -68,6 +76,21 @@ export async function POST(
       return NextResponse.json(
         { error: "개선할 섹션이 없습니다" },
         { status: 400 }
+      );
+    }
+
+    // quota(월 한도)는 "이번 달 새로 만든 보고서 수"만 세서, 이미 만든
+    // 보고서에 반복 호출되는 이 라우트(건당 AI 호출 최대 5회)를 막지
+    // 못한다. rate limit을 실질적인 방어선으로 둔다.
+    const rate = await checkRateLimit(
+      `improve-weak:${session.user.id}`,
+      RATE_LIMITS.improveWeak.limit,
+      RATE_LIMITS.improveWeak.windowMs
+    );
+    if (!rate.allowed) {
+      return NextResponse.json(
+        { error: "약한 섹션 개선 요청이 너무 잦습니다. 잠시 후 다시 시도해 주세요." },
+        { status: 429, headers: { "Retry-After": String(rate.retryAfterSec) } }
       );
     }
 

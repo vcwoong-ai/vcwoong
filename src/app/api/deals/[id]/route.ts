@@ -19,13 +19,38 @@ const updateDealSchema = z.object({
   valuation: z.number().positive().optional(),
 });
 
+// deal-detail-client.tsx는 documents[].parsedText 길이와 reports[].sections
+// 개수만 쓰고 섹션 본문(content)은 렌더링하지 않는다. sections는 select로
+// 필요한 필드만 가져와 본문 전송을 피한다(같은 이유로 src/app/deals/[id]/
+// page.tsx의 서버 컴포넌트 조회도 동일하게 맞춰뒀다).
 async function getAuthorizedDeal(dealId: string, userId: string, teamId: string | null) {
   const deal = await prisma.deal.findFirst({
     where: { id: dealId, ...dealReadWhere(userId, teamId) },
     include: {
-      documents: true,
+      documents: {
+        select: {
+          id: true,
+          name: true,
+          type: true,
+          size: true,
+          mimeType: true,
+          createdAt: true,
+          parsedText: true,
+          metadata: true,
+        },
+      },
       reports: {
-        include: { sections: { orderBy: { order: "asc" } } },
+        select: {
+          id: true,
+          title: true,
+          agentType: true,
+          status: true,
+          createdAt: true,
+          sections: {
+            orderBy: { order: "asc" },
+            select: { id: true, title: true, order: true, status: true },
+          },
+        },
       },
     },
   });

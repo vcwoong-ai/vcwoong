@@ -4,11 +4,16 @@ import { InboundStatus } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { screenInboundDeal } from "@/lib/sourcing";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import {
   getUserTeamContext,
   inboundWriteWhere,
   permissionDeniedMessage,
 } from "@/lib/team-access";
+
+// AI 호출 라우트 — 기본 함수 실행시간(플랫폼 기본값, Hobby 플랜은 10초)로는
+// 부족해 다른 AI 호출 라우트와 동일하게 60초로 맞춰둔다.
+export const maxDuration = 60;
 
 /** AI 1차 스크리닝 점수 산출 */
 export async function POST(
@@ -31,6 +36,18 @@ export async function POST(
     return NextResponse.json(
       { error: permissionDeniedMessage("edit") },
       { status: 403 }
+    );
+  }
+
+  const rate = await checkRateLimit(
+    `sourcing-screen:${session.user.id}`,
+    RATE_LIMITS.sourcingScreen.limit,
+    RATE_LIMITS.sourcingScreen.windowMs
+  );
+  if (!rate.allowed) {
+    return NextResponse.json(
+      { error: "스크리닝 요청이 너무 잦습니다. 잠시 후 다시 시도해 주세요." },
+      { status: 429, headers: { "Retry-After": String(rate.retryAfterSec) } }
     );
   }
 

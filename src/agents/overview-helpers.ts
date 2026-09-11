@@ -6,7 +6,9 @@ function documentBlock(input: AgentInput): string {
     .filter((d) => d.parsedText)
     .map((d) => `### ${d.name}\n${(d.parsedText ?? "").slice(0, 8000)}`)
     .join("\n\n");
-  return doc || "제공된 자료 없음";
+  // 분석 대상 원문임을 명시해, 자료 안에 섞인 지시문을 사용자 명령으로
+  // 오인해 따르지 않게 한다(system-prompts.ts의 8번 원칙과 짝을 이룸).
+  return `<<<SOURCE_DOCUMENT>>>\n${doc || "제공된 자료 없음"}\n<<<END_SOURCE_DOCUMENT>>>`;
 }
 
 function dealHeader(input: AgentInput, sectorLabel: string): string {

@@ -4,12 +4,18 @@ import { z } from "zod";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateText } from "@/lib/claude";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { comparePeriod, currentPeriod } from "@/lib/portfolio";
 import {
   getUserTeamContext,
   portfolioWriteWhere,
   permissionDeniedMessage,
 } from "@/lib/team-access";
+
+// autoSummarize=true일 때만 AI를 1회 호출한다. 기본 함수 실행시간(플랫폼
+// 기본값, Hobby 플랜은 10초)로는 부족해 다른 AI 호출 라우트와 동일하게
+// 60초로 맞춰둔다.
+export const maxDuration = 60;
 
 const bodySchema = z.object({
   period: z.string().regex(/^\d{4}Q[1-4]$/).optional(),
@@ -61,6 +67,18 @@ export async function POST(
   let concerns = parsed.data.concerns;
 
   if (parsed.data.autoSummarize) {
+    const rate = await checkRateLimit(
+      `portfolio-summarize:${session.user.id}`,
+      RATE_LIMITS.portfolioAutoSummarize.limit,
+      RATE_LIMITS.portfolioAutoSummarize.windowMs
+    );
+    if (!rate.allowed) {
+      return NextResponse.json(
+        { error: "자동 요약 요청이 너무 잦습니다. 잠시 후 다시 시도해 주세요." },
+        { status: 429, headers: { "Retry-After": String(rate.retryAfterSec) } }
+      );
+    }
+
     const kpiLines = [...company.kpis]
       .sort((a, b) => comparePeriod(a.period, b.period))
       .slice(-16)
