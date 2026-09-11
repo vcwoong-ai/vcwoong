@@ -42,6 +42,34 @@ function testUserAbortIsRetryable() {
   console.log("✅ APIUserAbortError(명시적 AbortSignal 중단)도 재시도/폴백 대상");
 }
 
+/**
+ * 실제 프로덕션 장애 재현 (2026-09-11): callOnce()가 명시적으로 거는
+ * AbortSignal.timeout()이 발동하면 OpenAI SDK가 APIUserAbortError로 감싸줄
+ * 거라 가정했는데(위 testUserAbortIsRetryable), 실제로는 SDK를 거치지 않고
+ * raw DOMException(name="AbortError")이 그대로 올라왔다. 이 케이스가
+ * 재시도 대상으로 분류되지 않아 폴백 모델로 못 넘어갔고, 보고서 생성이
+ * 1/10 섹션에서 매번 실패했다(runtime logs로 확인).
+ */
+function testDomExceptionAbortErrorIsRetryable() {
+  const err = new DOMException("This operation was aborted", "AbortError");
+  assert(
+    isRetryableAIError(err),
+    "raw DOMException(AbortError)이 재시도 대상으로 인식되지 않음 — AbortSignal.timeout()이 실제로 던지는 형태인데 이걸 놓치면 폴백 모델로 못 넘어감"
+  );
+  assert(
+    shouldTryFallbackModel(err),
+    "raw DOMException(AbortError)일 때 폴백 모델 전환을 시도하지 않음"
+  );
+  // 이름이 다른 DOMException(예: NotSupportedError)까지 재시도 대상으로
+  // 잘못 넓히지 않는지 확인
+  const unrelated = new DOMException("unsupported", "NotSupportedError");
+  assert(
+    !isRetryableAIError(unrelated),
+    "AbortError가 아닌 DOMException까지 재시도 대상으로 잘못 분류됨"
+  );
+  console.log("✅ raw DOMException(AbortError, AbortSignal.timeout()이 실제로 던지는 형태)도 재시도/폴백 대상");
+}
+
 function testConnectionErrorIsRetryable() {
   const err = new OpenAI.APIConnectionError({ message: "network down" });
   assert(isRetryableAIError(err), "APIConnectionError가 재시도 대상으로 인식되지 않음");
@@ -85,6 +113,7 @@ function main() {
   console.log("\n=== DealMind OpenRouter 재시도/폴백 분류 테스트 ===\n");
   testConnectionTimeoutIsRetryable();
   testUserAbortIsRetryable();
+  testDomExceptionAbortErrorIsRetryable();
   testConnectionErrorIsRetryable();
   testRateLimitAndServerErrorsAreRetryable();
   testModelOrAuthErrorsFallBackButDontRetrySameModel();
