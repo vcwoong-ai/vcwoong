@@ -191,6 +191,15 @@ export function isRetryableAIError(err: unknown): boolean {
   if (e?.status === 429 || e?.status === 503 || e?.status === 502 || e?.status === 500) {
     return true;
   }
+  // callOnce()가 거는 명시적 AbortSignal.timeout()이 실제로 발동하면, OpenAI
+  // SDK가 이걸 APIUserAbortError로 감싸줄 거라 가정했었다(테스트도 그렇게
+  // 짜여 있었음) — 그런데 실제 프로덕션 로그를 보면 SDK를 거치지 않고 raw
+  // DOMException(name="AbortError")이 그대로 던져진다. 이 케이스를 놓치면
+  // 타임아웃이 나도 폴백 모델로 못 넘어가고 1차 시도에서 바로 실패한다
+  // (report generation 전체가 섹션 0개에서 죽는 사고로 이어짐).
+  if (err instanceof DOMException && err.name === "AbortError") {
+    return true;
+  }
   return (
     err instanceof OpenAI.APIConnectionTimeoutError ||
     err instanceof OpenAI.APIConnectionError ||
