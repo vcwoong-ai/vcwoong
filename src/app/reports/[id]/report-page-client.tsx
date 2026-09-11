@@ -13,6 +13,12 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { ArrowLeft, Loader2, Sparkles } from "lucide-react";
 import { formatKoreanDateTime } from "@/lib/utils";
+import { safeReadJson } from "@/lib/safe-fetch";
+import {
+  runBatchImprove,
+  type WeakSectionTarget,
+  type BatchProgress,
+} from "@/lib/improve-weak-orchestration";
 import { useToast } from "@/hooks/use-toast";
 import { useConfirm } from "@/hooks/use-confirm";
 
@@ -47,6 +53,7 @@ interface GenerationProgress {
   status: "generating" | "completed" | "error";
   error?: string;
 }
+
 
 const STATUS_DISPLAY: Record<string, { label: string; className: string }> = {
   PENDING: { label: "대기", className: "bg-gray-100 text-gray-600" },
@@ -204,6 +211,7 @@ export function ReportPageClient({
   } | null>(null);
   const [batchImproving, setBatchImproving] = useState(false);
   const [batchNote, setBatchNote] = useState<string | null>(null);
+  const [batchProgress, setBatchProgress] = useState<BatchProgress | null>(null);
 
   const handleReload = useCallback(() => window.location.reload(), []);
 
@@ -273,6 +281,103 @@ export function ReportPageClient({
         description: error instanceof Error ? error.message : "다시 시도해 주세요",
       });
       setIsFinalizing(false);
+    }
+  };
+
+  /**
+   * 약한 섹션 일괄 개선 — 섹션마다 별도 요청으로 순차 호출한다.
+   *
+   * 대상 목록은 improve-weak GET(AI 호출 없음)으로 받고, 실제 재생성은
+   * 이미 있는 단일 섹션 라우트(sections/regenerate, AI 호출 정확히 1회)를
+   * 대상 수만큼 반복 호출한다. 한 HTTP 요청 안에서 여러 섹션을 순차로
+   * AI 재생성하던 예전 구조가 Vercel 함수 실행시간 상한을 넘겨 죽으면서
+   * "Unexpected end of JSON input"을 노출했던 문제를, 구조 자체를
+   * 요청당-섹션-1개로 바꿔서 없앤다.
+   *
+   * 섹션 하나가 실패해도 이미 완료된 섹션은 DB에 그대로 남는다(각 섹션이
+   * sections/regenerate 안에서 즉시 저장됨) — 그 뒤 섹션 호출만 멈추고
+   * 부분 성공 상태를 그대로 보여준다.
+   */
+  const handleBatchImprove = async () => {
+    const ok = await confirm({
+      title: "약한 섹션을 일괄 개선할까요?",
+      description:
+        "품질 70점 미만 섹션(최대 3개)을 지적된 이슈를 반영해 순서대로 다시 생성합니다.",
+      confirmLabel: "개선 실행",
+    });
+    if (!ok) return;
+
+    setBatchImproving(true);
+    setBatchNote(null);
+    setBatchProgress(null);
+
+    try {
+      const planRes = await fetch(
+        `/api/reports/${report.id}/improve-weak?maxSections=3&scoreThreshold=70`
+      );
+      const plan = await safeReadJson<{
+        data: { targets: WeakSectionTarget[]; beforeScore: number };
+      }>(planRes);
+      if (!plan.ok) {
+        toast.error("일괄 개선 실패", { description: plan.message });
+        return;
+      }
+
+      const { targets, beforeScore } = plan.data.data;
+      if (targets.length === 0) {
+        setBatchNote("모든 섹션이 70점 이상입니다.");
+        return;
+      }
+
+      const { improved, stoppedEarly, stopMessage } = await runBatchImprove(
+        targets,
+        async (target) => {
+          const res = await fetch(
+            `/api/reports/${report.id}/sections/regenerate`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                sectionKey: target.sectionKey,
+                qualityIssues: [...target.issues, ...target.warnings].slice(0, 12),
+              }),
+            }
+          );
+          const parsed = await safeReadJson<{ data: { quality?: { score: number } } }>(res);
+          if (!parsed.ok) return { ok: false, message: parsed.message };
+          // 완료된 섹션은 이미 DB에 저장돼 있으니, 전체가 끝나기 전이라도
+          // 품질 패널을 바로 갱신해도 안전하다.
+          setQualityRefreshKey((k) => k + 1);
+          return { ok: true, afterScore: parsed.data.data.quality?.score ?? 0 };
+        },
+        setBatchProgress
+      );
+
+      let afterScoreLabel = "";
+      if (improved.length > 0) {
+        const qualityRes = await fetch(`/api/reports/${report.id}/quality`);
+        const quality = await safeReadJson<{ data: { overallScore: number } }>(qualityRes);
+        if (quality.ok) {
+          afterScoreLabel = ` (${beforeScore} → ${quality.data.data.overallScore}점)`;
+        }
+      }
+
+      if (stoppedEarly) {
+        setBatchNote(
+          `${improved.length}/${targets.length}개 섹션까지 개선 후 중단됨${afterScoreLabel} — 완료된 섹션은 저장되어 있습니다.`
+        );
+        toast.error("일부만 개선되었습니다", { description: stopMessage ?? undefined });
+      } else {
+        setBatchNote(`개선 ${improved.length}개${afterScoreLabel}`);
+        setTimeout(() => router.refresh(), 1500);
+      }
+    } catch (e) {
+      toast.error("일괄 개선 실패", {
+        description: e instanceof Error ? e.message : "다시 시도해 주세요",
+      });
+    } finally {
+      setBatchImproving(false);
+      setBatchProgress(null);
     }
   };
 
@@ -390,49 +495,7 @@ export function ReportPageClient({
                   })
               : undefined
           }
-          onBatchImprove={
-            canEdit
-              ? async () => {
-            const ok = await confirm({
-              title: "약한 섹션을 일괄 개선할까요?",
-              description:
-                "품질 70점 미만 섹션(최대 3개)을 지적된 이슈를 반영해 다시 생성합니다.",
-              confirmLabel: "개선 실행",
-            });
-            if (!ok) return;
-            setBatchImproving(true);
-            setBatchNote(null);
-            try {
-              const res = await fetch(
-                `/api/reports/${report.id}/improve-weak`,
-                {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ maxSections: 3, scoreThreshold: 70 }),
-                }
-              );
-              if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error(err.error ?? "일괄 개선 실패");
-              }
-              const { data } = await res.json();
-              setBatchNote(
-                data.message ??
-                  `개선 ${data.improved?.length ?? 0}개 · ${data.beforeScore} → ${data.afterScore}점`
-              );
-              setQualityRefreshKey((k) => k + 1);
-              // 서버에서 갱신된 본문을 가져오되, 결과 메시지를 볼 수 있게 살짝 늦춘다
-              setTimeout(() => router.refresh(), 1500);
-            } catch (e) {
-              toast.error("일괄 개선 실패", {
-                description: e instanceof Error ? e.message : "다시 시도해 주세요",
-              });
-            } finally {
-              setBatchImproving(false);
-            }
-              }
-              : undefined
-          }
+          onBatchImprove={canEdit ? handleBatchImprove : undefined}
         />
       )}
 
@@ -452,7 +515,15 @@ export function ReportPageClient({
         <IcQuestionsPanel reportId={report.id} canEdit={canEdit} />
       )}
 
-      {batchNote && (
+      {batchImproving && batchProgress && (
+        <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800 flex items-center gap-2">
+          <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+          약한 섹션 일괄 개선 중 — {batchProgress.done}/{batchProgress.total}
+          {batchProgress.currentTitle ? ` ${batchProgress.currentTitle}` : ""}
+        </div>
+      )}
+
+      {!batchImproving && batchNote && (
         <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">
           {batchNote}
         </div>
