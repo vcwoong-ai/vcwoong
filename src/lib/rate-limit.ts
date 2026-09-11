@@ -102,7 +102,18 @@ export const RATE_LIMITS = {
    * 호출은 quota로 막히지 않는다. rate limit이 사실상 유일한 방어선이다.
    */
   sectionRegenerate: { limit: 20, windowMs: 60 * 60 * 1000 },
-  /** 약한 섹션 일괄 개선(건당 AI 호출 최대 5회) — 위와 같은 이유로 필요 */
+  /**
+   * (더 이상 라우트에서 쓰지 않음 — 남겨둔 이유는 아래 참고)
+   * 예전엔 "약한 섹션 일괄 개선"이 한 요청 안에서 최대 5개 섹션을 순차로
+   * AI 재생성해서 이 rate limit이 실질적 방어선이었다. 그 순차 호출 구조가
+   * Vercel 함수 실행시간 상한을 넘겨 타임아웃으로 죽는 사고(빈/비-JSON
+   * 응답 → 프론트 "Unexpected end of JSON input")를 내서, 이제 일괄 개선은
+   * 섹션당 정확히 1번의 AI 호출만 하는 기존 sectionRegenerate 라우트를
+   * 프론트에서 순차 호출하는 방식으로 바뀌었다(improve-weak GET은 AI 호출
+   * 없는 순수 계산이라 rate limit이 필요 없다) — 비용 방어선은 이제
+   * sectionRegenerate 하나로 합쳐졌다. 이 항목은 test-security.ts가 존재를
+   * 확인하는 회귀 방지용으로만 남겨둔다.
+   */
   improveWeak: { limit: 10, windowMs: 60 * 60 * 1000 },
   /** 인바운드 딜 AI 스크리닝(AI 호출 1회): 사용자당 1시간 30회 */
   sourcingScreen: { limit: 30, windowMs: 60 * 60 * 1000 },
