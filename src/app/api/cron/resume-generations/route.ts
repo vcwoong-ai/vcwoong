@@ -55,7 +55,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "인증 실패" }, { status: 401 });
   }
 
-  const invocationDeadline = Date.now() + CRON_BUDGET_MS;
+  const tickStartedAt = Date.now();
+  const invocationDeadline = tickStartedAt + CRON_BUDGET_MS;
   const totalSections = SECTION_META.length;
   const staleBefore = new Date(Date.now() - STALE_GENERATION_MS);
 
@@ -91,18 +92,31 @@ export async function GET(request: NextRequest) {
   );
   const byId = new Map(raw.map((r) => [r.id, r]));
 
+  console.log(
+    `[Cron] tick_start candidates=${raw.length} resumable=${resumable.length}`
+  );
+
   const results: Array<{ reportId: string; outcome: string }> = [];
 
-  for (const candidate of resumable) {
+  for (let i = 0; i < resumable.length; i++) {
+    const candidate = resumable[i];
+    const remaining = resumable.length - i - 1;
+
     if (Date.now() >= invocationDeadline) {
       results.push({ reportId: candidate.id, outcome: "skipped_budget" });
-      continue; // 다음 tick(1분 후)에 이어서 본다
+      console.log(
+        `[Cron] report=${candidate.id} outcome=skipped_budget remaining=${remaining + 1} — 다음 tick(1분 후)에 이어서 본다`
+      );
+      continue;
     }
 
     const claimedOk = await claimPendingGeneration(candidate.id);
     if (!claimedOk) {
       // 브라우저(또는 다른 cron tick)가 먼저 선점했다 — 중복 생성 아님.
       results.push({ reportId: candidate.id, outcome: "already_claimed" });
+      console.log(
+        `[Cron] report=${candidate.id} outcome=already_claimed remaining=${remaining}`
+      );
       continue;
     }
 
@@ -123,6 +137,9 @@ export async function GET(request: NextRequest) {
     if (!deal) {
       // 정상 상황에서 발생하지 않는다(FK cascade) — 방어적으로만 처리.
       results.push({ reportId: candidate.id, outcome: "deal_not_found" });
+      console.log(
+        `[Cron] report=${candidate.id} outcome=deal_not_found remaining=${remaining}`
+      );
       continue;
     }
 
@@ -132,24 +149,35 @@ export async function GET(request: NextRequest) {
     });
 
     console.log(
-      `[Cron] report=${candidate.id} 자동 재개 시도 ${candidate.autoResumeCount + 1}/${MAX_AUTO_RESUME_ATTEMPTS} ` +
-        `(완료 ${candidate.completedSections}/${totalSections})`
+      `[Cron] report=${candidate.id} claimed 시도=${candidate.autoResumeCount + 1}/${MAX_AUTO_RESUME_ATTEMPTS} ` +
+        `완료=${candidate.completedSections}/${totalSections} remaining=${remaining}`
     );
 
     // 브라우저가 없는 trigger라 waitUntil로 응답을 먼저 보낼 이유가 없다
     // — cron 호출 자체가 사용자를 기다리게 하지 않으므로, 완료(또는
     // checkpoint)까지 이 요청 안에서 직접 기다린다.
+    const resumeStartedAt = Date.now();
+    let outcome = "resumed";
     await generateSectionsAsync(
       candidate.id,
       deal,
       byId.get(candidate.id)!.agentType,
       undefined,
       deal.userId
-    ).catch((err) =>
-      console.error(`[Cron] report=${candidate.id} 재개 실패:`, err)
+    ).catch((err) => {
+      outcome = "resume_error";
+      console.error(`[Cron] report=${candidate.id} 재개 실패:`, err);
+    });
+    const durationSec = ((Date.now() - resumeStartedAt) / 1000).toFixed(1);
+    console.log(
+      `[Cron] report=${candidate.id} outcome=${outcome} duration=${durationSec}s remaining=${remaining}`
     );
-    results.push({ reportId: candidate.id, outcome: "resumed" });
+    results.push({ reportId: candidate.id, outcome });
   }
+
+  console.log(
+    `[Cron] tick_end candidates=${raw.length} processed=${results.length} elapsed=${((Date.now() - tickStartedAt) / 1000).toFixed(1)}s`
+  );
 
   return NextResponse.json({
     data: { candidates: raw.length, processed: results.length, results },

@@ -15,7 +15,11 @@
  * Usage: npm run test:openrouter-retry
  */
 import OpenAI from "openai";
-import { isRetryableAIError, shouldTryFallbackModel } from "../src/lib/claude";
+import {
+  isRetryableAIError,
+  shouldTryFallbackModel,
+  EmptyAIResponseError,
+} from "../src/lib/claude";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -102,6 +106,17 @@ function testModelOrAuthErrorsFallBackButDontRetrySameModel() {
   console.log("✅ 400/401/403/404는 같은 모델 재시도는 안 하지만 폴백 모델은 시도");
 }
 
+function testEmptyAIResponseIsRetryable() {
+  // HTTP 200 + 정상 형태의 response인데 content가 비어 있는 경우(callOnce가
+  // 이때 EmptyAIResponseError를 던짐) — "AI 호출 성공"과 "섹션 성공"이
+  // 갈라지는 지점이라, 여기서 재시도/폴백이 안 되면 빈 섹션이 그대로
+  // COMPLETE로 저장된다.
+  const err = new EmptyAIResponseError("deepseek/deepseek-v4-flash-0731");
+  assert(isRetryableAIError(err), "빈 응답(EmptyAIResponseError)이 재시도 대상으로 인식되지 않음");
+  assert(shouldTryFallbackModel(err), "빈 응답인데 폴백 모델 전환 대상이 아님");
+  console.log("✅ EmptyAIResponseError(빈 content)는 재시도/폴백 대상");
+}
+
 function testUnrelatedErrorsAreNotRetryable() {
   const err = new Error("아무 관련 없는 에러");
   assert(!isRetryableAIError(err), "무관한 에러가 재시도 대상으로 잘못 분류됨");
@@ -117,6 +132,7 @@ function main() {
   testConnectionErrorIsRetryable();
   testRateLimitAndServerErrorsAreRetryable();
   testModelOrAuthErrorsFallBackButDontRetrySameModel();
+  testEmptyAIResponseIsRetryable();
   testUnrelatedErrorsAreNotRetryable();
   console.log("\n✅ OpenRouter 재시도/폴백 분류 테스트 통과\n");
 }
