@@ -8,6 +8,7 @@ import { ReportQualityPanel } from "@/components/reports/report-quality-panel";
 import { ReportEvidencePanel } from "@/components/reports/report-evidence-panel";
 import { ReportDeepDivePanel } from "@/components/reports/report-deep-dive-panel";
 import { IcQuestionsPanel } from "@/components/reports/ic-questions-panel";
+import { IcReviewPanel } from "@/components/reports/ic-review-panel";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -478,6 +479,10 @@ export function ReportPageClient({
           </p>
         )}
       </div>
+
+      {report.sections.length > 0 && (
+        <IcReviewPanel reportId={report.id} dealId={report.deal.id} canEdit={canEdit} />
+      )}
 
       {report.sections.length > 0 && (
         <ReportQualityPanel
