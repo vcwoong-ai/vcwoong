@@ -1,9 +1,12 @@
 /**
  * AI provider abstraction — OpenRouter 단일 프로바이더.
  *
- * 호출 우선순위:
+ * 호출 우선순위(모델 체인):
  *   1. AI_MODEL (기본: deepseek/deepseek-v4-flash-0731)
- *   2. 실패(429/5xx/타임아웃, 또는 모델 ID·인증 오류) → AI_FALLBACK_MODEL
+ *   2. AI_FALLBACK_MODELS(콤마 구분 목록) — 실패(429/5xx/타임아웃/AbortError,
+ *      또는 모델 ID·인증 오류 400/401/403/404) 시 순서대로 다음 모델로 전환.
+ *      미설정 시 하위호환으로 AI_FALLBACK_MODEL(단일) 사용, 그것도 없으면
+ *      기본 체인(아래 DEFAULT_FALLBACK_CHAIN) 사용.
  *
  * 모든 호출은 OpenRouter(OPENROUTER_API_KEY)로 나간다 — withModelOverride로
  * 감싼 구간만 예외(아래 참고).
@@ -15,8 +18,28 @@ import { generateMockContent } from "./mock-generator";
 import { BRAND } from "./brand";
 
 const DEFAULT_MODEL = "deepseek/deepseek-v4-flash-0731";
-/** 기본 모델이 죽었을 때를 대비한 OpenRouter 무료 모델 */
-const DEFAULT_FALLBACK_MODEL = "meta-llama/llama-3.3-70b-instruct:free";
+
+/**
+ * 기본 모델이 죽었을 때를 대비한 폴백 체인(순서대로 시도).
+ *
+ * 예전엔 특정 무료 모델 슬러그(`meta-llama/llama-3.3-70b-instruct:free`) 하나만
+ * 하드코딩했는데, OpenRouter가 무료 티어 모델 목록을 수시로 바꿔서(슬러그 자체가
+ * 없어지거나 유료로 전환됨) 그 모델이 404로 죽어버렸다 — 유일한 안전망이 통째로
+ * 없어져, 1차 모델이 타임아웃 났을 때 재시도할 곳이 없는 채로 보고서 생성이
+ * 매번 실패했다(실제 프로덕션 사고).
+ *
+ * 지금은 폴백을 "하나"가 아니라 "체인"으로 둔다 — 첫 폴백마저 죽어도 다음
+ * 폴백으로 넘어갈 수 있다:
+ *   1. `openrouter/free` — OpenRouter가 공식 제공하는 라우터로, 그 시점에
+ *      실제로 살아있는 무료 모델 중 하나를 OpenRouter가 알아서 골라준다
+ *      (https://openrouter.ai/docs/guides/routing/routers/free-router) —
+ *      특정 무료 슬러그를 하드코딩해서 나중에 또 죽는 문제를 구조적으로 없앤다.
+ *   2. `meta-llama/llama-3.3-70b-instruct` — 위 무료 라우터마저 응답을 못 주는
+ *      극단적 상황을 대비한 마지막 안전망(유료 슬러그 — OpenRouter가 실제
+ *      프로덕션 404 응답에서 직접 안내한 대체 슬러그, 임의로 지어낸 값이 아님).
+ *      비용은 이 단계까지 왔을 때만 발생 — 평소엔 호출되지 않는다.
+ */
+export const DEFAULT_FALLBACK_CHAIN = ["openrouter/free", "meta-llama/llama-3.3-70b-instruct"];
 
 function resolveDefaultModel(): string {
   return process.env.AI_MODEL?.trim() || DEFAULT_MODEL;
@@ -24,16 +47,49 @@ function resolveDefaultModel(): string {
 
 export const MODEL = resolveDefaultModel();
 
-export const FALLBACK_MODEL =
-  process.env.AI_FALLBACK_MODEL?.trim() ||
-  (MODEL === DEFAULT_FALLBACK_MODEL ? DEFAULT_MODEL : DEFAULT_FALLBACK_MODEL);
+/** 콤마 구분 목록을 안전하게 파싱한다 — 빈 항목·앞뒤 공백을 정리한다 */
+function parseModelList(raw: string): string[] {
+  return raw
+    .split(",")
+    .map((m) => m.trim())
+    .filter(Boolean);
+}
+
+/** 체인이 너무 길어지면(설정 실수 등) 시도 횟수·비용이 함께 늘어난다 — 상한을 둔다 */
+export const MAX_FALLBACK_MODELS = 4;
+
+/**
+ * 인자를 기본값(process.env)으로 두면 프로덕션 동작 그대로고, 명시적으로
+ * 넘기면 환경변수 조합별 분기(신규 목록/기존 단일값/둘 다 없음)를 실제
+ * 프로세스 env를 건드리지 않고 테스트할 수 있다.
+ */
+export function resolveFallbackChain(
+  fallbackModelsEnv: string | undefined = process.env.AI_FALLBACK_MODELS,
+  fallbackModelEnv: string | undefined = process.env.AI_FALLBACK_MODEL
+): string[] {
+  const list = fallbackModelsEnv?.trim();
+  if (list) {
+    const parsed = parseModelList(list);
+    if (parsed.length > 0) return parsed.slice(0, MAX_FALLBACK_MODELS);
+  }
+  // 하위호환: 기존 단일 AI_FALLBACK_MODEL만 설정된 환경
+  const single = fallbackModelEnv?.trim();
+  if (single) return [single];
+  return [...DEFAULT_FALLBACK_CHAIN];
+}
+
+/** 실제 사용할 폴백 체인 — 기본 모델과 같은 항목은 의미가 없어 제외한다 */
+export const FALLBACK_MODELS: string[] = resolveFallbackChain().filter((m) => m !== MODEL);
+
+/** 하위호환용 단일 값(헬스체크 등 기존 코드가 참조) — 체인의 첫 항목 */
+export const FALLBACK_MODEL = FALLBACK_MODELS[0] ?? DEFAULT_MODEL;
 
 function getMaxTokens(_model: string, requested?: number): number {
   return requested ?? 4096;
 }
 
 function isFreeModel(model: string): boolean {
-  return model.endsWith(":free");
+  return model.endsWith(":free") || model === "openrouter/free";
 }
 
 /**
@@ -115,7 +171,7 @@ export interface GenerateTextResult {
   usedModel: string;
 }
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 /**
  * generateText가 실제로 OpenRouter를 부르는 대신 이 함수로 대체되도록
@@ -224,10 +280,110 @@ function describeAIError(err: unknown): string {
   return `${kind}${e?.status ? ` ${e.status}` : ""}: ${e?.message ?? String(err)}`;
 }
 
+/** 모델 하나당 재시도 횟수를 짧게 유지한다 — 섹션 10개를 순차 생성하는
+ * 구조라 한 섹션이 재시도로 시간을 다 잡아먹으면 나머지 섹션이 실행조차
+ * 못 한다. 체인 길이가 늘어난 만큼 모델당 시도는 줄여서 총 비용을 맞춘다. */
+export const MODEL_ATTEMPTS = 2;
+export const CHAIN_BACKOFF_MS = [0, 3_000];
+
+export interface ModelChainDeps {
+  /** 남은 예산(ms) — 0 이하면 더 이상 어떤 시도도 시작하지 않는다 */
+  remainingMs: () => number;
+  /** 다음 시도 1회에 줄 타임아웃(ms) — 예산이 없으면 null */
+  attemptTimeout: () => number | null;
+  sleep: (ms: number) => Promise<void>;
+  /** 모델 하나당 최대 시도 횟수(같은 모델 재시도 포함) */
+  attemptsPerModel?: number;
+  /** 재시도 사이 대기시간(ms) — 인덱스가 넘치면 마지막 값을 반복 */
+  backoffMs?: number[];
+}
+
 /**
- * 메인 호출:
- * - 기본 모델 실패(429/5xx) → 폴백 모델
- * - 폴백도 실패 시 지수 백오프 재시도
+ * 모델 체인([기본 모델, ...폴백들])을 순서대로 시도하는 순수 로직.
+ *
+ * 실제 네트워크 호출(`callModel`)을 주입받기 때문에, 합성 에러(DOMException
+ * AbortError, 404 등)로 재시도/폴백 전환을 네트워크 없이 검증할 수 있다
+ * (tools/test-openrouter-retry.ts 참고) — improve-weak-orchestration.ts와
+ * 같은 이유로 순수 함수로 분리했다.
+ *
+ * 모델 하나당 최대 attemptsPerModel번(같은 모델 재시도, 짧은 백오프)까지
+ * 시도하고,
+ * - 재시도 가능한 에러(타임아웃/AbortError/네트워크/429/5xx)면 같은 모델을
+ *   계속 재시도하다가 소진되면 다음 모델로 넘어간다.
+ * - 재시도해도 소용없는 에러(400/401/403/404 — 모델 ID·인증 문제)면 같은
+ *   모델은 바로 포기하고 다음 모델로 넘어간다(예: 폴백 모델 슬러그 자체가
+ *   404일 때 그 모델만 헛되이 반복하지 않는다).
+ * - 그 외 무관한 에러는 체인을 더 시도하지 않고 즉시 실패한다.
+ *
+ * 체인 전체(모델 수 × 재시도)에 걸쳐 하나의 시간 예산(deps로 주입)을
+ * 공유한다 — 폴백이 몇 개든 총 소요시간·호출 수는 그 예산으로 항상
+ * 상한이 걸린다(AI_CALL_BUDGET_MS 초과 시 추가 모델 호출 금지).
+ */
+export async function runModelChain<T>(
+  chain: string[],
+  callModel: (model: string, timeoutMs: number) => Promise<T>,
+  deps: ModelChainDeps
+): Promise<{ result: T; usedModel: string }> {
+  const attemptsPerModel = deps.attemptsPerModel ?? MODEL_ATTEMPTS;
+  const backoffMs = deps.backoffMs ?? CHAIN_BACKOFF_MS;
+  let lastErr: unknown;
+
+  for (let modelIdx = 0; modelIdx < chain.length; modelIdx++) {
+    const currentModel = chain[modelIdx];
+    const label = modelIdx === 0 ? "primary" : `fallback#${modelIdx}`;
+
+    for (let attempt = 0; attempt < attemptsPerModel; attempt++) {
+      if (attempt > 0) {
+        const waitMs = backoffMs[attempt] ?? backoffMs[backoffMs.length - 1];
+        // 대기까지 하고 나면 호출할 시간이 안 남는 경우엔 대기 자체가 낭비다.
+        if (deps.remainingMs() <= waitMs) {
+          console.warn(
+            `[AI] ${label} ${currentModel} 시간 예산 소진 — 재시도 중단(남은 ${Math.max(0, deps.remainingMs())}ms)`
+          );
+          throw lastErr ?? new Error("AI 호출 시간 예산 초과");
+        }
+        console.log(
+          `[AI] ${label} ${currentModel} 재시도 ${attempt}/${attemptsPerModel - 1}, ${waitMs / 1000}초 대기...`
+        );
+        await deps.sleep(waitMs);
+      }
+
+      const timeout = deps.attemptTimeout();
+      if (timeout === null) {
+        console.warn(`[AI] 시간 예산 소진 — 추가 호출 중단`);
+        throw lastErr ?? new Error("AI 호출 시간 예산 초과");
+      }
+
+      try {
+        const result = await callModel(currentModel, timeout);
+        return { result, usedModel: currentModel };
+      } catch (err) {
+        lastErr = err;
+        console.warn(`[AI] ${label} ${currentModel} 실패 — ${describeAIError(err)}`);
+        if (!isRetryableAIError(err)) {
+          // 같은 모델을 반복해봐야 소용없다(모델 불가·인증 오류 등) — 재시도 중단하고 다음 모델로
+          break;
+        }
+        // 재시도 가능한 에러(타임아웃/네트워크/5xx/429)면 같은 모델을 계속 재시도한다.
+      }
+    }
+
+    if (!shouldTryFallbackModel(lastErr)) {
+      throw lastErr;
+    }
+    const next = chain[modelIdx + 1];
+    if (next) {
+      const freeNote = isFreeModel(currentModel) ? "무료 모델 " : "";
+      console.log(`[AI] ${freeNote}${currentModel} 실패 → ${next}로 전환`);
+    }
+  }
+
+  throw lastErr ?? new Error("AI 호출 시간 예산 초과");
+}
+
+/**
+ * 메인 호출 — 실제 OpenRouter 네트워크 호출(callOnce)을 runModelChain에
+ * 주입한다. 체인 구성(모델 목록)과 시간 예산 계산만 여기서 책임진다.
  */
 async function callWithFallback(
   model: string,
@@ -235,7 +391,7 @@ async function callWithFallback(
   maxTokens: number,
   temperature?: number
 ): Promise<{ result: OpenAI.Chat.Completions.ChatCompletion; usedModel: string }> {
-  // 이 호출 전체(1차 + 폴백 재시도 + 백오프 대기)에 허용된 마감 시각.
+  // 이 호출 전체(체인의 모든 모델·재시도·백오프 대기)에 허용된 마감 시각.
   // 남은 시간을 넘기는 시도는 시작하지 않는다 — 함수가 강제 종료되는 것보다
   // 일찍 실패를 돌려주는 편이 낫다(호출부가 저장·정리할 시간이 남는다).
   const budgetEndsAt = Date.now() + AI_CALL_BUDGET_MS;
@@ -246,77 +402,15 @@ async function callWithFallback(
     return left <= 0 ? null : Math.min(REQUEST_TIMEOUT_MS, left);
   };
 
-  try {
-    const result = await callOnce(
-      model,
-      messages,
-      maxTokens,
-      temperature,
-      attemptTimeout() ?? REQUEST_TIMEOUT_MS
-    );
-    return { result, usedModel: model };
-  } catch (err) {
-    console.warn(`[AI] ${model} 1차 호출 실패 — ${describeAIError(err)}`);
-    if (!shouldTryFallbackModel(err)) throw err;
-    if (isFreeModel(model) && model !== FALLBACK_MODEL) {
-      console.log(`[AI] 무료 모델 레이트리밋 → ${FALLBACK_MODEL}로 전환`);
-    } else {
-      console.log(`[AI] ${model} 오류 → ${FALLBACK_MODEL}로 전환`);
-    }
-  }
+  const canUseFallback = (process.env.OPENROUTER_API_KEY?.trim() ?? "").startsWith("sk-or-");
+  const chain = canUseFallback ? [model, ...FALLBACK_MODELS] : [model];
 
-  // 폴백 모델이 같거나 키가 없으면 기본 모델로만 재시도
-  const fallback = FALLBACK_MODEL;
-  const canUseFallback =
-    fallback !== model &&
-    (process.env.OPENROUTER_API_KEY?.trim() ?? "").startsWith("sk-or-");
-
-  const retryModel = canUseFallback ? fallback : model;
-  const fallbackTokens = getMaxTokens(retryModel, maxTokens);
-  let lastErr: unknown;
-
-  // 섹션 10개를 순차 생성하는 구조라, 한 섹션이 재시도로 시간을 다 잡아먹으면
-  // 나머지 섹션이 실행조차 못 한다. 재시도 횟수·대기를 짧게 유지한다.
-  const MAX_ATTEMPTS = 3;
-  const BACKOFF_MS = [0, 5_000, 15_000];
-
-  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-    if (attempt > 0) {
-      const waitMs = BACKOFF_MS[attempt];
-      // 대기까지 하고 나면 호출할 시간이 안 남는 경우엔 대기 자체가 낭비다.
-      if (remainingMs() <= waitMs) {
-        console.warn(
-          `[AI] ${retryModel} 시간 예산 소진 — 재시도 중단(남은 ${Math.max(0, remainingMs())}ms)`
-        );
-        break;
-      }
-      console.log(
-        `[AI] ${retryModel} 재시도 ${attempt}/${MAX_ATTEMPTS - 1}, ${waitMs / 1000}초 대기...`
-      );
-      await sleep(waitMs);
-    }
-    const timeout = attemptTimeout();
-    if (timeout === null) {
-      console.warn(`[AI] ${retryModel} 시간 예산 소진 — 재시도 중단`);
-      break;
-    }
-    try {
-      const result = await callOnce(
-        retryModel,
-        messages,
-        fallbackTokens,
-        temperature,
-        timeout
-      );
-      return { result, usedModel: retryModel };
-    } catch (err) {
-      lastErr = err;
-      console.warn(`[AI] ${retryModel} 실패 — ${describeAIError(err)}`);
-      if (!isRetryableAIError(err)) break;
-    }
-  }
-
-  throw lastErr ?? new Error(`AI 호출 시간 예산(${AI_CALL_BUDGET_MS}ms) 초과`);
+  return runModelChain(
+    chain,
+    (currentModel, timeout) =>
+      callOnce(currentModel, messages, getMaxTokens(currentModel, maxTokens), temperature, timeout),
+    { remainingMs, attemptTimeout, sleep }
+  );
 }
 
 export async function generateText(

@@ -21,12 +21,12 @@ async function main() {
     process.exit(1);
   }
 
-  const { generateText, isAIConfigured, MODEL, FALLBACK_MODEL } = await import(
+  const { generateText, isAIConfigured, MODEL, FALLBACK_MODELS } = await import(
     "../src/lib/claude"
   );
 
   console.log(`AI_MODEL: ${MODEL}`);
-  console.log(`AI_FALLBACK_MODEL: ${FALLBACK_MODEL}\n`);
+  console.log(`AI_FALLBACK_MODELS: ${FALLBACK_MODELS.join(", ") || "(없음)"}\n`);
 
   if (!isAIConfigured()) {
     console.log("❌ isAIConfigured() = false");

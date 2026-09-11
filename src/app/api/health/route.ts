@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { MODEL, FALLBACK_MODEL, isAIConfigured } from "@/lib/claude";
+import { MODEL, FALLBACK_MODELS, isAIConfigured } from "@/lib/claude";
 import { secureCompare } from "@/lib/secure-compare";
 
 /**
@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
       hasOpenRouterKey: Boolean(process.env.OPENROUTER_API_KEY?.trim()),
       aiConfigured: isAIConfigured(),
       aiModel: MODEL,
-      aiFallbackModel: FALLBACK_MODEL,
+      aiFallbackModels: FALLBACK_MODELS,
     },
     dbOk,
     dbError: dbError?.slice(0, 200),
