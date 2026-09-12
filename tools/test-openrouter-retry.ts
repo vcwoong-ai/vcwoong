@@ -19,6 +19,7 @@ import {
   isRetryableAIError,
   shouldTryFallbackModel,
   EmptyAIResponseError,
+  QualityGateError,
 } from "../src/lib/claude";
 
 function assert(cond: boolean, msg: string) {
@@ -117,6 +118,25 @@ function testEmptyAIResponseIsRetryable() {
   console.log("✅ EmptyAIResponseError(빈 content)는 재시도/폴백 대상");
 }
 
+/**
+ * 품질 게이트 실패(QualityGateError, 2026-09-12 실측: OPINION_SUMMARY가
+ * "User Safety: safe"로 저장된 사고 이후 도입 — section-generation-gate.ts
+ * 참고)도 EmptyAIResponseError와 동일한 이유로 재시도/폴백 대상이어야
+ * 한다 — "이 모델이 이번엔 못 썼다"이지 "전체가 실패했다"가 아니다.
+ */
+function testQualityGateErrorIsRetryable() {
+  const err = new QualityGateError("openrouter/free", "TOO_SHORT");
+  assert(
+    isRetryableAIError(err),
+    "QualityGateError(품질 게이트 실패)가 재시도 대상으로 인식되지 않음 — 저품질 응답에서 폴백 모델로 못 넘어감"
+  );
+  assert(
+    shouldTryFallbackModel(err),
+    "QualityGateError인데 폴백 모델 전환 대상이 아님"
+  );
+  console.log("✅ QualityGateError(품질 게이트 실패)는 재시도/폴백 대상");
+}
+
 function testUnrelatedErrorsAreNotRetryable() {
   const err = new Error("아무 관련 없는 에러");
   assert(!isRetryableAIError(err), "무관한 에러가 재시도 대상으로 잘못 분류됨");
@@ -133,6 +153,7 @@ function main() {
   testRateLimitAndServerErrorsAreRetryable();
   testModelOrAuthErrorsFallBackButDontRetrySameModel();
   testEmptyAIResponseIsRetryable();
+  testQualityGateErrorIsRetryable();
   testUnrelatedErrorsAreNotRetryable();
   console.log("\n✅ OpenRouter 재시도/폴백 분류 테스트 통과\n");
 }

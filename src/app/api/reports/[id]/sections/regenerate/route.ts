@@ -116,6 +116,7 @@ export async function POST(
     const result = await agent.generateSection(
       {
         dealId: deal.id,
+        reportId: report.id,
         companyName: deal.companyName,
         sector: deal.sector,
         agentType: report.agentType,

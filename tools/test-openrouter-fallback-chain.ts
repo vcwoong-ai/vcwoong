@@ -20,6 +20,7 @@ import {
   AI_CALL_BUDGET_MS,
   REQUEST_TIMEOUT_MS,
   FALLBACK_REQUEST_TIMEOUT_MS,
+  QualityGateError,
   type ModelChainDeps,
 } from "../src/lib/claude";
 
@@ -390,6 +391,150 @@ async function testBudgetExhaustionStopsFurtherCalls() {
   console.log("✅ AI_CALL_BUDGET_MS(예산) 소진 → 추가 모델 호출 금지");
 }
 
+/** console.warn 출력을 임시로 가로채 배열로 모은다 — 구조화 로그 형식 검증용 */
+async function captureWarnings(fn: () => Promise<void>): Promise<string[]> {
+  const captured: string[] = [];
+  const original = console.warn;
+  console.warn = (...args: unknown[]) => {
+    captured.push(args.map(String).join(" "));
+  };
+  try {
+    await fn();
+  } finally {
+    console.warn = original;
+  }
+  return captured;
+}
+
+/**
+ * G/H. Primary가 HTTP 200을 반환했지만 내용이 품질 게이트를 통과하지
+ * 못하면(모호한 출력이든 완전히 무관한 출력이든, 게이트 관점에서는 둘 다
+ * QualityGateError) fallback으로 넘어가야 한다 — "HTTP 성공 ≠ AI 성공".
+ */
+async function testMalformedPrimaryOutputTriggersFallback() {
+  const calls: string[] = [];
+  const deps = fakeDeps(60_000);
+  const { usedModel } = await runModelChain(
+    ["primary", "fallback-a"],
+    async (model) => {
+      calls.push(model);
+      if (model === "primary") {
+        // HTTP 200 + 응답은 왔지만 도메인 검증(section-generation-gate.ts 등)에
+        // 실패한 상황을 흉내낸다 — callOnce()가 실제로 이렇게 던진다.
+        throw new QualityGateError("primary", "TOO_SHORT");
+      }
+      return "ok";
+    },
+    deps
+  );
+  assert(
+    usedModel === "fallback-a",
+    `HTTP 200 + malformed output이어도 fallback으로 넘어가야 하는데 usedModel=${usedModel}`
+  );
+  assert(calls.join(",") === "primary,fallback-a", `호출 순서가 예상과 다름: ${calls.join(",")}`);
+  console.log("✅ Primary가 HTTP 200 + 품질 게이트 실패(malformed/unrelated 출력) → fallback 실행");
+}
+
+/** I. Primary timeout(기존 검증된 경로)도 여전히 fallback으로 이어짐 — 회귀 방지 */
+async function testPrimaryTimeoutStillTriggersFallback() {
+  const deps = fakeDeps(60_000);
+  const { usedModel } = await runModelChain(
+    ["primary", "fallback-a"],
+    async (model) => {
+      if (model === "primary") throw timeoutError();
+      return "ok";
+    },
+    deps
+  );
+  assert(usedModel === "fallback-a", "Primary timeout인데 fallback으로 안 넘어감");
+  console.log("✅ Primary timeout → fallback 실행 (회귀 없음)");
+}
+
+/** J. fallback도 품질 게이트 실패 → 다음 fallback으로 계속 전환 */
+async function testFallbackQualityFailContinuesToNextFallback() {
+  const calls: string[] = [];
+  const deps = fakeDeps(60_000);
+  const { usedModel } = await runModelChain(
+    ["primary", "fallback-a", "fallback-b"],
+    async (model) => {
+      calls.push(model);
+      if (model === "fallback-b") return "ok";
+      throw new QualityGateError(model, "MISSING_RECOMMENDATION_LABEL");
+    },
+    deps
+  );
+  assert(usedModel === "fallback-b", `fallback-b까지 넘어가야 하는데 usedModel=${usedModel}`);
+  assert(
+    calls.join(",") === "primary,fallback-a,fallback-b",
+    `체인 전체가 품질 게이트 실패를 겪고도 순서대로 넘어가야 하는데: ${calls.join(",")}`
+  );
+  console.log("✅ fallback도 품질 게이트 실패 → 다음 fallback으로 계속 전환");
+}
+
+/**
+ * K. 모든 모델이 품질 게이트에 실패하면 QualityGateError가 그대로
+ * 던져진다(report-generation.ts의 기존 catch가 이를 PENDING checkpoint로
+ * 흡수한다 — 이 테스트는 claude.ts 레벨의 계약만 확인한다).
+ */
+async function testAllModelsQualityFailThrowsQualityGateError() {
+  const deps = fakeDeps(60_000);
+  let thrown: unknown;
+  try {
+    await runModelChain(
+      ["primary", "fallback-a"],
+      async (model) => {
+        throw new QualityGateError(model, "TOO_SHORT");
+      },
+      deps
+    );
+  } catch (e) {
+    thrown = e;
+  }
+  assert(thrown instanceof QualityGateError, "모든 모델이 품질 게이트에 실패했는데 QualityGateError가 아님");
+  console.log("✅ 모든 모델 품질 게이트 실패 → QualityGateError 그대로 전파(→ PENDING checkpoint로 이어짐)");
+}
+
+/**
+ * 구조화 로그 검증 — reportId/section이 주어지면 실제로 [AI_QUALITY_GATE_FAIL]/
+ * [AI_SECTION_GENERATION_PENDING] 형태로 남는지 확인한다(사용자 요청 §13).
+ */
+async function testQualityGateFailureEmitsStructuredLogs() {
+  const deps = fakeDeps(60_000);
+  const warnings = await captureWarnings(async () => {
+    try {
+      await runModelChain(
+        ["primary", "fallback-a"],
+        async (model) => {
+          throw new QualityGateError(model, "TOO_SHORT");
+        },
+        deps,
+        { reportId: "report-abc", section: "OPINION_SUMMARY" }
+      );
+    } catch {
+      // 의도된 최종 실패 — 로그 내용만 검증한다.
+    }
+  });
+
+  const gateFailLines = warnings.filter((w) => w.includes("[AI_QUALITY_GATE_FAIL]"));
+  assert(gateFailLines.length === 2, `모델 2개가 각각 실패했는데 gate-fail 로그가 ${gateFailLines.length}건`);
+  assert(
+    gateFailLines[0].includes("reportId=report-abc") && gateFailLines[0].includes("section=OPINION_SUMMARY"),
+    `구조화 로그에 reportId/section이 없음: ${gateFailLines[0]}`
+  );
+  assert(gateFailLines[0].includes("fallback=true"), `첫 실패는 다음 모델이 있으니 fallback=true여야 함: ${gateFailLines[0]}`);
+  assert(gateFailLines[1].includes("fallback=false"), `마지막 실패는 다음 모델이 없으니 fallback=false여야 함: ${gateFailLines[1]}`);
+
+  const pendingLines = warnings.filter((w) => w.includes("[AI_SECTION_GENERATION_PENDING]"));
+  assert(pendingLines.length === 1, `전체 실패 로그가 정확히 1건이어야 하는데 ${pendingLines.length}건`);
+  assert(
+    pendingLines[0].includes("reportId=report-abc") &&
+      pendingLines[0].includes("section=OPINION_SUMMARY") &&
+      pendingLines[0].includes("reason=ALL_MODELS_QUALITY_FAILED"),
+    `최종 실패 로그 형식이 예상과 다름: ${pendingLines[0]}`
+  );
+  console.log("✅ 품질 게이트 실패 시 [AI_QUALITY_GATE_FAIL]/[AI_SECTION_GENERATION_PENDING] 구조화 로그 발생");
+}
+
 /** 9. fallback 모델 목록이 비어 있음(체인 길이 1) → 기존 동작과 호환 */
 async function testEmptyFallbackChainBehavesLikeBefore() {
   const deps = fakeDeps(60_000);
@@ -456,6 +601,11 @@ async function main() {
   await testAllModelsFailReturnsFinalError();
   await testAbortErrorDrivesChainForward();
   await testBudgetExhaustionStopsFurtherCalls();
+  await testMalformedPrimaryOutputTriggersFallback();
+  await testPrimaryTimeoutStillTriggersFallback();
+  await testFallbackQualityFailContinuesToNextFallback();
+  await testAllModelsQualityFailThrowsQualityGateError();
+  await testQualityGateFailureEmitsStructuredLogs();
   await testEmptyFallbackChainBehavesLikeBefore();
   testSingleFallbackEnvBackwardCompatible();
   console.log("\n✅ OpenRouter 멀티 폴백 체인 테스트 통과\n");
