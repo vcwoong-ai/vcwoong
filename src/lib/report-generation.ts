@@ -35,7 +35,10 @@ export interface DealForGeneration {
  * 실측 섹션당 평균 17~20초 기준으로 한 번의 실행에서 최소 4개 섹션을
  * 안정적으로 처리할 수 있는 값이다. maxDuration보다 반드시 짧아야 하고,
  * 아래 루프의 worst-case 계산(budget - REQUEST_TIMEOUT_MS + AI_CALL_BUDGET_MS)이
- * maxDuration을 넘지 않는지 값을 바꿀 때마다 다시 확인할 것.
+ * maxDuration을 넘지 않는지 값을 바꿀 때마다 다시 확인할 것 —
+ * AI_CALL_BUDGET_MS가 fallback 체인 구성에 따라 달라지므로(claude.ts 참고,
+ * 기본 180 - 25 + 55 = 210s, maxDuration 240s 대비 30초 여유),
+ * npm run test:runtime-budget이 이 계산을 자동으로 검증한다.
  * REPORT_GENERATION_BUDGET_MS 환경변수로 더 늘릴 수 있다(코드 변경 불필요).
  */
 const GENERATION_BUDGET_MS = envDurationMs(
@@ -203,8 +206,8 @@ export async function generateSectionsAsync(
         // 최악의 경우를 계산하면: 마지막으로 시작 가능한 시점은
         // (예산 - 1회 타임아웃)이고 거기서 재시도까지 다 쓰면
         // AI_CALL_BUDGET_MS가 더 걸린다. 기본값 기준
-        // 180s - 25s + 40s = 195s로 vercel.json의 maxDuration(240s)
-        // 안에 45초 여유를 두고 들어온다(DB 저장·품질평가 등 나머지 처리
+        // 180s - 25s + 55s = 210s로 vercel.json의 maxDuration(240s)
+        // 안에 30초 여유를 두고 들어온다(DB 저장·품질평가 등 나머지 처리
         // 시간). 여유를 재시도 최악값(AI_CALL_BUDGET_MS)으로 잡으면 한 번
         // 실행에 섹션 하나도 못 만들어 사용자가 "다시 시도"만 반복하게
         // 된다 — 그래서 더 짧은 REQUEST_TIMEOUT_MS를 기준으로 삼는다.
