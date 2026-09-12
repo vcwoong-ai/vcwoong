@@ -192,10 +192,32 @@ export interface ClaudeMessage {
   content: string;
 }
 
+/** generation-time 품질 게이트 결과(section-generation-gate.ts와 동일 shape) */
+export interface ContentValidationResult {
+  ok: boolean;
+  reason?: string;
+}
+
+/**
+ * 응답 content가 도메인 관점에서 유효한지 검증하는 콜백 — claude.ts는
+ * "섹션"이라는 개념을 몰라야 하므로(다른 여러 AI 호출도 이 파일을 공유),
+ * 검증 로직 자체는 호출부(base-agent.ts 등)가 주입한다. 실패하면
+ * QualityGateError가 던져져 기존 재시도/폴백 체인을 그대로 탄다.
+ */
+export type ContentValidator = (content: string) => ContentValidationResult;
+
+/** 구조화 로그(AI_QUALITY_GATE_FAIL 등)에 붙일 문맥 — claude.ts는 이 값의 의미를 모르고 로그 태그로만 쓴다 */
+export interface AIQualityLogContext {
+  reportId?: string;
+  section?: string;
+}
+
 export interface ClaudeOptions {
   maxTokens?: number;
   temperature?: number;
   systemPrompt?: string;
+  validate?: ContentValidator;
+  logContext?: AIQualityLogContext;
 }
 
 export interface GenerateTextResult {
@@ -254,12 +276,32 @@ export class EmptyAIResponseError extends Error {
   }
 }
 
+/**
+ * HTTP 200 + 비어있지 않은 응답이어도, 호출부가 지정한 최소 품질 조건
+ * (section-generation-gate.ts 등)을 통과하지 못하면 던진다. 실제 프로덕션
+ * 사고(2026-09-12): OPINION_SUMMARY가 "User Safety: safe"(45자)로 저장돼
+ * 보고서가 완료 처리됨 — EmptyAIResponseError는 "비어있지 않음"만 보므로
+ * 이 케이스를 잡지 못했다. isRetryableAIError가 이 타입도 재시도/폴백
+ * 대상으로 인식하게 해서, 기존 재시도·폴백 경로를 그대로 태운다(빈 응답과
+ * 동일한 설계 원칙 — 별도 처리 경로를 새로 만들지 않음).
+ */
+export class QualityGateError extends Error {
+  constructor(
+    public readonly model: string,
+    public readonly reason: string
+  ) {
+    super(`${model}의 응답이 품질 게이트를 통과하지 못함 (${reason})`);
+    this.name = "QualityGateError";
+  }
+}
+
 async function callOnce(
   model: string,
   messages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
   maxTokens: number,
   temperature?: number,
-  timeoutMs?: number
+  timeoutMs?: number,
+  validate?: ContentValidator
 ): Promise<OpenAI.Chat.Completions.ChatCompletion> {
   const effectiveTimeout = timeoutMs ?? REQUEST_TIMEOUT_MS;
   const client = getClient(effectiveTimeout);
@@ -286,6 +328,13 @@ async function callOnce(
   const content = result.choices?.[0]?.message?.content;
   if (!content || content.trim().length === 0) {
     throw new EmptyAIResponseError(model);
+  }
+
+  if (validate) {
+    const v = validate(content);
+    if (!v.ok) {
+      throw new QualityGateError(model, v.reason ?? "UNKNOWN");
+    }
   }
 
   return result;
@@ -319,6 +368,11 @@ export function isRetryableAIError(err: unknown): boolean {
   // 모델로 넘어가는 게 맞다(모델 ID/인증 문제와 달리 "이 모델 자체가
   // 못 쓴다"고 단정할 근거는 없어 완전히 건너뛰지 않고 먼저 재시도한다).
   if (err instanceof EmptyAIResponseError) {
+    return true;
+  }
+  // 품질 게이트 실패(EmptyAIResponseError와 같은 이유로 재시도/폴백 대상 —
+  // "이 모델이 이번엔 못 썼다"일 뿐 다음 모델로 넘어가면 살아날 수 있다)
+  if (err instanceof QualityGateError) {
     return true;
   }
   return (
@@ -406,7 +460,9 @@ export interface ModelChainDeps {
 export async function runModelChain<T>(
   chain: string[],
   callModel: (model: string, timeoutMs: number) => Promise<T>,
-  deps: ModelChainDeps
+  deps: ModelChainDeps,
+  /** 구조화 로그(AI_QUALITY_GATE_FAIL/AI_SECTION_GENERATION_PENDING)에 붙일 문맥 — 없으면 로그에 "?"로 표시 */
+  logContext?: AIQualityLogContext
 ): Promise<{ result: T; usedModel: string }> {
   const attemptsPerModel = deps.attemptsPerModel ?? MODEL_ATTEMPTS;
   const backoffMs = deps.backoffMs ?? CHAIN_BACKOFF_MS;
@@ -444,6 +500,15 @@ export async function runModelChain<T>(
       } catch (err) {
         lastErr = err;
         console.warn(`[AI] ${label} ${currentModel} 실패 — ${describeAIError(err)}`);
+        if (err instanceof QualityGateError) {
+          // "이 모델이 다음으로 넘어갈 수 있는가"는 이 시점에만 정확히 알 수 있다 —
+          // 그래서 이 로그도 여기서 남긴다(claude.ts는 reportId/section의 의미를
+          // 모르지만, 호출부가 넘겨준 태그를 그대로 실어 나른다).
+          const hasNext = Boolean(chain[modelIdx + 1]);
+          console.warn(
+            `[AI_QUALITY_GATE_FAIL] reportId=${logContext?.reportId ?? "?"} section=${logContext?.section ?? "?"} model=${currentModel} reason=${err.reason} fallback=${hasNext}`
+          );
+        }
         if (!isRetryableAIError(err)) {
           // 같은 모델을 반복해봐야 소용없다(모델 불가·인증 오류 등) — 재시도 중단하고 다음 모델로
           break;
@@ -462,6 +527,11 @@ export async function runModelChain<T>(
     }
   }
 
+  if (lastErr instanceof QualityGateError) {
+    console.warn(
+      `[AI_SECTION_GENERATION_PENDING] reportId=${logContext?.reportId ?? "?"} section=${logContext?.section ?? "?"} reason=ALL_MODELS_QUALITY_FAILED`
+    );
+  }
   throw lastErr ?? new Error("AI 호출 시간 예산 초과");
 }
 
@@ -473,7 +543,9 @@ async function callWithFallback(
   model: string,
   messages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
   maxTokens: number,
-  temperature?: number
+  temperature?: number,
+  validate?: ContentValidator,
+  logContext?: AIQualityLogContext
 ): Promise<{ result: OpenAI.Chat.Completions.ChatCompletion; usedModel: string }> {
   // 이 호출 전체(체인의 모든 모델·재시도·백오프 대기)에 허용된 마감 시각.
   // 남은 시간을 넘기는 시도는 시작하지 않는다 — 함수가 강제 종료되는 것보다
@@ -500,8 +572,9 @@ async function callWithFallback(
   return runModelChain(
     chain,
     (currentModel, timeout) =>
-      callOnce(currentModel, messages, getMaxTokens(currentModel, maxTokens), temperature, timeout),
-    { remainingMs, attemptTimeout, sleep }
+      callOnce(currentModel, messages, getMaxTokens(currentModel, maxTokens), temperature, timeout, validate),
+    { remainingMs, attemptTimeout, sleep },
+    logContext
   );
 }
 
@@ -534,7 +607,9 @@ export async function generateText(
     MODEL,
     builtMessages,
     maxTokens,
-    temperature
+    temperature,
+    options.validate,
+    options.logContext
   );
 
   if (usedModel !== MODEL) {

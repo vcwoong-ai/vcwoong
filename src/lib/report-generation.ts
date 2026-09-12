@@ -241,6 +241,7 @@ export async function generateSectionsAsync(
           result = await agent.generateSection(
             {
               dealId: deal.id,
+              reportId,
               companyName: deal.companyName,
               sector: deal.sector,
               agentType,

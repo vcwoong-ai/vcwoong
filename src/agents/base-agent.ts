@@ -1,5 +1,6 @@
 import { SectionKey, AgentType, DealSector } from "@prisma/client";
 import { generateText } from "@/lib/claude";
+import { buildSectionValidator } from "@/lib/section-generation-gate";
 import { getSystemPrompt } from "@/prompts/system-prompts";
 import {
   buildSectionPrompt,
@@ -27,6 +28,8 @@ export interface AgentInput {
   valuation?: number;
   documents: Array<{ name: string; parsedText: string | null }>;
   additionalContext?: string;
+  /** 생성 품질 게이트 로그(AI_QUALITY_GATE_FAIL 등)에 붙일 문맥용 — 선택값, 없어도 생성 자체는 그대로 동작 */
+  reportId?: string;
 }
 
 export abstract class BaseAgent {
@@ -61,6 +64,10 @@ export abstract class BaseAgent {
     sectionKey: SectionKey
   ): Promise<GenerationResult> {
     const systemPrompt = getSystemPrompt(this.agentType, this.sector);
+    // "이 응답을 저장해도 되는가"를 sectionKey 기준으로 판정한다(claude.ts는
+    // 섹션 개념을 모르므로 이 콜백을 그대로 주입만 받는다) — section-generation-gate.ts 참고.
+    const validate = buildSectionValidator(sectionKey);
+    const logContext = { reportId: input.reportId, section: sectionKey };
 
     // 모든 에이전트 공통: 회사개요는 섹터 특화 프롬프트 사용
     if (sectionKey === COMPANY_SECTION) {
@@ -70,7 +77,7 @@ export abstract class BaseAgent {
       const userPrompt = buildCompanyOverviewPrompt(input, flavor);
       const result = await generateText(
         [{ role: "user", content: userPrompt }],
-        { systemPrompt, maxTokens: 4096, temperature: 0.35 }
+        { systemPrompt, maxTokens: 4096, temperature: 0.35, validate, logContext }
       );
       return {
         sectionKey,
@@ -102,6 +109,8 @@ export abstract class BaseAgent {
         systemPrompt,
         maxTokens: 4096,
         temperature: 0.35,
+        validate,
+        logContext,
       }
     );
 
