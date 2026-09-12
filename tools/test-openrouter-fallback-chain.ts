@@ -574,7 +574,7 @@ function testSingleFallbackEnvBackwardCompatible() {
   const chainWithNeither = resolveFallbackChain(undefined, undefined);
   assert(
     chainWithNeither.join(",") === DEFAULT_FALLBACK_CHAIN.join(","),
-    `둘 다 미설정이면 기본 체인(openrouter/free 등)을 써야 하는데: ${chainWithNeither.join(",")}`
+    `둘 다 미설정이면 기본 체인(DEFAULT_FALLBACK_CHAIN)을 써야 하는데: ${chainWithNeither.join(",")}`
   );
 
   // 설정 실수로 목록이 지나치게 길어져도 상한(MAX_FALLBACK_MODELS)으로 잘린다
@@ -586,6 +586,28 @@ function testSingleFallbackEnvBackwardCompatible() {
   );
 
   console.log("✅ AI_FALLBACK_MODEL(단일)만 설정된 환경 하위호환 유지 + AI_FALLBACK_MODELS 목록/기본값/상한 정상 동작");
+}
+
+/**
+ * 회귀 방지 — Production fallback 기본값에 무료 모델(openrouter/free 등)이
+ * 다시 섞여 들어가지 않는지 고정한다. 실제 사고(2026-09-12, report=
+ * cmtycq7ne...)의 근본 원인 중 하나가 "무료 fallback의 응답 품질 자체가
+ * 낮음"이었다 — PR #68의 품질 게이트가 나쁜 응답을 걸러내긴 하지만,
+ * 애초에 fallback 후보 자체를 유료·고품질 모델로만 구성해 이 문제의
+ * 발생 빈도 자체를 낮춘다.
+ */
+function testDefaultFallbackChainHasNoFreeModels() {
+  for (const model of DEFAULT_FALLBACK_CHAIN) {
+    assert(
+      model !== "openrouter/free" && !model.endsWith(":free"),
+      `기본 폴백 체인에 무료 모델이 들어있음(${model}) — 투자심사보고서 fallback 기본값으로 부적절`
+    );
+  }
+  assert(
+    DEFAULT_FALLBACK_CHAIN.join(",") === "google/gemini-2.5-pro,anthropic/claude-sonnet-4.5",
+    `기본 폴백 체인이 예상과 다름: ${DEFAULT_FALLBACK_CHAIN.join(",")}`
+  );
+  console.log("✅ 기본 폴백 체인에 무료 모델 없음(google/gemini-2.5-pro → anthropic/claude-sonnet-4.5)");
 }
 
 async function main() {
@@ -608,6 +630,7 @@ async function main() {
   await testQualityGateFailureEmitsStructuredLogs();
   await testEmptyFallbackChainBehavesLikeBefore();
   testSingleFallbackEnvBackwardCompatible();
+  testDefaultFallbackChainHasNoFreeModels();
   console.log("\n✅ OpenRouter 멀티 폴백 체인 테스트 통과\n");
 }
 

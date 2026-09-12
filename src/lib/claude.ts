@@ -22,24 +22,34 @@ const DEFAULT_MODEL = "deepseek/deepseek-v4-flash-0731";
 /**
  * 기본 모델이 죽었을 때를 대비한 폴백 체인(순서대로 시도).
  *
- * 예전엔 특정 무료 모델 슬러그(`meta-llama/llama-3.3-70b-instruct:free`) 하나만
- * 하드코딩했는데, OpenRouter가 무료 티어 모델 목록을 수시로 바꿔서(슬러그 자체가
- * 없어지거나 유료로 전환됨) 그 모델이 404로 죽어버렸다 — 유일한 안전망이 통째로
- * 없어져, 1차 모델이 타임아웃 났을 때 재시도할 곳이 없는 채로 보고서 생성이
- * 매번 실패했다(실제 프로덕션 사고).
+ * 예전엔 무료 티어 모델(`openrouter/free` → 그 시점에 살아있는 무료 모델을
+ * OpenRouter가 알아서 골라줌, 그다음 `meta-llama/llama-3.3-70b-instruct`)을
+ * 기본 폴백으로 뒀다 — 가용성(모델이 안 죽는 것) 관점에서는 안전했지만,
+ * "무엇이 뽑힐지 통제 불가"와 "무료 모델의 응답 품질" 자체가 투자심사보고서
+ * 라는 용도에는 구조적으로 안 맞았다. 실제 프로덕션 사고(2026-09-12,
+ * report=cmtycq7ne...): primary가 타임아웃 나 `openrouter/free`로 전환됐는데,
+ * 그 모델이 OPINION_SUMMARY(가장 중요한 섹션)에 `"User Safety: safe"`
+ * (45자, 실제 투자의견이 아닌 안전필터/메타성 문구로 추정)를 반환했고,
+ * 당시엔 이를 걸러낼 generation-time validation이 없어 그대로 저장·완료
+ * 처리됐다(PR #68에서 이 검증 공백 자체는 이미 고쳤다 — QualityGateError가
+ * 이런 응답을 무슨 모델이 만들었든 reject하고 다음 모델로 넘긴다).
  *
- * 지금은 폴백을 "하나"가 아니라 "체인"으로 둔다 — 첫 폴백마저 죽어도 다음
- * 폴백으로 넘어갈 수 있다:
- *   1. `openrouter/free` — OpenRouter가 공식 제공하는 라우터로, 그 시점에
- *      실제로 살아있는 무료 모델 중 하나를 OpenRouter가 알아서 골라준다
- *      (https://openrouter.ai/docs/guides/routing/routers/free-router) —
- *      특정 무료 슬러그를 하드코딩해서 나중에 또 죽는 문제를 구조적으로 없앤다.
- *   2. `meta-llama/llama-3.3-70b-instruct` — 위 무료 라우터마저 응답을 못 주는
- *      극단적 상황을 대비한 마지막 안전망(유료 슬러그 — OpenRouter가 실제
- *      프로덕션 404 응답에서 직접 안내한 대체 슬러그, 임의로 지어낸 값이 아님).
- *      비용은 이 단계까지 왔을 때만 발생 — 평소엔 호출되지 않는다.
+ * 이 PR은 그 위에서 한 걸음 더 나간다 — "빈약한 응답이 나와도 게이트가
+ * 걸러준다"에 기대는 대신, 애초에 fallback 단계에서 나올 응답의 기대 품질
+ * 자체를 올린다. 기본 폴백 체인을 무료/가용성 우선에서 유료·고품질 모델
+ * 우선으로 바꾼다:
+ *   1. `google/gemini-2.5-pro`
+ *   2. `anthropic/claude-sonnet-4.5`
+ * DeepSeek(기본 모델, MODEL)는 그대로 유지한다 — 가격 대비 성능이 좋고
+ * 정상 응답 시 대부분의 섹션 생성에 충분하므로, "실패했을 때만" 이
+ * 체인으로 넘어간다(비용은 실패 시에만 발생 — 평소엔 호출되지 않음).
+ * 두 모델 다 OpenRouter를 통해 호출한다(OPENROUTER_API_KEY 하나로 통일,
+ * 별도 프로바이더 연동 없음).
+ *
+ * AI_FALLBACK_MODELS 환경변수로 언제든 override 가능(resolveFallbackChain
+ * 참고) — 이 상수는 그 환경변수가 미설정일 때만 쓰이는 "안전 기본값"이다.
  */
-export const DEFAULT_FALLBACK_CHAIN = ["openrouter/free", "meta-llama/llama-3.3-70b-instruct"];
+export const DEFAULT_FALLBACK_CHAIN = ["google/gemini-2.5-pro", "anthropic/claude-sonnet-4.5"];
 
 function resolveDefaultModel(): string {
   return process.env.AI_MODEL?.trim() || DEFAULT_MODEL;
