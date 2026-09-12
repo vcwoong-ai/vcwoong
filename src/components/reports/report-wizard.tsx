@@ -60,6 +60,12 @@ interface GenerationProgress {
   total: number;
   currentSection: string;
   status: "generating" | "completed" | "error";
+  /**
+   * DB에 저장된 원본 Report.status(PENDING/GENERATING/DRAFT/...). status="error"와
+   * 별개로 내려오는 값 — decideResumeAction이 "재개 가능한 checkpoint"와
+   * "진짜 오류"를 구분하는 핵심 신호다(아래 decideResumeAction 주석 참고).
+   */
+  reportStatus?: string;
 }
 
 // report-generation.ts는 함수 실행시간 상한(GENERATION_BUDGET_MS) 소진 시
@@ -79,24 +85,42 @@ export type ResumePollAction =
  * tools/test-report-wizard-resume.ts에서 checkpoint/실제 오류/무한 루프
  * 방지 시나리오를 컴포넌트 렌더링 없이 검증할 수 있도록 분리했다.
  *
- * status="error"는 report-generation.ts가 시간 예산 소진으로 스스로 멈춘
- * 정상 checkpoint(completed>0, completed<total)와 실제 오류를 구분하지
- * 않고 그대로 내려준다 — 여기서 completed 수 + 이전 재개 이후 진행 여부로
- * 구분한다. progress가 마지막 재개 시점보다 늘지 않았으면(무한 루프 방지)
- * 또는 재개 횟수 상한을 넘었으면 실제 오류로 취급한다.
+ * status="error"는 report-generation.ts가 시간 예산 소진(정상 checkpoint)이든
+ * AI 호출이 끝내 실패했든(section=0 포함) 구분 없이 그대로 내려준다 — 실제
+ * 구분은 reportStatus로 한다. report-generation.ts는 이 두 경우 전부에서
+ * (그리고 completed가 0이든 아니든) 항상 Report.status를 PENDING으로
+ * 되돌린다(checkpoint_saved=true, resume_expected=true — 코드 주석 참고).
+ * 즉 reportStatus==="PENDING"이라는 것 자체가 "서버가 재개 가능하다고 판단한
+ * checkpoint"라는 명시적 신호이지, completed 수로 다시 추측할 대상이 아니다.
+ *
+ * 예전엔 completed>0을 요구했다 — 그래서 "첫 섹션에서 AI가 타임아웃"(completed
+ * 여전히 0)나면 checkpoint가 아니라 곧장 실제 오류로 처리되어, 뒤에서
+ * cron(/api/cron/resume-generations)이 정상적으로 재시도해 결국 완료로
+ * 이어지고 있었는데도 브라우저 화면만 "생성 중 오류"로 멈췄다(2026-09-12
+ * 실측: report=cmtycq7ne... — 3번의 cron tick 동안 0/10에서 실패하다 4번째
+ * tick에서 1~3/10까지 정상 진행). reportStatus 기준으로 바꾸면 completed가
+ * 0이든 아니든 서버가 재개 대상으로 본 checkpoint를 그대로 신뢰한다.
+ *
+ * 무한 루프 방지는 진행 여부(madeProgress) 대신 재개 횟수 상한
+ * (autoResumeCount, MAX_AUTO_RESUMES)만으로 건다 — "재개할 때마다 completed가
+ * 반드시 늘어야 한다"는 조건은, 지금처럼 첫 섹션 자체가 여러 번 연속
+ * 타임아웃 났다가 나중에 성공하는(=completed가 몇 번의 재개 동안 0에
+ * 머무를 수 있는) 정상적인 흐름까지 "정체"로 오판해 너무 일찍 포기하게
+ * 만든다. 상한(20/cron은 DB의 MAX_AUTO_RESUME_ATTEMPTS=30) 안에서는 진행이
+ * 없어도 계속 재시도하는 편이 낫다 — 어차피 상한이 진짜 무한 재시도를 막는다.
  */
 export function decideResumeAction(
   prog: GenerationProgress,
-  state: { autoResumeCount: number; lastResumedCompleted: number; maxAutoResumes?: number }
+  state: { autoResumeCount: number; maxAutoResumes?: number }
 ): ResumePollAction {
   if (prog.status === "completed") return "completed";
   if (prog.status !== "error") return "continue-generating";
 
-  const isCheckpoint = prog.completed > 0 && prog.completed < prog.total;
-  const madeProgress = prog.completed > state.lastResumedCompleted;
+  const isResumableCheckpoint =
+    prog.total > 0 && prog.completed < prog.total && prog.reportStatus === "PENDING";
   const withinLimit = state.autoResumeCount < (state.maxAutoResumes ?? MAX_AUTO_RESUMES);
 
-  return isCheckpoint && madeProgress && withinLimit ? "auto-resume" : "error";
+  return isResumableCheckpoint && withinLimit ? "auto-resume" : "error";
 }
 
 export function ReportWizard({ deal, open, onClose }: WizardProps) {
@@ -179,13 +203,13 @@ export function ReportWizard({ deal, open, onClose }: WizardProps) {
       let consecutiveErrors = 0;
       let finalStatus: GenerationProgress["status"] | "dropped" = "generating";
       // Vercel 함수 실행시간 상한 때문에 report-generation.ts가 예산
-      // (GENERATION_BUDGET_MS) 소진 시 "실패"가 아니라 스스로 멈추고
-      // status="error"로 보고한다(완성된 섹션 수 > 0인 정상 checkpoint) —
-      // 이 경우를 진짜 오류와 구분해 자동으로 /run을 다시 호출해 이어서
-      // 생성한다. 무한 루프 방지: 시도 횟수 상한 + 매번 완료 섹션 수가
-      // 실제로 늘었는지 확인(안 늘면 진짜 멈춘 것으로 보고 중단).
+      // (GENERATION_BUDGET_MS) 소진이든 AI 호출 실패든 "실패"로 끝나지
+      // 않고 스스로 멈추며 status="error"로 보고한다(완성된 섹션 수가
+      // 0이어도 마찬가지 — report-wizard.tsx의 decideResumeAction 주석
+      // 참고). 이 경우를 진짜 오류와 구분해 자동으로 /run을 다시 호출해
+      // 이어서 생성한다. 무한 루프 방지는 재개 횟수 상한(MAX_AUTO_RESUMES)만
+      // 사용한다.
       let autoResumeCount = 0;
-      let lastResumedCompleted = -1;
 
       while (!pollAbortRef.current) {
         try {
@@ -198,7 +222,7 @@ export function ReportWizard({ deal, open, onClose }: WizardProps) {
           };
           consecutiveErrors = 0;
 
-          const action = decideResumeAction(prog, { autoResumeCount, lastResumedCompleted });
+          const action = decideResumeAction(prog, { autoResumeCount });
 
           if (action === "completed") {
             setProgress(prog);
@@ -208,7 +232,6 @@ export function ReportWizard({ deal, open, onClose }: WizardProps) {
 
           if (action === "auto-resume") {
             autoResumeCount += 1;
-            lastResumedCompleted = prog.completed;
             // 오류로 보이지 않도록 "생성 중"으로 표시한 채 이어서 생성을 요청한다.
             setProgress({ ...prog, status: "generating", currentSection: "다음 섹션 이어서 생성 중..." });
             const resumeRes = await fetch(`/api/reports/${id}/run`, {

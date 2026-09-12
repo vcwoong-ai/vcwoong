@@ -15,7 +15,7 @@ import {
 // POST가 주장당 검색+AI 호출을 최대 5회까지 순차로 한다(GET은 저장된 값만
 // 읽어 호출 없음). 기본 함수 실행시간(플랫폼 기본값, Hobby 플랜은 10초)로는
 // 턱없이 부족하다. 다만 60초를 줘도 최악의 경우(검색~8초 + AI 호출
-// AI_CALL_BUDGET_MS 40초, 주장 5개)는 여전히 넘칠 수 있다 — 시간당 요청
+// AI_CALL_BUDGET_MS 기본 55초, 주장 5개)는 여전히 넘칠 수 있다 — 시간당 요청
 // 한도(RATE_LIMITS.deepDive)로 폭주는 막혀 있지만 남은 위험은 그대로 있다.
 export const maxDuration = 60;
 

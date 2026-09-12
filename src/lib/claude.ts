@@ -123,15 +123,49 @@ export const REQUEST_TIMEOUT_MS = envDurationMs(
 );
 
 /**
- * generateText 한 번이 쓸 수 있는 총 시간(ms) — 재시도·백오프 대기까지 포함.
+ * fallback 모델(체인의 2번째 이후) 전용 1회 시도 타임아웃(ms).
  *
- * 재시도(최대 3회, 0/5/15초 백오프)를 시간 제한 없이 돌리면 호출 하나가
- * 100초를 넘길 수도 있어서, 60초 상한에서는 자체 중단 로직이 손도 못 써보고
- * 함수가 죽는다. 남은 예산을 넘기는 시도·대기는 아예 시작하지 않는다.
+ * 예전엔 fallback도 attemptTimeout()이 "예산에서 앞선 모델이 쓰고 남은 만큼"을
+ * 그대로 받는 구조였다 — primary가 REQUEST_TIMEOUT_MS(25s)를 꽉 채워
+ * 실패하면 fallback#1(openrouter/free)은 남은 15s만 받고, 그마저 타임아웃
+ * 나면 fallback#2(meta-llama)는 남은 시간이 0이라 "시간 예산 소진"으로
+ * 호출 자체가 스킵됐다(2026-09-12 실측: report=cmtycq7ne... — primary·
+ * fallback#1 둘 다 25s/15s를 꽉 채워 AbortError, fallback#2는 로그에 시도
+ * 흔적조차 없음). fallback마다 "남은 걸 나눠 쓰는" 구조 대신 자기 몫으로
+ * 고정된 타임아웃을 주면, 앞선 모델이 얼마나 시간을 썼는지와 무관하게
+ * 다음 모델이 항상 실제로 시도된다(단, 남은 예산 자체가 이보다 적으면
+ * 남은 만큼만 — 아래 AI_CALL_BUDGET_MS 참고). primary보다 짧게 잡은
+ * 이유는 fallback 단계에 왔다는 것 자체가 이미 1차 지연을 겪고 있다는
+ * 신호라, 매번 25초씩 기다리면 체인 전체가 길어져 REPORT_GENERATION_BUDGET_MS/
+ * maxDuration 여유를 필요 이상으로 깎아먹기 때문이다.
+ */
+export const FALLBACK_REQUEST_TIMEOUT_MS = envDurationMs(
+  process.env.AI_FALLBACK_REQUEST_TIMEOUT_MS,
+  15_000
+);
+
+/**
+ * generateText 한 번(체인 전체: primary + 모든 fallback 시도)이 쓸 수
+ * 있는 총 시간(ms) — 재시도·백오프 대기까지 포함.
+ *
+ * 기본값은 "40초를 60초로 늘리는" 임의 조정이 아니라, 실제 체인 구성에서
+ * 모델 각각이 자기 몫(REQUEST_TIMEOUT_MS 또는 FALLBACK_REQUEST_TIMEOUT_MS)을
+ * 온전히 받을 수 있도록 역산한 값이다: primary 1개(REQUEST_TIMEOUT_MS) +
+ * fallback마다(FALLBACK_REQUEST_TIMEOUT_MS) — 기본 체인(openrouter/free,
+ * meta-llama 2개)이면 25s + 15s×2 = 55s. AI_FALLBACK_MODELS로 fallback을
+ * 늘리면(MAX_FALLBACK_MODELS까지) 이 기본값도 그만큼 늘어나 체인 끝까지
+ * 실제로 시도될 시간을 보장한다.
+ *
+ * 여전히 상한 역할도 한다 — attemptTimeout()이 이 예산을 넘기는 시도는
+ * 절대 시작하지 않는다(모델별 고정 타임아웃보다 남은 예산이 적으면 그
+ * 남은 만큼만 준다). 재시도(최대 3회, 0/5/15초 백오프)를 시간 제한 없이
+ * 돌리면 호출 하나가 한참 넘길 수도 있어서, 함수 실행시간 상한에서는 자체
+ * 중단 로직이 손도 못 써보고 함수가 죽는다 — 남은 예산을 넘기는 시도·대기는
+ * 아예 시작하지 않는다.
  */
 export const AI_CALL_BUDGET_MS = envDurationMs(
   process.env.AI_CALL_BUDGET_MS,
-  40_000
+  REQUEST_TIMEOUT_MS + FALLBACK_REQUEST_TIMEOUT_MS * FALLBACK_MODELS.length
 );
 
 function getClient(timeoutMs: number = REQUEST_TIMEOUT_MS): OpenAI {
@@ -331,8 +365,16 @@ export const CHAIN_BACKOFF_MS = [0, 3_000];
 export interface ModelChainDeps {
   /** 남은 예산(ms) — 0 이하면 더 이상 어떤 시도도 시작하지 않는다 */
   remainingMs: () => number;
-  /** 다음 시도 1회에 줄 타임아웃(ms) — 예산이 없으면 null */
-  attemptTimeout: () => number | null;
+  /**
+   * 다음 시도 1회에 줄 타임아웃(ms) — 예산이 없으면 null.
+   *
+   * modelIdx(체인 내 위치, 0=primary, 1 이상=fallback)를 받아 모델마다
+   * 다른 상한(REQUEST_TIMEOUT_MS vs FALLBACK_REQUEST_TIMEOUT_MS)을 줄 수
+   * 있게 한다 — "남은 예산을 그대로 물려주는" 방식이면 앞선 모델이 시간을
+   * 다 써버렸을 때 뒤 모델이 아예 호출되지 못하는 문제가 있었다(claude.ts의
+   * FALLBACK_REQUEST_TIMEOUT_MS 주석 참고).
+   */
+  attemptTimeout: (modelIdx: number) => number | null;
   sleep: (ms: number) => Promise<void>;
   /** 모델 하나당 최대 시도 횟수(같은 모델 재시도 포함) */
   attemptsPerModel?: number;
@@ -390,7 +432,7 @@ export async function runModelChain<T>(
         await deps.sleep(waitMs);
       }
 
-      const timeout = deps.attemptTimeout();
+      const timeout = deps.attemptTimeout(modelIdx);
       if (timeout === null) {
         console.warn(`[AI] 시간 예산 소진 — 추가 호출 중단`);
         throw lastErr ?? new Error("AI 호출 시간 예산 초과");
@@ -438,10 +480,18 @@ async function callWithFallback(
   // 일찍 실패를 돌려주는 편이 낫다(호출부가 저장·정리할 시간이 남는다).
   const budgetEndsAt = Date.now() + AI_CALL_BUDGET_MS;
   const remainingMs = () => budgetEndsAt - Date.now();
-  /** 남은 예산과 1회 타임아웃 중 짧은 쪽 — 예산이 없으면 null */
-  const attemptTimeout = (): number | null => {
+  /**
+   * 모델별 고정 타임아웃(0=primary는 REQUEST_TIMEOUT_MS, 그 이후 fallback은
+   * 전부 FALLBACK_REQUEST_TIMEOUT_MS)과 남은 예산 중 작은 쪽을 준다 —
+   * "남은 걸 그대로 물려주는" 방식이 아니라 각 모델이 항상 자기 몫을
+   * 받되, 예산이 정말 없으면(remainingMs<=0) 그때만 null을 반환해 호출
+   * 자체를 막는다.
+   */
+  const attemptTimeout = (modelIdx: number): number | null => {
     const left = remainingMs();
-    return left <= 0 ? null : Math.min(REQUEST_TIMEOUT_MS, left);
+    if (left <= 0) return null;
+    const perModelCap = modelIdx === 0 ? REQUEST_TIMEOUT_MS : FALLBACK_REQUEST_TIMEOUT_MS;
+    return Math.min(perModelCap, left);
   };
 
   const canUseFallback = (process.env.OPENROUTER_API_KEY?.trim() ?? "").startsWith("sk-or-");

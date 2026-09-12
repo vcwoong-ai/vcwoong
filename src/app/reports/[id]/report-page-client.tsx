@@ -55,6 +55,8 @@ interface GenerationProgress {
   currentSection: string;
   status: "generating" | "completed" | "error";
   error?: string;
+  /** DB 원본 Report.status — decideResumeAction의 checkpoint 판정에 쓰인다 */
+  reportStatus?: string;
 }
 
 
@@ -82,17 +84,17 @@ function GeneratingView({
     let timer: ReturnType<typeof setTimeout>;
     // 일시적인 네트워크 오류로 곧장 실패 화면을 띄우지 않는다.
     let consecutiveErrors = 0;
-    // report-generation.ts는 시간 예산 소진 시 완성된 섹션까지 저장하고
-    // 스스로 멈춘다(정상 checkpoint) — /status는 이 상태를 실제 오류와
-    // 구분하지 않고 그대로 "error"로 내려준다. 마법사(report-wizard.tsx)의
-    // 폴링 루프는 decideResumeAction으로 이 둘을 구분해 checkpoint면 자동으로
-    // /run을 다시 호출하는데, 마법사 다이얼로그를 닫고 이 보고서 상세
-    // 페이지로 넘어오면(또는 GENERATING 중 새로고침하면) 이 폴링 루프만
-    // 남고 그 auto-resume 로직이 없어서, 사실상 정상 진행 중인 생성이
-    // "생성 상태를 확인할 수 없습니다"로 멈춰 보이는 문제가 있었다 — 같은
-    // 로직을 여기도 적용한다.
+    // report-generation.ts는 예산 소진이든 AI 호출 실패든(완성 섹션이
+    // 0개여도) 항상 완성된 섹션까지 저장하고 스스로 멈춘다(정상 checkpoint,
+    // Report.status=PENDING) — /status는 이 상태를 실제 오류와 구분하지
+    // 않고 그대로 "error"로 내려주지만, reportStatus 필드로 PENDING인지는
+    // 알 수 있다. 마법사(report-wizard.tsx)의 폴링 루프는 decideResumeAction으로
+    // 이 둘을 구분해 checkpoint면 자동으로 /run을 다시 호출하는데, 마법사
+    // 다이얼로그를 닫고 이 보고서 상세 페이지로 넘어오면(또는 GENERATING
+    // 중 새로고침하면) 이 폴링 루프만 남고 그 auto-resume 로직이 없어서,
+    // 사실상 정상 진행 중인 생성이 "생성 상태를 확인할 수 없습니다"로
+    // 멈춰 보이는 문제가 있었다 — 같은 로직을 여기도 적용한다.
     let autoResumeCount = 0;
-    let lastResumedCompleted = -1;
 
     const poll = async () => {
       try {
@@ -105,10 +107,7 @@ function GeneratingView({
 
         consecutiveErrors = 0;
 
-        const action = decideResumeAction(data, {
-          autoResumeCount,
-          lastResumedCompleted,
-        });
+        const action = decideResumeAction(data, { autoResumeCount });
 
         if (action === "completed") {
           setProgress(data);
@@ -118,7 +117,6 @@ function GeneratingView({
 
         if (action === "auto-resume") {
           autoResumeCount += 1;
-          lastResumedCompleted = data.completed;
           setProgress({
             ...data,
             status: "generating",
