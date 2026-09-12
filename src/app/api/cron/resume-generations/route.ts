@@ -35,10 +35,28 @@ export const maxDuration = 240;
  * 순차로 재개하다 cron 함수 자체가 강제 종료되면, 마지막으로 처리하던
  * 보고서가 자기 checkpoint 로직도 못 거치고 GENERATING에 걸릴 수 있다.
  * generateSectionsAsync 한 번이 최악 195초까지 걸릴 수 있어(report-generation.ts
- * 참고) 40초 여유를 둔다 — 사실상 tick당 보고서 1개를 처리하는 게 보통이고,
- * 그보다 훨씬 빨리 끝나는 보고서가 있을 때만 같은 tick에서 다음 걸 더 본다.
+ * 참고) 40초 여유를 둔다.
+ *
+ * 다만 이 값만으로는 부족하다는 게 실제 프로덕션에서 확인됐다(2026-09-12):
+ * generateSectionsAsync는 호출될 때마다 자기 GENERATION_BUDGET_MS(180초)를
+ * "지금부터" 새로 재는데, cron이 이미 다른 보고서 여러 개를 처리하느라
+ * 시간을 쓴 뒤라는 걸 모른다 — 그래서 CRON_BUDGET_MS 체크를 통과해 새
+ * 보고서를 하나 더 시작해도, 그 보고서 자체가 195초를 다 쓰면 cron
+ * 누적 시간이 240초를 넘겨 Vercel이 함수를 강제 종료했다("Vercel Runtime
+ * Timeout Error: Task timed out after 240 seconds", 실제 12시간 동안
+ * 12건 발생). 그래서 MAX_RESUMES_PER_TICK으로 실제 생성 시도 자체를
+ * tick당 1건으로 제한한다 — 1분 주기라 처리량 손해는 거의 없고, 이 방식이
+ * "남은 시간을 얼마나 정확히 아는가"에 의존하지 않아 훨씬 안전하다.
  */
 const CRON_BUDGET_MS = 200_000;
+
+/**
+ * tick당 실제로 generateSectionsAsync를 호출하는 횟수의 상한(이미 다른
+ * invocation이 선점해 즉시 넘어가는 already_claimed/deal_not_found는
+ * 포함 안 됨). 위 주석 참고 — 이 값을 늘리면 CRON_BUDGET_MS 체크만으로는
+ * 240초 강제종료를 막지 못한다는 걸 다시 확인한 뒤에만 늘릴 것.
+ */
+const MAX_RESUMES_PER_TICK = 1;
 
 /** 한 번의 조회로 이 개수만큼 후보를 본다 — 필터링(섹션 수·시도 횟수) 후 남는 수가 이보다 적을 수 있다 */
 const CANDIDATE_QUERY_LIMIT = 30;
@@ -97,10 +115,19 @@ export async function GET(request: NextRequest) {
   );
 
   const results: Array<{ reportId: string; outcome: string }> = [];
+  let resumesStarted = 0;
 
   for (let i = 0; i < resumable.length; i++) {
     const candidate = resumable[i];
     const remaining = resumable.length - i - 1;
+
+    if (resumesStarted >= MAX_RESUMES_PER_TICK) {
+      results.push({ reportId: candidate.id, outcome: "skipped_tick_limit" });
+      console.log(
+        `[Cron] report=${candidate.id} outcome=skipped_tick_limit remaining=${remaining + 1} — 다음 tick(1분 후)에 이어서 본다`
+      );
+      continue;
+    }
 
     if (Date.now() >= invocationDeadline) {
       results.push({ reportId: candidate.id, outcome: "skipped_budget" });
@@ -156,6 +183,7 @@ export async function GET(request: NextRequest) {
     // 브라우저가 없는 trigger라 waitUntil로 응답을 먼저 보낼 이유가 없다
     // — cron 호출 자체가 사용자를 기다리게 하지 않으므로, 완료(또는
     // checkpoint)까지 이 요청 안에서 직접 기다린다.
+    resumesStarted += 1;
     const resumeStartedAt = Date.now();
     let outcome = "resumed";
     await generateSectionsAsync(
