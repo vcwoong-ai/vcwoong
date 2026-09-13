@@ -236,6 +236,11 @@ export function ReportWizard({ deal, open, onClose }: WizardProps) {
             setProgress({ ...prog, status: "generating", currentSection: "다음 섹션 이어서 생성 중..." });
             const resumeRes = await fetch(`/api/reports/${id}/run`, {
               method: "POST",
+              headers: { "Content-Type": "application/json" },
+              // 사용자 조작 없이 스스로 이어서 호출하는 것임을 서버에 알려
+              // report-gen rate limit에서 제외되게 한다(run/route.ts의
+              // isAutoResumeExemptFromRateLimit 참고).
+              body: JSON.stringify({ trigger: "auto" }),
             }).catch(() => null);
             // 409 = 다른 요청이 이미 재개 중 — 실패로 보지 않고 계속 폴링한다.
             if (!resumeRes || (!resumeRes.ok && resumeRes.status !== 409)) {
