@@ -94,6 +94,71 @@ export const FALLBACK_MODELS: string[] = resolveFallbackChain().filter((m) => m 
 /** 하위호환용 단일 값(헬스체크 등 기존 코드가 참조) — 체인의 첫 항목 */
 export const FALLBACK_MODEL = FALLBACK_MODELS[0] ?? DEFAULT_MODEL;
 
+/**
+ * FREE 플랜 전용 모델 체인 — 무료 사용자가 고가 fallback(Gemini 2.5 Pro,
+ * Claude Sonnet 4.5)까지 호출해 리포트 1건에 유료 사용자와 같은 비용이
+ * 나가는 것을 막는다.
+ *
+ * primary는 기본 모델(DeepSeek, MODEL)과 동일하게 둔다 — 어차피 primary는
+ * 이미 가장 저렴한 모델이라 FREE 전용으로 더 낮출 이유가 없다(정상 응답
+ * 시 fallback 자체가 호출되지 않으므로 여기서 비용 차이가 없다). 차이는
+ * "primary가 실패했을 때 어디로 넘어가는가"뿐이다 — PAID는
+ * DEFAULT_FALLBACK_CHAIN(Gemini→Claude)으로 넘어가지만, FREE는 저가
+ * 모델로만 넘어간다.
+ *
+ * 모델명은 환경변수로 조정 가능하게 뒀다(AI_FALLBACK_MODELS와 같은
+ * 패턴) — OpenRouter에서 실제 사용 가능한 모델·가격은 배포 환경마다
+ * 다를 수 있어, 코드에 고정하기보다 운영자가 실측 후 조정할 수 있게
+ * 한다. 기본값은 무료 티어 fallback으로 이미 검증된 저가 모델
+ * (meta-llama/llama-3.3-70b-instruct)이다 — openrouter/free는 쓰지
+ * 않는다(PR #69에서 겪은 품질 사고와 같은 이유).
+ */
+export const FREE_TIER_MODEL = process.env.AI_FREE_TIER_MODEL?.trim() || MODEL;
+
+function resolveFreeTierFallbackChain(): string[] {
+  const raw = process.env.AI_FREE_TIER_FALLBACK_MODELS?.trim();
+  if (raw) {
+    const parsed = parseModelList(raw);
+    if (parsed.length > 0) return parsed.slice(0, MAX_FALLBACK_MODELS);
+  }
+  return ["meta-llama/llama-3.3-70b-instruct"];
+}
+
+export const FREE_TIER_FALLBACK_MODELS: string[] = resolveFreeTierFallbackChain().filter(
+  (m) => m !== FREE_TIER_MODEL
+);
+
+/** FREE를 제외한, 실제로 존재하는 유료 플랜 키만 명시적으로 나열한다(quotas.ts의 PlanKey와 동일). */
+const KNOWN_PAID_PLAN_KEYS = new Set([
+  "solo",
+  "sector_pro",
+  "multi",
+  "full",
+  "bio_premium",
+]);
+
+/**
+ * Cost-aware Model Router(요청서 item 17) — 사용자 플랜 키만 보고 이번
+ * generateText 호출에 쓸 전체 모델 체인([primary, ...fallbacks])을
+ * 결정한다. 새 abstraction이 아니라 이미 있는 MODEL/FALLBACK_MODELS
+ * 상수 조합을 플랜별로 고르는 순수 함수다 — 호출부(report-generation.ts,
+ * sections/regenerate/route.ts)가 DB에서 읽은 플랜을 여기 넘기기만
+ * 하면 되고, claude.ts 자체는 구독·과금 개념을 전혀 몰라도 된다.
+ *
+ * "free가 아니면 전부 유료로 본다"가 아니라 실제 유료 플랜 키
+ * (KNOWN_PAID_PLAN_KEYS)에 정확히 속할 때만 premium 체인을 준다 —
+ * planKey를 못 읽었거나(구독 정보 누락) 오타·알 수 없는 값이면 항상
+ * FREE 체인으로 fail-safe한다. "free가 아닌 모든 것을 유료로 취급"하면
+ * 구독 조회가 깨졌을 때 정확히 반대 방향(저비용이 아니라 고비용)으로
+ * 새어버린다.
+ */
+export function resolveModelChainForTier(planKey: string | null | undefined): string[] {
+  if (planKey && KNOWN_PAID_PLAN_KEYS.has(planKey)) {
+    return [MODEL, ...FALLBACK_MODELS];
+  }
+  return [FREE_TIER_MODEL, ...FREE_TIER_FALLBACK_MODELS];
+}
+
 function getMaxTokens(_model: string, requested?: number): number {
   return requested ?? 4096;
 }
@@ -228,6 +293,14 @@ export interface ClaudeOptions {
   systemPrompt?: string;
   validate?: ContentValidator;
   logContext?: AIQualityLogContext;
+  /**
+   * 이번 호출에 쓸 모델 체인([primary, ...fallbacks])을 명시적으로
+   * 지정한다 — 없으면 기존과 동일하게 전역 MODEL/FALLBACK_MODELS를
+   * 쓴다. resolveModelChainForTier()로 만든 플랜별 체인을 여기 넘기는
+   * 용도(Cost-aware Model Router) — claude.ts는 이 배열이 어디서
+   * 왔는지(플랜·과금) 전혀 몰라도 된다.
+   */
+  modelChain?: string[];
 }
 
 export interface GenerateTextResult {
@@ -555,7 +628,9 @@ async function callWithFallback(
   maxTokens: number,
   temperature?: number,
   validate?: ContentValidator,
-  logContext?: AIQualityLogContext
+  logContext?: AIQualityLogContext,
+  /** 지정하면 이 배열을 체인으로 쓴다(플랜별 라우팅) — 없으면 model+전역 FALLBACK_MODELS */
+  modelChain?: string[]
 ): Promise<{ result: OpenAI.Chat.Completions.ChatCompletion; usedModel: string }> {
   // 이 호출 전체(체인의 모든 모델·재시도·백오프 대기)에 허용된 마감 시각.
   // 남은 시간을 넘기는 시도는 시작하지 않는다 — 함수가 강제 종료되는 것보다
@@ -577,7 +652,11 @@ async function callWithFallback(
   };
 
   const canUseFallback = (process.env.OPENROUTER_API_KEY?.trim() ?? "").startsWith("sk-or-");
-  const chain = canUseFallback ? [model, ...FALLBACK_MODELS] : [model];
+  const chain = !canUseFallback
+    ? [model]
+    : modelChain && modelChain.length > 0
+      ? modelChain
+      : [model, ...FALLBACK_MODELS];
 
   return runModelChain(
     chain,
@@ -612,17 +691,19 @@ export async function generateText(
     ...messages.map((m) => ({ role: m.role, content: m.content })),
   ];
 
-  const maxTokens = getMaxTokens(MODEL, options.maxTokens);
+  const effectivePrimary = options.modelChain?.[0] || MODEL;
+  const maxTokens = getMaxTokens(effectivePrimary, options.maxTokens);
   const { result, usedModel } = await callWithFallback(
-    MODEL,
+    effectivePrimary,
     builtMessages,
     maxTokens,
     temperature,
     options.validate,
-    options.logContext
+    options.logContext,
+    options.modelChain
   );
 
-  if (usedModel !== MODEL) {
+  if (usedModel !== effectivePrimary) {
     console.log(`[AI] 실제 사용 모델: ${usedModel}`);
   }
 

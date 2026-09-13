@@ -13,6 +13,8 @@ import { evaluateSection } from "@/lib/report-quality";
 import { checkQuota } from "@/lib/quotas";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { buildPriorSectionSummary } from "@/lib/section-context";
+import { resolveModelChainForTier } from "@/lib/claude";
+import { getUserPlanKey } from "@/lib/subscription";
 import {
   getUserTeamContext,
   reportWriteWhere,
@@ -112,6 +114,9 @@ export async function POST(
       ? `## 사용자 지시\n${body.focusNote.trim()}`
       : "";
 
+    const planKey = await getUserPlanKey(session.user.id);
+    const modelChain = resolveModelChainForTier(planKey);
+
     const agent = getAgent(report.agentType, deal.sector);
     const result = await agent.generateSection(
       {
@@ -134,6 +139,7 @@ export async function POST(
         ]
           .filter(Boolean)
           .join("\n\n"),
+        modelChain,
       },
       body.sectionKey
     );

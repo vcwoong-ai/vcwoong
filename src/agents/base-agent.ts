@@ -30,6 +30,14 @@ export interface AgentInput {
   additionalContext?: string;
   /** 생성 품질 게이트 로그(AI_QUALITY_GATE_FAIL 등)에 붙일 문맥용 — 선택값, 없어도 생성 자체는 그대로 동작 */
   reportId?: string;
+  /**
+   * 이번 생성에 쓸 모델 체인(Cost-aware Model Router, claude.ts의
+   * resolveModelChainForTier 참고) — 호출부(report-generation.ts 등)가
+   * 사용자 플랜을 보고 미리 계산해 넘긴다. base-agent.ts는 구독·과금
+   * 개념을 몰라도 되도록 이미 계산된 배열만 그대로 전달한다. 없으면
+   * claude.ts의 기존 기본 체인(MODEL + FALLBACK_MODELS)을 쓴다.
+   */
+  modelChain?: string[];
 }
 
 export abstract class BaseAgent {
@@ -77,7 +85,7 @@ export abstract class BaseAgent {
       const userPrompt = buildCompanyOverviewPrompt(input, flavor);
       const result = await generateText(
         [{ role: "user", content: userPrompt }],
-        { systemPrompt, maxTokens: 4096, temperature: 0.35, validate, logContext }
+        { systemPrompt, maxTokens: 4096, temperature: 0.35, validate, logContext, modelChain: input.modelChain }
       );
       return {
         sectionKey,
@@ -111,6 +119,7 @@ export abstract class BaseAgent {
         temperature: 0.35,
         validate,
         logContext,
+        modelChain: input.modelChain,
       }
     );
 

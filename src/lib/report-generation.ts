@@ -8,7 +8,8 @@ import {
   formatSharedFactsForPrompt,
 } from "@/lib/shared-facts";
 import { evaluateReport } from "@/lib/report-quality";
-import { REQUEST_TIMEOUT_MS, envDurationMs, MODEL } from "@/lib/claude";
+import { REQUEST_TIMEOUT_MS, envDurationMs, MODEL, resolveModelChainForTier } from "@/lib/claude";
+import { getUserPlanKey } from "@/lib/subscription";
 
 export interface DealForGeneration {
   id: string;
@@ -178,6 +179,13 @@ export async function generateSectionsAsync(
     const factsBlock = formatSharedFactsForPrompt(sharedFacts);
     const priorSummaries: string[] = [];
 
+    // Cost-aware Model Router(AI API 원가 최적화) — 사용자 플랜을 한 번만
+    // 조회해 이 보고서의 모든 섹션에 동일하게 적용한다. userId를 못 받은
+    // 경우(구독 정보 조회 불가)는 안전한 방향(FREE 체인)으로 fail-safe한다
+    // — 실수로 비싼 모델 쪽으로 새지 않는다.
+    const planKey = userId ? await getUserPlanKey(userId) : "free";
+    const modelChain = resolveModelChainForTier(planKey);
+
     for (let i = 0; i < sectionKeys.length; i++) {
       const sectionKey = sectionKeys[i];
       const meta = SECTION_META.find((m) => m.key === sectionKey)!;
@@ -257,6 +265,7 @@ export async function generateSectionsAsync(
               ]
                 .filter(Boolean)
                 .join("\n\n"),
+              modelChain,
             },
             sectionKey
           );
