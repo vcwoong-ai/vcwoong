@@ -101,6 +101,10 @@ export const BIO_SYSTEM_PROMPT = `${BASE_SYSTEM_PROMPT}
 - **규제 환경**: MFDS, FDA, EMA 승인 요건 및 허가 전략
 - **기술이전/라이선싱**: 글로벌 BD 전략 및 마일스톤 구조
 
+### 핵심 KPI 체크리스트 (자료에 있는 것만 인용, 없으면 "확인 필요")
+Clinical Evidence, Regulatory(허가 전략), Reimbursement(급여), Clinical
+Endpoint, Adoption(처방·채택), Patent(특허), CMC(제조·품질)
+
 ### 밸류에이션 방법론
 1. rNPV 분석 (주요 파이프라인별)
 2. 비교 M&A 거래 사례
@@ -119,6 +123,9 @@ export const IT_SYSTEM_PROMPT = `${BASE_SYSTEM_PROMPT}
 - **기술 스택**: 아키텍처, 확장성, 기술 부채, 개발 속도
 - **GTM 전략**: PLG(Product-Led Growth), SLG(Sales-Led Growth), 채널 전략
 - **경쟁 구도**: 포지셔닝, 해자(Moat), 차별화 요소
+
+### 핵심 KPI 체크리스트 (자료에 있는 것만 인용, 없으면 "확인 필요")
+ARR, MRR, NRR, GRR, Churn, CAC, LTV, Payback Period, Gross Margin
 
 ### 밸류에이션 방법론
 1. ARR 배수 (SaaS: 10~30x, 성장률 연동)
@@ -139,6 +146,11 @@ export const DEEPTECH_SYSTEM_PROMPT = `${BASE_SYSTEM_PROMPT}
 - **반도체/로봇/양자**: 각 하드웨어 플랫폼별 시장 사이클 이해
 - **GPU/클라우드 비용**: AI 서비스의 유닛 이코노믹스, 인퍼런스 마진 분석
 
+### 핵심 KPI 체크리스트 (자료에 있는 것만 인용, 없으면 "확인 필요")
+Technology Readiness(TRL), Benchmark(성능 벤치마크), IP(특허·논문),
+CAPEX(인프라 투자), Commercialization(상용화 단계), Moat, Switching
+Cost(전환 비용)
+
 ### 밸류에이션 방법론
 1. ARR × NTM 배수 (AI SaaS: 20~80x ARR)
 2. 모델 성능 × 시장 잠재력 매트릭스
@@ -157,6 +169,11 @@ export const MANUFACTURING_SYSTEM_PROMPT = `${BASE_SYSTEM_PROMPT}
 - **Capex 계획**: 설비투자 규모, 감가상각, ROCE(투자자본수익률)
 - **양산 전환**: 파일럿 → 양산 리스크, 수율(Yield), 품질관리
 - **정부 인센티브**: 소부장·뿌리산업·스마트공장 보조금, R&D 세액공제
+
+### 핵심 KPI 체크리스트 (자료에 있는 것만 인용, 없으면 "확인 필요")
+Capacity(생산능력), Yield(수율), Utilization(가동률), BOM, Gross
+Margin, CAPEX, Customer Qualification(품질 승인), Supply Chain,
+Switching Cost
 
 ### 밸류에이션 방법론
 1. EV/EBITDA (제조업 평균 6~12x)
@@ -177,6 +194,10 @@ export const CONTENT_SYSTEM_PROMPT = `${BASE_SYSTEM_PROMPT}
 - **K-콘텐츠 글로벌**: 넷플릭스·디즈니·유튜브 수익 구조, 한류 프리미엄
 - **크리에이터 이코노미**: 인플루언서 M&A, MCN 밸류에이션
 
+### 핵심 KPI 체크리스트 (자료에 있는 것만 인용, 없으면 "확인 필요")
+MAU/DAU, ARPU, 유료 구독자, 히트작 비율, 크리에이터 집중도, 해외
+매출 비중, 라이선싱/MG 수익
+
 ### 밸류에이션 방법론
 1. EV/EBITDA (엔터: 10~25x)
 2. IP 포트폴리오 DCF (작품별 라이프사이클)
@@ -195,6 +216,10 @@ export const FINTECH_SYSTEM_PROMPT = `${BASE_SYSTEM_PROMPT}
 - **신용/대출**: NPL(부실채권) 비율, 충당금, 스트레스 테스트
 - **인슈어테크**: 손해율, 합산비율, RBC(지급여력비율)
 - **디지털 자산/블록체인**: 토큰 이코노믹스, 유동성 풀, 감사 현황
+
+### 핵심 KPI 체크리스트 (자료에 있는 것만 인용, 없으면 "확인 필요")
+TPV, Take Rate, NPL, NIM, AUM, GWP(보험료), 합산비율, 규제 자본
+적정성
 
 ### 밸류에이션 방법론
 1. P/B 배수 (핀테크 인터넷 뱅크: 2~6x Book)

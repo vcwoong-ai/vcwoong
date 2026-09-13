@@ -4,6 +4,7 @@
  * 사라지는" 회귀를 잡을 방법이 이것뿐이다.
  * Usage: npm run test:investment-quality-layer
  */
+import { readFileSync } from "fs";
 import { AgentType, DealSector } from "@prisma/client";
 import { getSystemPrompt, BASE_SYSTEM_PROMPT } from "../src/prompts/system-prompts";
 import { buildSectionPrompt } from "../src/prompts/section-prompts";
@@ -111,7 +112,35 @@ function main() {
   );
   console.log("✅ Why Not Invest(투자하지 않을 강한 이유 3개) 반영됨");
 
-  console.log("\n✅ Investment Quality Layer(Phase 1+2) 테스트 통과\n");
+  // 12. (Phase 3) 섹터별 핵심 KPI 체크리스트가 실제 6개 섹터 프롬프트에 반영됨
+  const kpiExpectations: Array<[AgentType, DealSector, string]> = [
+    [AgentType.BIO, DealSector.BIO, "Reimbursement"],
+    [AgentType.IT, DealSector.IT, "NRR"],
+    [AgentType.DEEPTECH, DealSector.DEEPTECH, "Technology Readiness"],
+    [AgentType.MANUFACTURING, DealSector.MANUFACTURING, "Yield(수율)"],
+    [AgentType.CONTENT, DealSector.CONTENT, "MAU/DAU"],
+    [AgentType.FINTECH, DealSector.FINTECH, "Take Rate"],
+  ];
+  for (const [agentType, sector, kpi] of kpiExpectations) {
+    const prompt = getSystemPrompt(agentType, sector);
+    assert(prompt.includes("핵심 KPI 체크리스트"), `${sector} 프롬프트에 KPI 체크리스트 섹션 누락`);
+    assert(prompt.includes(kpi), `${sector} 프롬프트의 KPI 체크리스트에 "${kpi}" 누락`);
+  }
+  console.log("✅ 6개 섹터 전문 프롬프트에 핵심 KPI 체크리스트 반영됨");
+
+  // 13. (Phase 3) IC Questions 다듬기 프롬프트: "판단이 바뀌는 질문" 원칙 + 나쁜/좋은 예시
+  const icRefinePromptSource = readFileSync(
+    new URL("../src/lib/ic-questions-ai.ts", import.meta.url),
+    "utf-8"
+  );
+  assert(
+    icRefinePromptSource.includes("답변에 따라 실제 투자 여부가 바뀌는 질문"),
+    "IC 질문 다듬기 프롬프트에 '판단이 바뀌는 질문' 원칙 누락"
+  );
+  assert(icRefinePromptSource.includes("향후 성장전략은 무엇인가"), "나쁜 질문 예시 누락");
+  console.log("✅ IC 질문 다듬기 프롬프트에 '판단이 바뀌는 질문' 원칙(나쁜/좋은 예시) 반영됨");
+
+  console.log("\n✅ Investment Quality Layer(Phase 1+2+3) 테스트 통과\n");
 }
 
 main();
