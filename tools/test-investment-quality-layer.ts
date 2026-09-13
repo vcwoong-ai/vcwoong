@@ -79,7 +79,39 @@ function main() {
   assert(marketPrompt.includes("역산하지"), "SOM 역산 금지 지침 누락");
   console.log("✅ 시장분석 섹션에 TAM→SAM→SOM 순서·SOM 역산 금지 지침 반영됨");
 
-  console.log("\n✅ Investment Quality Layer(Phase 1) 테스트 통과\n");
+  // 8. (Phase 2) 사업성("돈이 되는가") 진단 프레임 11문항이 공통 컨텍스트에 포함
+  for (const term of ["Customer(누가 돈을 내는가)", "Moat(경쟁사가 따라오면", "Exit(IPO/M&A"]) {
+    assert(sectionPrompt.includes(term), `사업성 진단 프레임에 "${term}" 누락`);
+  }
+  console.log("✅ 사업성 진단 프레임(Customer→Exit 11문항)이 공통 컨텍스트에 포함됨");
+
+  // 9. (Phase 2) 의견종합: Investment Thesis 3개 압축
+  const opinionPrompt = buildSectionPrompt(SectionKey.OPINION_SUMMARY, {
+    companyName: "테스트기업",
+    sector: "IT",
+    documentContext: "제공된 자료 없음",
+  });
+  for (const term of ["Thesis 1 — Market", "Thesis 2 — Company", "Thesis 3 — Economics"]) {
+    assert(opinionPrompt.includes(term), `Investment Thesis에 "${term}" 누락`);
+  }
+  console.log("✅ 의견종합 섹션에 Investment Thesis 3개(Market/Company/Economics) 반영됨");
+
+  // 10. (Phase 2) Bull/Base/Bear — 긍정 시나리오만 쓰지 않도록 Bear 실패 요인 명시
+  assert(opinionPrompt.includes("Bull:"), "Bull Case 누락");
+  assert(opinionPrompt.includes("Base:"), "Base Case 누락");
+  assert(opinionPrompt.includes("Bear:"), "Bear Case 누락");
+  assert(opinionPrompt.includes("핵심인력 이탈"), "Bear Case 실패 요인 목록 누락");
+  console.log("✅ Bull/Base/Bear Case(Bear의 구체적 실패 요인 포함) 반영됨");
+
+  // 11. (Phase 2) Why Not Invest — IR 그대로 긍정 요약하는 것을 막는 핵심 장치
+  assert(opinionPrompt.includes("Why Not Invest"), "Why Not Invest 항목 누락");
+  assert(
+    opinionPrompt.includes("투자하지 않을 수 있는 가장 강한 이유"),
+    "Why Not Invest의 목적(투자 안 할 이유) 설명 누락"
+  );
+  console.log("✅ Why Not Invest(투자하지 않을 강한 이유 3개) 반영됨");
+
+  console.log("\n✅ Investment Quality Layer(Phase 1+2) 테스트 통과\n");
 }
 
 main();
