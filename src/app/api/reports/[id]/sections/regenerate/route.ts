@@ -13,6 +13,10 @@ import { evaluateSection } from "@/lib/report-quality";
 import { checkQuota } from "@/lib/quotas";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { buildPriorSectionSummary } from "@/lib/section-context";
+import { resolveModelChainForTier, isPaidPlanKey, type AIAttemptRecord } from "@/lib/claude";
+import { getUserPlanKey } from "@/lib/subscription";
+import { resolveTaskTierForSection } from "@/agents/base-agent";
+import { recordAIAttempts } from "@/lib/usage-log";
 import {
   getUserTeamContext,
   reportWriteWhere,
@@ -112,6 +116,12 @@ export async function POST(
       ? `## 사용자 지시\n${body.focusNote.trim()}`
       : "";
 
+    const planKey = await getUserPlanKey(session.user.id);
+    const taskTier = resolveTaskTierForSection(body.sectionKey);
+    const modelChain = resolveModelChainForTier(planKey, taskTier);
+    /** 이번 재생성이 실제로 시도한 모델 전부(성공/실패 무관) — recordAIAttempts로 UsageLog에 남긴다 */
+    const attempts: AIAttemptRecord[] = [];
+
     const agent = getAgent(report.agentType, deal.sector);
     const result = await agent.generateSection(
       {
@@ -134,6 +144,8 @@ export async function POST(
         ]
           .filter(Boolean)
           .join("\n\n"),
+        modelChain,
+        onAttempt: (a) => attempts.push(a),
       },
       body.sectionKey
     );
@@ -155,23 +167,20 @@ export async function POST(
       );
     }
 
-    if (session.user.id && result.tokensUsed > 0) {
-      prisma.usageLog
-        .create({
-          data: {
-            userId: session.user.id,
-            dealId: deal.id,
-            reportId: report.id,
-            agentType: report.agentType,
-            sectionKey: result.sectionKey,
-            model: result.modelUsed ?? "unknown",
-            inputTokens: Math.round(result.tokensUsed * 0.7),
-            outputTokens: Math.round(result.tokensUsed * 0.3),
-            totalTokens: result.tokensUsed,
-          },
-        })
-        .catch(() => {});
-    }
+    // 시도 전부(성공 직전 실패한 fallback 전환 포함)를 UsageLog에 남긴다 —
+    // 예전엔 tokensUsed*0.7/0.3 추정치를 썼는데(실측 아님), 이제
+    // callOnce가 실제로 받은 usage.prompt_tokens/completion_tokens를
+    // 시도별로 그대로 쓴다.
+    recordAIAttempts({
+      userId: session.user.id,
+      dealId: deal.id,
+      reportId: report.id,
+      agentType: report.agentType,
+      sectionKey: result.sectionKey,
+      userTier: isPaidPlanKey(planKey) ? "paid" : "free",
+      taskTier,
+      attempts,
+    });
 
     const section = await prisma.reportSection.findFirst({
       where: { reportId: report.id, sectionKey: body.sectionKey },

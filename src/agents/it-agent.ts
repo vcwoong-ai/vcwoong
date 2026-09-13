@@ -1,5 +1,5 @@
 import { AgentType, DealSector, SectionKey } from "@prisma/client";
-import { BaseAgent, AgentInput } from "./base-agent";
+import { BaseAgent, AgentInput, resolveTaskTierForSection } from "./base-agent";
 import { generateText } from "@/lib/claude";
 import { getSystemPrompt } from "@/prompts/system-prompts";
 import { GenerationResult } from "@/types";
@@ -55,6 +55,9 @@ export class ITAgent extends BaseAgent {
       systemPrompt,
       maxTokens: 4096,
       temperature: 0.35,
+      modelChain: input.modelChain,
+      taskTier: resolveTaskTierForSection(sectionKey),
+      onAttempt: input.onAttempt,
     });
     return {
       sectionKey,

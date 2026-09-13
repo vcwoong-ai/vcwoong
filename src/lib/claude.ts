@@ -16,6 +16,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import OpenAI from "openai";
 import { generateMockContent } from "./mock-generator";
 import { BRAND } from "./brand";
+import { calculateEstimatedCost } from "./ai-cost";
 
 const DEFAULT_MODEL = "deepseek/deepseek-v4-flash-0731";
 
@@ -93,6 +94,150 @@ export const FALLBACK_MODELS: string[] = resolveFallbackChain().filter((m) => m 
 
 /** 하위호환용 단일 값(헬스체크 등 기존 코드가 참조) — 체인의 첫 항목 */
 export const FALLBACK_MODEL = FALLBACK_MODELS[0] ?? DEFAULT_MODEL;
+
+/**
+ * FREE 플랜 전용 모델 체인 — 무료 사용자가 고가 fallback(Gemini 2.5 Pro,
+ * Claude Sonnet 4.5)까지 호출해 리포트 1건에 유료 사용자와 같은 비용이
+ * 나가는 것을 막는다.
+ *
+ * primary는 기본 모델(DeepSeek, MODEL)과 동일하게 둔다 — 어차피 primary는
+ * 이미 가장 저렴한 모델이라 FREE 전용으로 더 낮출 이유가 없다(정상 응답
+ * 시 fallback 자체가 호출되지 않으므로 여기서 비용 차이가 없다). 차이는
+ * "primary가 실패했을 때 어디로 넘어가는가"뿐이다 — PAID는
+ * DEFAULT_FALLBACK_CHAIN(Gemini→Claude)으로 넘어가지만, FREE는 저가
+ * 모델로만 넘어간다.
+ *
+ * 모델명은 환경변수로 조정 가능하게 뒀다(AI_FALLBACK_MODELS와 같은
+ * 패턴) — OpenRouter에서 실제 사용 가능한 모델·가격은 배포 환경마다
+ * 다를 수 있어, 코드에 고정하기보다 운영자가 실측 후 조정할 수 있게
+ * 한다. 기본값은 무료 티어 fallback으로 이미 검증된 저가 모델
+ * (meta-llama/llama-3.3-70b-instruct)이다 — openrouter/free는 쓰지
+ * 않는다(PR #69에서 겪은 품질 사고와 같은 이유).
+ */
+export const FREE_TIER_MODEL = process.env.AI_FREE_TIER_MODEL?.trim() || MODEL;
+
+function resolveFreeTierFallbackChain(): string[] {
+  const raw = process.env.AI_FREE_TIER_FALLBACK_MODELS?.trim();
+  if (raw) {
+    const parsed = parseModelList(raw);
+    if (parsed.length > 0) return parsed.slice(0, MAX_FALLBACK_MODELS);
+  }
+  return ["meta-llama/llama-3.3-70b-instruct"];
+}
+
+export const FREE_TIER_FALLBACK_MODELS: string[] = resolveFreeTierFallbackChain().filter(
+  (m) => m !== FREE_TIER_MODEL
+);
+
+/** FREE를 제외한, 실제로 존재하는 유료 플랜 키만 명시적으로 나열한다(quotas.ts의 PlanKey와 동일). */
+const KNOWN_PAID_PLAN_KEYS = new Set([
+  "solo",
+  "sector_pro",
+  "multi",
+  "full",
+  "bio_premium",
+]);
+
+/**
+ * Cost-aware Model Router(요청서 item 17) — 사용자 플랜 키만 보고 이번
+ * generateText 호출에 쓸 전체 모델 체인([primary, ...fallbacks])을
+ * 결정한다. 새 abstraction이 아니라 이미 있는 MODEL/FALLBACK_MODELS
+ * 상수 조합을 플랜별로 고르는 순수 함수다 — 호출부(report-generation.ts,
+ * sections/regenerate/route.ts)가 DB에서 읽은 플랜을 여기 넘기기만
+ * 하면 되고, claude.ts 자체는 구독·과금 개념을 전혀 몰라도 된다.
+ *
+ * "free가 아니면 전부 유료로 본다"가 아니라 실제 유료 플랜 키
+ * (KNOWN_PAID_PLAN_KEYS)에 정확히 속할 때만 premium 체인을 준다 —
+ * planKey를 못 읽었거나(구독 정보 누락) 오타·알 수 없는 값이면 항상
+ * FREE 체인으로 fail-safe한다. "free가 아닌 모든 것을 유료로 취급"하면
+ * 구독 조회가 깨졌을 때 정확히 반대 방향(저비용이 아니라 고비용)으로
+ * 새어버린다.
+ */
+/**
+ * Task 단위 비용 등급(요청서 "Cost-Performance Model Router"). 플랜 등급
+ * (FREE/PAID)과는 다른 축이다 — 같은 PAID 사용자라도 섹션 성격에 따라
+ * 쓸 모델 풀이 다르다:
+ *   - cheap: 요약·메타데이터 추출·간단한 IC 초안 다듬기 등 최종 투자
+ *     판단에 직접 쓰이지 않는 보조 작업(ic-questions-ai.ts, evidence-ai.ts,
+ *     deep-dive.ts, deal-scoring.ts, sourcing.ts, template 추출 등)
+ *   - balanced: 기본 보고서 섹션(투자개요/제품기술/시장분석/재무현황/
+ *     리스크/투자조건/별첨 등) — 기존 PAID 기본 체인과 동일
+ *   - premium: 투자의견(OPINION_SUMMARY: Investment Thesis/Bull-Base-Bear/
+ *     Why Not Invest)과 복잡한 밸류에이션(VALUATION) — 최종 투자 판단에
+ *     가장 직접적으로 쓰이는 섹션만 해당
+ */
+export type TaskTier = "cheap" | "balanced" | "premium";
+
+/**
+ * BALANCED(기본 보고서 섹션) 전용 모델 체인 — 기존 PAID 기본 체인
+ * (AI_MODEL + AI_FALLBACK_MODELS) 그 자체다. PREMIUM의 기본값이 바로 이
+ * 상수를 참조한다(아래) — `AI_PREMIUM_MODELS`를 설정하지 않으면
+ * `PREMIUM_MODELS`가 이 배열과 **의도적으로 완전히 같다**. 실수나 버그가
+ * 아니다.
+ *
+ * 왜 기본값을 다르게 만들지 않았나: 이 프로젝트는 "확인 안 된 모델
+ * 목록을 코드에 새로 지어내지 않는다"는 원칙을 지킨다(요청서: "새 모델을
+ * 임의로 추가하지 말 것"). BALANCED 전용으로 더 싼 모델을 기본값으로
+ * 박아 넣으려면 그 모델이 실제로 OpenRouter에서 쓸 수 있고 투자심사
+ * 보고서 품질에 충분한지 이 세션에서 검증할 방법이 없었다(네트워크 접근
+ * 차단). 그래서 BALANCED와 PREMIUM 둘 다 "이미 검증된 기존 기본 체인"을
+ * 기본값으로 공유하고, 실제 비용 차등은:
+ *   1) `AI_PREMIUM_MODELS`를 설정해 PREMIUM만 다른(더 비싼/더 신뢰도 높은)
+ *      체인으로 분리하거나,
+ *   2) `AI_BALANCED_MAX_PRICE`로 BALANCED에만 provider 가격 상한을 걸어
+ *      OpenRouter가 그 안에서 더 싼 provider를 우선 쓰게 하는 방법으로
+ * 운영자가 실측 후 켠다. 이 PR은 그 스위치(코드 경로)를 만드는 것까지가
+ * 범위이고, 기본값을 임의로 벌려놓지 않는다.
+ */
+export const BALANCED_MODEL_CHAIN: string[] = [MODEL, ...FALLBACK_MODELS];
+
+/**
+ * PREMIUM 전용 모델 체인 — 미설정 시 BALANCED_MODEL_CHAIN과 완전히
+ * 동일하다(하위호환: 이 env가 없으면 premium/balanced 구분이 모델 목록
+ * 수준에서는 동일하고, provider 라우팅 설정만 갈릴 수 있다). 위
+ * BALANCED_MODEL_CHAIN 주석 참고.
+ */
+function resolvePremiumModelChain(): string[] {
+  const raw = process.env.AI_PREMIUM_MODELS?.trim();
+  if (raw) {
+    const parsed = parseModelList(raw);
+    if (parsed.length > 0) return parsed.slice(0, MAX_FALLBACK_MODELS + 1);
+  }
+  return BALANCED_MODEL_CHAIN;
+}
+
+export const PREMIUM_MODELS: string[] = resolvePremiumModelChain();
+
+/** CHEAP 작업 전용 모델 체인 — FREE 플랜 체인과 동일한 저가 모델을 재사용한다(불필요한 신규 모델 목록을 늘리지 않음). */
+export const CHEAP_MODEL_CHAIN: string[] = [FREE_TIER_MODEL, ...FREE_TIER_FALLBACK_MODELS];
+
+/**
+ * Cost-aware Model Router(요청서 item 17, 이후 3-tier로 확장) — 사용자
+ * 플랜 키 + task tier를 보고 이번 generateText 호출에 쓸 전체 모델 체인
+ * ([primary, ...fallbacks])을 결정한다.
+ *
+ * "free가 아니면 전부 유료로 본다"가 아니라 실제 유료 플랜 키
+ * (KNOWN_PAID_PLAN_KEYS)에 정확히 속할 때만 balanced/premium 체인을 준다 —
+ * planKey를 못 읽었거나(구독 정보 누락) 오타·알 수 없는 값이면 항상
+ * FREE(=cheap) 체인으로 fail-safe한다. FREE 플랜은 taskTier가 premium이어도
+ * premium 체인으로 올라가지 않는다 — "이 섹션이 중요하다"는 것이 "이
+ * 사용자에게 비싼 모델을 써도 된다"는 뜻은 아니다(클라이언트가 taskTier를
+ * 조작할 방법도 없지만, 서버가 스스로에게도 이 원칙을 적용한다).
+ */
+/** planKey가 실제 유료 플랜 키(KNOWN_PAID_PLAN_KEYS)에 정확히 속하는지 — UsageLog의 userTier 태깅 등에서 재사용(단일 소스) */
+export function isPaidPlanKey(planKey: string | null | undefined): boolean {
+  return Boolean(planKey && KNOWN_PAID_PLAN_KEYS.has(planKey));
+}
+
+export function resolveModelChainForTier(
+  planKey: string | null | undefined,
+  taskTier: TaskTier = "balanced"
+): string[] {
+  if (!isPaidPlanKey(planKey)) return CHEAP_MODEL_CHAIN;
+  if (taskTier === "premium") return PREMIUM_MODELS;
+  if (taskTier === "cheap") return CHEAP_MODEL_CHAIN;
+  return BALANCED_MODEL_CHAIN;
+}
 
 function getMaxTokens(_model: string, requested?: number): number {
   return requested ?? 4096;
@@ -178,6 +323,77 @@ export const AI_CALL_BUDGET_MS = envDurationMs(
   REQUEST_TIMEOUT_MS + FALLBACK_REQUEST_TIMEOUT_MS * FALLBACK_MODELS.length
 );
 
+export interface OpenRouterProviderPreferences {
+  sort?: "price" | "throughput" | "latency";
+  allow_fallbacks?: boolean;
+  max_price?: { prompt: number; completion: number };
+}
+
+const VALID_ROUTING_SORTS = new Set(["price", "throughput", "latency"]);
+
+/** "prompt,completion" ($/1M 토큰) 형식을 파싱한다 — 형식이 틀리면 cap 없이 진행(요청 실패보다 안전) */
+export function parseMaxPrice(raw: string | undefined): { prompt: number; completion: number } | undefined {
+  const trimmed = raw?.trim();
+  if (!trimmed) return undefined;
+  const parts = trimmed.split(",").map((s) => Number(s.trim()));
+  if (parts.length !== 2 || parts.some((n) => !Number.isFinite(n) || n < 0)) {
+    console.warn(`[AI] max_price 환경변수 형식 오류(무시, cap 없이 진행): "${raw}"`);
+    return undefined;
+  }
+  return { prompt: parts[0], completion: parts[1] };
+}
+
+/**
+ * OpenRouter의 provider 선택 파라미터(공식 문서
+ * https://openrouter.ai/docs/guides/routing/provider-selection) — 이
+ * 세션에서는 openrouter.ai로의 아웃바운드 접속이 조직 egress 정책으로
+ * 차단돼 있어(WebFetch: EGRESS_BLOCKED) 문서를 직접 열어 확인하지 못했다.
+ * 대신 OpenRouter 공식 블로그·서드파티 미러 여러 곳으로 교차 확인된
+ * 필드만 구현한다:
+ *   - sort: "price" | "throughput" | "latency" (문자열)
+ *   - allow_fallbacks: boolean(기본 true — provider 하나가 막히면 다른
+ *     provider로 자동 전환, OpenRouter 자체 문서 기본값과 동일)
+ *   - max_price: { prompt, completion } — $/1M 토큰. 이 가격을 넘는
+ *     provider가 없으면 요청 자체를 거절한다(조용히 비싼 provider로
+ *     새지 않는다)
+ *
+ * 요청서에 있던 "provider.partition: 'none'"은 구현하지 않았다 — 교차
+ * 확인한 자료들이 이를 provider 최상위 필드가 아니라 sort 하위 구조
+ * (`sort: {by, partition}`)로 설명해 요청서 표기와 어긋났고, 공식 문서로
+ * 직접 검증할 수 없는 상태에서 틀린 shape를 보내면 최악의 경우 400으로
+ * 보고서 생성 전체가 실패할 위험이 있다 — 확인 안 된 필드를 프로덕션
+ * 요청 바디에 넣기보다 비워둔다.
+ *
+ * sort는 모델을 바꾸지 않는다 — 이미 정해진 model(들) 뒤에서 그 모델을
+ * 서빙하는 여러 provider 중 우선순위만 정한다(예: Claude Sonnet을 서빙하는
+ * provider가 여럿이면 그중 가장 싼 곳부터 시도). 그래서 premium tier에도
+ * 안전하게 적용할 수 있다 — 품질에 영향을 주는 "어떤 모델을 쓰는가"가
+ * 아니라 "같은 모델을 어디서 싸게 받는가"만 바꾼다.
+ */
+export function buildProviderPreferences(tier: TaskTier): OpenRouterProviderPreferences | undefined {
+  const sortEnv = (process.env.AI_ROUTING_SORT ?? "price").trim();
+  if (!sortEnv) return undefined; // 빈 값으로 명시하면 provider 라우팅 자체를 끈다
+  if (!VALID_ROUTING_SORTS.has(sortEnv)) {
+    console.warn(`[AI] AI_ROUTING_SORT 값이 올바르지 않음("${sortEnv}") — provider 라우팅 미적용`);
+    return undefined;
+  }
+
+  const maxPriceEnv =
+    tier === "cheap"
+      ? process.env.AI_CHEAP_MAX_PRICE
+      : tier === "premium"
+        ? process.env.AI_PREMIUM_MAX_PRICE
+        : process.env.AI_BALANCED_MAX_PRICE;
+
+  const maxPrice = parseMaxPrice(maxPriceEnv);
+
+  return {
+    sort: sortEnv as "price" | "throughput" | "latency",
+    allow_fallbacks: true,
+    ...(maxPrice ? { max_price: maxPrice } : {}),
+  };
+}
+
 function getClient(timeoutMs: number = REQUEST_TIMEOUT_MS): OpenAI {
   return new OpenAI({
     baseURL: "https://openrouter.ai/api/v1",
@@ -228,6 +444,66 @@ export interface ClaudeOptions {
   systemPrompt?: string;
   validate?: ContentValidator;
   logContext?: AIQualityLogContext;
+  /**
+   * 이번 호출에 쓸 모델 체인([primary, ...fallbacks])을 명시적으로
+   * 지정한다 — 없으면 기존과 동일하게 전역 MODEL/FALLBACK_MODELS를
+   * 쓴다. resolveModelChainForTier()로 만든 플랜별 체인을 여기 넘기는
+   * 용도(Cost-aware Model Router) — claude.ts는 이 배열이 어디서
+   * 왔는지(플랜·과금) 전혀 몰라도 된다.
+   */
+  modelChain?: string[];
+  /**
+   * OpenRouter provider 라우팅(sort/max_price)에 쓸 task tier — 미지정 시
+   * "balanced"(기존 기본 동작과 동일). modelChain(어떤 모델을 시도하는가)과
+   * 독립적인 축이다: modelChain은 호출부가 이미 골라둔 모델 목록이고,
+   * taskTier는 그 모델들을 어떤 provider 가격 정책으로 부를지만 정한다.
+   */
+  taskTier?: TaskTier;
+  /**
+   * 체인의 모든 시도(성공/실패 모두)를 실시간으로 통보받는 훅 —
+   * UsageLog에 "최종 성공 모델만" 기록하면 실패한 시도(품질 게이트 실패,
+   * 빈 응답 등 — 전부 실제 API 호출이 이미 일어나 토큰이 소모된 뒤의
+   * 실패)가 비용 집계에서 누락된다. 호출부(report-generation.ts 등)가
+   * 이 콜백으로 시도마다 UsageLog row를 쌓는다. claude.ts는 그 저장 방식을
+   * 몰라도 되도록 순수 사실(model/성공여부/토큰/provider/비용)만 전달한다.
+   * 콜백이 던지는 예외는 절대 AI 생성 자체를 실패시키지 않는다(아래
+   * emitAttempt 참고 — 항상 try/catch로 감싼다).
+   */
+  onAttempt?: AIAttemptListener;
+}
+
+/** 모델 체인의 시도 1회(성공이든 실패든)에 대한 사실 기록 — UsageLog 등 저장 방식은 모른다 */
+export interface AIAttemptRecord {
+  model: string;
+  /** 체인 내 위치 — 0=primary, 1 이상=fallback(몇 번째로 시도됐는지) */
+  attemptIndex: number;
+  success: boolean;
+  durationMs: number;
+  inputTokens: number;
+  outputTokens: number;
+  /**
+   * OpenRouter가 실제로 이 요청을 처리한 provider id — 이 세션은
+   * openrouter.ai 문서를 직접 열 수 없어 응답의 정확한 필드명을 확정하지
+   * 못했다. 있으면 쓰고, 없으면(또는 필드가 다르면) undefined로 남긴다
+   * (모르는 걸 지어내지 않는다 — cost와 동일한 원칙).
+   */
+  provider?: string;
+  /** OpenRouter가 응답에 실은 실제 비용(USD) — 없으면 null(추정 안 함) */
+  estimatedCost: number | null;
+  /** 실패한 시도의 에러 종류(성공이면 undefined) */
+  errorKind?: string;
+}
+
+export type AIAttemptListener = (attempt: AIAttemptRecord) => void;
+
+/** onAttempt 콜백은 호출부 로직(DB 저장 등)이라 실패할 수 있다 — 절대 AI 생성 자체를 막지 않는다 */
+export function emitAttempt(listener: AIAttemptListener | undefined, record: AIAttemptRecord): void {
+  if (!listener) return;
+  try {
+    listener(record);
+  } catch (err) {
+    console.warn(`[AI] onAttempt 콜백 실패(무시, 생성 자체에는 영향 없음): ${String(err)}`);
+  }
 }
 
 export interface GenerateTextResult {
@@ -305,47 +581,148 @@ export class QualityGateError extends Error {
   }
 }
 
+/**
+ * OpenRouter 응답(ChatCompletion)에서 토큰/provider/비용을 뽑아낸다 —
+ * 순수 함수로 분리해 실제 네트워크 호출 없이(합성 응답 객체로) 단위
+ * 테스트할 수 있게 한다(runModelChain을 순수 함수로 분리한 이유와 동일).
+ *
+ * - inputTokens/outputTokens: usage가 없으면 0(호출 자체가 비정상이었단 뜻)
+ * - provider: OpenRouter 응답의 provider 필드 위치를 이 세션에서 공식
+ *   문서로 확정하지 못했다 — 있으면 쓰고 없으면 undefined(지어내지 않음)
+ * - estimatedCost: calculateEstimatedCost 참고 — OpenRouter가 실제로
+ *   보고한 usage.cost가 없으면 null
+ */
+export function extractUsageAndCost(result: OpenAI.Chat.Completions.ChatCompletion): {
+  inputTokens: number;
+  outputTokens: number;
+  provider?: string;
+  estimatedCost: number | null;
+} {
+  const usage = result.usage as
+    | (OpenAI.CompletionUsage & { cost?: number })
+    | undefined;
+  const inputTokens = usage?.prompt_tokens ?? 0;
+  const outputTokens = usage?.completion_tokens ?? 0;
+  const provider = (result as { provider?: string }).provider;
+  const estimatedCost = calculateEstimatedCost({
+    inputTokens,
+    outputTokens,
+    providerUsage: { cost: usage?.cost },
+  });
+  return { inputTokens, outputTokens, provider, estimatedCost };
+}
+
 async function callOnce(
   model: string,
   messages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
   maxTokens: number,
   temperature?: number,
   timeoutMs?: number,
-  validate?: ContentValidator
+  validate?: ContentValidator,
+  tier: TaskTier = "balanced",
+  attemptIndex = 0,
+  onAttempt?: AIAttemptListener
 ): Promise<OpenAI.Chat.Completions.ChatCompletion> {
   const effectiveTimeout = timeoutMs ?? REQUEST_TIMEOUT_MS;
   const client = getClient(effectiveTimeout);
+  const provider = buildProviderPreferences(tier);
+  const startedAt = Date.now();
   // OpenAI SDK의 client-level timeout 옵션에만 의존하지 않는다 — 실제
   // 프로덕션 타임아웃 장애에서, 재시도/폴백 로직이 남기는 경고 로그가 전혀
   // 없이 함수가 통째로 60초 만에 강제 종료된 사례가 있었다. SDK 옵션이
   // 조용히 아무 효과가 없었을 가능성을 배제할 수 없어(NIM 연동에서도 같은
   // 증상을 AbortSignal로 고친 전례가 있음), 명시적 AbortSignal을 이중으로
   // 건다 — 둘 중 하나만 동작해도 요청이 멈추지 않는 사고를 막는다.
-  const result = (await client.chat.completions.create(
-    {
+  let result: OpenAI.Chat.Completions.ChatCompletion;
+  try {
+    result = (await client.chat.completions.create(
+      {
+        model,
+        max_tokens: maxTokens,
+        messages,
+        stream: false,
+        ...(typeof temperature === "number" ? { temperature } : {}),
+        // provider는 OpenAI Chat Completions 표준 필드가 아니라 OpenRouter
+        // 전용 확장이다 — 이 파일이 이미 쓰는 타입 캐스트(아래 as Parameters<...>)로
+        // 얹는다. 모델을 바꾸지 않고 같은 모델을 서빙하는 provider 중
+        // 우선순위만 정하므로, 실패 시 기존 재시도/폴백 로직과 독립적으로 동작한다.
+        ...(provider ? { provider } : {}),
+      } as Parameters<OpenAI["chat"]["completions"]["create"]>[0],
+      { signal: AbortSignal.timeout(effectiveTimeout) }
+    )) as OpenAI.Chat.Completions.ChatCompletion;
+  } catch (err) {
+    // 응답 자체를 못 받은 실패(네트워크·타임아웃·401/404 등) — usage가
+    // 없으므로 토큰/비용은 0/null. 그래도 "이 모델이 이 시점에 실패했다"는
+    // 사실 자체는 기록해야 retryCount·attempt별 추적이 끊기지 않는다.
+    emitAttempt(onAttempt, {
       model,
-      max_tokens: maxTokens,
-      messages,
-      stream: false,
-      ...(typeof temperature === "number" ? { temperature } : {}),
-    } as Parameters<OpenAI["chat"]["completions"]["create"]>[0],
-    { signal: AbortSignal.timeout(effectiveTimeout) }
-  )) as OpenAI.Chat.Completions.ChatCompletion;
+      attemptIndex,
+      success: false,
+      durationMs: Date.now() - startedAt,
+      inputTokens: 0,
+      outputTokens: 0,
+      estimatedCost: null,
+      errorKind: err instanceof Error ? err.constructor.name : "Error",
+    });
+    throw err;
+  }
+
+  const durationMs = Date.now() - startedAt;
+  const { inputTokens, outputTokens, provider: providerName, estimatedCost } =
+    extractUsageAndCost(result);
 
   // HTTP 200 + 정상 JSON이어도 content가 비어 있으면(공백만 포함해도) 성공이
   // 아니다 — 여기서 걸러야 report-generation.ts가 빈 섹션을 "성공"으로 저장하지
   // 않는다. JSON 파싱이 필요한 게 아니라 이미 파싱된 값의 최소 유효성만 본다.
   const content = result.choices?.[0]?.message?.content;
   if (!content || content.trim().length === 0) {
+    // 응답은 받았으므로(빈 completion이어도) usage가 있을 수 있다 — 실제로
+    // 토큰이 소모됐다면(가능성 있음) 비용 집계에서 누락되지 않게 기록한다.
+    emitAttempt(onAttempt, {
+      model,
+      attemptIndex,
+      success: false,
+      durationMs,
+      inputTokens,
+      outputTokens,
+      provider: providerName,
+      estimatedCost,
+      errorKind: "EmptyAIResponseError",
+    });
     throw new EmptyAIResponseError(model);
   }
 
   if (validate) {
     const v = validate(content);
     if (!v.ok) {
+      // 품질 게이트 실패 — 실제 API 호출·토큰 소모는 이미 일어난 뒤다.
+      // "최종 성공 모델만 기록"하면 이런 실패 시도의 비용이 조용히
+      // 누락되므로(과소계상), 실패해도 반드시 기록한다.
+      emitAttempt(onAttempt, {
+        model,
+        attemptIndex,
+        success: false,
+        durationMs,
+        inputTokens,
+        outputTokens,
+        provider: providerName,
+        estimatedCost,
+        errorKind: "QualityGateError",
+      });
       throw new QualityGateError(model, v.reason ?? "UNKNOWN");
     }
   }
+
+  emitAttempt(onAttempt, {
+    model,
+    attemptIndex,
+    success: true,
+    durationMs,
+    inputTokens,
+    outputTokens,
+    provider: providerName,
+    estimatedCost,
+  });
 
   return result;
 }
@@ -469,7 +846,7 @@ export interface ModelChainDeps {
  */
 export async function runModelChain<T>(
   chain: string[],
-  callModel: (model: string, timeoutMs: number) => Promise<T>,
+  callModel: (model: string, timeoutMs: number, modelIdx: number) => Promise<T>,
   deps: ModelChainDeps,
   /** 구조화 로그(AI_QUALITY_GATE_FAIL/AI_SECTION_GENERATION_PENDING)에 붙일 문맥 — 없으면 로그에 "?"로 표시 */
   logContext?: AIQualityLogContext
@@ -505,7 +882,7 @@ export async function runModelChain<T>(
       }
 
       try {
-        const result = await callModel(currentModel, timeout);
+        const result = await callModel(currentModel, timeout, modelIdx);
         return { result, usedModel: currentModel };
       } catch (err) {
         lastErr = err;
@@ -555,7 +932,13 @@ async function callWithFallback(
   maxTokens: number,
   temperature?: number,
   validate?: ContentValidator,
-  logContext?: AIQualityLogContext
+  logContext?: AIQualityLogContext,
+  /** 지정하면 이 배열을 체인으로 쓴다(플랜별 라우팅) — 없으면 model+전역 FALLBACK_MODELS */
+  modelChain?: string[],
+  /** provider 라우팅(sort/max_price)에 쓸 task tier — 미지정 시 balanced */
+  tier: TaskTier = "balanced",
+  /** 체인의 모든 시도(성공/실패)를 호출부에 통보 — ClaudeOptions.onAttempt 참고 */
+  onAttempt?: AIAttemptListener
 ): Promise<{ result: OpenAI.Chat.Completions.ChatCompletion; usedModel: string }> {
   // 이 호출 전체(체인의 모든 모델·재시도·백오프 대기)에 허용된 마감 시각.
   // 남은 시간을 넘기는 시도는 시작하지 않는다 — 함수가 강제 종료되는 것보다
@@ -577,12 +960,26 @@ async function callWithFallback(
   };
 
   const canUseFallback = (process.env.OPENROUTER_API_KEY?.trim() ?? "").startsWith("sk-or-");
-  const chain = canUseFallback ? [model, ...FALLBACK_MODELS] : [model];
+  const chain = !canUseFallback
+    ? [model]
+    : modelChain && modelChain.length > 0
+      ? modelChain
+      : [model, ...FALLBACK_MODELS];
 
   return runModelChain(
     chain,
-    (currentModel, timeout) =>
-      callOnce(currentModel, messages, getMaxTokens(currentModel, maxTokens), temperature, timeout, validate),
+    (currentModel, timeout, modelIdx) =>
+      callOnce(
+        currentModel,
+        messages,
+        getMaxTokens(currentModel, maxTokens),
+        temperature,
+        timeout,
+        validate,
+        tier,
+        modelIdx,
+        onAttempt
+      ),
     { remainingMs, attemptTimeout, sleep },
     logContext
   );
@@ -612,17 +1009,21 @@ export async function generateText(
     ...messages.map((m) => ({ role: m.role, content: m.content })),
   ];
 
-  const maxTokens = getMaxTokens(MODEL, options.maxTokens);
+  const effectivePrimary = options.modelChain?.[0] || MODEL;
+  const maxTokens = getMaxTokens(effectivePrimary, options.maxTokens);
   const { result, usedModel } = await callWithFallback(
-    MODEL,
+    effectivePrimary,
     builtMessages,
     maxTokens,
     temperature,
     options.validate,
-    options.logContext
+    options.logContext,
+    options.modelChain,
+    options.taskTier ?? "balanced",
+    options.onAttempt
   );
 
-  if (usedModel !== MODEL) {
+  if (usedModel !== effectivePrimary) {
     console.log(`[AI] 실제 사용 모델: ${usedModel}`);
   }
 

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { generateText, isAIConfigured } from "@/lib/claude";
+import { generateText, isAIConfigured, CHEAP_MODEL_CHAIN } from "@/lib/claude";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import {
   getUserTeamContext,
@@ -114,7 +114,7 @@ BIO | IT | DEEPTECH | MANUFACTURING | CONTENT | FINTECH | CONSUMER | CLIMATE | G
   try {
     const result = await generateText(
       [{ role: "user", content: prompt }],
-      { maxTokens: 200 }
+      { maxTokens: 200, modelChain: CHEAP_MODEL_CHAIN, taskTier: "cheap" }
     );
 
     // Extract JSON from response

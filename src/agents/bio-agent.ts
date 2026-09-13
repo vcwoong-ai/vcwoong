@@ -1,5 +1,5 @@
 import { AgentType, DealSector, SectionKey } from "@prisma/client";
-import { BaseAgent, AgentInput } from "./base-agent";
+import { BaseAgent, AgentInput, resolveTaskTierForSection } from "./base-agent";
 import { generateText } from "@/lib/claude";
 import { getSystemPrompt } from "@/prompts/system-prompts";
 import { GenerationResult } from "@/types";
@@ -94,6 +94,9 @@ export class BioAgent extends BaseAgent {
       systemPrompt,
       maxTokens: 4096,
       temperature: 0.35,
+      modelChain: input.modelChain,
+      taskTier: resolveTaskTierForSection(OVERVIEW_SECTION),
+      onAttempt: input.onAttempt,
     });
     return {
       sectionKey: OVERVIEW_SECTION,
@@ -201,7 +204,14 @@ ${documentContext}${externalContext}
 
     const result = await generateText(
       [{ role: "user", content: userPrompt }],
-      { systemPrompt, maxTokens: 4096, temperature: 0.35 }
+      {
+        systemPrompt,
+        maxTokens: 4096,
+        temperature: 0.35,
+        modelChain: input.modelChain,
+        taskTier: resolveTaskTierForSection(SectionKey.PRODUCT_TECHNOLOGY),
+        onAttempt: input.onAttempt,
+      }
     );
 
     return { sectionKey: SectionKey.PRODUCT_TECHNOLOGY, content: result.content, tokensUsed: result.inputTokens + result.outputTokens, inputTokens: result.inputTokens, outputTokens: result.outputTokens, modelUsed: result.usedModel };
@@ -260,7 +270,14 @@ ${documentContext}${rnpvContext}${externalContext}
 
     const result = await generateText(
       [{ role: "user", content: userPrompt }],
-      { systemPrompt, maxTokens: 4096, temperature: 0.35 }
+      {
+        systemPrompt,
+        maxTokens: 4096,
+        temperature: 0.35,
+        modelChain: input.modelChain,
+        taskTier: resolveTaskTierForSection(SectionKey.VALUATION),
+        onAttempt: input.onAttempt,
+      }
     );
 
     return { sectionKey: SectionKey.VALUATION, content: result.content, tokensUsed: result.inputTokens + result.outputTokens, inputTokens: result.inputTokens, outputTokens: result.outputTokens, modelUsed: result.usedModel };
@@ -304,7 +321,14 @@ ${documentContext}${externalContext}
 
     const result = await generateText(
       [{ role: "user", content: userPrompt }],
-      { systemPrompt, maxTokens: 4096, temperature: 0.35 }
+      {
+        systemPrompt,
+        maxTokens: 4096,
+        temperature: 0.35,
+        modelChain: input.modelChain,
+        taskTier: resolveTaskTierForSection(SectionKey.MARKET_ANALYSIS),
+        onAttempt: input.onAttempt,
+      }
     );
 
     return { sectionKey: SectionKey.MARKET_ANALYSIS, content: result.content, tokensUsed: result.inputTokens + result.outputTokens, inputTokens: result.inputTokens, outputTokens: result.outputTokens, modelUsed: result.usedModel };
@@ -350,7 +374,14 @@ ${documentContext}${externalContext}
 
     const result = await generateText(
       [{ role: "user", content: userPrompt }],
-      { systemPrompt, maxTokens: 4096, temperature: 0.35 }
+      {
+        systemPrompt,
+        maxTokens: 4096,
+        temperature: 0.35,
+        modelChain: input.modelChain,
+        taskTier: resolveTaskTierForSection(SectionKey.RISK_ANALYSIS),
+        onAttempt: input.onAttempt,
+      }
     );
 
     return { sectionKey: SectionKey.RISK_ANALYSIS, content: result.content, tokensUsed: result.inputTokens + result.outputTokens, inputTokens: result.inputTokens, outputTokens: result.outputTokens, modelUsed: result.usedModel };
