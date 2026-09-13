@@ -8,8 +8,17 @@ import {
   formatSharedFactsForPrompt,
 } from "@/lib/shared-facts";
 import { evaluateReport } from "@/lib/report-quality";
-import { REQUEST_TIMEOUT_MS, envDurationMs, MODEL, resolveModelChainForTier } from "@/lib/claude";
+import {
+  REQUEST_TIMEOUT_MS,
+  envDurationMs,
+  MODEL,
+  resolveModelChainForTier,
+  isPaidPlanKey,
+  type AIAttemptRecord,
+} from "@/lib/claude";
 import { getUserPlanKey } from "@/lib/subscription";
+import { resolveTaskTierForSection } from "@/agents/base-agent";
+import { recordAIAttempts } from "@/lib/usage-log";
 
 export interface DealForGeneration {
   id: string;
@@ -179,12 +188,15 @@ export async function generateSectionsAsync(
     const factsBlock = formatSharedFactsForPrompt(sharedFacts);
     const priorSummaries: string[] = [];
 
-    // Cost-aware Model Router(AI API 원가 최적화) — 사용자 플랜을 한 번만
-    // 조회해 이 보고서의 모든 섹션에 동일하게 적용한다. userId를 못 받은
-    // 경우(구독 정보 조회 불가)는 안전한 방향(FREE 체인)으로 fail-safe한다
-    // — 실수로 비싼 모델 쪽으로 새지 않는다.
+    // Cost-aware Model Router(AI API 원가 최적화) — 사용자 플랜은 이
+    // 보고서 전체에서 한 번만 조회한다(섹션마다 다시 조회할 이유가 없음).
+    // userId를 못 받은 경우(구독 정보 조회 불가)는 안전한 방향(FREE 체인)으로
+    // fail-safe한다 — 실수로 비싼 모델 쪽으로 새지 않는다.
+    //
+    // 모델 체인은 섹션마다 다시 계산한다(3-tier Cost-Performance Model
+    // Router) — 같은 PAID 사용자라도 투자의견/밸류에이션(premium)과 나머지
+    // 기본 섹션(balanced)은 다른 모델 풀·provider 가격 정책을 쓴다.
     const planKey = userId ? await getUserPlanKey(userId) : "free";
-    const modelChain = resolveModelChainForTier(planKey);
 
     for (let i = 0; i < sectionKeys.length; i++) {
       const sectionKey = sectionKeys[i];
@@ -194,6 +206,10 @@ export async function generateSectionsAsync(
       const isClosing =
         sectionKey === "OPINION_SUMMARY" ||
         sectionKey === "INVESTMENT_TERMS";
+      const taskTier = resolveTaskTierForSection(sectionKey);
+      const modelChain = resolveModelChainForTier(planKey, taskTier);
+      /** 이 섹션의 모델 체인이 실제로 시도한 것 전부(성공/실패 무관) — recordAIAttempts로 UsageLog에 남긴다 */
+      const attempts: AIAttemptRecord[] = [];
 
       const existingContent = existingByKey.get(sectionKey);
       let result: GenerationResult;
@@ -266,6 +282,7 @@ export async function generateSectionsAsync(
                 .filter(Boolean)
                 .join("\n\n"),
               modelChain,
+              onAttempt: (a) => attempts.push(a),
             },
             sectionKey
           );
@@ -279,6 +296,21 @@ export async function generateSectionsAsync(
               `duration=${((Date.now() - startedAt) / 1000).toFixed(1)}s success=false ` +
               `elapsed=${elapsedSec()}s error=${err instanceof Error ? err.constructor.name : "Error"}`
           );
+          // 섹션 전체가 실패해도 그 전까지의 시도(품질 게이트 실패 등)는
+          // 이미 실제 API 호출·토큰 소모가 일어난 뒤다 — 최종 실패라고
+          // 비용 집계에서 빠지면 안 된다.
+          if (userId) {
+            recordAIAttempts({
+              userId,
+              dealId: deal.id,
+              reportId,
+              agentType,
+              sectionKey,
+              userTier: isPaidPlanKey(planKey) ? "paid" : "free",
+              taskTier,
+              attempts,
+            });
+          }
           throw err;
         }
 
@@ -305,24 +337,22 @@ export async function generateSectionsAsync(
           },
         });
 
-        if (userId && result.tokensUsed > 0) {
-          prisma.usageLog
-            .create({
-              data: {
-                userId,
-                dealId: deal.id,
-                reportId,
-                agentType,
-                sectionKey: result.sectionKey,
-                model: result.modelUsed ?? "unknown",
-                // 프로바이더가 보고한 실측값을 그대로 쓴다. 예전엔 합계에
-                // 70/30을 곱한 추정치를 넣어 사용량 통계가 실제와 달랐다.
-                inputTokens: result.inputTokens ?? 0,
-                outputTokens: result.outputTokens ?? 0,
-                totalTokens: result.tokensUsed,
-              },
-            })
-            .catch(() => {});
+        // 시도 하나하나(성공 직전에 실패했던 fallback 전환 포함)를 전부
+        // UsageLog에 남긴다 — "최종 성공 모델 1줄"만 남기면 fallback
+        // 과정에서 실패한 시도(이미 API 호출·토큰이 소모된)의 비용이
+        // 누락된다. attempts가 비어 있으면(데모 모드 등 실제 호출이 없었던
+        // 경우) 아무것도 쓰지 않는다.
+        if (userId) {
+          recordAIAttempts({
+            userId,
+            dealId: deal.id,
+            reportId,
+            agentType,
+            sectionKey: result.sectionKey,
+            userTier: isPaidPlanKey(planKey) ? "paid" : "free",
+            taskTier,
+            attempts,
+          });
         }
 
         if (i < sectionKeys.length - 1) {

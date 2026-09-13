@@ -383,6 +383,18 @@ model UsageLog {
   inputTokens  Int         @default(0)
   outputTokens Int         @default(0)
   totalTokens  Int         @default(0)
+  /// 이 호출을 실제로 처리한 provider(OpenRouter 응답 기준, 확인 안 되면 null — 지어내지 않음)
+  provider      String?
+  /// 이 호출 1회(모델 체인의 시도 하나)에 걸린 시간(ms)
+  durationMs    Int?
+  /// 체인 내 시도 위치(0=primary, 1 이상=fallback) — "몇 번째 시도였는가"
+  retryCount    Int?
+  /// OpenRouter가 응답에 실은 실제 비용(USD) — 가격 정보가 없으면 null(추정하지 않음, 0원이 아님)
+  estimatedCost Float?
+  /// 호출 시점의 구독 플랜 축(free/paid) — Cost-aware Model Router 진단용
+  userTier      String?
+  /// 호출 시점의 task tier(cheap/balanced/premium) — 3-tier Cost-Performance Model Router 진단용
+  taskTier      String?
   createdAt    DateTime    @default(now())
 
   user User @relation(fields: [userId], references: [id])

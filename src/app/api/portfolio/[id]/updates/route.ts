@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { z } from "zod";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { generateText } from "@/lib/claude";
+import { generateText, CHEAP_MODEL_CHAIN } from "@/lib/claude";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { comparePeriod, currentPeriod } from "@/lib/portfolio";
 import {
@@ -120,6 +120,8 @@ ${msLines || "등록된 마일스톤 없음"}
     const result = await generateText([{ role: "user", content: prompt }], {
       maxTokens: 1500,
       temperature: 0.3,
+      modelChain: CHEAP_MODEL_CHAIN,
+      taskTier: "cheap",
     });
 
     const parsedOut = parseSections(result.content);

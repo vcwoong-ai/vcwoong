@@ -8,7 +8,7 @@
  *채우는 것보다 안전).
  */
 
-import { generateText, envDurationMs } from "@/lib/claude";
+import { generateText, envDurationMs, CHEAP_MODEL_CHAIN } from "@/lib/claude";
 
 const DOC_CONTEXT_CHARS = 8000;
 /**
@@ -97,7 +97,13 @@ ${context}
   try {
     const result = await generateText(
       [{ role: "user", content: prompt }],
-      { systemPrompt, maxTokens: 500, temperature: 0.2 }
+      {
+        systemPrompt,
+        maxTokens: 500,
+        temperature: 0.2,
+        modelChain: CHEAP_MODEL_CHAIN,
+        taskTier: "cheap",
+      }
     );
 
     // 데모 모드(API 키 미설정)의 목 응답은 이 추출 프롬프트 형식을 모르고

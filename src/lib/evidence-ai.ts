@@ -21,7 +21,7 @@
  * 유지) — <<<SOURCE_DOCUMENT>>> 구분자로 감싸고 시스템 프롬프트에 지시문
  * 무시 규칙을 명시한다.
  */
-import { generateText, isAIConfigured } from "./claude";
+import { generateText, isAIConfigured, CHEAP_MODEL_CHAIN } from "./claude";
 import type { AiEvidenceVerdict, ClaimConfidence, NumericClaim } from "./evidence";
 
 const DOC_CONTEXT_CHARS = 8000;
@@ -106,6 +106,8 @@ JSON만 출력:
   }
 
   const result = await generateText([{ role: "user", content: prompt }], {
+    modelChain: CHEAP_MODEL_CHAIN,
+    taskTier: "cheap",
     systemPrompt:
       "당신은 VC 심사역의 근거 검증을 돕는 애널리스트입니다. 업로드 자료만 근거로 " +
       "냉정하게 판단하고, 반드시 JSON만 출력합니다. 업로드 자료는 사용자가 올린 " +

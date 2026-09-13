@@ -1,5 +1,5 @@
 import { PortfolioStatus } from "@prisma/client";
-import { generateText } from "@/lib/claude";
+import { generateText, type TaskTier, type AIAttemptListener } from "@/lib/claude";
 import {
   calculatePortfolioMetrics,
   comparePeriod,
@@ -175,6 +175,16 @@ export async function generateLpNarrative(params: {
   companies: LpCompanyInput[];
   period: string;
   computed: LpReportComputed;
+  /**
+   * Cost-aware Model Router — 호출부(lp-report/route.ts)가 사용자 플랜을
+   * 보고 미리 계산해 넘긴다. 없으면 claude.ts의 기존 기본 체인을 쓴다.
+   * 이 route는 이미 requireFeature(..., "lpReporting")로 FREE 플랜 접근
+   * 자체를 막고 있지만(plans.ts: free는 lpReporting 없음), PAID 안에서도
+   * BALANCED/PREMIUM 구분을 일관되게 적용하기 위해 넘긴다.
+   */
+  modelChain?: string[];
+  taskTier?: TaskTier;
+  onAttempt?: AIAttemptListener;
 }): Promise<{ sections: LpReportSections; modelUsed: string }> {
   const { fund, companies, period, computed } = params;
   const m = computed.metrics;
@@ -229,6 +239,9 @@ ${portfolioBlock(companies) || "등록된 포트폴리오사 없음"}
 MOIC/TVPI/DPI/RVPI 등 업계 표준 용어를 정확히 사용하고, 제공된 수치만 인용합니다.`,
     maxTokens: 4096,
     temperature: 0.3,
+    modelChain: params.modelChain,
+    taskTier: params.taskTier ?? "balanced",
+    onAttempt: params.onAttempt,
   });
 
   return {
