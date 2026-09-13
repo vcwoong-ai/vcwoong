@@ -47,6 +47,8 @@ function dim(
     claimsSupported: confidence === "UNSUPPORTED" ? 0 : 2,
     keyEvidence: [],
     unsupportedClaims: [],
+    decisionImpact: "MEDIUM",
+    uncertaintyNote: confidence === "HIGH" ? "" : "테스트용 불확실성 설명",
     ...overrides,
   };
 }
@@ -310,6 +312,49 @@ function testCompatibilityWithMissingEvidenceAssessment() {
   console.log("✅ evidenceAssessment가 없는 기존 DealScore 레코드도 안전하게(빈 배열로) 처리");
 }
 
+/** 16. (Phase 4) decisionImpact가 Key Strength/Risk 카드까지 그대로 전달됨 */
+function testDecisionImpactPassesThroughToCards() {
+  const a = assessment({
+    product: dim("product", 85, "UNSUPPORTED", { decisionImpact: "HIGH", unsupportedClaims: [{ raw: "근거 없는 주장" }] }),
+    marketSize: dim("marketSize", 80, "HIGH", { decisionImpact: "LOW" }),
+  }, ["UNSUPPORTED_KEY_CLAIM", "HIGH_SCORE_LOW_EVIDENCE"]);
+
+  const risks = selectKeyRisks(a, {}, 10);
+  const productRisk = risks.find((r) => r.dimension === "product");
+  assert(Boolean(productRisk), "product 리스크 카드가 안 만들어짐");
+  assert(productRisk!.decisionImpact === "HIGH", `product 리스크의 decisionImpact가 HIGH로 전달되지 않음: ${productRisk!.decisionImpact}`);
+
+  const strengths = selectKeyStrengths(a, {}, 10);
+  const marketStrength = strengths.find((s) => s.dimension === "marketSize");
+  assert(Boolean(marketStrength), "marketSize 강점 카드가 안 만들어짐");
+  assert(marketStrength!.decisionImpact === "LOW", `marketSize 강점의 decisionImpact가 LOW로 전달되지 않음: ${marketStrength!.decisionImpact}`);
+  console.log("✅ 16. decisionImpact가 Key Strength/Risk 카드까지 그대로 전달됨");
+}
+
+/** 17. (Phase 4) Phase 4 이전에 저장된 evidenceAssessment(dimension에 decisionImpact/uncertaintyNote 없음)도 죽지 않음 */
+function testCompatibilityWithPrePhase4Dimensions() {
+  const legacyDim = {
+    dimension: "product" as const,
+    score: 80,
+    confidence: "HIGH" as const,
+    evidenceCoverage: 100,
+    claimsTotal: 2,
+    claimsSupported: 2,
+    keyEvidence: [],
+    unsupportedClaims: [],
+    // decisionImpact/uncertaintyNote 없음 — Phase 4 배포 전에 저장된 실제 레코드 형태
+  };
+  const a = assessment({ product: legacyDim as unknown as ReturnType<typeof dim> });
+  const strengths = selectKeyStrengths(a, {}, 10);
+  const productStrength = strengths.find((s) => s.dimension === "product");
+  assert(Boolean(productStrength), "구버전(decisionImpact 없는) 레코드에서 강점 카드 생성 자체가 실패함");
+  assert(
+    productStrength!.decisionImpact === undefined,
+    "구버전 레코드인데 decisionImpact가 임의의 값으로 채워짐(undefined여야 함)"
+  );
+  console.log("✅ 17. decisionImpact/uncertaintyNote가 없는 Phase 4 이전 저장분도 예외 없이 처리(undefined로 통과)");
+}
+
 async function main() {
   console.log("\n=== DealMind IC Review Workspace 계산 로직 테스트 ===\n");
   testHighScoreHighConfidenceIsStrong();
@@ -327,6 +372,8 @@ async function main() {
   testNoDuplicateDimensionInRisks();
   testRecommendationMapping();
   testCompatibilityWithMissingEvidenceAssessment();
+  testDecisionImpactPassesThroughToCards();
+  testCompatibilityWithPrePhase4Dimensions();
   console.log("\n✅ IC Review Workspace 계산 로직 테스트 통과\n");
 }
 

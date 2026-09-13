@@ -17,6 +17,8 @@ import { SCORE_DIMENSIONS, scoreLabel, type ScoreDimensionKey } from "@/lib/deal
 
 type ScoreConfidence = "HIGH" | "MEDIUM" | "LOW" | "UNSUPPORTED" | "NO_EVIDENCE";
 
+type DecisionImpact = "HIGH" | "MEDIUM" | "LOW";
+
 interface DimensionEvidenceAssessment {
   dimension: ScoreDimensionKey;
   score: number;
@@ -25,6 +27,9 @@ interface DimensionEvidenceAssessment {
   claimsTotal: number;
   claimsSupported: number;
   keyEvidence: Array<{ raw: string; confidence: string; documentName?: string; location?: string }>;
+  /** 옵셔널 — Phase 4 이전에 저장된 기존 레코드에는 없을 수 있다 */
+  decisionImpact?: DecisionImpact;
+  uncertaintyNote?: string;
 }
 
 interface ScoreEvidenceAssessment {
@@ -209,12 +214,17 @@ export function DealScoreRadar({
               const dim = assessment?.dimensions?.[d.key];
               const dimMeta = dim ? CONFIDENCE_META[dim.confidence] : null;
               return (
-                <li key={d.key} className="truncate">
+                <li key={d.key} className="truncate" title={dim?.uncertaintyNote || undefined}>
                   <span className="text-gray-700 font-medium">{d.label}</span>{" "}
                   {score[d.key]}점
                   {dimMeta && (
                     <span className={`ml-1 rounded border px-1 py-0 text-[10px] ${dimMeta.className}`}>
                       {dim!.evidenceCoverage != null ? `근거 ${dim!.evidenceCoverage}%` : dimMeta.label}
+                    </span>
+                  )}
+                  {dim?.decisionImpact === "HIGH" && (
+                    <span className="ml-1 rounded border border-red-200 bg-red-50 text-red-700 px-1 py-0 text-[10px]">
+                      판단 영향 높음
                     </span>
                   )}
                   {score.rationale?.[d.key] && ` — ${score.rationale[d.key]}`}
