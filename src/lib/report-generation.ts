@@ -10,6 +10,7 @@ import {
 import { evaluateReport } from "@/lib/report-quality";
 import { REQUEST_TIMEOUT_MS, envDurationMs, MODEL, resolveModelChainForTier } from "@/lib/claude";
 import { getUserPlanKey } from "@/lib/subscription";
+import { resolveTaskTierForSection } from "@/agents/base-agent";
 
 export interface DealForGeneration {
   id: string;
@@ -179,12 +180,15 @@ export async function generateSectionsAsync(
     const factsBlock = formatSharedFactsForPrompt(sharedFacts);
     const priorSummaries: string[] = [];
 
-    // Cost-aware Model Router(AI API 원가 최적화) — 사용자 플랜을 한 번만
-    // 조회해 이 보고서의 모든 섹션에 동일하게 적용한다. userId를 못 받은
-    // 경우(구독 정보 조회 불가)는 안전한 방향(FREE 체인)으로 fail-safe한다
-    // — 실수로 비싼 모델 쪽으로 새지 않는다.
+    // Cost-aware Model Router(AI API 원가 최적화) — 사용자 플랜은 이
+    // 보고서 전체에서 한 번만 조회한다(섹션마다 다시 조회할 이유가 없음).
+    // userId를 못 받은 경우(구독 정보 조회 불가)는 안전한 방향(FREE 체인)으로
+    // fail-safe한다 — 실수로 비싼 모델 쪽으로 새지 않는다.
+    //
+    // 모델 체인은 섹션마다 다시 계산한다(3-tier Cost-Performance Model
+    // Router) — 같은 PAID 사용자라도 투자의견/밸류에이션(premium)과 나머지
+    // 기본 섹션(balanced)은 다른 모델 풀·provider 가격 정책을 쓴다.
     const planKey = userId ? await getUserPlanKey(userId) : "free";
-    const modelChain = resolveModelChainForTier(planKey);
 
     for (let i = 0; i < sectionKeys.length; i++) {
       const sectionKey = sectionKeys[i];
@@ -194,6 +198,7 @@ export async function generateSectionsAsync(
       const isClosing =
         sectionKey === "OPINION_SUMMARY" ||
         sectionKey === "INVESTMENT_TERMS";
+      const modelChain = resolveModelChainForTier(planKey, resolveTaskTierForSection(sectionKey));
 
       const existingContent = existingByKey.get(sectionKey);
       let result: GenerationResult;

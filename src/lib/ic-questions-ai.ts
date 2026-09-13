@@ -15,7 +15,7 @@
  * 실패 시(AI 미설정/호출 실패/JSON 파싱 실패) deterministic 문장을 그대로
  * 반환한다 — IC Questions는 AI 없이도 완결된 결과여야 한다.
  */
-import { generateText, isAIConfigured } from "./claude";
+import { generateText, isAIConfigured, CHEAP_MODEL_CHAIN } from "./claude";
 import type { IcQuestion } from "./ic-questions";
 
 const MAX_REFINE_TARGETS = 10;
@@ -99,6 +99,8 @@ ${buildCandidateBlock(targets)}
   let result: { content: string };
   try {
     result = await generateText([{ role: "user", content: prompt }], {
+      modelChain: CHEAP_MODEL_CHAIN,
+      taskTier: "cheap",
       systemPrompt:
         "당신은 VC 투자심의위원회 자료를 다듬는 애널리스트입니다. 주어진 질문 " +
         "후보의 문장만 자연스럽게 다듬고, 새로운 사실이나 숫자를 만들어내지 " +

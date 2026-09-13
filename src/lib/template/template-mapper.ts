@@ -10,7 +10,7 @@
  */
 
 import { SectionKey } from "@prisma/client";
-import { generateText } from "@/lib/claude";
+import { generateText, CHEAP_MODEL_CHAIN } from "@/lib/claude";
 import type { TemplateSection } from "./template-parser";
 
 export interface SectionMapping {
@@ -139,7 +139,7 @@ JSON 형식으로만 응답하세요:
 
       const result = await generateText(
         [{ role: "user", content: prompt }],
-        { maxTokens: 1000 }
+        { maxTokens: 1000, modelChain: CHEAP_MODEL_CHAIN, taskTier: "cheap" }
       );
 
       // JSON 파싱

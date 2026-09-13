@@ -152,11 +152,62 @@ const KNOWN_PAID_PLAN_KEYS = new Set([
  * 구독 조회가 깨졌을 때 정확히 반대 방향(저비용이 아니라 고비용)으로
  * 새어버린다.
  */
-export function resolveModelChainForTier(planKey: string | null | undefined): string[] {
-  if (planKey && KNOWN_PAID_PLAN_KEYS.has(planKey)) {
-    return [MODEL, ...FALLBACK_MODELS];
+/**
+ * Task 단위 비용 등급(요청서 "Cost-Performance Model Router"). 플랜 등급
+ * (FREE/PAID)과는 다른 축이다 — 같은 PAID 사용자라도 섹션 성격에 따라
+ * 쓸 모델 풀이 다르다:
+ *   - cheap: 요약·메타데이터 추출·간단한 IC 초안 다듬기 등 최종 투자
+ *     판단에 직접 쓰이지 않는 보조 작업(ic-questions-ai.ts, evidence-ai.ts,
+ *     deep-dive.ts, deal-scoring.ts, sourcing.ts, template 추출 등)
+ *   - balanced: 기본 보고서 섹션(투자개요/제품기술/시장분석/재무현황/
+ *     리스크/투자조건/별첨 등) — 기존 PAID 기본 체인과 동일
+ *   - premium: 투자의견(OPINION_SUMMARY: Investment Thesis/Bull-Base-Bear/
+ *     Why Not Invest)과 복잡한 밸류에이션(VALUATION) — 최종 투자 판단에
+ *     가장 직접적으로 쓰이는 섹션만 해당
+ */
+export type TaskTier = "cheap" | "balanced" | "premium";
+
+/**
+ * PREMIUM 전용 모델 체인 — 미설정 시 기존 PAID 기본 체인(MODEL+FALLBACK_MODELS)과
+ * 동일하다(하위호환: 이 env가 없으면 premium/balanced 구분이 모델 목록
+ * 수준에서는 동일하고, provider 라우팅 설정만 갈릴 수 있다).
+ */
+function resolvePremiumModelChain(): string[] {
+  const raw = process.env.AI_PREMIUM_MODELS?.trim();
+  if (raw) {
+    const parsed = parseModelList(raw);
+    if (parsed.length > 0) return parsed.slice(0, MAX_FALLBACK_MODELS + 1);
   }
-  return [FREE_TIER_MODEL, ...FREE_TIER_FALLBACK_MODELS];
+  return [MODEL, ...FALLBACK_MODELS];
+}
+
+export const PREMIUM_MODELS: string[] = resolvePremiumModelChain();
+
+/** CHEAP 작업 전용 모델 체인 — FREE 플랜 체인과 동일한 저가 모델을 재사용한다(불필요한 신규 모델 목록을 늘리지 않음). */
+export const CHEAP_MODEL_CHAIN: string[] = [FREE_TIER_MODEL, ...FREE_TIER_FALLBACK_MODELS];
+
+/**
+ * Cost-aware Model Router(요청서 item 17, 이후 3-tier로 확장) — 사용자
+ * 플랜 키 + task tier를 보고 이번 generateText 호출에 쓸 전체 모델 체인
+ * ([primary, ...fallbacks])을 결정한다.
+ *
+ * "free가 아니면 전부 유료로 본다"가 아니라 실제 유료 플랜 키
+ * (KNOWN_PAID_PLAN_KEYS)에 정확히 속할 때만 balanced/premium 체인을 준다 —
+ * planKey를 못 읽었거나(구독 정보 누락) 오타·알 수 없는 값이면 항상
+ * FREE(=cheap) 체인으로 fail-safe한다. FREE 플랜은 taskTier가 premium이어도
+ * premium 체인으로 올라가지 않는다 — "이 섹션이 중요하다"는 것이 "이
+ * 사용자에게 비싼 모델을 써도 된다"는 뜻은 아니다(클라이언트가 taskTier를
+ * 조작할 방법도 없지만, 서버가 스스로에게도 이 원칙을 적용한다).
+ */
+export function resolveModelChainForTier(
+  planKey: string | null | undefined,
+  taskTier: TaskTier = "balanced"
+): string[] {
+  const isPaid = Boolean(planKey && KNOWN_PAID_PLAN_KEYS.has(planKey));
+  if (!isPaid) return CHEAP_MODEL_CHAIN;
+  if (taskTier === "premium") return PREMIUM_MODELS;
+  if (taskTier === "cheap") return CHEAP_MODEL_CHAIN;
+  return [MODEL, ...FALLBACK_MODELS];
 }
 
 function getMaxTokens(_model: string, requested?: number): number {
@@ -243,6 +294,77 @@ export const AI_CALL_BUDGET_MS = envDurationMs(
   REQUEST_TIMEOUT_MS + FALLBACK_REQUEST_TIMEOUT_MS * FALLBACK_MODELS.length
 );
 
+export interface OpenRouterProviderPreferences {
+  sort?: "price" | "throughput" | "latency";
+  allow_fallbacks?: boolean;
+  max_price?: { prompt: number; completion: number };
+}
+
+const VALID_ROUTING_SORTS = new Set(["price", "throughput", "latency"]);
+
+/** "prompt,completion" ($/1M 토큰) 형식을 파싱한다 — 형식이 틀리면 cap 없이 진행(요청 실패보다 안전) */
+export function parseMaxPrice(raw: string | undefined): { prompt: number; completion: number } | undefined {
+  const trimmed = raw?.trim();
+  if (!trimmed) return undefined;
+  const parts = trimmed.split(",").map((s) => Number(s.trim()));
+  if (parts.length !== 2 || parts.some((n) => !Number.isFinite(n) || n < 0)) {
+    console.warn(`[AI] max_price 환경변수 형식 오류(무시, cap 없이 진행): "${raw}"`);
+    return undefined;
+  }
+  return { prompt: parts[0], completion: parts[1] };
+}
+
+/**
+ * OpenRouter의 provider 선택 파라미터(공식 문서
+ * https://openrouter.ai/docs/guides/routing/provider-selection) — 이
+ * 세션에서는 openrouter.ai로의 아웃바운드 접속이 조직 egress 정책으로
+ * 차단돼 있어(WebFetch: EGRESS_BLOCKED) 문서를 직접 열어 확인하지 못했다.
+ * 대신 OpenRouter 공식 블로그·서드파티 미러 여러 곳으로 교차 확인된
+ * 필드만 구현한다:
+ *   - sort: "price" | "throughput" | "latency" (문자열)
+ *   - allow_fallbacks: boolean(기본 true — provider 하나가 막히면 다른
+ *     provider로 자동 전환, OpenRouter 자체 문서 기본값과 동일)
+ *   - max_price: { prompt, completion } — $/1M 토큰. 이 가격을 넘는
+ *     provider가 없으면 요청 자체를 거절한다(조용히 비싼 provider로
+ *     새지 않는다)
+ *
+ * 요청서에 있던 "provider.partition: 'none'"은 구현하지 않았다 — 교차
+ * 확인한 자료들이 이를 provider 최상위 필드가 아니라 sort 하위 구조
+ * (`sort: {by, partition}`)로 설명해 요청서 표기와 어긋났고, 공식 문서로
+ * 직접 검증할 수 없는 상태에서 틀린 shape를 보내면 최악의 경우 400으로
+ * 보고서 생성 전체가 실패할 위험이 있다 — 확인 안 된 필드를 프로덕션
+ * 요청 바디에 넣기보다 비워둔다.
+ *
+ * sort는 모델을 바꾸지 않는다 — 이미 정해진 model(들) 뒤에서 그 모델을
+ * 서빙하는 여러 provider 중 우선순위만 정한다(예: Claude Sonnet을 서빙하는
+ * provider가 여럿이면 그중 가장 싼 곳부터 시도). 그래서 premium tier에도
+ * 안전하게 적용할 수 있다 — 품질에 영향을 주는 "어떤 모델을 쓰는가"가
+ * 아니라 "같은 모델을 어디서 싸게 받는가"만 바꾼다.
+ */
+export function buildProviderPreferences(tier: TaskTier): OpenRouterProviderPreferences | undefined {
+  const sortEnv = (process.env.AI_ROUTING_SORT ?? "price").trim();
+  if (!sortEnv) return undefined; // 빈 값으로 명시하면 provider 라우팅 자체를 끈다
+  if (!VALID_ROUTING_SORTS.has(sortEnv)) {
+    console.warn(`[AI] AI_ROUTING_SORT 값이 올바르지 않음("${sortEnv}") — provider 라우팅 미적용`);
+    return undefined;
+  }
+
+  const maxPriceEnv =
+    tier === "cheap"
+      ? process.env.AI_CHEAP_MAX_PRICE
+      : tier === "premium"
+        ? process.env.AI_PREMIUM_MAX_PRICE
+        : process.env.AI_BALANCED_MAX_PRICE;
+
+  const maxPrice = parseMaxPrice(maxPriceEnv);
+
+  return {
+    sort: sortEnv as "price" | "throughput" | "latency",
+    allow_fallbacks: true,
+    ...(maxPrice ? { max_price: maxPrice } : {}),
+  };
+}
+
 function getClient(timeoutMs: number = REQUEST_TIMEOUT_MS): OpenAI {
   return new OpenAI({
     baseURL: "https://openrouter.ai/api/v1",
@@ -301,6 +423,13 @@ export interface ClaudeOptions {
    * 왔는지(플랜·과금) 전혀 몰라도 된다.
    */
   modelChain?: string[];
+  /**
+   * OpenRouter provider 라우팅(sort/max_price)에 쓸 task tier — 미지정 시
+   * "balanced"(기존 기본 동작과 동일). modelChain(어떤 모델을 시도하는가)과
+   * 독립적인 축이다: modelChain은 호출부가 이미 골라둔 모델 목록이고,
+   * taskTier는 그 모델들을 어떤 provider 가격 정책으로 부를지만 정한다.
+   */
+  taskTier?: TaskTier;
 }
 
 export interface GenerateTextResult {
@@ -384,10 +513,12 @@ async function callOnce(
   maxTokens: number,
   temperature?: number,
   timeoutMs?: number,
-  validate?: ContentValidator
+  validate?: ContentValidator,
+  tier: TaskTier = "balanced"
 ): Promise<OpenAI.Chat.Completions.ChatCompletion> {
   const effectiveTimeout = timeoutMs ?? REQUEST_TIMEOUT_MS;
   const client = getClient(effectiveTimeout);
+  const provider = buildProviderPreferences(tier);
   // OpenAI SDK의 client-level timeout 옵션에만 의존하지 않는다 — 실제
   // 프로덕션 타임아웃 장애에서, 재시도/폴백 로직이 남기는 경고 로그가 전혀
   // 없이 함수가 통째로 60초 만에 강제 종료된 사례가 있었다. SDK 옵션이
@@ -401,6 +532,11 @@ async function callOnce(
       messages,
       stream: false,
       ...(typeof temperature === "number" ? { temperature } : {}),
+      // provider는 OpenAI Chat Completions 표준 필드가 아니라 OpenRouter
+      // 전용 확장이다 — 이 파일이 이미 쓰는 타입 캐스트(아래 as Parameters<...>)로
+      // 얹는다. 모델을 바꾸지 않고 같은 모델을 서빙하는 provider 중
+      // 우선순위만 정하므로, 실패 시 기존 재시도/폴백 로직과 독립적으로 동작한다.
+      ...(provider ? { provider } : {}),
     } as Parameters<OpenAI["chat"]["completions"]["create"]>[0],
     { signal: AbortSignal.timeout(effectiveTimeout) }
   )) as OpenAI.Chat.Completions.ChatCompletion;
@@ -630,7 +766,9 @@ async function callWithFallback(
   validate?: ContentValidator,
   logContext?: AIQualityLogContext,
   /** 지정하면 이 배열을 체인으로 쓴다(플랜별 라우팅) — 없으면 model+전역 FALLBACK_MODELS */
-  modelChain?: string[]
+  modelChain?: string[],
+  /** provider 라우팅(sort/max_price)에 쓸 task tier — 미지정 시 balanced */
+  tier: TaskTier = "balanced"
 ): Promise<{ result: OpenAI.Chat.Completions.ChatCompletion; usedModel: string }> {
   // 이 호출 전체(체인의 모든 모델·재시도·백오프 대기)에 허용된 마감 시각.
   // 남은 시간을 넘기는 시도는 시작하지 않는다 — 함수가 강제 종료되는 것보다
@@ -661,7 +799,15 @@ async function callWithFallback(
   return runModelChain(
     chain,
     (currentModel, timeout) =>
-      callOnce(currentModel, messages, getMaxTokens(currentModel, maxTokens), temperature, timeout, validate),
+      callOnce(
+        currentModel,
+        messages,
+        getMaxTokens(currentModel, maxTokens),
+        temperature,
+        timeout,
+        validate,
+        tier
+      ),
     { remainingMs, attemptTimeout, sleep },
     logContext
   );
@@ -700,7 +846,8 @@ export async function generateText(
     temperature,
     options.validate,
     options.logContext,
-    options.modelChain
+    options.modelChain,
+    options.taskTier ?? "balanced"
   );
 
   if (usedModel !== effectivePrimary) {

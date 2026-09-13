@@ -15,6 +15,7 @@ import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { buildPriorSectionSummary } from "@/lib/section-context";
 import { resolveModelChainForTier } from "@/lib/claude";
 import { getUserPlanKey } from "@/lib/subscription";
+import { resolveTaskTierForSection } from "@/agents/base-agent";
 import {
   getUserTeamContext,
   reportWriteWhere,
@@ -115,7 +116,7 @@ export async function POST(
       : "";
 
     const planKey = await getUserPlanKey(session.user.id);
-    const modelChain = resolveModelChainForTier(planKey);
+    const modelChain = resolveModelChainForTier(planKey, resolveTaskTierForSection(body.sectionKey));
 
     const agent = getAgent(report.agentType, deal.sector);
     const result = await agent.generateSection(
