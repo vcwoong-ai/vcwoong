@@ -17,6 +17,9 @@ import {
   fundReadWhere,
   permissionDeniedMessage,
 } from "@/lib/team-access";
+import { resolveModelChainForTier, isPaidPlanKey, type AIAttemptRecord } from "@/lib/claude";
+import { getUserPlanKey } from "@/lib/subscription";
+import { recordAIAttempts } from "@/lib/usage-log";
 
 const bodySchema = z.object({
   period: z.string().regex(/^\d{4}Q[1-4]$/).optional(),
@@ -81,12 +84,31 @@ export async function POST(
   };
 
   try {
+    // requireFeature("lpReporting")가 이미 FREE 플랜의 접근 자체를 막고
+    // 있지만(plans.ts: free 플랜엔 lpReporting이 없음), PAID 안에서도
+    // BALANCED/PREMIUM 라우팅·provider 가격 정책을 다른 AI 호출 라우트와
+    // 동일하게 적용한다(defense-in-depth + 일관성).
+    const planKey = await getUserPlanKey(session.user.id);
+    const modelChain = resolveModelChainForTier(planKey, "balanced");
+    const attempts: AIAttemptRecord[] = [];
+
     const computed = computeLpFigures(fundInput, fund.companies);
     const { sections, modelUsed } = await generateLpNarrative({
       fund: fundInput,
       companies: fund.companies,
       period,
       computed,
+      modelChain,
+      taskTier: "balanced",
+      onAttempt: (a) => attempts.push(a),
+    });
+
+    recordAIAttempts({
+      userId: session.user.id,
+      agentType: "GENERAL",
+      userTier: isPaidPlanKey(planKey) ? "paid" : "free",
+      taskTier: "balanced",
+      attempts,
     });
     const content = renderLpMarkdown({
       fund: fundInput,

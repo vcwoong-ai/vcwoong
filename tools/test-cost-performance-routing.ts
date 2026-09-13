@@ -225,7 +225,8 @@ function testReportGenerationWiresPerSectionTier() {
     "report-generation.ts가 섹션별 taskTier를 계산하지 않음(전체 보고서에 단일 체인을 쓰던 이전 구조로 되돌아감)"
   );
   assert(
-    /resolveModelChainForTier\(planKey, resolveTaskTierForSection\(sectionKey\)\)/.test(source),
+    /resolveModelChainForTier\(planKey,\s*taskTier\)/.test(source) &&
+      /const taskTier = resolveTaskTierForSection\(sectionKey\)/.test(source),
     "report-generation.ts가 resolveModelChainForTier를 taskTier 인자와 함께 섹션 루프 안에서 호출하지 않음"
   );
   console.log("✅ K. report-generation.ts: 섹션 루프 안에서 매 섹션마다 taskTier를 다시 계산해 modelChain을 정함(정적 검사)");
@@ -282,6 +283,152 @@ function testNoClientCostPolicyOverridePath() {
   );
 }
 
+/**
+ * Test: FREE + "악의적" request body(모델/provider/tier 필드를 직접 끼워
+ * 넣은 JSON)를 실제 zod 스키마로 parse해도 그 필드들이 조용히 사라진다
+ * (zod의 기본 동작 — object 스키마에 없는 키는 무시된다. .passthrough()를
+ * 쓰지 않는 한 결과 객체에 남지 않는다). 즉 공격자가 body에 어떤 필드를
+ * 끼워 넣어도 서버 코드가 그 필드를 읽을 방법 자체가 없다.
+ */
+function testMaliciousRequestBodyFieldsAreDropped() {
+  const { z } = require("zod") as typeof import("zod");
+  const regenerateSchema = z.object({
+    sectionKey: z.string(),
+    focusNote: z.string().max(800).optional(),
+    qualityIssues: z.array(z.string().max(200)).max(12).optional(),
+  });
+  const malicious = {
+    sectionKey: "OPINION_SUMMARY",
+    model: "anthropic/claude-sonnet-4.5",
+    models: ["anthropic/claude-sonnet-4.5"],
+    provider: { sort: "quality" },
+    tier: "premium",
+    taskTier: "premium",
+    fallback: ["anthropic/claude-sonnet-4.5"],
+  };
+  const parsed = regenerateSchema.parse(malicious);
+  const parsedKeys = Object.keys(parsed);
+  for (const dangerousKey of ["model", "models", "provider", "tier", "taskTier", "fallback"]) {
+    assert(
+      !parsedKeys.includes(dangerousKey),
+      `악의적 body의 "${dangerousKey}" 필드가 zod 파싱 결과에 남음 — 서버 코드가 이걸 읽으면 cost policy 우회 가능`
+    );
+  }
+  console.log("✅ FREE + 악의적 request body(model/models/provider/tier/fallback 끼워넣기) → zod가 전부 조용히 제거, 서버가 읽을 방법 없음");
+}
+
+/**
+ * Test: FREE 사용자가 max_price 관련 env를 흉내내거나(클라이언트는 애초에
+ * 서버 프로세스의 env를 바꿀 수 없지만, "그래도 시도했다"는 가정) provider
+ * 가격 상한을 조작해도 resolveModelChainForTier의 FREE 판정 자체는
+ * max_price와 완전히 독립적이다 — max_price는 provider "가격 상한"일 뿐,
+ * "어떤 모델 목록을 쓸지"와는 다른 함수(buildProviderPreferences)가 담당한다.
+ */
+function testMaxPriceManipulationCannotUpgradeFreeToPremium() {
+  const originalPremiumMax = process.env.AI_PREMIUM_MAX_PRICE;
+  const originalCheapMax = process.env.AI_CHEAP_MAX_PRICE;
+  try {
+    // FREE 사용자가 뭘 어떻게 하든(가정: 서버 env까지 건드렸다고 최악을
+    // 가정해도) resolveModelChainForTier의 결과는 max_price와 무관하다.
+    process.env.AI_PREMIUM_MAX_PRICE = "999999,999999"; // 상한을 터무니없이 높여도
+    process.env.AI_CHEAP_MAX_PRICE = "0,0"; // CHEAP 상한을 0으로 낮춰도
+    const chain = resolveModelChainForTier("free", "premium");
+    assert(
+      JSON.stringify(chain) === JSON.stringify(CHEAP_MODEL_CHAIN),
+      `max_price env 조작 후에도 FREE는 여전히 CHEAP 체인이어야 함: ${chain.join(",")}`
+    );
+  } finally {
+    if (originalPremiumMax === undefined) delete process.env.AI_PREMIUM_MAX_PRICE;
+    else process.env.AI_PREMIUM_MAX_PRICE = originalPremiumMax;
+    if (originalCheapMax === undefined) delete process.env.AI_CHEAP_MAX_PRICE;
+    else process.env.AI_CHEAP_MAX_PRICE = originalCheapMax;
+  }
+  console.log("✅ FREE + max_price 조작 → 여전히 CHEAP 체인(max_price는 provider 가격 상한일 뿐, 모델 목록 선택과 무관한 축)");
+}
+
+/** Test: deal-scoring 라우트가 실제로 resolveModelChainForTier를 거치는지(정적 검사) — PR #77 Final Review의 A) gap 수정 확인 */
+function testDealScoringRouteWiresPlanRouting() {
+  const fs = require("fs") as typeof import("fs");
+  const path = require("path") as typeof import("path");
+  const source = fs.readFileSync(
+    path.resolve(process.cwd(), "src/app/api/deals/[id]/score/route.ts"),
+    "utf-8"
+  );
+  assert(
+    /getUserPlanKey\(session\.user\.id\)/.test(source),
+    "deal score route가 사용자 플랜을 조회하지 않음 — FREE가 여전히 전역 기본(유료) 체인을 씀"
+  );
+  assert(
+    /resolveModelChainForTier\(planKey,\s*"balanced"\)/.test(source),
+    "deal score route가 resolveModelChainForTier를 쓰지 않음"
+  );
+  assert(
+    /generateDealScore\(\s*\{/.test(source) && /modelChain/.test(source),
+    "deal score route가 계산한 modelChain을 generateDealScore에 넘기지 않음"
+  );
+  console.log("✅ deal-scoring 라우트: planKey 조회 → resolveModelChainForTier → generateDealScore로 실제 배선됨(정적 검사)");
+}
+
+/** Test: LP report 라우트가 실제로 resolveModelChainForTier를 거치는지(정적 검사) — PR #77 Final Review의 B) gap 수정 확인 */
+function testLpReportRouteWiresPlanRouting() {
+  const fs = require("fs") as typeof import("fs");
+  const path = require("path") as typeof import("path");
+  const source = fs.readFileSync(
+    path.resolve(process.cwd(), "src/app/api/funds/[id]/lp-report/route.ts"),
+    "utf-8"
+  );
+  assert(
+    /requireFeature\(session\.user\.id,\s*"lpReporting"\)/.test(source),
+    "LP report route의 기존 plan 게이팅(requireFeature)이 사라짐 — FREE가 도달 가능해짐"
+  );
+  assert(
+    /getUserPlanKey\(session\.user\.id\)/.test(source) &&
+      /resolveModelChainForTier\(planKey,\s*"balanced"\)/.test(source),
+    "LP report route가 resolveModelChainForTier를 쓰지 않음(PAID 안에서 BALANCED/PREMIUM 구분이 안 됨)"
+  );
+  console.log(
+    "✅ LP report 라우트: 기존 requireFeature(lpReporting) 게이팅 유지 + resolveModelChainForTier로 PAID 내부 tier도 일관되게 적용(정적 검사)"
+  );
+}
+
+/**
+ * Test: fallback 소진 시 어떤 코드 경로도 CHEAP → PREMIUM/BALANCED로
+ * "격상"하지 않는다. resolveModelChainForTier는 호출부(report-generation.ts,
+ * 각 route)가 섹션/작업을 시작하기 "전에" 한 번 호출해 체인을 정하는
+ * 함수다 — claude.ts 자신(runModelChain/callWithFallback/callOnce/
+ * generateText, 즉 실제 체인을 소비하는 쪽)이 이 함수를 스스로 다시
+ * 호출하는 코드가 있다면, 그건 "체인이 소진되면 다른 체인을 다시
+ * 골라 이어붙인다"는 뜻이라 escalation 경로가 생긴 것이다. claude.ts
+ * 안에서 resolveModelChainForTier를 실제로 "호출"하는 곳(괄호가 붙은
+ * 형태)이 자기 자신의 정의뿐인지 확인한다(정의는 호출이 아니므로 0이어야 함).
+ */
+function testNoEscalationPathExistsInSource() {
+  const fs = require("fs") as typeof import("fs");
+  const path = require("path") as typeof import("path");
+  const source = fs.readFileSync(
+    path.resolve(process.cwd(), "src/lib/claude.ts"),
+    "utf-8"
+  );
+  // 함수 선언 형태(`function resolveModelChainForTier(`)와 주석 줄(문서에서
+  // 이 함수를 언급만 하는 경우)은 제외하고, 실제 코드에서 "호출"하는 형태만
+  // 센다.
+  const codeLines = source
+    .split("\n")
+    .filter((line) => {
+      const t = line.trim();
+      return !t.startsWith("//") && !t.startsWith("*") && !t.startsWith("/**");
+    })
+    .join("\n");
+  const callSites = codeLines.match(/(?<!function )resolveModelChainForTier\(/g) ?? [];
+  assert(
+    callSites.length === 0,
+    `claude.ts 내부에서 resolveModelChainForTier를 스스로 호출하는 코드가 있음(${callSites.length}건) — ` +
+      `이 함수는 호출부(report-generation.ts 등)가 체인 시작 "전"에 한 번만 불러야 한다. ` +
+      `claude.ts 자신이 다시 부르면 "체인이 소진되면 다른 tier로 재선택"하는 escalation 경로가 생긴 것`
+  );
+  console.log("✅ fallback 소진 → CHEAP/BALANCED/PREMIUM 간 자동 격상 경로 없음(claude.ts 자신은 resolveModelChainForTier를 호출하지 않음, 정적 검사)");
+}
+
 async function main() {
   console.log("\n=== DealMind Cost-Performance Model Router(3-tier) + Provider 라우팅 테스트 ===\n");
   testFreeAlwaysCheapRegardlessOfTaskTier();
@@ -297,6 +444,11 @@ async function main() {
   testReportGenerationWiresPerSectionTier();
   testSectionTierMapping();
   testNoClientCostPolicyOverridePath();
+  testMaliciousRequestBodyFieldsAreDropped();
+  testMaxPriceManipulationCannotUpgradeFreeToPremium();
+  testDealScoringRouteWiresPlanRouting();
+  testLpReportRouteWiresPlanRouting();
+  testNoEscalationPathExistsInSource();
   console.log("\n✅ Cost-Performance Model Router 테스트 통과\n");
 }
 

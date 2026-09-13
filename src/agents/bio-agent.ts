@@ -96,6 +96,7 @@ export class BioAgent extends BaseAgent {
       temperature: 0.35,
       modelChain: input.modelChain,
       taskTier: resolveTaskTierForSection(OVERVIEW_SECTION),
+      onAttempt: input.onAttempt,
     });
     return {
       sectionKey: OVERVIEW_SECTION,
@@ -209,6 +210,7 @@ ${documentContext}${externalContext}
         temperature: 0.35,
         modelChain: input.modelChain,
         taskTier: resolveTaskTierForSection(SectionKey.PRODUCT_TECHNOLOGY),
+        onAttempt: input.onAttempt,
       }
     );
 
@@ -274,6 +276,7 @@ ${documentContext}${rnpvContext}${externalContext}
         temperature: 0.35,
         modelChain: input.modelChain,
         taskTier: resolveTaskTierForSection(SectionKey.VALUATION),
+        onAttempt: input.onAttempt,
       }
     );
 
@@ -324,6 +327,7 @@ ${documentContext}${externalContext}
         temperature: 0.35,
         modelChain: input.modelChain,
         taskTier: resolveTaskTierForSection(SectionKey.MARKET_ANALYSIS),
+        onAttempt: input.onAttempt,
       }
     );
 
@@ -376,6 +380,7 @@ ${documentContext}${externalContext}
         temperature: 0.35,
         modelChain: input.modelChain,
         taskTier: resolveTaskTierForSection(SectionKey.RISK_ANALYSIS),
+        onAttempt: input.onAttempt,
       }
     );
 

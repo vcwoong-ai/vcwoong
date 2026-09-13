@@ -8,9 +8,17 @@ import {
   formatSharedFactsForPrompt,
 } from "@/lib/shared-facts";
 import { evaluateReport } from "@/lib/report-quality";
-import { REQUEST_TIMEOUT_MS, envDurationMs, MODEL, resolveModelChainForTier } from "@/lib/claude";
+import {
+  REQUEST_TIMEOUT_MS,
+  envDurationMs,
+  MODEL,
+  resolveModelChainForTier,
+  isPaidPlanKey,
+  type AIAttemptRecord,
+} from "@/lib/claude";
 import { getUserPlanKey } from "@/lib/subscription";
 import { resolveTaskTierForSection } from "@/agents/base-agent";
+import { recordAIAttempts } from "@/lib/usage-log";
 
 export interface DealForGeneration {
   id: string;
@@ -198,7 +206,10 @@ export async function generateSectionsAsync(
       const isClosing =
         sectionKey === "OPINION_SUMMARY" ||
         sectionKey === "INVESTMENT_TERMS";
-      const modelChain = resolveModelChainForTier(planKey, resolveTaskTierForSection(sectionKey));
+      const taskTier = resolveTaskTierForSection(sectionKey);
+      const modelChain = resolveModelChainForTier(planKey, taskTier);
+      /** 이 섹션의 모델 체인이 실제로 시도한 것 전부(성공/실패 무관) — recordAIAttempts로 UsageLog에 남긴다 */
+      const attempts: AIAttemptRecord[] = [];
 
       const existingContent = existingByKey.get(sectionKey);
       let result: GenerationResult;
@@ -271,6 +282,7 @@ export async function generateSectionsAsync(
                 .filter(Boolean)
                 .join("\n\n"),
               modelChain,
+              onAttempt: (a) => attempts.push(a),
             },
             sectionKey
           );
@@ -284,6 +296,21 @@ export async function generateSectionsAsync(
               `duration=${((Date.now() - startedAt) / 1000).toFixed(1)}s success=false ` +
               `elapsed=${elapsedSec()}s error=${err instanceof Error ? err.constructor.name : "Error"}`
           );
+          // 섹션 전체가 실패해도 그 전까지의 시도(품질 게이트 실패 등)는
+          // 이미 실제 API 호출·토큰 소모가 일어난 뒤다 — 최종 실패라고
+          // 비용 집계에서 빠지면 안 된다.
+          if (userId) {
+            recordAIAttempts({
+              userId,
+              dealId: deal.id,
+              reportId,
+              agentType,
+              sectionKey,
+              userTier: isPaidPlanKey(planKey) ? "paid" : "free",
+              taskTier,
+              attempts,
+            });
+          }
           throw err;
         }
 
@@ -310,24 +337,22 @@ export async function generateSectionsAsync(
           },
         });
 
-        if (userId && result.tokensUsed > 0) {
-          prisma.usageLog
-            .create({
-              data: {
-                userId,
-                dealId: deal.id,
-                reportId,
-                agentType,
-                sectionKey: result.sectionKey,
-                model: result.modelUsed ?? "unknown",
-                // 프로바이더가 보고한 실측값을 그대로 쓴다. 예전엔 합계에
-                // 70/30을 곱한 추정치를 넣어 사용량 통계가 실제와 달랐다.
-                inputTokens: result.inputTokens ?? 0,
-                outputTokens: result.outputTokens ?? 0,
-                totalTokens: result.tokensUsed,
-              },
-            })
-            .catch(() => {});
+        // 시도 하나하나(성공 직전에 실패했던 fallback 전환 포함)를 전부
+        // UsageLog에 남긴다 — "최종 성공 모델 1줄"만 남기면 fallback
+        // 과정에서 실패한 시도(이미 API 호출·토큰이 소모된)의 비용이
+        // 누락된다. attempts가 비어 있으면(데모 모드 등 실제 호출이 없었던
+        // 경우) 아무것도 쓰지 않는다.
+        if (userId) {
+          recordAIAttempts({
+            userId,
+            dealId: deal.id,
+            reportId,
+            agentType,
+            sectionKey: result.sectionKey,
+            userTier: isPaidPlanKey(planKey) ? "paid" : "free",
+            taskTier,
+            attempts,
+          });
         }
 
         if (i < sectionKeys.length - 1) {

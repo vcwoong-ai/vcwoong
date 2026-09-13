@@ -8,6 +8,9 @@ import { traceReportEvidence } from "@/lib/evidence";
 import { verdictsToMap } from "@/lib/evidence-ai";
 import { buildScoreEvidenceAssessment } from "@/lib/deal-scoring-evidence";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { resolveModelChainForTier, isPaidPlanKey, type AIAttemptRecord } from "@/lib/claude";
+import { getUserPlanKey } from "@/lib/subscription";
+import { recordAIAttempts } from "@/lib/usage-log";
 import {
   getUserTeamContext,
   dealReadWhere,
@@ -129,15 +132,40 @@ export async function POST(
     );
   }
 
-  const result = await generateDealScore({
-    companyName: deal.companyName,
-    sector: deal.sector,
-    stage: deal.stage,
-    investRound: deal.investRound ?? undefined,
-    investAmount: deal.investAmount ?? undefined,
-    valuation: deal.valuation ?? undefined,
-    reportContent,
-    documentsText,
+  // Cost-aware Model Router — FREE 사용자가 딜 스코어링으로 유료 모델
+  // fallback(Gemini/Claude)까지 호출하지 못하도록, 다른 AI 호출 라우트와
+  // 동일한 정책(resolveModelChainForTier)을 그대로 적용한다. 딜 스코어는
+  // 투자 판단에 쓰이지만 최종 IC 의견(OPINION_SUMMARY)은 아니므로
+  // "balanced" tier로 분류한다.
+  const planKey = await getUserPlanKey(session.user.id);
+  const modelChain = resolveModelChainForTier(planKey, "balanced");
+  const attempts: AIAttemptRecord[] = [];
+
+  const result = await generateDealScore(
+    {
+      companyName: deal.companyName,
+      sector: deal.sector,
+      stage: deal.stage,
+      investRound: deal.investRound ?? undefined,
+      investAmount: deal.investAmount ?? undefined,
+      valuation: deal.valuation ?? undefined,
+      reportContent,
+      documentsText,
+    },
+    {
+      modelChain,
+      taskTier: "balanced",
+      onAttempt: (a) => attempts.push(a),
+    }
+  );
+
+  recordAIAttempts({
+    userId: session.user.id,
+    dealId: deal.id,
+    agentType: "GENERAL",
+    userTier: isPaidPlanKey(planKey) ? "paid" : "free",
+    taskTier: "balanced",
+    attempts,
   });
 
   // Phase 3 Evidence Engine과 연결 — 새 AI 호출 없이, 이미 결정적으로 계산

@@ -58,6 +58,7 @@ export class ManufacturingAgent extends BaseAgent {
       temperature: 0.35,
       modelChain: input.modelChain,
       taskTier: resolveTaskTierForSection(sectionKey),
+      onAttempt: input.onAttempt,
     });
     return {
       sectionKey,

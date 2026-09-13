@@ -1,5 +1,5 @@
 import { SectionKey, AgentType, DealSector } from "@prisma/client";
-import { generateText, TaskTier } from "@/lib/claude";
+import { generateText, TaskTier, AIAttemptListener } from "@/lib/claude";
 import { buildSectionValidator } from "@/lib/section-generation-gate";
 import { getSystemPrompt } from "@/prompts/system-prompts";
 import {
@@ -38,6 +38,12 @@ export interface AgentInput {
    * claude.ts의 기존 기본 체인(MODEL + FALLBACK_MODELS)을 쓴다.
    */
   modelChain?: string[];
+  /**
+   * 이번 섹션 생성의 모든 AI 호출 시도(성공/실패)를 통보받는 훅 —
+   * 호출부(report-generation.ts 등)가 UsageLog에 시도별 비용/토큰을
+   * 빠짐없이 기록하는 용도(claude.ts의 ClaudeOptions.onAttempt와 동일 의미).
+   */
+  onAttempt?: AIAttemptListener;
 }
 
 /**
@@ -107,6 +113,7 @@ export abstract class BaseAgent {
           logContext,
           modelChain: input.modelChain,
           taskTier: resolveTaskTierForSection(sectionKey),
+          onAttempt: input.onAttempt,
         }
       );
       return {
@@ -143,6 +150,7 @@ export abstract class BaseAgent {
         logContext,
         modelChain: input.modelChain,
         taskTier: resolveTaskTierForSection(sectionKey),
+        onAttempt: input.onAttempt,
       }
     );
 
