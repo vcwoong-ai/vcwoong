@@ -313,6 +313,100 @@ function testBenchmarkPercentile() {
   console.log("✅ 비교 대상 충분 → 실제 분포 기반 percentile·평균 계산");
 }
 
+// ── Phase 4: Investment Score 근거 구조화(decisionImpact/uncertaintyNote) ──
+
+/** Test A: 근거가 충분한 항목 → 정상적인 고득점 가능, decisionImpact LOW, uncertaintyNote 없음 */
+function testDecisionImpactLowWhenFullyEvidenced() {
+  const claims = [
+    fakeClaim({ sectionKey: SectionKey.MARKET_ANALYSIS, confidence: "HIGH", status: "document" }),
+    fakeClaim({ sectionKey: SectionKey.MARKET_ANALYSIS, confidence: "HIGH", status: "document" }),
+  ];
+  const assessment = buildScoreEvidenceAssessment(BASE_SCORES, BASE_RATIONALE, claims);
+  const market = assessment.dimensions.marketSize; // score=82, 근거 HIGH
+  assert(market.confidence === "HIGH", `근거 전부 확인됐는데 HIGH가 아님: ${market.confidence}`);
+  assert(market.decisionImpact === "LOW", `근거 충분한 고득점인데 decisionImpact가 LOW가 아님: ${market.decisionImpact}`);
+  assert(market.uncertaintyNote === "", `근거 충분한데 uncertaintyNote가 비어있지 않음: "${market.uncertaintyNote}"`);
+  console.log("✅ A. 근거 충분 + 고득점(82) → decisionImpact LOW, uncertaintyNote 없음");
+}
+
+/** Test B: 근거가 일부만 존재 → decisionImpact가 MEDIUM으로 올라가고 uncertaintyNote가 채워짐 */
+function testDecisionImpactMediumWhenPartialEvidence() {
+  const claims = [
+    fakeClaim({ sectionKey: SectionKey.MARKET_ANALYSIS, confidence: "HIGH", status: "document" }),
+    fakeClaim({ sectionKey: SectionKey.MARKET_ANALYSIS, confidence: "HIGH", status: "document" }),
+    fakeClaim({ sectionKey: SectionKey.MARKET_ANALYSIS, confidence: "MEDIUM", status: "document" }),
+    fakeClaim({ sectionKey: SectionKey.MARKET_ANALYSIS, confidence: "UNSUPPORTED" }),
+  ];
+  const assessment = buildScoreEvidenceAssessment(BASE_SCORES, BASE_RATIONALE, claims);
+  const market = assessment.dimensions.marketSize;
+  assert(market.decisionImpact === "MEDIUM", `부분 근거인데 decisionImpact가 MEDIUM이 아님: ${market.decisionImpact}`);
+  assert(market.uncertaintyNote.length > 0, "부분 근거인데 uncertaintyNote가 비어있음");
+  console.log("✅ B. 근거 일부만 존재 → decisionImpact MEDIUM, uncertaintyNote 채워짐");
+}
+
+/** Test C: 근거가 아예 없는 차원 → NO_EVIDENCE로 처리, uncertaintyNote가 그 사실을 명시 */
+function testUnknownDimensionNotCoerced() {
+  const assessment = buildScoreEvidenceAssessment(BASE_SCORES, BASE_RATIONALE, []);
+  const team = assessment.dimensions.team; // score=60, claim 0개
+  assert(team.confidence === "NO_EVIDENCE", `claim 0개인데 NO_EVIDENCE가 아님: ${team.confidence}`);
+  assert(team.evidenceCoverage === null, "claim이 없는데 커버리지가 0 같은 숫자로 대체됨(unknown이 숫자로 둔갑)");
+  assert(
+    team.uncertaintyNote.includes("확인 필요"),
+    `근거 전무인데 uncertaintyNote가 그 사실을 명시하지 않음: "${team.uncertaintyNote}"`
+  );
+  console.log("✅ C. 근거 전무 → NO_EVIDENCE로 명확히 구분, unknown을 숫자로 만들지 않음");
+}
+
+/** Test D: 근거 없는 숫자로 고득점(85) → decisionImpact HIGH로 명확히 위험 신호(점수 자체는 안 바꿈 — 기존 API 호환) */
+function testDecisionImpactHighWhenHighScoreUnsupported() {
+  const claims = [fakeClaim({ sectionKey: SectionKey.PRODUCT_TECHNOLOGY, confidence: "UNSUPPORTED" })];
+  const assessment = buildScoreEvidenceAssessment(BASE_SCORES, BASE_RATIONALE, claims);
+  const product = assessment.dimensions.product; // score=85
+  assert(product.score === 85, "점수 자체를 바꿔서는 안 됨(기존 API 호환) — clamp/감점 대신 decisionImpact로 신호");
+  assert(
+    product.decisionImpact === "HIGH",
+    `근거 없는 고득점인데 decisionImpact가 HIGH가 아님: ${product.decisionImpact}`
+  );
+  assert(product.uncertaintyNote.length > 0, "고득점+근거없음인데 uncertaintyNote가 비어있음");
+  console.log("✅ D. 근거 없는 고득점(85) → 점수는 유지, decisionImpact HIGH로 위험 신호");
+}
+
+/** Test E: Company Claim만 존재(문서에서 확인 안 됨) → Verified Fact로 취급하지 않음 */
+function testUnverifiedClaimNeverTreatedAsVerified() {
+  const claims = [
+    fakeClaim({
+      sectionKey: SectionKey.PRODUCT_TECHNOLOGY,
+      status: "unverified", // 회사가 주장했을 뿐 문서로 확인되지 않음
+      confidence: "UNSUPPORTED",
+      raw: "업계 최고 수준의 기술력 보유",
+    }),
+  ];
+  const assessment = buildScoreEvidenceAssessment(BASE_SCORES, BASE_RATIONALE, claims);
+  const product = assessment.dimensions.product;
+  assert(
+    product.unsupportedClaims.some((c) => c.raw === "업계 최고 수준의 기술력 보유"),
+    "미확인 claim(회사 주장)이 unsupportedClaims에 안 들어감 — Fact로 취급될 위험"
+  );
+  assert(product.confidence !== "HIGH", "미확인 claim만 있는데 HIGH confidence로 격상됨");
+  console.log("✅ E. 문서로 확인 안 된 Company Claim → Verified Fact로 승격되지 않음");
+}
+
+/** Test F: unknown(claim 0개) 상태는 항상 null/NO_EVIDENCE로만 표현 — 임의 숫자 대입 금지 */
+function testUnknownNeverBecomesArbitraryNumber() {
+  const assessment = buildScoreEvidenceAssessment(BASE_SCORES, BASE_RATIONALE, []);
+  for (const dim of Object.values(assessment.dimensions)) {
+    assert(
+      dim.evidenceCoverage === null,
+      `${dim.dimension}: claim이 없는데 evidenceCoverage가 숫자(${dim.evidenceCoverage})로 채워짐`
+    );
+    assert(
+      dim.confidence === "NO_EVIDENCE",
+      `${dim.dimension}: claim이 없는데 confidence가 NO_EVIDENCE가 아님(${dim.confidence})`
+    );
+  }
+  console.log("✅ F. unknown(claim 0개)은 항상 null/NO_EVIDENCE만 — 임의 숫자로 대체되지 않음");
+}
+
 /** AI 비용 남용 방지 — deal-scoring rate limit이 실수로 지워지지 않았는지 확인 */
 function testRateLimitStillConfigured() {
   assert(Boolean(RATE_LIMITS.dealScoring), "RATE_LIMITS.dealScoring이 없음");
@@ -337,6 +431,12 @@ function main() {
   testIcSummary();
   testNoReportBasis();
   testDeterministicResult();
+  testDecisionImpactLowWhenFullyEvidenced();
+  testDecisionImpactMediumWhenPartialEvidence();
+  testUnknownDimensionNotCoerced();
+  testDecisionImpactHighWhenHighScoreUnsupported();
+  testUnverifiedClaimNeverTreatedAsVerified();
+  testUnknownNeverBecomesArbitraryNumber();
   testBenchmarkInsufficientData();
   testBenchmarkPercentile();
   testRateLimitStillConfigured();

@@ -14,6 +14,7 @@ import {
   type ScoreEvidenceAssessment,
   type ScoreConfidence,
   type RiskFlag,
+  type DecisionImpact,
 } from "./deal-scoring-evidence";
 import type { NumericClaim, ClaimConfidence } from "./evidence";
 import type { IcQuestion } from "./ic-questions";
@@ -97,6 +98,12 @@ export interface KeyStrength {
   score: number;
   confidence: ScoreConfidence;
   rationale: string;
+  /**
+   * 이 강점의 불확실성이 투자판단을 뒤집을 수 있는 정도(Phase 4, 신규).
+   * Phase 4 이전에 저장된 evidenceAssessment JSON에는 이 필드가 없어
+   * undefined일 수 있다 — optional로 둔다(기존 저장분 호환).
+   */
+  decisionImpact?: DecisionImpact;
 }
 
 const MAX_KEY_STRENGTHS = 3;
@@ -123,6 +130,7 @@ export function selectKeyStrengths(
       score: d.score,
       confidence: d.confidence,
       rationale: rationale[d.dimension] ?? "",
+      decisionImpact: d.decisionImpact,
     }));
 }
 
@@ -134,6 +142,8 @@ export interface KeyRisk {
   dimension?: ScoreDimensionKey;
   score?: number;
   detail: string;
+  /** 관련 차원이 있을 때만 채운다(밸류에이션 공백처럼 차원이 없는 리스크는 undefined) */
+  decisionImpact?: DecisionImpact;
 }
 
 const MAX_KEY_RISKS = 5;
@@ -194,6 +204,7 @@ export function selectKeyRisks(
         dimension: dim.dimension,
         score: dim.score,
         detail: dim.unsupportedClaims[0]?.raw ?? "",
+        decisionImpact: dim.decisionImpact,
       });
       coveredDimensions.add(dim.dimension);
     } else if (flag === "HIGH_SCORE_LOW_EVIDENCE") {
@@ -210,6 +221,7 @@ export function selectKeyRisks(
         dimension: dim.dimension,
         score: dim.score,
         detail: `${dimensionLabel(dim.dimension)} ${dim.score}점, 근거 확신도 ${dim.confidence}`,
+        decisionImpact: dim.decisionImpact,
       });
       coveredDimensions.add(dim.dimension);
     } else if (flag === "VALUATION_EVIDENCE_GAP") {
@@ -229,6 +241,7 @@ export function selectKeyRisks(
         dimension: dim.dimension,
         score: dim.score,
         detail: rationale[dim.dimension] ?? `${dimensionLabel(dim.dimension)} 근거 부족`,
+        decisionImpact: dim.decisionImpact,
       });
       coveredDimensions.add(dim.dimension);
     }
@@ -246,6 +259,7 @@ export function selectKeyRisks(
         dimension: d.dimension,
         score: d.score,
         detail: rationale[d.dimension] || `${dimensionLabel(d.dimension)} 점수 ${d.score}점`,
+        decisionImpact: d.decisionImpact,
       });
       coveredDimensions.add(d.dimension);
     }

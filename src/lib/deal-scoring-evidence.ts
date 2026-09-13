@@ -26,6 +26,19 @@ import { SCORE_DIMENSIONS, type ScoreDimensionKey } from "./deal-scoring-shared"
  * 구분해서 보여줄 수 있게 별도 상태를 둔다. */
 export type ScoreConfidence = ClaimConfidence | "NO_EVIDENCE";
 
+/**
+ * 이 차원의 불확실성이 실제로 투자판단을 뒤집을 수 있는 정도(Phase 4).
+ * 점수 자체(score)는 절대 건드리지 않는다 — 기존 레이더 차트·API 호환을
+ * 위해서다(회귀 테스트 "기존 radar chart / scoring output 유지" 참고).
+ * 대신 "이 숫자가 틀렸다면 투자판단이 바뀌는가"를 별도 신호로 노출한다.
+ *
+ *   HIGH   — 고득점(>=70)인데 근거가 약함(LOW/UNSUPPORTED/NO_EVIDENCE).
+ *            이 항목이 틀리면 투자판단 자체가 뒤집힐 수 있다.
+ *   MEDIUM — 근거가 일부만 있거나(부분 지원), 저득점인데 근거가 약함.
+ *   LOW    — 근거가 충분(HIGH)해 향후 뒤집힐 여지가 작다.
+ */
+export type DecisionImpact = "HIGH" | "MEDIUM" | "LOW";
+
 export interface DimensionEvidenceAssessment {
   dimension: ScoreDimensionKey;
   score: number;
@@ -47,6 +60,13 @@ export interface DimensionEvidenceAssessment {
    * 주장"을 놓치지 않으려면 이게 따로 필요하다).
    */
   unsupportedClaims: Array<{ raw: string }>;
+  /** 이 항목의 불확실성이 투자판단을 뒤집을 수 있는 정도(Phase 4, 신규) */
+  decisionImpact: DecisionImpact;
+  /**
+   * 왜 불확실한지에 대한 한 줄 설명(결정적으로 생성, AI 호출 없음).
+   * confidence가 HIGH면 불확실성이 낮다는 뜻이라 빈 문자열.
+   */
+  uncertaintyNote: string;
 }
 
 export type RiskFlag =
@@ -132,6 +152,35 @@ function coverageToConfidence(
   return "UNSUPPORTED";
 }
 
+/**
+ * "고득점인데 근거가 약함"이 가장 위험한 조합이라는 게 이 파일 전체의
+ * 핵심 발견이다(파일 상단 주석) — decisionImpact는 그 발견을 차원별로
+ * 명시적인 신호로 노출한다. 점수 자체는 바꾸지 않는다.
+ */
+function computeDecisionImpact(score: number, confidence: ScoreConfidence): DecisionImpact {
+  const weakEvidence =
+    confidence === "LOW" || confidence === "UNSUPPORTED" || confidence === "NO_EVIDENCE";
+  if (score >= 70 && weakEvidence) return "HIGH";
+  if (confidence === "HIGH") return "LOW";
+  return "MEDIUM";
+}
+
+/** 결정적으로 생성 — AI 호출 없음. confidence가 HIGH면 불확실성이 낮다는 뜻이라 빈 문자열. */
+function buildUncertaintyNote(
+  confidence: ScoreConfidence,
+  unsupportedClaims: Array<{ raw: string }>,
+  claimsTotal: number
+): string {
+  if (confidence === "HIGH") return "";
+  if (confidence === "NO_EVIDENCE") {
+    return "이 항목을 뒷받침하는 근거를 업로드 자료에서 찾지 못함 — 점수 전체가 확인 필요";
+  }
+  if (unsupportedClaims.length > 0) {
+    return `핵심 주장 일부가 자료에서 확인되지 않음(예: "${unsupportedClaims[0].raw}") — 실사 시 직접 검증 필요`;
+  }
+  return `근거 커버리지가 부분적임(${claimsTotal}건 중 일부만 확인) — 추가 자료 확인 필요`;
+}
+
 function assessDimension(
   dimension: ScoreDimensionKey,
   score: number,
@@ -157,18 +206,22 @@ function assessDimension(
     .slice(0, 3)
     .map((c) => ({ raw: c.raw }));
 
+  const confidence = coverageToConfidence(
+    coverage,
+    claims.some((c) => c.confidence === "UNSUPPORTED")
+  );
+
   return {
     dimension,
     score,
-    confidence: coverageToConfidence(
-      coverage,
-      claims.some((c) => c.confidence === "UNSUPPORTED")
-    ),
+    confidence,
     evidenceCoverage: coverage,
     claimsTotal: claims.length,
     claimsSupported: supported.length,
     keyEvidence,
     unsupportedClaims,
+    decisionImpact: computeDecisionImpact(score, confidence),
+    uncertaintyNote: buildUncertaintyNote(confidence, unsupportedClaims, claims.length),
   };
 }
 
