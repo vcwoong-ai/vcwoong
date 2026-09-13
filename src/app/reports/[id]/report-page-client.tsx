@@ -124,6 +124,11 @@ function GeneratingView({
           });
           const resumeRes = await fetch(`/api/reports/${report.id}/run`, {
             method: "POST",
+            headers: { "Content-Type": "application/json" },
+            // 사용자 조작 없이 스스로 이어서 호출하는 것임을 서버에 알려
+            // report-gen rate limit에서 제외되게 한다(run/route.ts의
+            // isAutoResumeExemptFromRateLimit 참고).
+            body: JSON.stringify({ trigger: "auto" }),
           }).catch(() => null);
           // 409 = 다른 요청이 이미 재개 중 — 실패로 보지 않고 계속 폴링한다.
           if (!resumeRes || (!resumeRes.ok && resumeRes.status !== 409)) {
@@ -254,11 +259,19 @@ export function ReportPageClient({
 
   const handleReload = useCallback(() => window.location.reload(), []);
 
-  const handleStartGeneration = async () => {
+  // trigger="user"(기본): 아래 버튼 클릭 — report-gen rate limit 적용.
+  // trigger="auto": 아래 useEffect가 체크포인트를 감지해 사용자 조작
+  // 없이 스스로 호출하는 것 — rate limit에서 제외된다(run/route.ts의
+  // isAutoResumeExemptFromRateLimit 참고).
+  const handleStartGeneration = async (trigger: "user" | "auto" = "user") => {
     setIsStarting(true);
     setStartError(null);
     try {
-      const response = await fetch(`/api/reports/${report.id}/run`, { method: "POST" });
+      const response = await fetch(`/api/reports/${report.id}/run`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ trigger }),
+      });
       if (!response.ok) {
         const err = await response.json();
         throw new Error(err.error ?? "생성 시작 실패");
@@ -285,7 +298,7 @@ export function ReportPageClient({
       !autoResumedRef.current
     ) {
       autoResumedRef.current = true;
-      handleStartGeneration();
+      handleStartGeneration("auto");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [report.id, pageStatus]);
@@ -510,7 +523,7 @@ export function ReportPageClient({
               ? "잠시만 기다려 주세요 — 자동으로 이어지지 않으면 아래 버튼을 눌러 주세요."
               : "IR 자료가 업로드되어 있으면 AI 보고서 생성을 시작할 수 있습니다."}
           </p>
-          <Button onClick={handleStartGeneration} disabled={isStarting}>
+          <Button onClick={() => handleStartGeneration()} disabled={isStarting}>
             {isStarting ? (
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
             ) : (

@@ -84,6 +84,39 @@ export async function checkRateLimit(
   }
 }
 
+/**
+ * /api/reports/[id]/run의 자동 checkpoint resume(브라우저가 사용자 조작
+ * 없이 스스로 이어서 호출하는 것 — report-wizard.tsx/report-page-client.tsx의
+ * 폴링 루프, "이어서 생성" 자동 트리거)은 report-generation rate limit에서
+ * 제외한다.
+ *
+ * 이유: report-generation.ts는 함수 실행시간 상한 때문에 한 번의 보고서
+ * 생성이 여러 invocation(체크포인트)으로 나뉘는 게 정상 구조다(GENERATION_
+ * BUDGET_MS 참고). 자동 재개 호출까지 사용자가 "또 생성 요청을 보냈다"고
+ * 셈하면, 사용자는 실제로 1번만 생성 버튼을 눌렀는데도 체크포인트 횟수만큼
+ * 카운터가 올라 10회/시간 한도에 금방 도달해 429가 난다(실제 Production에서
+ * 확인된 문제).
+ *
+ * trigger="auto"만 예외로 인정하고, mode="restart"(재생성 버튼)는 trigger
+ * 값과 무관하게 항상 사용자의 명시적 조작이므로 예외 대상에서 제외한다.
+ * trigger가 없거나(구버전 호출) "auto"가 아닌 값이면 항상 카운트하는
+ * 쪽으로 fail-safe한다 — 알 수 없는 값이 레이트리밋을 우회하는 방향으로
+ * 새면 안 된다(resolveModelChainForTier의 화이트리스트 방식과 같은 원칙).
+ *
+ * 이 예외가 새로운 비용 남용 경로를 열지 않는 이유: report-generation.ts는
+ * 섹션이 이미 만들어져 있으면(existingByKey) 다시 AI를 호출하지 않고
+ * 재사용한다 — 즉 /run을 아무리 여러 번(trigger=auto라 주장하며) 호출해도
+ * 한 보고서당 실제 AI 호출 총량은 섹션 수(고정)로 이미 상한이 걸려 있고,
+ * 보고서 자체를 새로 만드는 경로(POST /api/deals/[id]/reports)는 이 예외와
+ * 무관하게 기존 rate limit·월 quota를 그대로 적용받는다.
+ */
+export function isAutoResumeExemptFromRateLimit(
+  mode: "resume" | "restart",
+  trigger: "user" | "auto" | undefined
+): boolean {
+  return trigger === "auto" && mode !== "restart";
+}
+
 /** 자주 쓰는 정책 모음 (한 곳에서 조정할 수 있게) */
 export const RATE_LIMITS = {
   /** 회원가입: IP당 1시간 5회 */

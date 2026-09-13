@@ -11,7 +11,11 @@ import {
   STALE_GENERATION_MS,
 } from "@/lib/report-generation";
 import { checkQuota } from "@/lib/quotas";
-import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import {
+  checkRateLimit,
+  RATE_LIMITS,
+  isAutoResumeExemptFromRateLimit,
+} from "@/lib/rate-limit";
 import {
   getUserTeamContext,
   reportWriteWhere,
@@ -25,9 +29,19 @@ import {
  *  - "restart": 기존 섹션을 지우고 처음부터 다시 생성. "재생성" 버튼용.
  *    이 구분이 없으면 완성된 보고서에서 재생성을 눌러도 전 섹션이
  *    "기존 섹션 재사용"으로 건너뛰어져 아무것도 바뀌지 않는다.
+ *
+ * trigger:
+ *  - "user"(기본): 사람이 버튼을 눌러 명시적으로 보낸 요청 — report-gen
+ *    rate limit을 그대로 적용한다.
+ *  - "auto": 브라우저가 체크포인트(PENDING)를 감지하고 사용자 조작 없이
+ *    스스로 이어서 호출한 것(report-wizard.tsx/report-page-client.tsx의
+ *    폴링 auto-resume) — rate limit에서 제외한다(isAutoResumeExemptFromRateLimit
+ *    참고). mode="restart"와 함께 오면(있을 수 없는 조합이지만) 항상
+ *    카운트되도록 fail-safe한다.
  */
 const runSchema = z.object({
   mode: z.enum(["resume", "restart"]).optional(),
+  trigger: z.enum(["user", "auto"]).optional(),
 });
 
 export async function POST(
@@ -39,14 +53,21 @@ export async function POST(
     return NextResponse.json({ error: "인증이 필요합니다" }, { status: 401 });
   }
 
-  // 본문이 없거나 JSON이 아니면 기본값(resume)으로 둔다 — 재시도 호출은
-  // 본문 없이 POST만 보내기 때문에 이걸로 실패하면 안 된다.
+  // 본문이 없거나 JSON이 아니면 기본값(resume/user)으로 둔다 — 사용자가
+  // 명시적으로 누르는 호출은 본문 없이 POST만 보내는 경우가 많기 때문에
+  // 이걸로 실패하면 안 된다. trigger 기본값이 "user"라는 점이 중요하다 —
+  // 알 수 없거나 누락된 값은 항상 rate limit을 적용하는 쪽(fail-safe)으로
+  // 떨어진다.
   let mode: "resume" | "restart" = "resume";
+  let trigger: "user" | "auto" = "user";
   try {
     const parsed = runSchema.safeParse(await request.json());
-    if (parsed.success && parsed.data.mode) mode = parsed.data.mode;
+    if (parsed.success) {
+      if (parsed.data.mode) mode = parsed.data.mode;
+      if (parsed.data.trigger) trigger = parsed.data.trigger;
+    }
   } catch {
-    // 본문 없음 — resume 유지
+    // 본문 없음 — resume/user 유지
   }
 
   const { teamId, role } = await getUserTeamContext(session.user.id);
@@ -86,16 +107,23 @@ export async function POST(
   }
 
   // 월 한도와 별개로 단시간 폭주를 막는다 (생성 1건 = AI 호출 10회).
-  const rate = await checkRateLimit(
-    `report-gen:${session.user.id}`,
-    RATE_LIMITS.reportGeneration.limit,
-    RATE_LIMITS.reportGeneration.windowMs
-  );
-  if (!rate.allowed) {
-    return NextResponse.json(
-      { error: "보고서 생성 요청이 너무 잦습니다. 잠시 후 다시 시도해 주세요." },
-      { status: 429, headers: { "Retry-After": String(rate.retryAfterSec) } }
+  // 단, 브라우저가 사용자 조작 없이 스스로 거는 체크포인트 자동 재개
+  // (trigger="auto")는 이 카운터에서 제외한다 — 한 번의 생성이 여러
+  // invocation으로 나뉘는 게 정상 구조라, 포함시키면 사용자가 실제로는
+  // 1번만 생성 요청했는데도 자동 재개 횟수만큼 카운터가 올라 금방 429가
+  // 난다(isAutoResumeExemptFromRateLimit 참고).
+  if (!isAutoResumeExemptFromRateLimit(mode, trigger)) {
+    const rate = await checkRateLimit(
+      `report-gen:${session.user.id}`,
+      RATE_LIMITS.reportGeneration.limit,
+      RATE_LIMITS.reportGeneration.windowMs
     );
+    if (!rate.allowed) {
+      return NextResponse.json(
+        { error: "보고서 생성 요청이 너무 잦습니다. 잠시 후 다시 시도해 주세요." },
+        { status: 429, headers: { "Retry-After": String(rate.retryAfterSec) } }
+      );
+    }
   }
 
   const quota = await checkQuota(session.user.id, "report");
