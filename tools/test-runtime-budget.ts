@@ -23,6 +23,7 @@
 import {
   envDurationMs,
   REQUEST_TIMEOUT_MS,
+  FALLBACK_REQUEST_TIMEOUT_MS,
   AI_CALL_BUDGET_MS,
 } from "../src/lib/claude";
 import { STALE_GENERATION_MS } from "../src/lib/report-generation";
@@ -92,6 +93,37 @@ function testWorstCaseRunFitsFunctionLimit() {
   );
 }
 
+/**
+ * 회귀 방지: 2026-09-14 Production 사고에서 OpenRouter 자체 청구 로그로
+ * 확인된 사실 — 25s(primary)/15s(fallback)는 "모델이 응답을 안 준" 게
+ * 아니라 "섹션 하나를 다 쓰기엔 짧은" 값이었다. 매 시도가 TTFT 1~3초로
+ * 정상 시작해 실제 토큰을 계속 생성하며 정상 과금까지 됐는데도, 정확히
+ * REQUEST_TIMEOUT_MS/FALLBACK_REQUEST_TIMEOUT_MS 경계에서 스트림이 잘려
+ * 매번 실패했다(claude.ts의 REQUEST_TIMEOUT_MS 주석 참고).
+ *
+ * 이 테스트는 그 사고로 "부족하다고 실측 확인된" 옛 기본값(25s/15s)으로
+ * 누군가 무심코 되돌리는 것만 막는다 — 정확한 "충분한" 값을 판정하지는
+ * 않는다(그건 이 저장소 밖의 실측 문제다).
+ */
+function testTimeoutsNotRegressedToKnownInsufficientValues() {
+  const KNOWN_INSUFFICIENT_PRIMARY_MS = 25_000;
+  const KNOWN_INSUFFICIENT_FALLBACK_MS = 15_000;
+  assert(
+    REQUEST_TIMEOUT_MS > KNOWN_INSUFFICIENT_PRIMARY_MS,
+    `REQUEST_TIMEOUT_MS(${REQUEST_TIMEOUT_MS}ms)가 2026-09-14 사고로 부족하다고 ` +
+      `실측 확인된 ${KNOWN_INSUFFICIENT_PRIMARY_MS}ms 이하로 되돌아감`
+  );
+  assert(
+    FALLBACK_REQUEST_TIMEOUT_MS > KNOWN_INSUFFICIENT_FALLBACK_MS,
+    `FALLBACK_REQUEST_TIMEOUT_MS(${FALLBACK_REQUEST_TIMEOUT_MS}ms)가 2026-09-14 사고로 ` +
+      `부족하다고 실측 확인된 ${KNOWN_INSUFFICIENT_FALLBACK_MS}ms 이하로 되돌아감`
+  );
+  console.log(
+    `✅ 회귀 방지: primary(${REQUEST_TIMEOUT_MS / 1000}s)/fallback(${FALLBACK_REQUEST_TIMEOUT_MS / 1000}s) ` +
+      "타임아웃이 실측 부족 확인된 옛 값(25s/15s)보다 큼"
+  );
+}
+
 function testStaleWindowIsNotAbsurdlyLong() {
   // 죽은 게 확실한 생성 때문에 15분을 기다리게 하면 안 된다.
   assert(
@@ -142,6 +174,7 @@ function main() {
   testEnvDurationParsing();
   testAiTimeoutFitsFunctionLimit();
   testWorstCaseRunFitsFunctionLimit();
+  testTimeoutsNotRegressedToKnownInsufficientValues();
   testStaleWindowIsNotAbsurdlyLong();
   testKstMonthBoundary();
   console.log("\n✅ 실행시간 예산·월 경계 테스트 통과\n");
