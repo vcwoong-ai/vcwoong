@@ -280,16 +280,26 @@ export function envDurationMs(raw: string | undefined, fallback: number): number
  * 850~950 토큰에서 항상 잘렸다 — Investment Quality Layer(수치 근거 등급/
  * Bull-Base-Bear/KPI 체크리스트 등)로 섹션당 요구 분량이 늘어난 뒤로는 이
  * 정도로는 항상 부족해, primary/fallback 전부가 매번 이 지점에서 실패하는
- * 사고로 이어졌다. 60s로 올려 여유를 둔다(아래 AI_CALL_BUDGET_MS 계산에서
+ * 사고로 이어졌다. 60s로 올려 여유를 뒀다(아래 AI_CALL_BUDGET_MS 계산에서
  * 이 값 자체는 worst-case 여유(FUNCTION_LIMIT_MS 대비 margin)에 영향을 주지
  * 않는다 — report-generation.ts의 "남은 시간 ≥ REQUEST_TIMEOUT_MS일 때만
  * 새 섹션 시작" 게이트와 AI_CALL_BUDGET_MS 공식에서 이 항이 서로 상쇄되기
  * 때문. tools/test-runtime-budget.ts의 testWorstCaseRunFitsFunctionLimit
  * 참고 — 이 값을 올려도 그 테스트가 요구하는 여유는 그대로 유지된다).
+ *
+ * 2026-09-14(같은 날, 후속): 60s로도 PRODUCT_TECHNOLOGY처럼 요구 밀도가
+ * 높은 섹션에서 primary·fallback 전부가 매번 타임아웃 나는 사고가
+ * 재발했다(report=cmu12xfok... — 25회 연속 81~83s에서 AbortError, 60s+
+ * 20s(fallback)와 정확히 일치). 90s로 다시 올린다 — 이 값은 위에서 이미
+ * 확인했듯 worst-case 여유에 전혀 영향을 주지 않으므로(FALLBACK_REQUEST_
+ * TIMEOUT_MS와 달리 공식에서 상쇄됨) 비용 없는 조정이다. 근본 원인(해당
+ * 섹션의 요구 밀도 자체)은 section-prompts.ts의 PRODUCT_TECHNOLOGY
+ * 지침을 압축하는 별도 변경으로 함께 대응한다 — 이 값 하나만으로 재발을
+ * 완전히 막는다고 보장하지 않는다.
  */
 export const REQUEST_TIMEOUT_MS = envDurationMs(
   process.env.AI_REQUEST_TIMEOUT_MS,
-  60_000
+  90_000
 );
 
 /**
@@ -330,7 +340,7 @@ export const FALLBACK_REQUEST_TIMEOUT_MS = envDurationMs(
  * 모델 각각이 자기 몫(REQUEST_TIMEOUT_MS 또는 FALLBACK_REQUEST_TIMEOUT_MS)을
  * 온전히 받을 수 있도록 역산한 값이다: primary 1개(REQUEST_TIMEOUT_MS) +
  * fallback마다(FALLBACK_REQUEST_TIMEOUT_MS) — 기본 체인(2026-09-14 기준
- * 60s + 20s×2 = 100s, fallback 2개)이다. AI_FALLBACK_MODELS로 fallback을
+ * 90s + 20s×2 = 130s, fallback 2개)이다. AI_FALLBACK_MODELS로 fallback을
  * 늘리면(MAX_FALLBACK_MODELS까지) 이 기본값도 그만큼 늘어나 체인 끝까지
  * 실제로 시도될 시간을 보장한다.
  *

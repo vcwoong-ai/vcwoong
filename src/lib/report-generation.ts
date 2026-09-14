@@ -46,7 +46,8 @@ export interface DealForGeneration {
  * (budget - REQUEST_TIMEOUT_MS + AI_CALL_BUDGET_MS)이 maxDuration을 넘지
  * 않는지 값을 바꿀 때마다 다시 확인할 것 — AI_CALL_BUDGET_MS가 fallback
  * 체인 구성에 따라 달라지므로(claude.ts 참고, 2026-09-14 기준
- * 180 - 60 + 100 = 220s, maxDuration 240s 대비 20초 여유),
+ * 180 - 90 + 130 = 220s, maxDuration 240s 대비 20초 여유 — REQUEST_TIMEOUT_MS
+ * 항은 이 식에서 상쇄되므로 90s로 올려도 여유는 그대로다),
  * npm run test:runtime-budget이 이 계산을 자동으로 검증한다.
  * REPORT_GENERATION_BUDGET_MS 환경변수로 더 늘릴 수 있다(코드 변경 불필요).
  *
