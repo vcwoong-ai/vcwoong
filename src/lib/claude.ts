@@ -271,10 +271,25 @@ export function envDurationMs(raw: string | undefined, fallback: number): number
  * 길면 느린 호출 한 번만으로 함수가 강제 종료되고, 상태 정리도 못 해서
  * 보고서가 GENERATING에 갇힌다. Pro 등 더 긴 실행시간을 쓰면
  * AI_REQUEST_TIMEOUT_MS로 올리면 된다.
+ *
+ * 2026-09-14 Production 실측(OpenRouter 자체 청구 로그로 확인 — generation_id
+ * 단위 실제 과금 기록): 25s는 실제로 "모델이 응답을 안 준" 게 아니라 "섹션
+ * 하나를 다 쓰기엔 짧은" 값이었다. 매 시도가 TTFT 1~3초로 정상 시작해 실제
+ * 토큰을 계속 생성 중이었는데도(정상 과금 발생) 정확히 25.0s에서
+ * AbortController가 스트림을 끊어, 그 시점 실측 속도(~30-40 tok/s) 기준
+ * 850~950 토큰에서 항상 잘렸다 — Investment Quality Layer(수치 근거 등급/
+ * Bull-Base-Bear/KPI 체크리스트 등)로 섹션당 요구 분량이 늘어난 뒤로는 이
+ * 정도로는 항상 부족해, primary/fallback 전부가 매번 이 지점에서 실패하는
+ * 사고로 이어졌다. 60s로 올려 여유를 둔다(아래 AI_CALL_BUDGET_MS 계산에서
+ * 이 값 자체는 worst-case 여유(FUNCTION_LIMIT_MS 대비 margin)에 영향을 주지
+ * 않는다 — report-generation.ts의 "남은 시간 ≥ REQUEST_TIMEOUT_MS일 때만
+ * 새 섹션 시작" 게이트와 AI_CALL_BUDGET_MS 공식에서 이 항이 서로 상쇄되기
+ * 때문. tools/test-runtime-budget.ts의 testWorstCaseRunFitsFunctionLimit
+ * 참고 — 이 값을 올려도 그 테스트가 요구하는 여유는 그대로 유지된다).
  */
 export const REQUEST_TIMEOUT_MS = envDurationMs(
   process.env.AI_REQUEST_TIMEOUT_MS,
-  25_000
+  60_000
 );
 
 /**
@@ -291,12 +306,20 @@ export const REQUEST_TIMEOUT_MS = envDurationMs(
  * 다음 모델이 항상 실제로 시도된다(단, 남은 예산 자체가 이보다 적으면
  * 남은 만큼만 — 아래 AI_CALL_BUDGET_MS 참고). primary보다 짧게 잡은
  * 이유는 fallback 단계에 왔다는 것 자체가 이미 1차 지연을 겪고 있다는
- * 신호라, 매번 25초씩 기다리면 체인 전체가 길어져 REPORT_GENERATION_BUDGET_MS/
- * maxDuration 여유를 필요 이상으로 깎아먹기 때문이다.
+ * 신호라, 매번 primary와 똑같이 오래 기다리면 체인 전체가 길어져
+ * REPORT_GENERATION_BUDGET_MS/maxDuration 여유를 필요 이상으로 깎아먹기
+ * 때문이다.
+ *
+ * 2026-09-14: REQUEST_TIMEOUT_MS를 25s→60s로 올린 것과 같은 이유(실측
+ * Production 사고 — 위 주석 참고)로 이 값도 15s→20s로 올린다. 다만 이 값은
+ * AI_CALL_BUDGET_MS 공식(아래)에서 fallback 개수만큼(×2) worst-case 여유를
+ * 직접 깎아먹으므로 REQUEST_TIMEOUT_MS만큼 자유롭게 올릴 수는 없다 —
+ * 5s(×2=10s) 증가는 tools/test-runtime-budget.ts가 검증하는 여유
+ * (FUNCTION_LIMIT_MS 240s 대비)를 30s→20s로만 줄인다.
  */
 export const FALLBACK_REQUEST_TIMEOUT_MS = envDurationMs(
   process.env.AI_FALLBACK_REQUEST_TIMEOUT_MS,
-  15_000
+  20_000
 );
 
 /**
@@ -306,8 +329,8 @@ export const FALLBACK_REQUEST_TIMEOUT_MS = envDurationMs(
  * 기본값은 "40초를 60초로 늘리는" 임의 조정이 아니라, 실제 체인 구성에서
  * 모델 각각이 자기 몫(REQUEST_TIMEOUT_MS 또는 FALLBACK_REQUEST_TIMEOUT_MS)을
  * 온전히 받을 수 있도록 역산한 값이다: primary 1개(REQUEST_TIMEOUT_MS) +
- * fallback마다(FALLBACK_REQUEST_TIMEOUT_MS) — 기본 체인(openrouter/free,
- * meta-llama 2개)이면 25s + 15s×2 = 55s. AI_FALLBACK_MODELS로 fallback을
+ * fallback마다(FALLBACK_REQUEST_TIMEOUT_MS) — 기본 체인(2026-09-14 기준
+ * 60s + 20s×2 = 100s, fallback 2개)이다. AI_FALLBACK_MODELS로 fallback을
  * 늘리면(MAX_FALLBACK_MODELS까지) 이 기본값도 그만큼 늘어나 체인 끝까지
  * 실제로 시도될 시간을 보장한다.
  *
