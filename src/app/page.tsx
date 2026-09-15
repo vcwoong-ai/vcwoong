@@ -84,24 +84,34 @@ export default function LandingPage() {
       </nav>
 
       {/* Hero */}
-      <section className="pt-40 pb-16 px-6 border-b border-white/10">
-        <div className="max-w-6xl mx-auto">
-          <p className="text-xs font-mono tracking-[0.2em] text-white/40 mb-6 uppercase">
+      <section className="relative pt-40 pb-16 px-6 border-b border-white/10 overflow-hidden">
+        {/* 아주 옅은 격자 배경 — 터미널/증권 화면 톤을 히어로 배경까지 이어간다 */}
+        <div
+          className="pointer-events-none absolute inset-0 opacity-[0.07]"
+          style={{
+            backgroundImage:
+              "linear-gradient(to right, white 1px, transparent 1px), linear-gradient(to bottom, white 1px, transparent 1px)",
+            backgroundSize: "64px 64px",
+            maskImage: "radial-gradient(ellipse 60% 50% at 30% 0%, black, transparent)",
+          }}
+        />
+        <div className="relative max-w-6xl mx-auto">
+          <p className="landing-fade-in-up text-xs font-mono tracking-[0.2em] text-white/40 mb-6 uppercase">
             Institutional-grade diligence, written by AI
           </p>
-          <h1 className="text-5xl md:text-7xl font-semibold leading-[1.05] tracking-tight max-w-4xl">
+          <h1 className="landing-fade-in-up [animation-delay:80ms] text-5xl md:text-7xl font-semibold leading-[1.05] tracking-tight max-w-4xl">
             딜을 요약하지 않습니다.
             <br />
             <span className="text-white/50">판단의 근거를 남깁니다.</span>
           </h1>
-          <p className="text-lg text-white/60 mt-8 max-w-2xl leading-relaxed">
+          <p className="landing-fade-in-up [animation-delay:160ms] text-lg text-white/60 mt-8 max-w-2xl leading-relaxed">
             섹터 전문 AI가 10섹션 투자심의보고서를 자동 작성합니다. 쓰인 모든 숫자는 업로드
             자료의 원문까지 되짚을 수 있고, 근거가 없는 값은 따로 표시해 심의 전에 확인할
             것만 남깁니다.
           </p>
 
           {/* Stats — 숫자를 monospace로, 증권/터미널 화면 느낌 */}
-          <div className="mt-12 grid grid-cols-3 max-w-xl border-y border-white/10 divide-x divide-white/10">
+          <div className="landing-fade-in-up [animation-delay:240ms] mt-12 grid grid-cols-3 max-w-xl border-y border-white/10 divide-x divide-white/10">
             {[
               { value: "10분", label: "보고서 1건 생성" },
               { value: "6", label: "섹터 전문 에이전트" },
@@ -139,10 +149,15 @@ export default function LandingPage() {
               <Link
                 key={track.key}
                 href={track.soon ? "#faq" : `/register?track=${track.key}`}
-                className={`group relative p-8 md:p-10 ${i === 0 ? "border-b md:border-b-0 md:border-r border-white/10" : ""} hover:bg-white/[0.04] transition-colors`}
+                className={`group relative overflow-hidden p-8 md:p-10 ${i === 0 ? "border-b md:border-b-0 md:border-r border-white/10" : ""} hover:bg-white/[0.04] transition-colors`}
               >
+                {/* 하단 강조선 — hover 시 왼쪽에서 자라난다 */}
+                <span className="absolute bottom-0 left-0 h-px w-0 bg-white group-hover:w-full transition-[width] duration-300" />
                 <div className="flex items-start justify-between">
-                  <track.icon className="w-8 h-8 text-white/70" strokeWidth={1.5} />
+                  <track.icon
+                    className="w-8 h-8 text-white/70 group-hover:text-white group-hover:scale-105 transition-all"
+                    strokeWidth={1.5}
+                  />
                   {track.soon ? (
                     <span className="text-[10px] font-mono tracking-wider text-white/40 border border-white/15 rounded-full px-2.5 py-1 uppercase">
                       Coming soon
