@@ -221,14 +221,16 @@ export default function LandingPage() {
               <FileText className="w-4 h-4 text-white/50" />
               <span className="text-xs font-mono tracking-wider text-white/40 uppercase">Report</span>
             </div>
-            <div className="space-y-2.5">
-              <div className="h-1.5 bg-white/15 rounded-full w-full" />
-              <div className="h-1.5 bg-white/15 rounded-full w-5/6" />
-              <div className="h-1.5 bg-white/15 rounded-full w-4/6" />
-            </div>
-            <div className="mt-6 flex items-center gap-1.5 text-xs text-white/70 font-mono">
-              <Check className="w-3.5 h-3.5" />
-              근거 문서 확인 18/29
+            <p className="text-xs text-white/60 leading-relaxed">
+              최근 12개월 ARR은{" "}
+              <span className="text-white bg-white/10 border-b border-white/40 px-1 rounded-sm">
+                24.7억원
+              </span>
+              으로 전년 대비 3.1배 성장했으며, Series B 밸류에이션은...
+            </p>
+            <div className="mt-5 inline-flex items-center gap-2 text-[10px] font-mono text-white/50 border border-white/15 rounded-sm px-2.5 py-1.5 bg-white/[0.03]">
+              <Check className="w-3 h-3 text-white/70 flex-shrink-0" />
+              IR_Deck_v3.pptx · 슬라이드 12 원문 확인
             </div>
           </div>
           <div className="relative bg-black p-8">
@@ -238,10 +240,39 @@ export default function LandingPage() {
               <BarChart3 className="w-4 h-4 text-white/50" />
               <span className="text-xs font-mono tracking-wider text-white/40 uppercase">Score</span>
             </div>
-            <div className="text-4xl font-mono font-semibold">
-              82<span className="text-base text-white/30">/100</span>
+            <div className="flex items-center gap-5">
+              <svg viewBox="0 0 120 120" className="w-20 h-20 flex-shrink-0" aria-hidden="true">
+                <polygon
+                  points="60,15 98.97,37.5 98.97,82.5 60,105 21.03,82.5 21.03,37.5"
+                  fill="none"
+                  stroke="white"
+                  strokeOpacity="0.15"
+                />
+                {[
+                  [60, 15],
+                  [98.97, 37.5],
+                  [98.97, 82.5],
+                  [60, 105],
+                  [21.03, 82.5],
+                  [21.03, 37.5],
+                ].map(([x, y]) => (
+                  <line key={`${x}-${y}`} x1="60" y1="60" x2={x} y2={y} stroke="white" strokeOpacity="0.08" />
+                ))}
+                <polygon
+                  points="60,24.9 85.33,45.38 91.96,78.45 60,91.5 38.57,72.38 36.62,46.5"
+                  fill="white"
+                  fillOpacity="0.15"
+                  stroke="white"
+                  strokeWidth="1.5"
+                />
+              </svg>
+              <div>
+                <div className="text-4xl font-mono font-semibold">
+                  82<span className="text-base text-white/30">/100</span>
+                </div>
+                <p className="text-xs text-white/40 mt-2">투자 매력도 · 확신도 HIGH</p>
+              </div>
             </div>
-            <p className="text-xs text-white/40 mt-2">투자 매력도 · 확신도 HIGH</p>
           </div>
           <div className="relative bg-black p-8">
             <span className="absolute top-3 left-3 w-2.5 h-2.5 border-t border-l border-white/20" />
@@ -251,7 +282,15 @@ export default function LandingPage() {
               <span className="text-xs font-mono tracking-wider text-white/40 uppercase">Agent</span>
             </div>
             <p className="text-lg font-semibold">Dr. Cell</p>
-            <p className="text-xs text-white/40 mt-2 leading-relaxed">BIO 전문 AI · rNPV 계산 완료</p>
+            <p className="text-xs text-white/40 mt-1 mb-4">BIO 전문 AI</p>
+            <p className="text-xs text-white/60 leading-relaxed border-l-2 border-white/20 pl-3">
+              PoS 62% 적용 시 rNPV{" "}
+              <span className="text-white font-mono">118억원</span>
+            </p>
+            <div className="mt-4 inline-flex items-center gap-1.5 text-[10px] font-mono text-white/40">
+              <span className="w-1 h-1 rounded-full bg-white/50" />
+              PubMed NCT04561492 조회 완료
+            </div>
           </div>
         </div>
       </section>
