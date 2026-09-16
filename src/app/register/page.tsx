@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -9,8 +9,7 @@ import { signIn } from "next-auth/react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Zap, AlertCircle } from "lucide-react";
+import { AlertCircle, ArrowLeft } from "lucide-react";
 import { BRAND } from "@/lib/brand";
 import Link from "next/link";
 
@@ -34,10 +33,32 @@ const registerSchema = z
 
 type RegisterForm = z.infer<typeof registerSchema>;
 
-export default function RegisterPage() {
+/**
+ * 트랙별 카피만 바꾼다 — DB에 track을 저장하는 필드가 없어(스키마 변경
+ * 없이는 영속화 불가) 여기서는 가입 화면의 문구만 트랙에 맞춘다.
+ * VC 외 트랙(예: pe)은 랜딩에서 실제로 이 URL로 연결되지 않으므로
+ * (아직 "Coming soon" — FAQ로 스크롤) 기본 카피로 안전하게 폴백한다.
+ */
+const TRACK_COPY: Record<string, { eyebrow: string; heading: string; sub: string }> = {
+  vc: {
+    eyebrow: "TRACK · VC 심사역",
+    heading: "VC 트랙으로 시작합니다",
+    sub: "섹터 전문 AI 6명이 투자심의보고서 초안을 씁니다. 신용카드 없이 무료로 시작하세요.",
+  },
+};
+
+const DEFAULT_COPY = {
+  eyebrow: "GET STARTED",
+  heading: "5분 안에 첫 보고서를 시작하세요",
+  sub: "신용카드 없이 무료로 시작 — 6개 섹터 전문 AI 에이전트를 지금 바로 사용할 수 있습니다.",
+};
+
+function RegisterForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const copy = TRACK_COPY[searchParams.get("track") ?? ""] ?? DEFAULT_COPY;
 
   const {
     register,
@@ -81,136 +102,122 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen flex">
-      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 flex-col items-center justify-center p-12 relative overflow-hidden">
-        <div className="max-w-md text-center relative z-10">
-          {/* next/image의 최적화는 래스터 이미지 대상이라 SVG엔 이득이
-              없고, SVG는 next.config의 dangerouslyAllowSVG 없인 아예
-              차단된다 — 정적 벡터 장식 이미지라 그냥 img로 충분하다. */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/illustrations/register.svg"
-            alt=""
-            className="w-full max-w-sm mx-auto mb-8"
-          />
-          <h2 className="text-2xl font-bold text-white mb-2">
-            5분 안에 첫 보고서를 시작하세요
-          </h2>
-          <p className="text-blue-300 text-sm leading-relaxed">
-            신용카드 없이 무료로 시작 — 6개 섹터 전문 AI 에이전트를
-            지금 바로 사용할 수 있습니다.
+    <div className="min-h-screen bg-black text-white flex flex-col">
+      <header className="px-6 h-16 flex items-center border-b border-white/10">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-2 text-sm text-white/50 hover:text-white transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          {BRAND.name}
+        </Link>
+      </header>
+
+      <main className="flex-1 flex items-center justify-center px-6 py-16">
+        <div className="w-full max-w-sm">
+          <p className="text-xs font-mono tracking-[0.2em] text-white/40 mb-4 uppercase">
+            {copy.eyebrow}
           </p>
-        </div>
-      </div>
+          <h1 className="text-2xl font-semibold tracking-tight">{copy.heading}</h1>
+          <p className="text-sm text-white/50 mt-2 leading-relaxed">{copy.sub}</p>
 
-      <div className="flex-1 flex items-center justify-center p-4 bg-white">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 bg-blue-600 rounded-2xl mb-4">
-            <Zap className="w-8 h-8 text-white" />
-          </div>
-          <h1 className="text-3xl font-bold text-gray-900">{BRAND.name}</h1>
-          <p className="text-gray-500 mt-1 text-sm">{BRAND.nameKr} · AI 투자심의 자동화</p>
-        </div>
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 mt-8">
+            {error && (
+              <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/30 rounded-sm text-sm text-red-300">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                {error}
+              </div>
+            )}
 
-        <Card className="border-0 shadow-2xl">
-          <CardHeader className="pb-2">
-            <h2 className="text-xl font-semibold text-center text-gray-900">
-              회원가입
-            </h2>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-              {error && (
-                <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                  {error}
-                </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="name" className="text-xs font-mono tracking-wider text-white/50 uppercase">
+                이름
+              </Label>
+              <Input
+                id="name"
+                placeholder="홍길동"
+                {...register("name")}
+                className={`bg-white/5 border-white/15 text-white placeholder:text-white/30 focus-visible:ring-white/30 focus-visible:border-white/40 ${errors.name ? "border-red-500/50" : ""}`}
+              />
+              {errors.name && (
+                <p className="text-xs text-red-400">{errors.name.message}</p>
               )}
-
-              <div className="space-y-1.5">
-                <Label htmlFor="name">이름</Label>
-                <Input
-                  id="name"
-                  placeholder="홍길동"
-                  {...register("name")}
-                  className={errors.name ? "border-red-300" : ""}
-                />
-                {errors.name && (
-                  <p className="text-xs text-red-500">{errors.name.message}</p>
-                )}
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="email">이메일</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="analyst@vcfirm.co.kr"
-                  {...register("email")}
-                  className={errors.email ? "border-red-300" : ""}
-                />
-                {errors.email && (
-                  <p className="text-xs text-red-500">
-                    {errors.email.message}
-                  </p>
-                )}
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="password">비밀번호</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="8자 이상, 영문+숫자"
-                  {...register("password")}
-                  className={errors.password ? "border-red-300" : ""}
-                />
-                {errors.password && (
-                  <p className="text-xs text-red-500">
-                    {errors.password.message}
-                  </p>
-                )}
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="confirmPassword">비밀번호 확인</Label>
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  placeholder="비밀번호를 다시 입력하세요"
-                  {...register("confirmPassword")}
-                  className={errors.confirmPassword ? "border-red-300" : ""}
-                />
-                {errors.confirmPassword && (
-                  <p className="text-xs text-red-500">
-                    {errors.confirmPassword.message}
-                  </p>
-                )}
-              </div>
-
-              <Button
-                type="submit"
-                className="w-full bg-blue-600 hover:bg-blue-700"
-                disabled={loading}
-              >
-                {loading ? "가입 중..." : "회원가입"}
-              </Button>
-            </form>
-
-            <div className="mt-4 text-center text-sm text-gray-500">
-              이미 계정이 있으신가요?{" "}
-              <Link
-                href="/login"
-                className="text-blue-600 hover:underline font-medium"
-              >
-                로그인
-              </Link>
             </div>
-          </CardContent>
-        </Card>
-      </div>
-      </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="email" className="text-xs font-mono tracking-wider text-white/50 uppercase">
+                이메일
+              </Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="analyst@vcfirm.co.kr"
+                {...register("email")}
+                className={`bg-white/5 border-white/15 text-white placeholder:text-white/30 focus-visible:ring-white/30 focus-visible:border-white/40 ${errors.email ? "border-red-500/50" : ""}`}
+              />
+              {errors.email && (
+                <p className="text-xs text-red-400">{errors.email.message}</p>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="password" className="text-xs font-mono tracking-wider text-white/50 uppercase">
+                비밀번호
+              </Label>
+              <Input
+                id="password"
+                type="password"
+                placeholder="8자 이상, 영문+숫자"
+                {...register("password")}
+                className={`bg-white/5 border-white/15 text-white placeholder:text-white/30 focus-visible:ring-white/30 focus-visible:border-white/40 ${errors.password ? "border-red-500/50" : ""}`}
+              />
+              {errors.password && (
+                <p className="text-xs text-red-400">{errors.password.message}</p>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="confirmPassword" className="text-xs font-mono tracking-wider text-white/50 uppercase">
+                비밀번호 확인
+              </Label>
+              <Input
+                id="confirmPassword"
+                type="password"
+                placeholder="비밀번호를 다시 입력하세요"
+                {...register("confirmPassword")}
+                className={`bg-white/5 border-white/15 text-white placeholder:text-white/30 focus-visible:ring-white/30 focus-visible:border-white/40 ${errors.confirmPassword ? "border-red-500/50" : ""}`}
+              />
+              {errors.confirmPassword && (
+                <p className="text-xs text-red-400">{errors.confirmPassword.message}</p>
+              )}
+            </div>
+
+            <Button
+              type="submit"
+              className="w-full bg-white text-black hover:bg-white/90 rounded-sm font-medium"
+              disabled={loading}
+            >
+              {loading ? "가입 중..." : "무료로 시작하기"}
+            </Button>
+            <p className="text-xs text-white/30 text-center">신용카드 불필요 · 5분 이내 설정 · 월 5건 무료</p>
+          </form>
+
+          <div className="mt-6 pt-6 border-t border-white/10 text-center text-sm text-white/40">
+            이미 계정이 있으신가요?{" "}
+            <Link href="/login" className="text-white hover:underline font-medium">
+              로그인
+            </Link>
+          </div>
+        </div>
+      </main>
     </div>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-black" />}>
+      <RegisterForm />
+    </Suspense>
   );
 }
