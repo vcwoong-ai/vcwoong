@@ -51,10 +51,15 @@ export function LandingPricing() {
             return (
               <div
                 key={plan.key}
-                className={`p-8 border-b border-r border-black/15 ${
+                className={`relative p-8 border-b border-r border-black/15 ${
                   plan.highlight ? "bg-black text-white" : "bg-white"
                 }`}
               >
+                {plan.highlight && (
+                  <span className="absolute top-4 right-4 text-[10px] font-mono tracking-wider uppercase text-black bg-white px-2.5 py-1 rounded-full">
+                    가장 많이 선택
+                  </span>
+                )}
                 <div className="mb-6">
                   <p
                     className={`text-xs font-mono tracking-wider uppercase mb-2 ${

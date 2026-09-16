@@ -96,7 +96,8 @@ export default function LandingPage() {
           }}
         />
         <div className="relative max-w-6xl mx-auto">
-          <p className="landing-fade-in-up text-xs font-mono tracking-[0.2em] text-white/40 mb-6 uppercase">
+          <p className="landing-fade-in-up text-xs font-mono tracking-[0.2em] text-white/40 mb-6 uppercase flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-white/60 animate-pulse" />
             Institutional-grade diligence, written by AI
           </p>
           <h1 className="landing-fade-in-up [animation-delay:80ms] text-5xl md:text-7xl font-semibold leading-[1.05] tracking-tight max-w-4xl">
@@ -153,6 +154,13 @@ export default function LandingPage() {
               >
                 {/* 하단 강조선 — hover 시 왼쪽에서 자라난다 */}
                 <span className="absolute bottom-0 left-0 h-px w-0 bg-white group-hover:w-full transition-[width] duration-300" />
+                {/* 큰 고스트 넘버 — 에디토리얼 지면 느낌의 배경 장식, 내용과 안 겹치게 우하단에 배치 */}
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute -bottom-6 -right-2 text-[10rem] leading-none font-mono font-bold text-white/[0.035] select-none"
+                >
+                  {String(i + 1).padStart(2, "0")}
+                </span>
                 <div className="flex items-start justify-between">
                   <track.icon
                     className="w-8 h-8 text-white/70 group-hover:text-white group-hover:scale-105 transition-all"
@@ -206,7 +214,9 @@ export default function LandingPage() {
       {/* Product preview cards */}
       <section className="py-20 px-6 border-b border-white/10 bg-white/[0.02]">
         <div className="max-w-6xl mx-auto grid md:grid-cols-3 gap-px bg-white/10">
-          <div className="bg-black p-8">
+          <div className="relative bg-black p-8">
+            <span className="absolute top-3 left-3 w-2.5 h-2.5 border-t border-l border-white/20" />
+            <span className="absolute bottom-3 right-3 w-2.5 h-2.5 border-b border-r border-white/20" />
             <div className="flex items-center gap-2 mb-6">
               <FileText className="w-4 h-4 text-white/50" />
               <span className="text-xs font-mono tracking-wider text-white/40 uppercase">Report</span>
@@ -221,7 +231,9 @@ export default function LandingPage() {
               근거 문서 확인 18/29
             </div>
           </div>
-          <div className="bg-black p-8">
+          <div className="relative bg-black p-8">
+            <span className="absolute top-3 left-3 w-2.5 h-2.5 border-t border-l border-white/20" />
+            <span className="absolute bottom-3 right-3 w-2.5 h-2.5 border-b border-r border-white/20" />
             <div className="flex items-center gap-2 mb-6">
               <BarChart3 className="w-4 h-4 text-white/50" />
               <span className="text-xs font-mono tracking-wider text-white/40 uppercase">Score</span>
@@ -231,7 +243,9 @@ export default function LandingPage() {
             </div>
             <p className="text-xs text-white/40 mt-2">투자 매력도 · 확신도 HIGH</p>
           </div>
-          <div className="bg-black p-8">
+          <div className="relative bg-black p-8">
+            <span className="absolute top-3 left-3 w-2.5 h-2.5 border-t border-l border-white/20" />
+            <span className="absolute bottom-3 right-3 w-2.5 h-2.5 border-b border-r border-white/20" />
             <div className="flex items-center gap-2 mb-6">
               <span className="w-1.5 h-1.5 rounded-full bg-white/70" />
               <span className="text-xs font-mono tracking-wider text-white/40 uppercase">Agent</span>
@@ -519,7 +533,7 @@ export default function LandingPage() {
                 결론과 함께 그 근거를 원문까지 되짚을 수 있게 남깁니다.
               </p>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-10 text-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-10 text-sm">
               <div>
                 <p className="text-white font-medium mb-3">제품</p>
                 <div className="space-y-2">
@@ -534,6 +548,18 @@ export default function LandingPage() {
                 <div className="space-y-2">
                   <Link href="/login" className="block hover:text-white transition-colors">로그인</Link>
                   <Link href="/register" className="block hover:text-white transition-colors">회원가입</Link>
+                </div>
+              </div>
+              <div>
+                <p className="text-white font-medium mb-3">문의</p>
+                <div className="space-y-2">
+                  <a
+                    href={`mailto:${BRAND.supportEmail}`}
+                    className="block hover:text-white transition-colors"
+                  >
+                    {BRAND.supportEmail}
+                  </a>
+                  <a href="#faq" className="block hover:text-white transition-colors">FAQ</a>
                 </div>
               </div>
             </div>
