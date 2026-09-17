@@ -146,24 +146,29 @@ export default function LandingPage() {
           </div>
 
           <div className="grid md:grid-cols-2 border border-white/10">
-            {TRACKS.map((track, i) => (
+            {TRACKS.map((track, i) => {
+              const isVc = track.key === "vc";
+              return (
               <Link
                 key={track.key}
                 href={track.soon ? "#faq" : `/register?track=${track.key}`}
-                className={`group relative overflow-hidden p-8 md:p-10 ${i === 0 ? "border-b md:border-b-0 md:border-r border-white/10" : ""} hover:bg-white/[0.04] transition-colors`}
+                className={`group relative overflow-hidden p-8 md:p-10 ${i === 0 ? "border-b md:border-b-0 md:border-r border-white/10" : ""} ${isVc ? "hover:bg-blue-500/[0.06]" : "hover:bg-white/[0.04]"} transition-colors`}
               >
-                {/* 하단 강조선 — hover 시 왼쪽에서 자라난다 */}
-                <span className="absolute bottom-0 left-0 h-px w-0 bg-white group-hover:w-full transition-[width] duration-300" />
+                {/* 하단 강조선 — hover 시 왼쪽에서 자라난다. VC는 실제 제품(대시보드)의
+                    블루 톤을 이어받고, PE는 랜딩 전체의 모노톤을 그대로 쓴다 */}
+                <span
+                  className={`absolute bottom-0 left-0 h-px w-0 group-hover:w-full transition-[width] duration-300 ${isVc ? "bg-blue-400" : "bg-white"}`}
+                />
                 {/* 큰 고스트 넘버 — 에디토리얼 지면 느낌의 배경 장식, 내용과 안 겹치게 우하단에 배치 */}
                 <span
                   aria-hidden="true"
-                  className="pointer-events-none absolute -bottom-6 -right-2 text-[10rem] leading-none font-mono font-bold text-white/[0.035] select-none"
+                  className={`pointer-events-none absolute -bottom-6 -right-2 text-[10rem] leading-none font-mono font-bold select-none ${isVc ? "text-blue-400/[0.06]" : "text-white/[0.035]"}`}
                 >
                   {String(i + 1).padStart(2, "0")}
                 </span>
                 <div className="flex items-start justify-between">
                   <track.icon
-                    className="w-8 h-8 text-white/70 group-hover:text-white group-hover:scale-105 transition-all"
+                    className={`w-8 h-8 transition-all ${isVc ? "text-blue-300/80 group-hover:text-blue-300 group-hover:scale-105" : "text-white/70 group-hover:text-white group-hover:scale-105"}`}
                     strokeWidth={1.5}
                   />
                   {track.soon ? (
@@ -171,10 +176,10 @@ export default function LandingPage() {
                       Coming soon
                     </span>
                   ) : (
-                    <ArrowUpRight className="w-5 h-5 text-white/30 group-hover:text-white group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all" />
+                    <ArrowUpRight className={`w-5 h-5 transition-all group-hover:translate-x-0.5 group-hover:-translate-y-0.5 ${isVc ? "text-blue-300/50 group-hover:text-blue-300" : "text-white/30 group-hover:text-white"}`} />
                   )}
                 </div>
-                <p className="text-xs font-mono tracking-[0.2em] text-white/40 mt-8 uppercase">
+                <p className={`text-xs font-mono tracking-[0.2em] mt-8 uppercase ${isVc ? "text-blue-300/60" : "text-white/40"}`}>
                   {track.eyebrow}
                 </p>
                 <h3 className="text-2xl font-semibold mt-2 tracking-tight">{track.name}</h3>
@@ -183,13 +188,14 @@ export default function LandingPage() {
                 <ul className="mt-6 space-y-2">
                   {track.points.map((p) => (
                     <li key={p} className="flex items-start gap-2 text-xs text-white/50">
-                      <span className="w-1 h-1 rounded-full bg-white/40 mt-1.5 shrink-0" />
+                      <span className={`w-1 h-1 rounded-full mt-1.5 shrink-0 ${isVc ? "bg-blue-400/60" : "bg-white/40"}`} />
                       {p}
                     </li>
                   ))}
                 </ul>
               </Link>
-            ))}
+              );
+            })}
           </div>
 
           <div className="mt-6 flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6">
