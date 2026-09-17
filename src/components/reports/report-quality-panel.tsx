@@ -181,7 +181,11 @@ export function ReportQualityPanel({
       )}
 
       <div className="mt-4 grid grid-cols-2 sm:grid-cols-5 gap-2">
-        {data.sections.map((s) => {
+        {/* 문서 순서(보고서 목차) 그대로 두면 낮은 점수 섹션이 여기저기 흩어져
+            10개를 다 훑어야 뭘 고쳐야 할지 알 수 있다. 이 그리드는 목차가
+            아니라 "뭘 고칠지 찾는" 용도라, 점수 낮은 순으로 재배열해 확인이
+            필요한 섹션이 항상 왼쪽 위(눈이 먼저 가는 자리)에 모이게 한다. */}
+        {[...data.sections].sort((a, b) => a.score - b.score).map((s) => {
           const issues = [...s.issues, ...s.warnings];
           const weak = s.score < 70;
           const improving = improvingSectionKey === s.sectionKey;
