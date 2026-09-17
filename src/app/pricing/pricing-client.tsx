@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import { Check, ArrowLeft } from "lucide-react";
 import {
   PUBLIC_PLANS,
@@ -35,6 +36,10 @@ const FAQ = [
 
 export function PricingClient() {
   const [cycle, setCycle] = useState<BillingCycle>("monthly");
+  const { status } = useSession();
+  /** 로그인 상태면 바로 설정으로, 아니면 가입부터 — landing-pricing.tsx와 동일 */
+  const upgradeHref = (planKey: string) =>
+    status === "authenticated" ? "/settings#subscription" : `/register?plan=${planKey}`;
 
   return (
     <div className="min-h-screen bg-white">
@@ -156,7 +161,7 @@ export function PricingClient() {
                   ))}
                 </ul>
                 <Link
-                  href={plan.key === "free" ? "/register" : "/settings#subscription"}
+                  href={plan.key === "free" ? "/register" : upgradeHref(plan.key)}
                   className={`mt-6 text-center text-sm py-2.5 rounded-lg font-medium ${
                     plan.highlight
                       ? "bg-blue-500 text-white hover:bg-blue-400"
