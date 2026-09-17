@@ -19,6 +19,16 @@ export const BRAND = {
   supportEmail: "admin@dealmind.kr",
   customerKeyPrefix: "dealmind",
   github: "https://github.com/vcwoong-ai/vcwoong",
+  /**
+   * 사업자 정보 — footer·이용약관·개인정보처리방침에 노출된다.
+   * TODO: 실제 사업자등록증 정보로 교체할 것 (현재는 자리표시자).
+   */
+  legal: {
+    businessName: "(주)딜마인드 (사업자등록 전 — 자리표시자)",
+    ceoName: "대표자명 미기재 (자리표시자)",
+    businessRegNo: "000-00-00000 (자리표시자)",
+    address: "주소 미기재 (자리표시자)",
+  },
 } as const;
 
 /**

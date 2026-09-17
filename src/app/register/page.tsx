@@ -25,6 +25,9 @@ const registerSchema = z
         "영문자와 숫자를 포함해야 합니다"
       ),
     confirmPassword: z.string(),
+    agreeTerms: z.literal(true, {
+      message: "개인정보처리방침과 이용약관에 동의해야 가입할 수 있습니다",
+    }),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "비밀번호가 일치하지 않습니다",
@@ -198,6 +201,29 @@ function RegisterForm() {
               />
               {errors.confirmPassword && (
                 <p className={`text-xs ${isVc ? "text-red-500" : "text-red-400"}`}>{errors.confirmPassword.message}</p>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <label className={`flex items-start gap-2 text-xs leading-relaxed ${isVc ? "text-slate-600" : "text-white/60"}`}>
+                <input
+                  type="checkbox"
+                  {...register("agreeTerms")}
+                  className="mt-0.5 flex-shrink-0"
+                />
+                <span>
+                  <Link href="/privacy" target="_blank" className={`underline ${isVc ? "hover:text-slate-900" : "hover:text-white"}`}>
+                    개인정보처리방침
+                  </Link>
+                  {" "}및{" "}
+                  <Link href="/terms" target="_blank" className={`underline ${isVc ? "hover:text-slate-900" : "hover:text-white"}`}>
+                    이용약관
+                  </Link>
+                  에 동의합니다 (필수)
+                </span>
+              </label>
+              {errors.agreeTerms && (
+                <p className={`text-xs ${isVc ? "text-red-500" : "text-red-400"}`}>{errors.agreeTerms.message}</p>
               )}
             </div>
 
