@@ -58,7 +58,16 @@ function RegisterForm() {
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
-  const copy = TRACK_COPY[searchParams.get("track") ?? ""] ?? DEFAULT_COPY;
+  const track = searchParams.get("track") ?? "";
+  const copy = TRACK_COPY[track] ?? DEFAULT_COPY;
+  /**
+   * VC는 가입 후 실제로 들어가는 대시보드가 블루 톤(--primary 토큰, 기존
+   * bg-blue-600 계열)이라 그 경험을 그대로 이어받는다. 그 외 트랙(아직
+   * 랜딩에서 연결되지 않은 PE 포함)은 랜딩 전체의 블랙&화이트 톤을
+   * 기본값으로 유지 — 트랙이 실제로 연결되는 시점에 그 트랙의 제품
+   * 경험에 맞춰 다시 정하면 된다.
+   */
+  const isVc = track === "vc";
 
   const {
     register,
@@ -102,11 +111,11 @@ function RegisterForm() {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col">
-      <header className="px-6 h-16 flex items-center border-b border-white/10">
+    <div className={`min-h-screen flex flex-col ${isVc ? "bg-white text-slate-900" : "bg-black text-white"}`}>
+      <header className={`px-6 h-16 flex items-center border-b ${isVc ? "border-slate-200" : "border-white/10"}`}>
         <Link
           href="/"
-          className="inline-flex items-center gap-2 text-sm text-white/50 hover:text-white transition-colors"
+          className={`inline-flex items-center gap-2 text-sm transition-colors ${isVc ? "text-slate-500 hover:text-slate-900" : "text-white/50 hover:text-white"}`}
         >
           <ArrowLeft className="w-4 h-4" />
           {BRAND.name}
@@ -115,37 +124,37 @@ function RegisterForm() {
 
       <main className="flex-1 flex items-center justify-center px-6 py-16">
         <div className="w-full max-w-sm">
-          <p className="text-xs font-mono tracking-[0.2em] text-white/40 mb-4 uppercase">
+          <p className={`text-xs font-mono tracking-[0.2em] mb-4 uppercase ${isVc ? "text-blue-600" : "text-white/40"}`}>
             {copy.eyebrow}
           </p>
           <h1 className="text-2xl font-semibold tracking-tight">{copy.heading}</h1>
-          <p className="text-sm text-white/50 mt-2 leading-relaxed">{copy.sub}</p>
+          <p className={`text-sm mt-2 leading-relaxed ${isVc ? "text-slate-500" : "text-white/50"}`}>{copy.sub}</p>
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 mt-8">
             {error && (
-              <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/30 rounded-sm text-sm text-red-300">
+              <div className={`flex items-center gap-2 p-3 rounded-sm text-sm ${isVc ? "bg-red-50 border border-red-200 text-red-700" : "bg-red-500/10 border border-red-500/30 text-red-300"}`}>
                 <AlertCircle className="w-4 h-4 flex-shrink-0" />
                 {error}
               </div>
             )}
 
             <div className="space-y-1.5">
-              <Label htmlFor="name" className="text-xs font-mono tracking-wider text-white/50 uppercase">
+              <Label htmlFor="name" className={`text-xs font-mono tracking-wider uppercase ${isVc ? "text-slate-500" : "text-white/50"}`}>
                 이름
               </Label>
               <Input
                 id="name"
                 placeholder="홍길동"
                 {...register("name")}
-                className={`bg-white/5 border-white/15 text-white placeholder:text-white/30 focus-visible:ring-white/30 focus-visible:border-white/40 ${errors.name ? "border-red-500/50" : ""}`}
+                className={isVc ? (errors.name ? "border-red-400" : "") : `bg-white/5 border-white/15 text-white placeholder:text-white/30 focus-visible:ring-white/30 focus-visible:border-white/40 ${errors.name ? "border-red-500/50" : ""}`}
               />
               {errors.name && (
-                <p className="text-xs text-red-400">{errors.name.message}</p>
+                <p className={`text-xs ${isVc ? "text-red-500" : "text-red-400"}`}>{errors.name.message}</p>
               )}
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="email" className="text-xs font-mono tracking-wider text-white/50 uppercase">
+              <Label htmlFor="email" className={`text-xs font-mono tracking-wider uppercase ${isVc ? "text-slate-500" : "text-white/50"}`}>
                 이메일
               </Label>
               <Input
@@ -153,15 +162,15 @@ function RegisterForm() {
                 type="email"
                 placeholder="analyst@vcfirm.co.kr"
                 {...register("email")}
-                className={`bg-white/5 border-white/15 text-white placeholder:text-white/30 focus-visible:ring-white/30 focus-visible:border-white/40 ${errors.email ? "border-red-500/50" : ""}`}
+                className={isVc ? (errors.email ? "border-red-400" : "") : `bg-white/5 border-white/15 text-white placeholder:text-white/30 focus-visible:ring-white/30 focus-visible:border-white/40 ${errors.email ? "border-red-500/50" : ""}`}
               />
               {errors.email && (
-                <p className="text-xs text-red-400">{errors.email.message}</p>
+                <p className={`text-xs ${isVc ? "text-red-500" : "text-red-400"}`}>{errors.email.message}</p>
               )}
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="password" className="text-xs font-mono tracking-wider text-white/50 uppercase">
+              <Label htmlFor="password" className={`text-xs font-mono tracking-wider uppercase ${isVc ? "text-slate-500" : "text-white/50"}`}>
                 비밀번호
               </Label>
               <Input
@@ -169,15 +178,15 @@ function RegisterForm() {
                 type="password"
                 placeholder="8자 이상, 영문+숫자"
                 {...register("password")}
-                className={`bg-white/5 border-white/15 text-white placeholder:text-white/30 focus-visible:ring-white/30 focus-visible:border-white/40 ${errors.password ? "border-red-500/50" : ""}`}
+                className={isVc ? (errors.password ? "border-red-400" : "") : `bg-white/5 border-white/15 text-white placeholder:text-white/30 focus-visible:ring-white/30 focus-visible:border-white/40 ${errors.password ? "border-red-500/50" : ""}`}
               />
               {errors.password && (
-                <p className="text-xs text-red-400">{errors.password.message}</p>
+                <p className={`text-xs ${isVc ? "text-red-500" : "text-red-400"}`}>{errors.password.message}</p>
               )}
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="confirmPassword" className="text-xs font-mono tracking-wider text-white/50 uppercase">
+              <Label htmlFor="confirmPassword" className={`text-xs font-mono tracking-wider uppercase ${isVc ? "text-slate-500" : "text-white/50"}`}>
                 비밀번호 확인
               </Label>
               <Input
@@ -185,26 +194,26 @@ function RegisterForm() {
                 type="password"
                 placeholder="비밀번호를 다시 입력하세요"
                 {...register("confirmPassword")}
-                className={`bg-white/5 border-white/15 text-white placeholder:text-white/30 focus-visible:ring-white/30 focus-visible:border-white/40 ${errors.confirmPassword ? "border-red-500/50" : ""}`}
+                className={isVc ? (errors.confirmPassword ? "border-red-400" : "") : `bg-white/5 border-white/15 text-white placeholder:text-white/30 focus-visible:ring-white/30 focus-visible:border-white/40 ${errors.confirmPassword ? "border-red-500/50" : ""}`}
               />
               {errors.confirmPassword && (
-                <p className="text-xs text-red-400">{errors.confirmPassword.message}</p>
+                <p className={`text-xs ${isVc ? "text-red-500" : "text-red-400"}`}>{errors.confirmPassword.message}</p>
               )}
             </div>
 
             <Button
               type="submit"
-              className="w-full bg-white text-black hover:bg-white/90 rounded-sm font-medium"
+              className={isVc ? "w-full font-medium" : "w-full bg-white text-black hover:bg-white/90 rounded-sm font-medium"}
               disabled={loading}
             >
               {loading ? "가입 중..." : "무료로 시작하기"}
             </Button>
-            <p className="text-xs text-white/30 text-center">신용카드 불필요 · 5분 이내 설정 · 월 5건 무료</p>
+            <p className={`text-xs text-center ${isVc ? "text-slate-400" : "text-white/30"}`}>신용카드 불필요 · 5분 이내 설정 · 월 5건 무료</p>
           </form>
 
-          <div className="mt-6 pt-6 border-t border-white/10 text-center text-sm text-white/40">
+          <div className={`mt-6 pt-6 border-t text-center text-sm ${isVc ? "border-slate-200 text-slate-500" : "border-white/10 text-white/40"}`}>
             이미 계정이 있으신가요?{" "}
-            <Link href="/login" className="text-white hover:underline font-medium">
+            <Link href="/login" className={`hover:underline font-medium ${isVc ? "text-blue-600" : "text-white"}`}>
               로그인
             </Link>
           </div>
