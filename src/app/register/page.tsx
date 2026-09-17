@@ -102,7 +102,9 @@ function RegisterForm() {
         redirect: false,
       });
 
-      router.push("/dashboard");
+      // 가격표에서 유료 플랜을 고르고 넘어온 경우 설정의 구독 섹션으로 바로 이어준다
+      const plan = searchParams.get("plan");
+      router.push(plan ? `/settings?plan=${plan}#subscription` : "/dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "오류가 발생했습니다");
     } finally {
