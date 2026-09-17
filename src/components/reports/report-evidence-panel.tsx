@@ -225,7 +225,13 @@ export function ReportEvidencePanel({
         <ul className="mt-3 space-y-2">
           {visible.map((c, i) => {
             const meta = STATUS_META[c.status];
-            const confMeta = CONFIDENCE_META[c.confidence];
+            /* confidence는 status==="document"일 때만 다른 값(HIGH/MEDIUM/LOW)을
+             * 가질 수 있다 — "딜 입력"은 항상 HIGH, "근거 없음"은 항상 UNSUPPORTED로
+             * status 자체가 그 의미를 이미 담고 있어(evidence.ts 참고), 이 경우
+             * confidence 뱃지를 같이 보여주면 같은 말을 뱃지 두 개로 반복하게 된다.
+             * "문서 확인"일 때만 confidence가 실제로 추가 정보(근거 품질)를 준다. */
+            const confMeta =
+              c.status === "document" ? CONFIDENCE_META[c.confidence] : null;
             return (
               <li
                 key={`${c.sectionKey}-${c.claimType}-${c.value}-${c.unit}-${i}`}
@@ -242,11 +248,13 @@ export function ReportEvidencePanel({
                     </span>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
-                    <span
-                      className={`text-[11px] rounded border px-1.5 py-0.5 ${confMeta.className}`}
-                    >
-                      {confMeta.label}
-                    </span>
+                    {confMeta && (
+                      <span
+                        className={`text-[11px] rounded border px-1.5 py-0.5 ${confMeta.className}`}
+                      >
+                        {confMeta.label}
+                      </span>
+                    )}
                     <span
                       className={`text-[11px] rounded border px-1.5 py-0.5 ${meta.className}`}
                     >
