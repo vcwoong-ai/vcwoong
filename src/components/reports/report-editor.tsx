@@ -60,8 +60,8 @@ interface ReportEditorProps {
   onImproveHandled?: () => void;
   /** 조회 전용 (팀 심사역 등) */
   readOnly?: boolean;
-  /** NVIDIA NIM 설정 여부 — false면 "다른 모델로 비교" 버튼 자체를 숨긴다 */
-  nimConfigured?: boolean;
+  /** NIM 또는 Gemini 중 하나라도 설정돼 있는지 — false면 "다른 모델로 비교" 버튼 자체를 숨긴다 */
+  compareModelsConfigured?: boolean;
 }
 
 interface CompareModelResult {
@@ -88,7 +88,7 @@ export function ReportEditor({
   improveRequest,
   onImproveHandled,
   readOnly = false,
-  nimConfigured = false,
+  compareModelsConfigured = false,
 }: ReportEditorProps) {
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
   const toast = useToast();
@@ -508,7 +508,7 @@ export function ReportEditor({
                           )}
                           재생성
                         </Button>
-                        {nimConfigured && (
+                        {compareModelsConfigured && (
                           <Button
                             variant="ghost"
                             size="sm"
