@@ -6,6 +6,7 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { ReportPageClient } from "./report-page-client";
 import { getUserTeamContext, reportReadWhere, canEditResource } from "@/lib/team-access";
 import { isNimConfigured } from "@/lib/nim";
+import { isGeminiConfigured } from "@/lib/gemini";
 
 export default async function ReportPage({
   params,
@@ -44,7 +45,7 @@ export default async function ReportPage({
         key={report.id}
         report={JSON.parse(JSON.stringify(report))}
         canEdit={canEdit}
-        nimConfigured={isNimConfigured()}
+        compareModelsConfigured={isNimConfigured() || isGeminiConfigured()}
       />
     </AppLayout>
   );
