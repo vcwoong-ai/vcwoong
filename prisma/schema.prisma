@@ -81,6 +81,7 @@ model User {
   funds              Fund[]
   portfolioCompanies PortfolioCompany[]
   inboundDeals       InboundDeal[]
+  maDeals            MADeal[]
 
   @@index([teamId])
 }
@@ -97,6 +98,7 @@ model Team {
   funds              Fund[]
   portfolioCompanies PortfolioCompany[]
   inboundDeals       InboundDeal[]
+  maDeals            MADeal[]
 }
 
 model Deal {
@@ -657,4 +659,124 @@ enum InboundStatus {
   QUALIFIED
   PROMOTED
   REJECTED
+}
+
+// ───────────────────────────────────────────────
+// PE 트랙 — Domain Foundation (PR-A)
+//
+// VC의 Deal/Report/SectionKey와 완전히 분리된 별도 모델이다 — VC 기존
+// 모델·enum은 이 섹션에서 단 한 건도 수정하지 않는다(PE Track Phase 2
+// Blueprint §5 참고). LBO 계산 로직(src/lib/lbo-model.ts, PR #90)은
+// Prisma에 의존하지 않는 순수 함수라 이 스키마와 무관하며, 여기서도
+// 연결하지 않는다 — LboModel 테이블은 실제 사용처(LBO integration, PR-E)가
+// 생기기 전까지 만들지 않는다.
+// ───────────────────────────────────────────────
+
+model MADeal {
+  id          String       @id @default(cuid())
+  /// 딜 명칭 — companyName과 별개로 유지한다(향후 딜 명과 대상회사명이
+  /// 서로 다른 개념이 될 수 있음, 예: 동일 대상회사에 대한 재딜)
+  name        String
+  companyName String
+  dealType    MaDealType
+  status      MaDealStatus @default(ACTIVE)
+  userId      String
+  teamId      String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  user      User         @relation(fields: [userId], references: [id])
+  team      Team?        @relation(fields: [teamId], references: [id])
+  documents MADocument[]
+  reports   MAReport[]
+
+  @@index([userId])
+  @@index([teamId])
+  @@index([status])
+}
+
+model MADocument {
+  id         String         @id @default(cuid())
+  maDealId   String
+  name       String
+  type       MaDocumentType
+  url        String
+  size       Int
+  mimeType   String
+  parsedText String?        @db.Text
+  metadata   Json?
+  createdAt  DateTime       @default(now())
+
+  maDeal MADeal @relation(fields: [maDealId], references: [id], onDelete: Cascade)
+
+  @@index([maDealId])
+}
+
+model MAReport {
+  id        String         @id @default(cuid())
+  maDealId  String
+  title     String
+  status    MaReportStatus @default(PENDING)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  maDeal   MADeal            @relation(fields: [maDealId], references: [id], onDelete: Cascade)
+  sections MAReportSection[]
+
+  @@index([maDealId])
+  @@index([status])
+}
+
+model MAReportSection {
+  id         String        @id @default(cuid())
+  maReportId String
+  sectionKey MaSectionKey
+  title      String
+  content    String        @db.Text
+  order      Int
+  status     SectionStatus @default(DRAFT)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  maReport MAReport @relation(fields: [maReportId], references: [id], onDelete: Cascade)
+
+  @@index([maReportId])
+}
+
+enum MaDealType {
+  BUYOUT
+  GROWTH_EQUITY
+  CARVE_OUT
+  MBO
+  SECONDARY
+  MINORITY
+}
+
+enum MaDealStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum MaDocumentType {
+  MANAGEMENT_ACCOUNTS
+  DD_MATERIAL
+  FINANCIAL_MODEL
+  CONTRACT
+  OTHER
+}
+
+enum MaReportStatus {
+  PENDING
+  DRAFT
+}
+
+enum MaSectionKey {
+  DEAL_OVERVIEW
+  FINANCIAL_NORMALIZATION
+  QOE_ANALYSIS
+  LBO_ANALYSIS
+  DD_SUMMARY
+  RETURNS_ANALYSIS
+  RISK_FACTORS
+  RECOMMENDATION
 }
