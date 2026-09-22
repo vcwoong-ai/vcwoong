@@ -689,6 +689,7 @@ model MADeal {
   team      Team?        @relation(fields: [teamId], references: [id])
   documents MADocument[]
   reports   MAReport[]
+  financialPeriods MAFinancialPeriod[]
 
   @@index([userId])
   @@index([teamId])
@@ -779,4 +780,105 @@ enum MaSectionKey {
   RETURNS_ANALYSIS
   RISK_FACTORS
   RECOMMENDATION
+}
+
+// ───────────────────────────────────────────────
+// PE 트랙 — Financial Normalization Foundation (PR-B)
+//
+// 원천 재무 데이터(MAFinancialLineItem, source/sourceLocation로 출처 보존)
+// → 정규화 엔진(src/lib/pe/financial-normalization.ts, 순수 함수,
+// LLM·DB 미사용) → EBITDA/Net Debt/FCF 등 파생 지표. QoE 분류(일회성/
+// 런레이트 등)·DART 연동·LBO 연결은 이후 PR(PR-C/D/E) 범위 — 여기서는
+// MAFinancialAdjustment가 그 확장을 받을 수 있는 최소 구조만 둔다.
+// lineItem/metric은 enum으로 고정하지 않는다(CompanyKPI.metric과 동일한
+// 이유 — financial-types.ts의 CANONICAL_LINE_ITEMS가 API 레벨 검증을 맡는다).
+// ───────────────────────────────────────────────
+
+model MAFinancialPeriod {
+  id         String                @id @default(cuid())
+  maDealId   String
+  fiscalYear Int
+  periodType MaFinancialPeriodType
+  startDate  DateTime
+  endDate    DateTime
+  /// ISO 통화 코드(예: KRW, USD) — 이 기간에 속한 모든 line item·adjustment는
+  /// 반드시 같은 통화여야 한다(정규화 엔진이 다르면 currency_mismatch 반환)
+  currency   String
+  createdAt  DateTime              @default(now())
+  updatedAt  DateTime              @updatedAt
+
+  maDeal      MADeal                   @relation(fields: [maDealId], references: [id], onDelete: Cascade)
+  lineItems   MAFinancialLineItem[]
+  adjustments MAFinancialAdjustment[]
+
+  @@unique([maDealId, fiscalYear, periodType])
+  @@index([maDealId])
+  @@index([fiscalYear])
+}
+
+model MAFinancialLineItem {
+  id                String                   @id @default(cuid())
+  financialPeriodId String
+  statementType     MaFinancialStatementType
+  /// CANONICAL_LINE_ITEMS(financial-types.ts) 값만 API에서 허용 — DB 컬럼은
+  /// 향후 확장을 막지 않기 위해 String으로 둔다(CompanyKPI.metric과 동일 패턴)
+  lineItem          String
+  /// 원본 통화 최소 단위 금액(예: KRW는 "원") — 억원 환산 없음(financial-types.ts 참고)
+  value             Float
+  currency          String
+  source            MaFinancialSourceType
+  sourceName        String?
+  sourceLocation    String?
+  /// 원본 라벨을 표준 계정명으로 매핑 완료했는지 여부(향후 원천 자동 매핑 단계용)
+  isNormalized      Boolean                  @default(false)
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+
+  financialPeriod MAFinancialPeriod @relation(fields: [financialPeriodId], references: [id], onDelete: Cascade)
+
+  @@index([financialPeriodId])
+  @@index([financialPeriodId, lineItem])
+}
+
+/// 원천값 → 조정값 → 정규화값을 추적한다(Adjusted EBITDA 등을 조정 없이
+/// 최종값만 저장하지 않기 위함). QoE 카테고리 분류(일회성/런레이트/시너지
+/// 등)는 PR-D 범위 — metric·reason만으로 최소 구조를 유지한다.
+model MAFinancialAdjustment {
+  id                String                @id @default(cuid())
+  financialPeriodId String
+  /// CANONICAL_LINE_ITEMS 값 중 하나(현재는 EBITDA 조정만 정규화 엔진이 반영)
+  metric            String
+  reportedValue     Float
+  adjustmentValue   Float
+  /// = reportedValue + adjustmentValue(정규화 엔진의 결정적 계산, 생성 시점에 저장)
+  normalizedValue   Float
+  reason            String
+  source            MaFinancialSourceType
+  sourceName        String?
+  sourceLocation    String?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+
+  financialPeriod MAFinancialPeriod @relation(fields: [financialPeriodId], references: [id], onDelete: Cascade)
+
+  @@index([financialPeriodId])
+}
+
+enum MaFinancialPeriodType {
+  ANNUAL
+  QUARTERLY
+  TTM
+}
+
+enum MaFinancialStatementType {
+  INCOME_STATEMENT
+  BALANCE_SHEET
+  CASH_FLOW
+}
+
+enum MaFinancialSourceType {
+  UPLOADED_DOCUMENT
+  EXCEL
+  DART
+  MANUAL
 }
