@@ -656,6 +656,7 @@ model MADeal {
   team      Team?        @relation(fields: [teamId], references: [id])
   documents MADocument[]
   reports   MAReport[]
+  financialPeriods MAFinancialPeriod[]
 
   @@index([userId])
   @@index([teamId])
@@ -746,4 +747,87 @@ enum MaSectionKey {
   RETURNS_ANALYSIS
   RISK_FACTORS
   RECOMMENDATION
+}
+
+// ───────────────────────────────────────────────
+// PE 트랙 — Financial Normalization Foundation (PR-B)
+// schema.prisma(PostgreSQL)와 동일 — @db.Text만 제외(SQLite 불필요)
+// ───────────────────────────────────────────────
+
+model MAFinancialPeriod {
+  id         String                @id @default(cuid())
+  maDealId   String
+  fiscalYear Int
+  periodType MaFinancialPeriodType
+  startDate  DateTime
+  endDate    DateTime
+  currency   String
+  createdAt  DateTime              @default(now())
+  updatedAt  DateTime              @updatedAt
+
+  maDeal      MADeal                   @relation(fields: [maDealId], references: [id], onDelete: Cascade)
+  lineItems   MAFinancialLineItem[]
+  adjustments MAFinancialAdjustment[]
+
+  @@unique([maDealId, fiscalYear, periodType])
+  @@index([maDealId])
+  @@index([fiscalYear])
+}
+
+model MAFinancialLineItem {
+  id                String                   @id @default(cuid())
+  financialPeriodId String
+  statementType     MaFinancialStatementType
+  lineItem          String
+  value             Float
+  currency          String
+  source            MaFinancialSourceType
+  sourceName        String?
+  sourceLocation    String?
+  isNormalized      Boolean                  @default(false)
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+
+  financialPeriod MAFinancialPeriod @relation(fields: [financialPeriodId], references: [id], onDelete: Cascade)
+
+  @@index([financialPeriodId])
+  @@index([financialPeriodId, lineItem])
+}
+
+model MAFinancialAdjustment {
+  id                String                @id @default(cuid())
+  financialPeriodId String
+  metric            String
+  reportedValue     Float
+  adjustmentValue   Float
+  normalizedValue   Float
+  reason            String
+  source            MaFinancialSourceType
+  sourceName        String?
+  sourceLocation    String?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+
+  financialPeriod MAFinancialPeriod @relation(fields: [financialPeriodId], references: [id], onDelete: Cascade)
+
+  @@index([financialPeriodId])
+}
+
+enum MaFinancialPeriodType {
+  ANNUAL
+  QUARTERLY
+  TTM
+}
+
+enum MaFinancialStatementType {
+  INCOME_STATEMENT
+  BALANCE_SHEET
+  CASH_FLOW
+}
+
+enum MaFinancialSourceType {
+  UPLOADED_DOCUMENT
+  EXCEL
+  DART
+  MANUAL
 }
