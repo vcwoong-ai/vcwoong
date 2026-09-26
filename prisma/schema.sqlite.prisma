@@ -805,6 +805,8 @@ model MAFinancialAdjustment {
   source            MaFinancialSourceType
   sourceName        String?
   sourceLocation    String?
+  status            MaAdjustmentStatus    @default(APPROVED)
+  adjustmentType    MaAdjustmentType      @default(OTHER)
   createdAt         DateTime              @default(now())
   updatedAt         DateTime              @updatedAt
 
@@ -830,4 +832,24 @@ enum MaFinancialSourceType {
   EXCEL
   DART
   MANUAL
+}
+
+enum MaAdjustmentStatus {
+  DRAFT
+  PROPOSED
+  APPROVED
+  REJECTED
+}
+
+enum MaAdjustmentType {
+  ONE_OFF_EXPENSE
+  OWNER_COMPENSATION_NORMALIZATION
+  RELATED_PARTY_NORMALIZATION
+  RESTRUCTURING
+  ONE_TIME_PROFESSIONAL_FEE
+  NON_RECURRING_OPERATING_COST
+  ONE_OFF_INCOME
+  NON_RECURRING_REVENUE
+  UNSUSTAINABLE_MARGIN
+  OTHER
 }

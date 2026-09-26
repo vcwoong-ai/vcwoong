@@ -856,6 +856,16 @@ model MAFinancialAdjustment {
   source            MaFinancialSourceType
   sourceName        String?
   sourceLocation    String?
+  /// PR-D QoEAdjustmentStatus(qoe-types.ts)와 정확히 일치. APPROVED만 정규화
+  /// 엔진(deriveAdjustedEbitda)에 전달된다(qoe.ts의 toApprovedAdjustmentInputs).
+  /// 기존 row는 이 컬럼이 생기기 전부터 이미 무조건 계산에 포함되고 있었으므로
+  /// (PR-B 엔진은 상태 개념 없이 전달받은 조정을 전부 합산) @default(APPROVED)로
+  /// 초기화한다 — 계산 결과를 조용히 바꾸지 않는 쪽을 "보수적"으로 판단했다
+  /// (PR-D.1 최종 보고서 §4 참고).
+  status            MaAdjustmentStatus    @default(APPROVED)
+  /// PR-D QoEAdjustmentType(qoe-types.ts)와 정확히 일치. 기존 row는 분류
+  /// 정보가 전혀 없었으므로 실제로 모르는 값을 지어내지 않고 OTHER로 초기화한다.
+  adjustmentType    MaAdjustmentType      @default(OTHER)
   createdAt         DateTime              @default(now())
   updatedAt         DateTime              @updatedAt
 
@@ -881,4 +891,26 @@ enum MaFinancialSourceType {
   EXCEL
   DART
   MANUAL
+}
+
+/// PR-D qoe-types.ts의 QOE_ADJUSTMENT_STATUSES와 값이 정확히 일치해야 한다.
+enum MaAdjustmentStatus {
+  DRAFT
+  PROPOSED
+  APPROVED
+  REJECTED
+}
+
+/// PR-D qoe-types.ts의 QOE_ADJUSTMENT_TYPES와 값이 정확히 일치해야 한다.
+enum MaAdjustmentType {
+  ONE_OFF_EXPENSE
+  OWNER_COMPENSATION_NORMALIZATION
+  RELATED_PARTY_NORMALIZATION
+  RESTRUCTURING
+  ONE_TIME_PROFESSIONAL_FEE
+  NON_RECURRING_OPERATING_COST
+  ONE_OFF_INCOME
+  NON_RECURRING_REVENUE
+  UNSUSTAINABLE_MARGIN
+  OTHER
 }
