@@ -43,15 +43,20 @@ export async function GET(
   const { teamId } = await getUserTeamContext(session.user.id);
   const deal = await prisma.deal.findFirst({
     where: { id: params.id, ...dealReadWhere(session.user.id, teamId) },
-    select: { score: true, sector: true, stage: true },
+    select: { score: true, sector: true, stage: true, investAmount: true, valuation: true },
   });
 
   if (!deal) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
+  // PR-J: Investment Decision(vc-decision.ts)의 Valuation Case가 결정적으로
+  // 지분율을 계산하려면 investAmount/valuation이 필요하다 — 이미 이 라우트가
+  // 읽는 Deal 레코드에서 두 필드만 추가로 select했다(새 쿼리/새 테이블 없음).
+  const dealFacts = { investAmount: deal.investAmount, valuation: deal.valuation };
+
   if (!deal.score) {
-    return NextResponse.json({ data: null });
+    return NextResponse.json({ data: null, dealFacts });
   }
 
   const comparables = await prisma.deal.findMany({
@@ -70,7 +75,7 @@ export async function GET(
     .filter((n): n is number => typeof n === "number");
   const benchmark = computeSectorStageBenchmark(deal.score.overall, comparableOveralls);
 
-  return NextResponse.json({ data: deal.score, benchmark });
+  return NextResponse.json({ data: deal.score, benchmark, dealFacts });
 }
 
 /** 새로 계산(또는 재계산) — AI 호출 1회 */

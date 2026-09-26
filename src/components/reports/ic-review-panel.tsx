@@ -23,10 +23,26 @@ import {
   INVESTMENT_SIGNAL_LABEL,
   IC_RECOMMENDATION_LABEL,
 } from "@/lib/ic-review";
+import { buildInvestmentDecision } from "@/lib/vc-decision";
+import { VC_EVIDENCE_STATE_LABEL, VC_PRIORITY_LABEL } from "@/lib/vc-decision-types";
 import type { ScoreDimensionKey } from "@/lib/deal-scoring-shared";
 import type { ScoreEvidenceAssessment } from "@/lib/deal-scoring-evidence";
 import type { NumericClaim } from "@/lib/evidence";
 import type { IcQuestion, QuestionPriority } from "@/lib/ic-questions";
+
+const EVIDENCE_STATE_CLASS: Record<string, string> = {
+  VERIFIED: "bg-green-50 text-green-700 border-green-200",
+  PARTIALLY_VERIFIED: "bg-blue-50 text-blue-700 border-blue-200",
+  UNVERIFIED: "bg-amber-50 text-amber-700 border-amber-200",
+  MISSING: "bg-gray-50 text-gray-500 border-gray-200",
+  CONTRADICTED: "bg-red-50 text-red-700 border-red-200",
+};
+
+const PRIORITY_TONE: Record<string, string> = {
+  P0: "bg-red-50 text-red-700 border-red-200",
+  P1: "bg-amber-50 text-amber-700 border-amber-200",
+  P2: "bg-gray-50 text-gray-600 border-gray-200",
+};
 
 interface DealScoreData {
   overall: number;
@@ -61,6 +77,7 @@ export function IcReviewPanel({
   canEdit: boolean;
 }) {
   const [score, setScore] = useState<DealScoreData | null>(null);
+  const [dealFacts, setDealFacts] = useState<{ investAmount?: number | null; valuation?: number | null }>({});
   const [claims, setClaims] = useState<NumericClaim[] | null>(null);
   const [questions, setQuestions] = useState<IcQuestion[] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -80,6 +97,7 @@ export function IcReviewPanel({
         questionsRes.ok ? questionsRes.json() : { data: null },
       ]);
       setScore(scoreJson.data ?? null);
+      setDealFacts(scoreJson.dealFacts ?? {});
       setClaims(evidenceJson.data?.claims ?? null);
       setQuestions(questionsJson.data?.questions ?? null);
     } finally {
@@ -103,6 +121,16 @@ export function IcReviewPanel({
   const risks = useMemo(() => selectKeyRisks(assessment, score?.rationale), [assessment, score]);
   const mustAnswer = useMemo(() => selectMustAnswerQuestions(questions), [questions]);
   const unresolved = useMemo(() => selectUnresolvedEvidence(claims, questions), [claims, questions]);
+
+  // PR-J: Investment Decision — 위 값들(assessment/claims/questions)을 새로
+  // 계산하지 않고 그대로 재구성한다(vc-decision.ts는 순수 함수, 새 AI 호출 없음).
+  const decision = useMemo(
+    () =>
+      score
+        ? buildInvestmentDecision(score.overall, assessment, score.rationale, claims, questions, dealFacts)
+        : null,
+    [score, assessment, claims, questions, dealFacts]
+  );
 
   if (loading) {
     return (
@@ -154,6 +182,79 @@ export function IcReviewPanel({
         이 딜은 지금 무엇이 강점이고, 무엇이 위험하며, 투자 전에 무엇을 반드시 확인해야 하는지 —
         이미 계산된 Score·근거·IC 질문을 한 화면에 모았습니다. 최종 투자 판단은 심사역의 몫입니다.
       </p>
+
+      {decision && (
+        <div className="rounded-lg border border-gray-200 bg-gray-50/60 p-4 space-y-4">
+          <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Investment Decision</div>
+          <p className="text-sm text-gray-800 leading-relaxed">{decision.thesis}</p>
+
+          {decision.missingInformation.length > 0 && (
+            <div>
+              <div className="text-xs font-medium text-gray-700 mb-1.5">
+                투자-핵심 미확인 정보 (우선순위 순)
+              </div>
+              <ul className="space-y-1.5">
+                {decision.missingInformation.slice(0, 5).map((m) => (
+                  <li
+                    key={m.id}
+                    className="text-xs rounded border border-gray-200 bg-white px-2.5 py-1.5 flex items-start gap-2"
+                  >
+                    <span
+                      className={`shrink-0 rounded border px-1.5 py-0.5 text-[10px] ${PRIORITY_TONE[m.priority]}`}
+                      title={VC_PRIORITY_LABEL[m.priority]}
+                    >
+                      {m.priority}
+                    </span>
+                    <div className="min-w-0">
+                      <span className="text-gray-900">{m.item}</span>
+                      <p className="mt-0.5 text-gray-500">{m.whyItMatters}</p>
+                      <p className="mt-0.5 text-gray-400">필요 근거: {m.requiredEvidence}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <div>
+            <div className="text-xs font-medium text-gray-700 mb-1.5">Decision Map (8개 차원)</div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+              {decision.decisionDimensions.map((d) => (
+                <div
+                  key={d.dimension}
+                  className={`rounded border px-2 py-1.5 text-[10px] ${EVIDENCE_STATE_CLASS[d.state]}`}
+                  title={d.contradiction ? `상충: ${d.contradiction.valueA} vs ${d.contradiction.valueB}` : undefined}
+                >
+                  <div className="font-medium text-gray-900">{d.label}</div>
+                  <div>{VC_EVIDENCE_STATE_LABEL[d.state]}</div>
+                </div>
+              ))}
+              <div className="rounded border px-2 py-1.5 text-[10px] bg-gray-50 text-gray-500 border-gray-200">
+                <div className="font-medium text-gray-900">밸류에이션</div>
+                <div>{VC_EVIDENCE_STATE_LABEL[decision.valuation.evidenceState]}</div>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div className="text-xs font-medium text-gray-700 mb-1.5">Valuation &amp; Return</div>
+            <ul className="space-y-1">
+              {decision.valuation.lineItems.map((item, i) => (
+                <li key={i} className="text-[11px] text-gray-600">
+                  <span className="font-medium text-gray-800">{item.label}: </span>
+                  {item.status === "computed" ? (
+                    item.value
+                  ) : (
+                    <span className="text-gray-400">
+                      NOT COMPUTABLE — {item.reason} (필요: {item.requiredInput})
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
 
       {evidenceMissing && (
         <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2.5 py-1.5">
