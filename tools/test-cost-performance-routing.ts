@@ -37,7 +37,11 @@ function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
 }
 
-const PREMIUM_MARKERS = ["claude-sonnet", "gemini"];
+// 2026-09-25: PREMIUM_MODELS 기본값이 claude-opus-5.5(신규 primary) +
+// BALANCED_MODEL_CHAIN(deepseek, xiaomi/mimo-v2.6-pro, meta/muse-spark-1.3)로
+// 바뀌었다(claude.ts 참고) — "premium에만 있고 CHEAP엔 없는" 모델 계열로
+// 마커를 갱신한다.
+const PREMIUM_MARKERS = ["claude-opus", "mimo-v2.6-pro", "muse-spark"];
 function containsPremiumModel(chain: string[]): boolean {
   return chain.some((m) => PREMIUM_MARKERS.some((marker) => m.includes(marker)));
 }

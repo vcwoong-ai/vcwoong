@@ -75,10 +75,10 @@ export class ContentAgent extends BaseAgent {
       input,
       SectionKey.PRODUCT_TECHNOLOGY,
       `## 기업: ${input.companyName} (콘텐츠/엔터)
-${input.additionalContext ?? ""}
 
 ## 자료
 ${documentContext}
+${input.additionalContext ?? ""}
 
 ## 제품/IP (콘텐츠 특화)
 ### 1. 핵심 IP 포트폴리오·OSMU
@@ -99,10 +99,10 @@ ${documentContext}
       input,
       SectionKey.MARKET_ANALYSIS,
       `## 기업: ${input.companyName}
-${input.additionalContext ?? ""}
 
 ## 자료
 ${documentContext}
+${input.additionalContext ?? ""}
 
 ## 시장분석 (콘텐츠 특화)
 ### 1. TAM·한류 프리미엄
@@ -121,10 +121,10 @@ ${documentContext}
       input,
       SectionKey.FINANCIAL_STATUS,
       `## 기업: ${input.companyName}
-${input.additionalContext ?? ""}
 
 ## 자료
 ${documentContext}
+${input.additionalContext ?? ""}
 
 ## 재무현황 (콘텐츠 특화)
 ### 1. 매출 포트폴리오 (공연/앨범/라이선스/광고)
@@ -145,10 +145,10 @@ ${documentContext}
       `## 기업: ${input.companyName}
 ${input.investRound ? `- 라운드: ${input.investRound}` : ""}
 ${input.valuation ? `- Post-money: ${input.valuation}억원` : ""}
-${input.additionalContext ?? ""}
 
 ## 자료
 ${documentContext}
+${input.additionalContext ?? ""}
 
 ## 밸류에이션 (콘텐츠 특화)
 ### 1. 라운드 요약
@@ -167,10 +167,10 @@ ${documentContext}
       input,
       SectionKey.RISK_ANALYSIS,
       `## 기업: ${input.companyName}
-${input.additionalContext ?? ""}
 
 ## 자료
 ${documentContext}
+${input.additionalContext ?? ""}
 
 ## 리스크 (콘텐츠 특화)
 ### 1. 아티스트 이탈·스캔들

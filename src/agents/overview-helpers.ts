@@ -15,8 +15,16 @@ function dealHeader(input: AgentInput, sectorLabel: string): string {
   return `## 기업: ${input.companyName} (${sectorLabel})
 ${input.investRound ? `- 라운드: ${input.investRound}` : ""}
 ${input.investAmount != null ? `- 투자금액: ${input.investAmount}억원` : ""}
-${input.valuation != null ? `- Post-money: ${input.valuation}억원` : ""}
-${input.additionalContext ?? ""}`;
+${input.valuation != null ? `- Post-money: ${input.valuation}억원` : ""}`;
+}
+
+// 프롬프트 캐싱 고려한 순서: additionalContext(직전 섹션 요약 등, 섹션마다
+// 달라짐)를 documentBlock(원문 자료, 같은 리포트 안에서는 고정) 뒤에
+// 둔다 — section-prompts.ts의 buildSectionPrompt와 같은 이유(원문 자료
+// 앞부분이 매 섹션 호출마다 동일해야 OpenRouter/DeepSeek 자동 prefix
+// 캐싱이 걸린다).
+function additionalContextBlock(input: AgentInput): string {
+  return input.additionalContext ? `\n## 추가 컨텍스트\n${input.additionalContext}\n` : "";
 }
 
 /** 섹터별 투자개요 특화 프롬프트 */
@@ -31,7 +39,7 @@ export function buildInvestmentOverviewPrompt(
 
 ## 자료
 ${documentBlock(input)}
-
+${additionalContextBlock(input)}
 ## 투자개요 (${opts.sectorLabel} 특화)
 ### 1. 한 줄 요약 (Why This / Why Now)
 ### 2. 투자 조건 (라운드·금액·밸류·지분 확인 필요 시 표기)
@@ -55,7 +63,7 @@ export function buildCompanyOverviewPrompt(
 
 ## 자료
 ${documentBlock(input)}
-
+${additionalContextBlock(input)}
 ## 회사개요 (${opts.sectorLabel} 특화)
 ### 1. 기업 기본 정보 (설립·소재·임직원)
 ### 2. 미션·비전·설립 배경

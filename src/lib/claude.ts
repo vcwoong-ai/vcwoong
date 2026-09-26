@@ -38,19 +38,27 @@ const DEFAULT_MODEL = "deepseek/deepseek-v4-flash-0731";
  * 이 PR은 그 위에서 한 걸음 더 나간다 — "빈약한 응답이 나와도 게이트가
  * 걸러준다"에 기대는 대신, 애초에 fallback 단계에서 나올 응답의 기대 품질
  * 자체를 올린다. 기본 폴백 체인을 무료/가용성 우선에서 유료·고품질 모델
- * 우선으로 바꾼다:
- *   1. `google/gemini-2.5-pro`
- *   2. `anthropic/claude-sonnet-4.5`
+ * 우선으로 바꾼다.
+ *
+ * 2026-09-25 갱신(가격 대비 성능 비교 글 기준 재검토): 이전 기본값이었던
+ * `google/gemini-2.5-pro` / `anthropic/claude-sonnet-4.5`는 이후 나온
+ * 모델들 대비 가격 대비 성능이 뒤처졌다. OpenRouter에 실제로 등록된
+ * 모델인지 각각의 openrouter.ai 상세 페이지 URL로 확인한 뒤 아래로
+ * 교체한다:
+ *   1. `xiaomi/mimo-v2.6-pro` — 혼합가 약 $0.54/1M, 지능지수 46.3점대
+ *   2. `meta/muse-spark-1.3` — 혼합가 약 $2/1M, 지능지수 48.1점대
  * DeepSeek(기본 모델, MODEL)는 그대로 유지한다 — 가격 대비 성능이 좋고
  * 정상 응답 시 대부분의 섹션 생성에 충분하므로, "실패했을 때만" 이
  * 체인으로 넘어간다(비용은 실패 시에만 발생 — 평소엔 호출되지 않음).
  * 두 모델 다 OpenRouter를 통해 호출한다(OPENROUTER_API_KEY 하나로 통일,
- * 별도 프로바이더 연동 없음).
+ * 별도 프로바이더 연동 없음). 이 컨테이너는 openrouter.ai로 나가는
+ * 아웃바운드가 조직 정책으로 막혀 있어 실제 호출 테스트는 못 했다 —
+ * 배포 후 실제 응답과 usage.cost로 재검증 필요.
  *
  * AI_FALLBACK_MODELS 환경변수로 언제든 override 가능(resolveFallbackChain
  * 참고) — 이 상수는 그 환경변수가 미설정일 때만 쓰이는 "안전 기본값"이다.
  */
-export const DEFAULT_FALLBACK_CHAIN = ["google/gemini-2.5-pro", "anthropic/claude-sonnet-4.5"];
+export const DEFAULT_FALLBACK_CHAIN = ["xiaomi/mimo-v2.6-pro", "meta/muse-spark-1.3"];
 
 function resolveDefaultModel(): string {
   return process.env.AI_MODEL?.trim() || DEFAULT_MODEL;
@@ -110,9 +118,17 @@ export const FALLBACK_MODEL = FALLBACK_MODELS[0] ?? DEFAULT_MODEL;
  * 모델명은 환경변수로 조정 가능하게 뒀다(AI_FALLBACK_MODELS와 같은
  * 패턴) — OpenRouter에서 실제 사용 가능한 모델·가격은 배포 환경마다
  * 다를 수 있어, 코드에 고정하기보다 운영자가 실측 후 조정할 수 있게
- * 한다. 기본값은 무료 티어 fallback으로 이미 검증된 저가 모델
- * (meta-llama/llama-3.3-70b-instruct)이다 — openrouter/free는 쓰지
- * 않는다(PR #69에서 겪은 품질 사고와 같은 이유).
+ * 한다.
+ *
+ * 2026-09-25 갱신: 기존 기본값 `meta-llama/llama-3.3-70b-instruct`는
+ * 가격 대비 성능 비교 기준으로 이미 더 저렴하면서 점수가 높은 대안이
+ * 있는(가성비 경계선 밖의) 구형 모델이라 교체한다. openrouter.ai 상세
+ * 페이지로 실제 등록을 확인한 저가 모델로 바꾼다:
+ *   1. `z-ai/glm-5.3-flash` — 혼합가 약 $0.24/1M
+ *   2. `openai/gpt-6-luna` — 혼합가 약 $0.20/1M(가장 저렴한 구간)
+ * openrouter/free는 여전히 쓰지 않는다(PR #69에서 겪은 품질 사고와 같은
+ * 이유). 이 컨테이너는 openrouter.ai 아웃바운드가 막혀 있어 실제 호출
+ * 테스트는 못 했다 — 배포 후 재검증 필요.
  */
 export const FREE_TIER_MODEL = process.env.AI_FREE_TIER_MODEL?.trim() || MODEL;
 
@@ -122,7 +138,7 @@ function resolveFreeTierFallbackChain(): string[] {
     const parsed = parseModelList(raw);
     if (parsed.length > 0) return parsed.slice(0, MAX_FALLBACK_MODELS);
   }
-  return ["meta-llama/llama-3.3-70b-instruct"];
+  return ["z-ai/glm-5.3-flash", "openai/gpt-6-luna"];
 }
 
 export const FREE_TIER_FALLBACK_MODELS: string[] = resolveFreeTierFallbackChain().filter(
@@ -170,32 +186,29 @@ export type TaskTier = "cheap" | "balanced" | "premium";
 
 /**
  * BALANCED(기본 보고서 섹션) 전용 모델 체인 — 기존 PAID 기본 체인
- * (AI_MODEL + AI_FALLBACK_MODELS) 그 자체다. PREMIUM의 기본값이 바로 이
- * 상수를 참조한다(아래) — `AI_PREMIUM_MODELS`를 설정하지 않으면
- * `PREMIUM_MODELS`가 이 배열과 **의도적으로 완전히 같다**. 실수나 버그가
- * 아니다.
- *
- * 왜 기본값을 다르게 만들지 않았나: 이 프로젝트는 "확인 안 된 모델
- * 목록을 코드에 새로 지어내지 않는다"는 원칙을 지킨다(요청서: "새 모델을
- * 임의로 추가하지 말 것"). BALANCED 전용으로 더 싼 모델을 기본값으로
- * 박아 넣으려면 그 모델이 실제로 OpenRouter에서 쓸 수 있고 투자심사
- * 보고서 품질에 충분한지 이 세션에서 검증할 방법이 없었다(네트워크 접근
- * 차단). 그래서 BALANCED와 PREMIUM 둘 다 "이미 검증된 기존 기본 체인"을
- * 기본값으로 공유하고, 실제 비용 차등은:
- *   1) `AI_PREMIUM_MODELS`를 설정해 PREMIUM만 다른(더 비싼/더 신뢰도 높은)
- *      체인으로 분리하거나,
- *   2) `AI_BALANCED_MAX_PRICE`로 BALANCED에만 provider 가격 상한을 걸어
- *      OpenRouter가 그 안에서 더 싼 provider를 우선 쓰게 하는 방법으로
- * 운영자가 실측 후 켠다. 이 PR은 그 스위치(코드 경로)를 만드는 것까지가
- * 범위이고, 기본값을 임의로 벌려놓지 않는다.
+ * (AI_MODEL + AI_FALLBACK_MODELS) 그 자체다.
  */
 export const BALANCED_MODEL_CHAIN: string[] = [MODEL, ...FALLBACK_MODELS];
 
 /**
- * PREMIUM 전용 모델 체인 — 미설정 시 BALANCED_MODEL_CHAIN과 완전히
- * 동일하다(하위호환: 이 env가 없으면 premium/balanced 구분이 모델 목록
- * 수준에서는 동일하고, provider 라우팅 설정만 갈릴 수 있다). 위
- * BALANCED_MODEL_CHAIN 주석 참고.
+ * PREMIUM 전용 모델 체인 — 투자의견(OPINION_SUMMARY)·밸류에이션(VALUATION)
+ * 등 최종 투자 판단에 가장 직접적으로 쓰이는 섹션 전용.
+ *
+ * 2026-09-25 이전: `AI_PREMIUM_MODELS` 미설정 시 BALANCED_MODEL_CHAIN과
+ * 완전히 동일했다 — "확인 안 된 모델을 코드에 새로 지어내지 않는다"는
+ * 원칙 때문에, 이 세션에서 검증 못 한 모델을 기본값으로 박아넣지 않고
+ * 운영자가 `AI_PREMIUM_MODELS`로 직접 켜도록 미뤘었다.
+ *
+ * 2026-09-25 갱신: `anthropic/claude-opus-5.5`가 openrouter.ai에 실제
+ * 등록되어 있음을 상세 페이지로 확인해 기본값을 분리한다 — "딜을
+ * 요약하는 게 아니라 판단하는 AI"라는 제품 방향과 맞게, 투자 판단에
+ * 가장 직접적으로 쓰이는 이 두 섹션만 최상위 모델을 기본으로 쓴다.
+ * primary가 실패하면 BALANCED_MODEL_CHAIN(DeepSeek → 유료 폴백)으로
+ * 내려간다 — PREMIUM 전용 모델 하나만 믿고 가용성을 낮추지 않는다.
+ * 이 컨테이너는 openrouter.ai 아웃바운드가 막혀 있어 실제 호출 테스트는
+ * 못 했다 — 배포 후 재검증 필요.
+ *
+ * `AI_PREMIUM_MODELS` 환경변수로 언제든 override 가능.
  */
 function resolvePremiumModelChain(): string[] {
   const raw = process.env.AI_PREMIUM_MODELS?.trim();
@@ -203,7 +216,7 @@ function resolvePremiumModelChain(): string[] {
     const parsed = parseModelList(raw);
     if (parsed.length > 0) return parsed.slice(0, MAX_FALLBACK_MODELS + 1);
   }
-  return BALANCED_MODEL_CHAIN;
+  return ["anthropic/claude-opus-5.5", ...BALANCED_MODEL_CHAIN];
 }
 
 export const PREMIUM_MODELS: string[] = resolvePremiumModelChain();

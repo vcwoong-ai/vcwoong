@@ -75,10 +75,10 @@ export class ITAgent extends BaseAgent {
     const userPrompt = `## 투자 대상 기업 정보
 - 기업명: ${input.companyName}
 - 섹터: IT/SaaS
-${input.additionalContext ? `\n${input.additionalContext}` : ""}
 
 ## 제공 자료
 ${documentContext}${saasAnalysis}
+${input.additionalContext ? `\n${input.additionalContext}` : ""}
 
 ## 제품/기술 섹션 (IT/SaaS 특화)
 
@@ -98,10 +98,10 @@ ${documentContext}${saasAnalysis}
     const userPrompt = `## 투자 대상 기업 정보
 - 기업명: ${input.companyName}
 - 섹터: IT/SaaS
-${input.additionalContext ? `\n${input.additionalContext}` : ""}
 
 ## 제공 자료
 ${documentContext}${saasAnalysis}
+${input.additionalContext ? `\n${input.additionalContext}` : ""}
 
 ## 시장분석 섹션 (IT/SaaS 특화)
 
@@ -124,10 +124,10 @@ ${documentContext}${saasAnalysis}
     const userPrompt = `## 투자 대상 기업 정보
 - 기업명: ${input.companyName}
 - 섹터: IT/소프트웨어
-${input.additionalContext ? `\n${input.additionalContext}` : ""}
 
 ## 제공 자료
 ${documentContext}${saasAnalysis}
+${input.additionalContext ? `\n${input.additionalContext}` : ""}
 
 ## 재무현황 섹션 작성 요청 (IT/SaaS 특화)
 
@@ -162,10 +162,10 @@ ${documentContext}${saasAnalysis}
 - 섹터: IT/SaaS
 ${input.investRound ? `- 투자 라운드: ${input.investRound}` : ""}
 ${input.valuation ? `- Post-money: ${input.valuation}억원` : ""}
-${input.additionalContext ? `\n${input.additionalContext}` : ""}
 
 ## 제공 자료
 ${documentContext}${saasAnalysis}
+${input.additionalContext ? `\n${input.additionalContext}` : ""}
 
 ## 밸류에이션 섹션 (IT/SaaS 특화)
 
@@ -188,10 +188,10 @@ SaaS 자동 분석(ARR 배수, Bessemer 벤치마크)을 반드시 활용:
     const userPrompt = `## 투자 대상 기업 정보
 - 기업명: ${input.companyName}
 - 섹터: IT/SaaS
-${input.additionalContext ? `\n${input.additionalContext}` : ""}
 
 ## 제공 자료
 ${documentContext}${saasAnalysis}
+${input.additionalContext ? `\n${input.additionalContext}` : ""}
 
 ## 리스크 분석 (IT/SaaS 특화)
 

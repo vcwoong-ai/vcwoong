@@ -81,10 +81,10 @@ export class ConsumerAgent extends BaseAgent {
       input,
       SectionKey.PRODUCT_TECHNOLOGY,
       `## 기업: ${input.companyName} (소비재/D2C)
-${input.additionalContext ?? ""}
 
 ## 자료
 ${documentContext}
+${input.additionalContext ?? ""}
 
 ## 제품/브랜드 (소비재 특화)
 ### 1. 핵심 제품·SKU 포트폴리오
@@ -103,10 +103,10 @@ ${documentContext}
       input,
       SectionKey.MARKET_ANALYSIS,
       `## 기업: ${input.companyName} (소비재/D2C)
-${input.additionalContext ?? ""}
 
 ## 자료
 ${documentContext}
+${input.additionalContext ?? ""}
 
 ## 시장분석 (소비재 특화)
 ### 1. 카테고리 TAM · 소비자 트렌드
@@ -127,10 +127,10 @@ ${documentContext}
       input,
       SectionKey.FINANCIAL_STATUS,
       `## 기업: ${input.companyName} (소비재/D2C)
-${input.additionalContext ?? ""}
 
 ## 자료
 ${documentContext}
+${input.additionalContext ?? ""}
 
 ## 재무현황 (소비재 특화)
 ### 1. GMV · Net Revenue · YoY
@@ -151,10 +151,10 @@ ${documentContext}
       `## 기업: ${input.companyName} (소비재/D2C)
 ${input.investRound ? `- 라운드: ${input.investRound}` : ""}
 ${input.valuation ? `- Post-money: ${input.valuation}억원` : ""}
-${input.additionalContext ?? ""}
 
 ## 자료
 ${documentContext}
+${input.additionalContext ?? ""}
 
 ## 밸류에이션 (소비재 특화)
 ### 1. 라운드 요약
@@ -173,10 +173,10 @@ ${documentContext}
       input,
       SectionKey.RISK_ANALYSIS,
       `## 기업: ${input.companyName} (소비재/D2C)
-${input.additionalContext ?? ""}
 
 ## 자료
 ${documentContext}
+${input.additionalContext ?? ""}
 
 ## 리스크 (소비재 특화)
 ### 1. 마케팅 효율 악화 (CAC 상승)

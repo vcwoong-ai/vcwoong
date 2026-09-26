@@ -79,10 +79,10 @@ export class ClimateAgent extends BaseAgent {
       input,
       SectionKey.PRODUCT_TECHNOLOGY,
       `## 기업: ${input.companyName} (기후/ESG)
-${input.additionalContext ?? ""}
 
 ## 자료
 ${documentContext}
+${input.additionalContext ?? ""}
 
 ## 제품/기술 (기후 특화)
 ### 1. 핵심 기술·솔루션 (탄소 감축/재생에너지/순환경제 등)
@@ -101,10 +101,10 @@ ${documentContext}
       input,
       SectionKey.MARKET_ANALYSIS,
       `## 기업: ${input.companyName} (기후/ESG)
-${input.additionalContext ?? ""}
 
 ## 자료
 ${documentContext}
+${input.additionalContext ?? ""}
 
 ## 시장분석 (기후 특화)
 ### 1. TAM (탄소 크레딧/재생에너지/순환경제 등) · 성장 드라이버
@@ -125,10 +125,10 @@ ${documentContext}
       input,
       SectionKey.FINANCIAL_STATUS,
       `## 기업: ${input.companyName} (기후/ESG)
-${input.additionalContext ?? ""}
 
 ## 자료
 ${documentContext}
+${input.additionalContext ?? ""}
 
 ## 재무현황 (기후 특화)
 ### 1. 손익 요약 (최근 3개년) — 매출·총이익·영업이익
@@ -149,10 +149,10 @@ ${documentContext}
       `## 기업: ${input.companyName} (기후/ESG)
 ${input.investRound ? `- 라운드: ${input.investRound}` : ""}
 ${input.valuation ? `- Post-money: ${input.valuation}억원` : ""}
-${input.additionalContext ?? ""}
 
 ## 자료
 ${documentContext}
+${input.additionalContext ?? ""}
 
 ## 밸류에이션 (기후 특화)
 ### 1. 라운드 요약
@@ -171,10 +171,10 @@ ${documentContext}
       input,
       SectionKey.RISK_ANALYSIS,
       `## 기업: ${input.companyName} (기후/ESG)
-${input.additionalContext ?? ""}
 
 ## 자료
 ${documentContext}
+${input.additionalContext ?? ""}
 
 ## 리스크 (기후 특화)
 ### 1. 정책·보조금 변동

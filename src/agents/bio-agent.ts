@@ -155,6 +155,10 @@ export class BioAgent extends BaseAgent {
 
   // ──────────────────────────────────────────────────
   // 섹션별 생성 메서드
+  //
+  // 프롬프트 캐싱: 아래 각 프롬프트에서 additionalContext(섹션마다 달라짐)를
+  // 항상 documentContext/externalContext(같은 리포트 안에서는 고정) 뒤에
+  // 배치한다 — section-prompts.ts의 buildSectionPrompt와 같은 이유.
   // ──────────────────────────────────────────────────
 
   private async generateBioPipeline(input: AgentInput): Promise<GenerationResult> {
@@ -166,10 +170,10 @@ export class BioAgent extends BaseAgent {
     const userPrompt = `## 투자 대상 기업 정보
 - 기업명: ${input.companyName}
 - 섹터: 바이오/헬스케어
-${input.additionalContext ? `\n${input.additionalContext}\n` : ""}
+
 ## 제공 자료 (IR 덱 등 업로드 문서)
 ${documentContext}${externalContext}
-
+${input.additionalContext ? `\n${input.additionalContext}\n` : ""}
 ## 제품/기술 섹션 작성 요청 (바이오 특화)
 
 위 외부 데이터(ClinicalTrials.gov 임상 현황, PubMed 논문, FDA 승인 경쟁약물)를 반드시 인용하며 다음 구조로 작성하세요:
@@ -237,10 +241,10 @@ ${documentContext}${externalContext}
 ${input.investRound ? `- 투자 라운드: ${input.investRound}` : ""}
 ${input.investAmount ? `- 투자 금액: ${input.investAmount.toLocaleString()}억원` : ""}
 ${input.valuation ? `- 투자 후 기업가치: ${input.valuation.toLocaleString()}억원` : ""}
-${input.additionalContext ? `\n${input.additionalContext}\n` : ""}
+
 ## 제공 자료
 ${documentContext}${rnpvContext}${externalContext}
-
+${input.additionalContext ? `\n${input.additionalContext}\n` : ""}
 ## 밸류에이션 섹션 작성 요청 (바이오 특화)
 
 위 외부 데이터를 반드시 활용하여 다음 구조로 작성하세요:
@@ -292,10 +296,10 @@ ${documentContext}${rnpvContext}${externalContext}
     const userPrompt = `## 투자 대상 기업 정보
 - 기업명: ${input.companyName}
 - 섹터: 바이오/헬스케어
-${input.additionalContext ? `\n${input.additionalContext}\n` : ""}
+
 ## 제공 자료
 ${documentContext}${externalContext}
-
+${input.additionalContext ? `\n${input.additionalContext}\n` : ""}
 ## 시장분석 섹션 작성 요청 (바이오 특화)
 
 위 외부 데이터를 반드시 활용하여 다음 구조로 작성하세요:
@@ -343,10 +347,10 @@ ${documentContext}${externalContext}
     const userPrompt = `## 투자 대상 기업 정보
 - 기업명: ${input.companyName}
 - 섹터: 바이오/헬스케어
-${input.additionalContext ? `\n${input.additionalContext}\n` : ""}
+
 ## 제공 자료
 ${documentContext}${externalContext}
-
+${input.additionalContext ? `\n${input.additionalContext}\n` : ""}
 ## 리스크 분석 섹션 작성 요청 (바이오 특화)
 
 위 임상 데이터와 경쟁 약물 현황을 활용하여 다음 구조로 작성하세요:
