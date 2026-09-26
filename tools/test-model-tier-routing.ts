@@ -24,7 +24,10 @@ function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
 }
 
-const PREMIUM_MARKERS = ["claude-sonnet", "gemini"];
+// 2026-09-25: 유료 폴백 체인이 xiaomi/mimo-v2.6-pro·meta/muse-spark-1.3로,
+// PREMIUM_MODELS 기본값도 anthropic/claude-opus-5.5로 바뀌었다(claude.ts
+// 참고) — "FREE 체인엔 절대 섞이면 안 되는" 유료 모델 계열로 마커를 갱신.
+const PREMIUM_MARKERS = ["claude-opus", "mimo-v2.6-pro", "muse-spark"];
 
 function containsPremiumModel(chain: string[]): boolean {
   return chain.some((m) => PREMIUM_MARKERS.some((marker) => m.includes(marker)));

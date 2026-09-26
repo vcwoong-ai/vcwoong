@@ -604,10 +604,10 @@ function testDefaultFallbackChainHasNoFreeModels() {
     );
   }
   assert(
-    DEFAULT_FALLBACK_CHAIN.join(",") === "google/gemini-2.5-pro,anthropic/claude-sonnet-4.5",
+    DEFAULT_FALLBACK_CHAIN.join(",") === "xiaomi/mimo-v2.6-pro,meta/muse-spark-1.3",
     `기본 폴백 체인이 예상과 다름: ${DEFAULT_FALLBACK_CHAIN.join(",")}`
   );
-  console.log("✅ 기본 폴백 체인에 무료 모델 없음(google/gemini-2.5-pro → anthropic/claude-sonnet-4.5)");
+  console.log("✅ 기본 폴백 체인에 무료 모델 없음(xiaomi/mimo-v2.6-pro → meta/muse-spark-1.3)");
 }
 
 async function main() {
