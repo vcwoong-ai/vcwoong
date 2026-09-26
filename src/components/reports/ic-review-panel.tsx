@@ -16,14 +16,13 @@ import {
 import {
   computeInvestmentSignal,
   computeRecommendation,
-  selectKeyStrengths,
-  selectKeyRisks,
   selectMustAnswerQuestions,
   selectUnresolvedEvidence,
   INVESTMENT_SIGNAL_LABEL,
   IC_RECOMMENDATION_LABEL,
 } from "@/lib/ic-review";
 import { buildInvestmentDecision } from "@/lib/vc-decision";
+import { checkVCDecisionGate } from "@/lib/vc-decision-gate";
 import { VC_EVIDENCE_STATE_LABEL, VC_PRIORITY_LABEL } from "@/lib/vc-decision-types";
 import type { ScoreDimensionKey } from "@/lib/deal-scoring-shared";
 import type { ScoreEvidenceAssessment } from "@/lib/deal-scoring-evidence";
@@ -114,11 +113,6 @@ export function IcReviewPanel({
   const signal = score ? computeInvestmentSignal(score.overall, overallConfidence) : null;
   const recommendation = signal ? computeRecommendation(signal, assessment?.riskFlags ?? []) : null;
 
-  const strengths = useMemo(
-    () => selectKeyStrengths(assessment, score?.rationale),
-    [assessment, score]
-  );
-  const risks = useMemo(() => selectKeyRisks(assessment, score?.rationale), [assessment, score]);
   const mustAnswer = useMemo(() => selectMustAnswerQuestions(questions), [questions]);
   const unresolved = useMemo(() => selectUnresolvedEvidence(claims, questions), [claims, questions]);
 
@@ -131,6 +125,13 @@ export function IcReviewPanel({
         : null,
     [score, assessment, claims, questions, dealFacts]
   );
+
+  // PR-J.1: 계산된 decision을 화면에 그대로 신뢰하지 않고, 자체 계약 위반을
+  // 방어적으로 재확인한다(vc-decision-gate.ts). 실패하면 그 내용을 신뢰
+  // 가능한 것처럼 보여주지 않고 명시적으로 경고만 표시한다.
+  const gate = useMemo(() => (decision ? checkVCDecisionGate(decision) : null), [decision]);
+
+  const hasP0MissingInfo = decision?.missingInformation.some((m) => m.priority === "P0") ?? false;
 
   if (loading) {
     return (
@@ -183,10 +184,26 @@ export function IcReviewPanel({
         이미 계산된 Score·근거·IC 질문을 한 화면에 모았습니다. 최종 투자 판단은 심사역의 몫입니다.
       </p>
 
-      {decision && (
+      {decision && gate && !gate.ok && (
+        <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded px-2.5 py-1.5">
+          Investment Decision 계산 결과가 자체 일관성 검증을 통과하지 못했습니다
+          ({gate.reason}) — 아래 Investment Decision 요약은 표시하지 않습니다. 이 문제는
+          엔지니어링 확인이 필요합니다.
+        </p>
+      )}
+
+      {decision && gate?.ok && (
         <div className="rounded-lg border border-gray-200 bg-gray-50/60 p-4 space-y-4">
           <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Investment Decision</div>
           <p className="text-sm text-gray-800 leading-relaxed">{decision.thesis}</p>
+
+          {hasP0MissingInfo && (
+            <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded px-2.5 py-1.5">
+              ⚠ 결정을 막는(P0) 정보 공백이 있습니다 — 아래 AI 작성 보고서 본문(투자의견 등)이
+              이 상태를 아직 반영하지 않았을 수 있습니다. 보고서의 결론과 이 요약이 다르면,
+              이 요약을 우선하고 P0 항목을 먼저 해소하십시오.
+            </p>
+          )}
 
           {decision.missingInformation.length > 0 && (
             <div>
@@ -217,7 +234,9 @@ export function IcReviewPanel({
           )}
 
           <div>
-            <div className="text-xs font-medium text-gray-700 mb-1.5">Decision Map (8개 차원)</div>
+            <div className="text-xs font-medium text-gray-700 mb-1.5">
+              Decision Map ({decision.decisionDimensions.length + 1}개 차원)
+            </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
               {decision.decisionDimensions.map((d) => (
                 <div
@@ -253,6 +272,87 @@ export function IcReviewPanel({
               ))}
             </ul>
           </div>
+
+          {(decision.drivers.length > 0 || decision.thesisBreakers.length > 0) && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {decision.drivers.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-1.5 text-green-700 font-medium text-sm">
+                    <TrendingUp className="w-4 h-4" />
+                    Investment Drivers
+                  </div>
+                  <ul className="mt-2 space-y-1.5">
+                    {decision.drivers.map((d) => (
+                      <li
+                        key={d.id}
+                        className="text-xs rounded border border-green-100 bg-green-50/50 px-2.5 py-1.5"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-medium text-gray-900">{d.title}</span>
+                          <span
+                            className={`shrink-0 rounded border px-1.5 py-0.5 text-[10px] ${EVIDENCE_STATE_CLASS[d.evidenceState]}`}
+                          >
+                            {VC_EVIDENCE_STATE_LABEL[d.evidenceState]}
+                          </span>
+                        </div>
+                        <p className="mt-0.5 text-gray-500">{d.whyItMatters}</p>
+                        {d.evidence.length > 0 && (
+                          <p className="mt-0.5 text-gray-400">
+                            근거:{" "}
+                            {d.evidence
+                              .slice(0, 2)
+                              .map((e) => `"${e.raw}"${e.documentName ? `(${e.documentName})` : ""}`)
+                              .join(", ")}
+                          </p>
+                        )}
+                        <p className="mt-0.5 text-gray-400">무엇이 뒤집을 수 있나: {d.whatCouldInvalidate}</p>
+                        <p className="mt-0.5 text-gray-400">검증 필요: {d.verificationRequirement}</p>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {decision.thesisBreakers.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-1.5 text-red-700 font-medium text-sm">
+                    <ShieldAlert className="w-4 h-4" />
+                    Thesis Breakers
+                  </div>
+                  <ul className="mt-2 space-y-1.5">
+                    {decision.thesisBreakers.map((b) => (
+                      <li
+                        key={b.id}
+                        className="text-xs rounded border border-red-100 bg-red-50/50 px-2.5 py-1.5"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-medium text-gray-900">{b.title}</span>
+                          <span
+                            className={`shrink-0 rounded border px-1.5 py-0.5 text-[10px] ${EVIDENCE_STATE_CLASS[b.evidenceState]}`}
+                          >
+                            {VC_EVIDENCE_STATE_LABEL[b.evidenceState]}
+                          </span>
+                        </div>
+                        <p className="mt-0.5 text-gray-500">{b.whyItMatters}</p>
+                        {b.evidence.length > 0 && (
+                          <p className="mt-0.5 text-gray-400">
+                            근거: {b.evidence.slice(0, 2).map((e) => `"${e.raw}"`).join(", ")}
+                          </p>
+                        )}
+                        {/* 확률은 추정 근거가 없으므로 항상 "평가되지 않음"으로만 표시한다 —
+                            숫자·퍼센트로 지어내지 않는다(vc-decision-types.ts의 계약 그대로). */}
+                        <p className="mt-0.5 text-gray-400">발생 확률: 평가되지 않음(근거 부족으로 추정 불가)</p>
+                        <p className="mt-0.5 text-gray-400">검증 필요: {b.verificationRequirement}</p>
+                        {b.icQuestion && (
+                          <p className="mt-0.5 text-gray-400">관련 IC 질문: {b.icQuestion.question}</p>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -261,51 +361,6 @@ export function IcReviewPanel({
           근거 평가가 계산되지 않았습니다(보고서 없이 채점됐거나 구버전 점수). 점수를 다시
           계산하면 근거와 연결됩니다.
         </p>
-      )}
-
-      {(strengths.length > 0 || risks.length > 0) && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {strengths.length > 0 && (
-            <div>
-              <div className="flex items-center gap-1.5 text-green-700 font-medium text-sm">
-                <TrendingUp className="w-4 h-4" />
-                Key Strengths
-              </div>
-              <ul className="mt-2 space-y-1.5">
-                {strengths.map((s) => (
-                  <li
-                    key={s.dimension}
-                    className="text-xs rounded border border-green-100 bg-green-50/50 px-2.5 py-1.5"
-                  >
-                    <span className="font-medium text-gray-900">{s.label}</span>
-                    <span className="ml-1.5 text-green-700">{s.score}점</span>
-                    {s.rationale && <p className="mt-0.5 text-gray-500">{s.rationale}</p>}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {risks.length > 0 && (
-            <div>
-              <div className="flex items-center gap-1.5 text-red-700 font-medium text-sm">
-                <ShieldAlert className="w-4 h-4" />
-                Key Risks
-              </div>
-              <ul className="mt-2 space-y-1.5">
-                {risks.map((r, i) => (
-                  <li
-                    key={`${r.trigger}-${r.dimension ?? i}`}
-                    className="text-xs rounded border border-red-100 bg-red-50/50 px-2.5 py-1.5"
-                  >
-                    <span className="font-medium text-gray-900">{r.label}</span>
-                    <p className="mt-0.5 text-gray-500">{r.detail}</p>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
       )}
 
       <div>
