@@ -472,8 +472,12 @@ export function ReportEditor({
           return (
             <Card
               key={section.id}
+              // PR-K: Investment Decision 패널의 "관련 상세 섹션" 참조가
+              // 실제로 이 섹션 위치로 스크롤할 수 있게 하는 고정 앵커.
+              // 새 URL/ID를 지어내지 않고 이미 있는 sectionKey를 그대로 쓴다.
+              id={`section-${section.sectionKey}`}
               className={cn(
-                "transition-all",
+                "scroll-mt-4 transition-all",
                 isApproved && "border-green-200 bg-green-50/30"
               )}
             >

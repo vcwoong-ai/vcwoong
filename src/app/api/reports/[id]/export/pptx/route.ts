@@ -29,7 +29,7 @@ export async function POST(
 
   const result = await loadReportForExport(session.user.id, params.id);
   if ("error" in result) return result.error;
-  const { report, canUseEngine } = result;
+  const { report, canUseEngine, decisionMemoSections } = result;
 
   try {
     let pptxBuffer: Buffer | null = null;
@@ -71,10 +71,14 @@ export async function POST(
       }
     }
 
+    // PR-K: Decision-First memo는 재현(reconstructPPTX, 회사가 업로드한 자체
+    // 템플릿의 1:1 서식 재현이 목적) 경로에는 끼워 넣지 않고, 신규 생성
+    // 경로에서만 기존 10개 섹션 앞에 붙인다. generateReportPPTX는 순수
+    // {title, content} 배열만 받으므로 pptx-export.ts 자체는 수정하지 않는다.
     const buffer =
       pptxBuffer ??
       (await generateReportPPTX(
-        report.sections,
+        [...decisionMemoSections, ...report.sections],
         { companyName: report.deal.companyName, reportDate: new Date() },
         collectDocumentImages(report.deal.documents)
       ));

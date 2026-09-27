@@ -96,8 +96,10 @@ export interface ScoreEvidenceAssessment {
   basis: "report_evidence" | "no_report";
 }
 
-/** 차원별 근거 매핑 — sectionKey(숫자 claim)와 질적 카테고리 라벨을 함께 쓴다 */
-const DIMENSION_SECTION_MAP: Record<ScoreDimensionKey, SectionKey[]> = {
+/** 차원별 근거 매핑 — sectionKey(숫자 claim)와 질적 카테고리 라벨을 함께 쓴다.
+ * PR-K에서 vc-decision-memo.ts가 "이 driver/dimension은 어느 상세 섹션과
+ * 연결되는가"를 보여줄 때 그대로 재사용한다(새 매핑을 만들지 않음). */
+export const DIMENSION_SECTION_MAP: Record<ScoreDimensionKey, SectionKey[]> = {
   marketSize: [SectionKey.MARKET_ANALYSIS],
   team: [SectionKey.COMPANY_OVERVIEW],
   product: [SectionKey.PRODUCT_TECHNOLOGY],
