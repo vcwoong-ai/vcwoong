@@ -601,6 +601,273 @@ function test25_driverFallbackCitesRealEvidenceWhenRationaleMissing() {
   console.log("✅ Test 25 — rationale 없어도 Driver whyItMatters는 실제 근거를 인용함(순수 일반론 금지)");
 }
 
+// ══════════════════════════════════════════════════════════════════════
+// PR-M — Canonical Numeric Contradiction Detection(§Step 3~7 그대로)
+//
+// detectContradictions()의 기존 exact-label 그룹핑은 label 문자열이
+// 정확히 같아야만 상충을 잡는다. 실제 헬스케어AI 리포트로 재현된 문제:
+// "FY24 매출"과 "이사회 보고 기준 FY24 매출은"은 같은 사실(FY24 매출)을
+// 가리키지만 문구가 달라 상충으로 잡히지 않았다. 이 테스트들은 새로
+// 추가된 canonical(지표/기간/시나리오) 그룹핑이 그 실패를 해결하면서도
+// 기존 exact-label 경로·오탐 방지 요건을 전부 지키는지 검증한다.
+// ══════════════════════════════════════════════════════════════════════
+
+// ── 26. Exact-label contradiction은 그대로 동작(canonical이 중복 보고하지 않음) ──
+
+function test26_exactLabelContradictionUnchanged() {
+  const claims: NumericClaim[] = [
+    claim({ raw: "FY24 매출 8억원", sectionKey: "FINANCIAL_STATUS", label: "FY24 매출", value: "8", unit: "억원", confidence: "HIGH", status: "document" }),
+    claim({ raw: "FY24 매출 15억원", sectionKey: "FINANCIAL_STATUS", label: "FY24 매출", value: "15", unit: "억원", confidence: "HIGH", status: "document" }),
+  ];
+  const contradictions = detectContradictions(claims);
+  assert(contradictions.length === 1, `label이 완전히 같으면 exact-label 그룹 하나만 있어야 함(canonical이 중복 보고하면 안 됨), got ${contradictions.length}`);
+  assert(contradictions[0].claims.length === 2, "두 claim이 모두 그룹에 있어야 함");
+  console.log("✅ Test 26 — exact-label 상충은 기존 그대로(canonical이 중복 보고하지 않음)");
+}
+
+// ── 27. Same-section 표현이 다른 라벨(실제 재현 케이스) ──
+
+function test27_sameSectionVariedLabelContradiction() {
+  const claims: NumericClaim[] = [
+    claim({ raw: "FY24 매출 8억원", sectionKey: "FINANCIAL_STATUS", label: "FY24 매출", value: "8", unit: "억원", confidence: "HIGH", status: "document" }),
+    claim({ raw: "FY24 매출 15억원", sectionKey: "FINANCIAL_STATUS", label: "이후 재계산된 FY24 매출", value: "15", unit: "억원", confidence: "HIGH", status: "document" }),
+  ];
+  const contradictions = detectContradictions(claims);
+  const group = contradictions.find((g) => g.claims.length === 2);
+  assert(!!group, "같은 섹션, 다른 문구, 같은 지표(FY24 매출)는 canonical 상충으로 잡혀야 함");
+  const values = new Set(group!.claims.map((c) => c.value));
+  assert(values.has("8") && values.has("15"), "두 값(8, 15)이 모두 보존돼야 함");
+  console.log("✅ Test 27 — 같은 섹션, 다른 문구로 적힌 같은 지표(FY24 매출)도 상충으로 탐지");
+}
+
+// ── 28. Cross-section 표현이 다른 라벨(실제 재현 케이스) ──
+
+function test28_crossSectionVariedLabelContradiction() {
+  const claims: NumericClaim[] = [
+    claim({ raw: "FY24 매출 8억원", sectionKey: "FINANCIAL_STATUS", label: "FY24 매출", value: "8", unit: "억원", confidence: "HIGH", status: "document" }),
+    claim({ raw: "FY24 매출 15억원", sectionKey: "INVESTMENT_OVERVIEW", label: "이사회 보고 기준 FY24 매출은", value: "15", unit: "억원", confidence: "HIGH", status: "document" }),
+  ];
+  const contradictions = detectContradictions(claims);
+  const group = contradictions.find((g) => g.claims.length === 2);
+  assert(!!group, "다른 섹션, 다른 문구, 같은 지표(FY24 매출)는 canonical 상충으로 잡혀야 함");
+  const values = new Set(group!.claims.map((c) => c.value));
+  assert(values.has("8") && values.has("15"), "두 값(8, 15)이 모두 보존돼야 함");
+  console.log("✅ Test 28 — 다른 섹션, 다른 문구로 적힌 같은 지표(FY24 매출)도 상충으로 탐지");
+}
+
+// ── 29. 오탐 방지 — 매출 vs 매출총이익 ──
+
+function test29_revenueVsGrossProfitNoFalsePositive() {
+  const claims: NumericClaim[] = [
+    claim({ raw: "매출 8억원", sectionKey: "FINANCIAL_STATUS", label: "매출", value: "8", unit: "억원", confidence: "HIGH", status: "document" }),
+    claim({ raw: "매출총이익 15억원", sectionKey: "FINANCIAL_STATUS", label: "매출총이익", value: "15", unit: "억원", confidence: "HIGH", status: "document" }),
+  ];
+  const contradictions = detectContradictions(claims);
+  assert(contradictions.length === 0, "매출과 매출총이익은 서로 다른 지표라 상충으로 잡히면 안 됨");
+  console.log("✅ Test 29 — 매출 vs 매출총이익은 다른 지표(오탐 없음)");
+}
+
+// ── 30. 오탐 방지 — 영업이익 vs 영업이익률 ──
+
+function test30_operatingProfitVsMarginNoFalsePositive() {
+  const claims: NumericClaim[] = [
+    claim({ raw: "영업이익 8억원", sectionKey: "FINANCIAL_STATUS", label: "영업이익", value: "8", unit: "억원", confidence: "HIGH", status: "document" }),
+    claim({ raw: "영업이익률 15%", sectionKey: "FINANCIAL_STATUS", label: "영업이익률", value: "15", unit: "%", confidence: "HIGH", status: "document" }),
+  ];
+  const contradictions = detectContradictions(claims);
+  assert(contradictions.length === 0, "영업이익(절대값)과 영업이익률(비율)은 서로 다른 지표라 상충으로 잡히면 안 됨");
+  console.log("✅ Test 30 — 영업이익 vs 영업이익률은 다른 지표(오탐 없음, unit도 다름)");
+}
+
+// ── 31. 오탐 방지 — 순이익 vs 순이익률, FY2024 vs FY2023 ──
+
+function test31_netProfitVsMarginAndDifferentFiscalYearNoFalsePositive() {
+  const npVsMargin = detectContradictions([
+    claim({ raw: "순이익 8억원", sectionKey: "FINANCIAL_STATUS", label: "순이익", value: "8", unit: "억원", confidence: "HIGH", status: "document" }),
+    claim({ raw: "순이익률 15%", sectionKey: "FINANCIAL_STATUS", label: "순이익률", value: "15", unit: "%", confidence: "HIGH", status: "document" }),
+  ]);
+  assert(npVsMargin.length === 0, "순이익과 순이익률은 서로 다른 지표라 상충으로 잡히면 안 됨");
+
+  const differentFY = detectContradictions([
+    claim({ raw: "FY2024 매출 8억원", sectionKey: "FINANCIAL_STATUS", label: "FY2024 매출", value: "8", unit: "억원", confidence: "HIGH", status: "document" }),
+    claim({ raw: "FY2023 매출 15억원", sectionKey: "FINANCIAL_STATUS", label: "FY2023 매출", value: "15", unit: "억원", confidence: "HIGH", status: "document" }),
+  ]);
+  assert(differentFY.length === 0, "FY2024와 FY2023은 다른 회계연도라 상충으로 잡히면 안 됨");
+
+  const differentQuarter = detectContradictions([
+    claim({ raw: "Q1 매출 8억원", sectionKey: "FINANCIAL_STATUS", label: "Q1 매출", value: "8", unit: "억원", confidence: "HIGH", status: "document" }),
+    claim({ raw: "Q2 매출 15억원", sectionKey: "FINANCIAL_STATUS", label: "Q2 매출", value: "15", unit: "억원", confidence: "HIGH", status: "document" }),
+  ]);
+  assert(differentQuarter.length === 0, "Q1과 Q2는 다른 분기라 상충으로 잡히면 안 됨");
+  console.log("✅ Test 31 — 순이익 vs 순이익률, FY2024 vs FY2023, Q1 vs Q2 모두 오탐 없음");
+}
+
+// ── 32. 오탐 방지 — 실적 vs 예상(시나리오 불일치) ──
+
+function test32_actualVsForecastNoFalsePositive() {
+  const claims: NumericClaim[] = [
+    claim({ raw: "실적 매출 8억원", sectionKey: "FINANCIAL_STATUS", label: "실적 매출", value: "8", unit: "억원", confidence: "HIGH", status: "document" }),
+    claim({ raw: "예상 매출 15억원", sectionKey: "FINANCIAL_STATUS", label: "예상 매출", value: "15", unit: "억원", confidence: "HIGH", status: "document" }),
+  ];
+  const contradictions = detectContradictions(claims);
+  assert(contradictions.length === 0, "실적(ACTUAL)과 예상(FORECAST)은 같은 시나리오가 아니므로 상충으로 잡히면 안 됨");
+  console.log("✅ Test 32 — 실적 매출 vs 예상 매출은 시나리오가 달라 오탐 없음");
+}
+
+// ── 33. 시나리오 표시 없는 매출끼리는(둘 다 UNSPECIFIED) 값이 다르면 상충 ──
+
+function test33_unspecifiedScenarioBothSidesStillContradicts() {
+  const claims: NumericClaim[] = [
+    claim({ raw: "매출 8억원", sectionKey: "FINANCIAL_STATUS", label: "매출", value: "8", unit: "억원", confidence: "HIGH", status: "document" }),
+    claim({ raw: "매출 15억원", sectionKey: "INVESTMENT_OVERVIEW", label: "총 매출", value: "15", unit: "억원", confidence: "HIGH", status: "document" }),
+  ];
+  const contradictions = detectContradictions(claims);
+  const group = contradictions.find((g) => g.claims.length === 2);
+  assert(!!group, "시나리오 표시가 둘 다 없으면(UNSPECIFIED==UNSPECIFIED) 값이 다를 때 상충으로 잡혀야 함");
+  console.log("✅ Test 33 — 시나리오 표시 없는 매출끼리는(둘 다 UNSPECIFIED) 값이 다르면 상충");
+}
+
+// ── 34. 같은 값이면 문구가 달라도 상충 아님 ──
+
+function test34_sameValueDifferentLabelNoContradiction() {
+  const claims: NumericClaim[] = [
+    claim({ raw: "매출 8억원", sectionKey: "FINANCIAL_STATUS", label: "매출", value: "8", unit: "억원", confidence: "HIGH", status: "document" }),
+    claim({ raw: "매출액 8억원", sectionKey: "INVESTMENT_OVERVIEW", label: "매출액", value: "8", unit: "억원", confidence: "HIGH", status: "document" }),
+  ];
+  const contradictions = detectContradictions(claims);
+  assert(contradictions.length === 0, "값이 같으면(둘 다 8) 문구가 달라도 상충이 아니어야 함");
+  console.log("✅ Test 34 — 매출 8억원 vs 매출액 8억원(값 동일)은 상충 아님");
+}
+
+// ── 35. 같은 canonical 지표/기간/단위, 값만 다른 문구 3개 이상 — 전부 보존 ──
+
+function test35_multipleVariedLabelsSameMetricAllValuesPreserved() {
+  const claims: NumericClaim[] = [
+    claim({ raw: "FY24 매출 8억원", sectionKey: "FINANCIAL_STATUS", label: "FY24 매출", value: "8", unit: "억원", confidence: "HIGH", status: "document" }),
+    claim({ raw: "FY24 매출 15억원", sectionKey: "INVESTMENT_OVERVIEW", label: "이사회 보고 기준 FY24 매출은", value: "15", unit: "억원", confidence: "HIGH", status: "document" }),
+    claim({ raw: "FY24 매출 12억원", sectionKey: "OPINION_SUMMARY", label: "재계산된 FY24 매출액", value: "12", unit: "억원", confidence: "HIGH", status: "document" }),
+  ];
+  const contradictions = detectContradictions(claims);
+  const group = contradictions.find((g) => g.claims.length >= 3);
+  assert(!!group, "서로 다른 문구로 적힌 3개 claim이 모두 한 canonical 그룹으로 묶여야 함");
+  const values = new Set(group!.claims.map((c) => c.value));
+  assert(values.size === 3 && values.has("8") && values.has("15") && values.has("12"), "세 값이 모두 보존돼야 함(하나를 조용히 고르지 않음)");
+  console.log("✅ Test 35 — 서로 다른 문구의 같은 지표(3개 claim)도 전부 상충 그룹에 보존");
+}
+
+// ── 36. 통화 단위가 다르면 기존처럼 병합하지 않음 ──
+
+function test36_currencyMismatchPreservesExistingBehavior() {
+  const claims: NumericClaim[] = [
+    claim({ raw: "매출 100억원", sectionKey: "FINANCIAL_STATUS", label: "매출", value: "100", unit: "억원", confidence: "HIGH", status: "document" }),
+    claim({ raw: "매출 10 USD", sectionKey: "FINANCIAL_STATUS", label: "매출", value: "10", unit: "USD", confidence: "HIGH", status: "document" }),
+  ];
+  const contradictions = detectContradictions(claims);
+  assert(contradictions.length === 0, "통화(unit)가 다르면 canonical 그룹도 병합하면 안 됨(통화 변환 없음)");
+  console.log("✅ Test 36 — 통화 단위가 다르면 병합하지 않음(기존 동작 그대로, 통화 정규화 없음)");
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// PR-M.1 — "2024A"/"2024E"류 연도-접미사(실적/추정) 오탐 수정
+//
+// PR-M 최종 adversarial review에서 발견: "2024E 매출"과 "2024A 매출"이
+// 실적(Actual)과 추정(Estimate)이라는 서로 다른 시나리오인데도 기간·
+// 시나리오 감지가 이 접미사 표기를 인식하지 못해 같은 canonical 키로
+// 묶여 거짓 상충(false positive)을 만들었다. 이 테스트들은 그 수정이
+// 정확히 요구된 매트릭스대로 동작하는지, 그리고 임의의 A/E 문자(ARR,
+// CAC, LTV, AI, MA, SA, Series A, CompanyA 등)를 실적/추정으로 오인하지
+// 않는지 검증한다.
+// ══════════════════════════════════════════════════════════════════════
+
+// ── 37. MUST NOT CONTRADICT — 연도-접미사로 시나리오가 다르면 병합 금지 ──
+
+function test37_yearSuffixScenarioMustNotContradict() {
+  const cases: Array<[string, NumericClaim[]]> = [
+    ["2024A vs 2024E", [
+      claim({ raw: "2024A 매출 100억원", sectionKey: "X", label: "2024A 매출", value: "100", unit: "억원", confidence: "HIGH", status: "document" }),
+      claim({ raw: "2024E 매출 120억원", sectionKey: "X", label: "2024E 매출", value: "120", unit: "억원", confidence: "HIGH", status: "document" }),
+    ]],
+    ["FY24A vs FY24E", [
+      claim({ raw: "FY24A 매출 100억원", sectionKey: "X", label: "FY24A 매출", value: "100", unit: "억원", confidence: "HIGH", status: "document" }),
+      claim({ raw: "FY24E 매출 120억원", sectionKey: "X", label: "FY24E 매출", value: "120", unit: "억원", confidence: "HIGH", status: "document" }),
+    ]],
+    ["2024년 실제 매출 vs 2024년 예상 매출", [
+      claim({ raw: "2024년 실제 매출 100억원", sectionKey: "X", label: "2024년 실제 매출", value: "100", unit: "억원", confidence: "HIGH", status: "document" }),
+      claim({ raw: "2024년 예상 매출 120억원", sectionKey: "X", label: "2024년 예상 매출", value: "120", unit: "억원", confidence: "HIGH", status: "document" }),
+    ]],
+    ["2024A vs 2023A(다른 연도)", [
+      claim({ raw: "2024A 매출 100억원", sectionKey: "X", label: "2024A 매출", value: "100", unit: "억원", confidence: "HIGH", status: "document" }),
+      claim({ raw: "2023A 매출 120억원", sectionKey: "X", label: "2023A 매출", value: "120", unit: "억원", confidence: "HIGH", status: "document" }),
+    ]],
+    ["2024E vs 2025E(다른 연도)", [
+      claim({ raw: "2024E 매출 100억원", sectionKey: "X", label: "2024E 매출", value: "100", unit: "억원", confidence: "HIGH", status: "document" }),
+      claim({ raw: "2025E 매출 120억원", sectionKey: "X", label: "2025E 매출", value: "120", unit: "억원", confidence: "HIGH", status: "document" }),
+    ]],
+  ];
+  for (const [name, claims] of cases) {
+    const result = detectContradictions(claims);
+    const found = result.some((g) => g.claims.length >= 2);
+    assert(!found, `${name}은 서로 다른 시나리오/연도라 상충으로 잡히면 안 됨(false positive 재현)`);
+  }
+  console.log("✅ Test 37 — 2024A/2024E, FY24A/FY24E, 실제/예상, 다른 연도 모두 오탐 없음(PR-M.1 수정 확인)");
+}
+
+// ── 38. MUST CONTRADICT — 같은 연도+같은 시나리오인데 값이 다르면 여전히 상충 ──
+
+function test38_yearSuffixScenarioMustStillContradictWhenGenuineConflict() {
+  const cases: Array<[string, NumericClaim[]]> = [
+    ["2024A vs 2024A", [
+      claim({ raw: "2024A 매출 100억원", sectionKey: "X", label: "2024A 매출", value: "100", unit: "억원", confidence: "HIGH", status: "document" }),
+      claim({ raw: "2024A 매출 120억원", sectionKey: "Y", label: "2024A 매출", value: "120", unit: "억원", confidence: "HIGH", status: "document" }),
+    ]],
+    ["2024E vs 2024E", [
+      claim({ raw: "2024E 매출 100억원", sectionKey: "X", label: "2024E 매출", value: "100", unit: "억원", confidence: "HIGH", status: "document" }),
+      claim({ raw: "2024E 매출 120억원", sectionKey: "Y", label: "2024E 매출", value: "120", unit: "억원", confidence: "HIGH", status: "document" }),
+    ]],
+    ["FY24A vs FY24A", [
+      claim({ raw: "FY24A 매출 100억원", sectionKey: "X", label: "FY24A 매출", value: "100", unit: "억원", confidence: "HIGH", status: "document" }),
+      claim({ raw: "FY24A 매출 120억원", sectionKey: "Y", label: "FY24A 매출", value: "120", unit: "억원", confidence: "HIGH", status: "document" }),
+    ]],
+    ["FY24E vs FY24E", [
+      claim({ raw: "FY24E 매출 100억원", sectionKey: "X", label: "FY24E 매출", value: "100", unit: "억원", confidence: "HIGH", status: "document" }),
+      claim({ raw: "FY24E 매출 120억원", sectionKey: "Y", label: "FY24E 매출", value: "120", unit: "억원", confidence: "HIGH", status: "document" }),
+    ]],
+  ];
+  for (const [name, claims] of cases) {
+    const result = detectContradictions(claims);
+    const found = result.some((g) => g.claims.length >= 2);
+    assert(found, `${name}은 같은 연도+같은 시나리오인데 값이 다르므로 상충으로 잡혀야 함`);
+  }
+  console.log("✅ Test 38 — 같은 연도+같은 시나리오(2024A/2024A, 2024E/2024E, FY24A/FY24A, FY24E/FY24E)는 값이 다르면 여전히 상충");
+}
+
+// ── 39. False-positive attack — 숫자 없는 A/E 약어는 시나리오로 오인되면 안 됨 ──
+
+function test39_bareLetterAbbreviationsNeverTreatedAsScenario() {
+  // ARR 자체는 지표로서 정당하게 상충 가능해야 한다(연도 접미사와 무관).
+  const arrConflict = detectContradictions([
+    claim({ raw: "ARR 100억원", sectionKey: "X", label: "ARR", value: "100", unit: "억원", confidence: "HIGH", status: "document" }),
+    claim({ raw: "ARR 120억원", sectionKey: "Y", label: "ARR", value: "120", unit: "억원", confidence: "HIGH", status: "document" }),
+  ]);
+  assert(arrConflict.some((g) => g.claims.length >= 2), "ARR끼리 값이 다르면(연도 접미사와 무관하게) 여전히 상충으로 잡혀야 함");
+
+  // CAC/LTV/AI/MA/SA/Series A/Series E — 숫자 바로 앞에 없는 A/E는 지표
+  // 자체가 인식되지 않거나(CAC/LTV 미매칭 대상과 짝지어) 어떤 경우에도
+  // 시나리오로 오인되어 상충 여부가 뒤바뀌면 안 된다.
+  const noMetricMatch = detectContradictions([
+    claim({ raw: "CAC 100억원", sectionKey: "X", label: "CAC", value: "100", unit: "억원", confidence: "HIGH", status: "document" }),
+    claim({ raw: "매출 120억원", sectionKey: "Y", label: "매출", value: "120", unit: "억원", confidence: "HIGH", status: "document" }),
+  ]);
+  assert(noMetricMatch.length === 0, "CAC와 매출은 서로 다른 지표라 상충으로 잡히면 안 됨");
+
+  const seriesLetters = detectContradictions([
+    claim({ raw: "Series A 100억원", sectionKey: "X", label: "Series A", value: "100", unit: "억원", confidence: "HIGH", status: "document" }),
+    claim({ raw: "Series E 120억원", sectionKey: "Y", label: "Series E", value: "120", unit: "억원", confidence: "HIGH", status: "document" }),
+  ]);
+  assert(seriesLetters.length === 0, "'Series A'/'Series E'는 지표 자체가 인식되지 않아야 하며(연도 접미사 오인 없음) 상충으로 잡히면 안 됨");
+  console.log("✅ Test 39 — ARR은 정상적으로 지표 상충 가능, CAC/Series A/Series E는 연도-접미사로 오인되지 않음(false-positive 없음)");
+}
+
 const tests = [
   test1_decisionObjectCreation,
   test2_driverGeneration,
@@ -628,6 +895,20 @@ const tests = [
   test23_gateRejectsVerifiedBreakerWithoutEvidence,
   test24_noReportBasisSurfacesP0MissingInfo,
   test25_driverFallbackCitesRealEvidenceWhenRationaleMissing,
+  test26_exactLabelContradictionUnchanged,
+  test27_sameSectionVariedLabelContradiction,
+  test28_crossSectionVariedLabelContradiction,
+  test29_revenueVsGrossProfitNoFalsePositive,
+  test30_operatingProfitVsMarginNoFalsePositive,
+  test31_netProfitVsMarginAndDifferentFiscalYearNoFalsePositive,
+  test32_actualVsForecastNoFalsePositive,
+  test33_unspecifiedScenarioBothSidesStillContradicts,
+  test34_sameValueDifferentLabelNoContradiction,
+  test35_multipleVariedLabelsSameMetricAllValuesPreserved,
+  test36_currencyMismatchPreservesExistingBehavior,
+  test37_yearSuffixScenarioMustNotContradict,
+  test38_yearSuffixScenarioMustStillContradictWhenGenuineConflict,
+  test39_bareLetterAbbreviationsNeverTreatedAsScenario,
 ];
 
 console.log("=== VC Investment Decision Intelligence(PR-J) 테스트 ===\n");
