@@ -21,6 +21,7 @@ import { reconstructDOCX } from "../src/lib/template/template-reconstructor";
 import { parseDOCXTemplate } from "../src/lib/template/template-parser";
 import type { TemplateSectionMap } from "../src/lib/template/template-mapper";
 import { extractUnmappedContent } from "../src/lib/template/slide-extraction";
+import type { VCDecisionMemoSection } from "../src/lib/vc-decision-memo";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -363,6 +364,133 @@ async function main() {
   const noDocsResult = await extractUnmappedContent("인력 구성", "", []);
   assert(noDocsResult === null, "자료가 없으면 AI 호출 없이 바로 null이어야 함");
   console.log("✅ 참고할 자료가 없으면 AI 호출 없이 즉시 건너뜀");
+
+  // ══════════════════════════════════════════════════════════════════
+  // PR-L.1 — Decision-First memo를 Template Reconstruction(DOCX)에도
+  // 삽입하는 배선 검증. buildDecisionMemoSections()의 실제 정확성은
+  // tools/test-vc-decision-memo.ts가 이미 검증한다 — 여기서는 "조립된
+  // 마크다운이 재현 렌더러(renderContent/markdownToBlocks)를 거쳐 표지를
+  // 보존한 채 올바른 위치에 실제로 삽입되는지"만 확인한다.
+  // ══════════════════════════════════════════════════════════════════
+
+  const memoFixture: VCDecisionMemoSection[] = [
+    {
+      title: "투자 결정 요약",
+      content:
+        "### Investment Thesis\n투자 논지는 제품·기술력, 재무 건전성에 근거합니다.\n\n### Decision Map\n| 차원 | 상태 | 관련 상세 섹션 |\n| --- | --- | --- |\n| 제품·기술력 | 확인됨 | - |",
+    },
+    {
+      title: "투자 근거 (Investment Drivers)",
+      content:
+        "- **제품·기술력 — 82점** [확인됨]\n  - 왜 중요한가: 특허 12건 보유에 근거해 평가가 높습니다.\n  - 근거: \"특허 12건\"(IR_Deck.pdf)",
+    },
+  ];
+
+  // TEST 1 — Memo insertion: 실제 document.xml 안에 memo 텍스트가 존재하는지
+  const withMemoResult = await reconstructDOCX({
+    originalBuffer: original,
+    sectionMap,
+    reportSections,
+    replacements: { 기업명: "헬스케어AI Inc." },
+    decisionMemoSections: memoFixture,
+  });
+  const withMemoXml = await readDocXml(withMemoResult.buffer);
+
+  assert(
+    withMemoXml.includes("투자 논지는 제품·기술력, 재무 건전성에 근거합니다"),
+    "Decision-First memo의 thesis 텍스트가 document.xml에 없음"
+  );
+  assert(
+    withMemoXml.includes("투자 근거 (Investment Drivers)"),
+    "Decision-First memo의 두 번째 섹션 제목이 document.xml에 없음"
+  );
+  assert(
+    withMemoXml.includes("특허 12건 보유에 근거해 평가가 높습니다"),
+    "Decision-First memo의 investment driver 본문이 document.xml에 없음"
+  );
+  console.log("✅ PR-L.1 Test 1 — Decision-First memo 텍스트가 실제 document.xml에 삽입됨");
+
+  // TEST 2 — Existing section preserved: memo가 있어도 기존 매핑 섹션의
+  // 실제 문구/숫자, 회사 양식 자산(폰트·색상·표지), 플레이스홀더 치환은
+  // 그대로여야 한다.
+  assert(withMemoXml.includes("HY헤드라인M"), "memo 삽입 후 회사 지정 폰트가 사라짐");
+  assert(withMemoXml.includes("1F3864"), "memo 삽입 후 회사 지정 색상이 사라짐");
+  assert(withMemoXml.includes("투 자 심 의 보 고 서"), "memo 삽입 후 표지 제목이 사라짐");
+  assert(withMemoXml.includes("1. 투자개요"), "memo 삽입 후 섹션 제목이 사라짐");
+  assert(
+    withMemoXml.includes("Series B 100억원을 조달함"),
+    "memo 삽입 후 기존 매핑 섹션의 실제 본문(재무 수치)이 사라짐"
+  );
+  assert(
+    withMemoXml.includes("임상 실패 리스크"),
+    "memo 삽입 후 기존 리스크 섹션 본문이 사라짐"
+  );
+  assert(
+    withMemoXml.includes("헬스케어AI Inc.") && !withMemoXml.includes("{{기업명}}"),
+    "memo 삽입 후 플레이스홀더 치환이 깨짐"
+  );
+  console.log("✅ PR-L.1 Test 2 — memo 삽입 후에도 기존 매핑 섹션·회사 양식 자산이 그대로 보존됨");
+
+  // TEST 3 — Memo absent(undefined 또는 []): 기존 동작과 완전히 동일한
+  // document.xml이 나와야 한다(회귀 없음). §222행의 기존 `outXml`이 바로
+  // decisionMemoSections를 넘기지 않은 baseline이다.
+  const undefinedMemoXml = await readDocXml(
+    (
+      await reconstructDOCX({
+        originalBuffer: original,
+        sectionMap,
+        reportSections,
+        replacements: { 기업명: "헬스케어AI Inc." },
+      })
+    ).buffer
+  );
+  const emptyMemoXml = await readDocXml(
+    (
+      await reconstructDOCX({
+        originalBuffer: original,
+        sectionMap,
+        reportSections,
+        replacements: { 기업명: "헬스케어AI Inc." },
+        decisionMemoSections: [],
+      })
+    ).buffer
+  );
+  assert(
+    undefinedMemoXml === outXml,
+    "decisionMemoSections를 생략했을 때 기존 baseline과 XML이 달라짐(회귀)"
+  );
+  assert(
+    emptyMemoXml === outXml,
+    "decisionMemoSections가 []일 때 기존 baseline과 XML이 달라짐(회귀)"
+  );
+  console.log("✅ PR-L.1 Test 3 — decisionMemoSections가 undefined/[]이면 기존 동작과 XML까지 완전히 동일함");
+
+  // TEST 4 — Memo ordering: 표지 < memo < 첫 report section 순서가 실제
+  // document.xml(=문서 순서)에서 지켜지는지 확인한다. memo가 표지보다
+  // 앞에 들어가는 regression을 절대 허용하지 않는다(§Step2).
+  const coverIdx = withMemoXml.indexOf("투 자 심 의 보 고 서");
+  const companyNameIdx = withMemoXml.indexOf("헬스케어AI Inc.");
+  const memoFirstTitleIdx = withMemoXml.indexOf("투자 결정 요약");
+  const memoSecondTitleIdx = withMemoXml.indexOf("투자 근거 (Investment Drivers)");
+  const firstSectionHeadingIdx = withMemoXml.indexOf("1. 투자개요");
+  assert(
+    coverIdx !== -1 && memoFirstTitleIdx !== -1 && firstSectionHeadingIdx !== -1,
+    "순서 검증에 필요한 마커 문자열을 document.xml에서 찾지 못함"
+  );
+  assert(coverIdx < memoFirstTitleIdx, "Decision-First memo가 표지보다 앞에 삽입됨(regression)");
+  assert(
+    companyNameIdx !== -1 && companyNameIdx < memoFirstTitleIdx,
+    "Decision-First memo가 표지의 회사명 플레이스홀더보다 앞에 삽입됨(regression)"
+  );
+  assert(
+    memoFirstTitleIdx < memoSecondTitleIdx,
+    "buildDecisionMemoSections()가 반환한 memo section 순서가 보존되지 않음"
+  );
+  assert(
+    memoSecondTitleIdx < firstSectionHeadingIdx,
+    "Decision-First memo가 첫 번째 report section보다 뒤에 위치함(§Step2 위반)"
+  );
+  console.log("✅ PR-L.1 Test 4 — 표지 < Decision-First memo(순서 보존) < 첫 report section 순서 확인");
 
   console.log("\n✅ 양식 재현 테스트 통과\n");
 }

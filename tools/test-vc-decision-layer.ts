@@ -57,7 +57,13 @@ function dim(
     evidenceCoverage: confidence === "NO_EVIDENCE" ? null : 80,
     claimsTotal: confidence === "NO_EVIDENCE" ? 0 : 2,
     claimsSupported: confidence === "UNSUPPORTED" ? 0 : 2,
-    keyEvidence: [],
+    // 실제 assessDimension()(deal-scoring-evidence.ts)은 claimsTotal>0이면
+    // 확신도와 무관하게 keyEvidence를 채운다(상위 3개, 지지 여부 무관) —
+    // 이 기본값이 비어 있으면 LOW_SCORE Thesis Breaker가 evidence-free로
+    // 생성돼(§checkThesisBreakers) 이 파일의 다른 테스트가 의도치 않게
+    // 실패한다. NO_EVIDENCE만 실제로도 keyEvidence가 비는 게 맞다.
+    keyEvidence:
+      confidence === "NO_EVIDENCE" ? [] : [{ raw: "테스트 근거", confidence: confidence as ClaimConfidence }],
     unsupportedClaims: [],
     decisionImpact: "MEDIUM",
     uncertaintyNote: confidence === "HIGH" ? "" : "테스트용 불확실성 설명",
@@ -308,7 +314,21 @@ function test12_noFabricatedEvidence() {
 // ── 13. No recommendation bypass(품질 게이트가 확률 조작을 막음) ─────────
 
 function test13_gateRejectsAssessedProbability() {
-  const a = assessment({ team: dim("team", 40, "UNSUPPORTED") }, ["TEAM_EVIDENCE_GAP"]);
+  // 다른 5개 차원은 기본 필러(50점)가 아니라 60점으로 둔다 — 그렇지 않으면
+  // LOW_SCORE 폴백이 그 차원들도 Thesis Breaker로 승격시키는데, 기본
+  // dim() 헬퍼는 keyEvidence를 채우지 않아 이 테스트의 목적(확률 조작
+  // 방어)과 무관한 evidence-free 위반이 함께 걸려 테스트가 실패한다.
+  const a = assessment(
+    {
+      team: dim("team", 40, "UNSUPPORTED", { unsupportedClaims: [{ raw: "창업팀 경력 10년" }] }),
+      marketSize: dim("marketSize", 60, "MEDIUM"),
+      product: dim("product", 60, "MEDIUM"),
+      businessModel: dim("businessModel", 60, "MEDIUM"),
+      financials: dim("financials", 60, "MEDIUM"),
+      moat: dim("moat", 60, "MEDIUM"),
+    },
+    ["TEAM_EVIDENCE_GAP"]
+  );
   const decision = buildInvestmentDecision(50, a, {}, [], [], {});
   // 정상 경로는 항상 NOT_ASSESSED이므로 게이트를 통과해야 한다.
   const normalResult = checkVCDecisionGate(decision);
@@ -327,7 +347,17 @@ function test13_gateRejectsAssessedProbability() {
 // ── 14. Generic risk rejection/degradation ───────────────────────────────
 
 function test14_genericLanguageRejection() {
-  const a = assessment({ moat: dim("moat", 40, "MEDIUM") });
+  // 다른 5개 차원은 60점 이상으로 둔다(이유는 test13과 동일 — 기본
+  // 필러(50점) dim은 LOW_SCORE Thesis Breaker로 승격되는데 keyEvidence가
+  // 없어 이 테스트와 무관한 evidence-free 위반이 함께 걸린다).
+  const a = assessment({
+    moat: dim("moat", 40, "MEDIUM", { keyEvidence: [{ raw: "테스트 근거", confidence: "MEDIUM" }] }),
+    marketSize: dim("marketSize", 60, "MEDIUM"),
+    team: dim("team", 60, "MEDIUM"),
+    product: dim("product", 60, "MEDIUM"),
+    businessModel: dim("businessModel", 60, "MEDIUM"),
+    financials: dim("financials", 60, "MEDIUM"),
+  });
   const genericDrivers = buildInvestmentDrivers(a, {});
   // 게이트 자체를 직접 저품질 입력으로 테스트한다(생성 함수가 아니라 게이트의 판정 로직 검증).
   const decision = buildInvestmentDecision(50, a, {}, [], [], {});
@@ -438,6 +468,139 @@ function test20_exportCompatibility() {
   console.log("✅ Test 20 — Investment Decision은 JSON 직렬화 가능(export/영속화 호환)");
 }
 
+// ── 21. PR-L 발견 사항 회귀(§6/§7 — evidence-free Thesis Breaker) ─────────
+// LOW_SCORE 트리거는 "점수가 낮다"는 사실 자체가 근거일 수 있는데(즉
+// unsupportedClaims가 비어 있어도 그 차원의 keyEvidence는 실재), 예전
+// 구현은 unsupportedClaims만 evidence로 옮겨 VERIFIED 상태인데도 근거
+// 발췌가 하나도 없는 Thesis Breaker를 만들었다(실제 헬스케어AI 시드
+// 데이터로 재현됨 — tools/audit-vc-real-report.ts).
+
+function test21_thesisBreakerEvidenceFallsBackToKeyEvidence() {
+  const a = assessment(
+    {
+      financials: dim("financials", 40, "HIGH", {
+        keyEvidence: [
+          { raw: "8억원", confidence: "HIGH", documentName: "재무자료.xlsx" },
+          { raw: "60억원", confidence: "HIGH", documentName: "재무자료.xlsx" },
+        ],
+        unsupportedClaims: [],
+      }),
+    },
+    []
+  );
+  const breakers = buildThesisBreakers(a, {}, null);
+  const lowScore = breakers.find((b) => b.trigger === "LOW_SCORE" && b.dimension === "financials");
+  assert(!!lowScore, "재무 건전성 LOW_SCORE breaker가 생성되어야 함");
+  assert(lowScore!.evidenceState === "VERIFIED", "confidence HIGH인 차원은 VERIFIED 상태여야 함");
+  assert(
+    lowScore!.evidence.length > 0,
+    "VERIFIED 상태의 Thesis Breaker는 근거 발췌가 반드시 있어야 함(evidence-free 금지)"
+  );
+  assert(
+    lowScore!.evidence.some((e) => e.raw === "8억원"),
+    "unsupportedClaims가 비어 있으면 dim.keyEvidence(실제 확인된 근거)로 대체해야 함"
+  );
+  const gate = checkVCDecisionGate(
+    buildInvestmentDecision(40, a, {}, [], null, { investAmount: 10, valuation: 100 })
+  );
+  assert(gate.ok, `VERIFIED + 근거 있음이면 게이트를 통과해야 함: ${JSON.stringify(gate)}`);
+  console.log("✅ Test 21 — VERIFIED 상태 Thesis Breaker는 항상 실제 근거 발췌를 포함함(evidence-free 금지)");
+}
+
+// ── 22. 차원 없는 리스크(밸류에이션 공백)는 MISSING 상태여야 함 ───────────
+
+function test22_valuationGapBreakerIsMissingNotUnverified() {
+  const a = assessment({}, ["VALUATION_EVIDENCE_GAP"]);
+  const breakers = buildThesisBreakers(a, {}, null);
+  const gap = breakers.find((b) => b.trigger === "VALUATION_EVIDENCE_GAP");
+  assert(!!gap, "밸류에이션 근거 공백 breaker가 생성되어야 함");
+  assert(
+    gap!.evidenceState === "MISSING",
+    "차원이 없는 리스크(근거 배열을 채울 대상 자체가 없음)는 UNVERIFIED가 아니라 MISSING이어야 게이트가 정당하게 예외 처리함"
+  );
+  assert(gap!.evidence.length === 0, "MISSING 상태는 근거 배열이 비어 있는 게 정상");
+  console.log("✅ Test 22 — 차원 없는(밸류에이션) Thesis Breaker는 MISSING 상태(evidence-free 예외 대상)");
+}
+
+// ── 23. 게이트가 실제로 evidence-free VERIFIED breaker를 거부하는지(방어선) ──
+
+function test23_gateRejectsVerifiedBreakerWithoutEvidence() {
+  const a = assessment({ product: dim("product", 80, "HIGH", { keyEvidence: [{ raw: "근거", confidence: "HIGH" }] }) });
+  const decision = buildInvestmentDecision(80, a, {}, [], null, { investAmount: 10, valuation: 100 });
+  assert(checkVCDecisionGate(decision).ok, "정상 decision은 게이트를 통과해야 함");
+
+  const tampered = {
+    ...decision,
+    thesisBreakers: [
+      {
+        id: "breaker:TEST:none",
+        trigger: "LOW_SCORE" as const,
+        title: "테스트",
+        whyItMatters: "테스트용 위반 케이스",
+        evidenceState: "VERIFIED" as const,
+        evidence: [],
+        probability: "NOT_ASSESSED" as const,
+        decisionImpact: "MEDIUM" as const,
+        verificationRequirement: "재확인 필요",
+      },
+    ],
+  };
+  const result = checkVCDecisionGate(tampered);
+  assert(!result.ok, "VERIFIED인데 근거 배열이 비어 있으면 게이트가 반드시 실패해야 함");
+  assert(
+    result.reason === "THESIS_BREAKER_WITHOUT_EVIDENCE_OR_MISSING_STATE",
+    `실패 사유가 정확해야 함: ${result.reason}`
+  );
+  console.log("✅ Test 23 — 게이트는 evidence-free VERIFIED Thesis Breaker를 거부함(방어선 확인)");
+}
+
+// ── 24. basis="no_report"는 반드시 P0 Missing Information을 노출해야 함 ───
+// (§8 — "정보 공백이 하나도 없다"는 착시가 가장 위험하다: 보고서 자체가
+// 없어 claimsTotal=0이면 기존 riskFlag 기반 로직이 하나도 발동하지 않아
+// missingInformation이 빈 배열이 됐다 — 실제 no_report 프로덕션 경로로
+// 재현됨.)
+
+function test24_noReportBasisSurfacesP0MissingInfo() {
+  const a = assessment(
+    {
+      marketSize: dim("marketSize", 65, "NO_EVIDENCE", { keyEvidence: [], unsupportedClaims: [], claimsTotal: 0, claimsSupported: 0, evidenceCoverage: null }),
+    },
+    [],
+    { basis: "no_report", overallConfidence: "NO_EVIDENCE", overallCoverage: null }
+  );
+  const missing = buildMissingInformation(a, [], null);
+  const noReportItem = missing.find((m) => m.id === "missing:no_report");
+  assert(!!noReportItem, "basis=no_report이면 반드시 명시적 P0 항목이 있어야 함");
+  assert(noReportItem!.priority === "P0", "보고서 미생성은 P0(결정-차단)이어야 함");
+  console.log("✅ Test 24 — basis=no_report(보고서 없음)는 항상 P0 Missing Information을 명시함");
+}
+
+// ── 25. Driver whyItMatters는 rationale이 없어도 실제 근거를 인용해야 함 ──
+// (§5/§6 — AI가 rationale을 비워 줘도(parseScoreResponse의 실제 실패
+// 모드) "평가가 상대적으로 높습니다" 같은 순수 일반론 대신 실제 근거
+// 발췌를 그대로 인용해야 한다.)
+
+function test25_driverFallbackCitesRealEvidenceWhenRationaleMissing() {
+  const a = assessment({
+    product: dim("product", 78, "HIGH", {
+      keyEvidence: [{ raw: "특허 12건", confidence: "HIGH", documentName: "IR_Deck.pdf" }],
+      unsupportedClaims: [],
+    }),
+  });
+  const drivers = buildInvestmentDrivers(a, {}); // rationale 없음
+  const productDriver = drivers.find((d) => d.dimension === "product");
+  assert(!!productDriver, "product driver가 생성되어야 함");
+  assert(
+    productDriver!.whyItMatters.includes("특허 12건"),
+    `rationale이 없으면 실제 근거(keyEvidence)를 인용해야 함: "${productDriver!.whyItMatters}"`
+  );
+  assert(
+    !productDriver!.whyItMatters.includes("평가가 상대적으로 높습니다"),
+    "순수 일반론(근거 미인용) 문구로 폴백하면 안 됨"
+  );
+  console.log("✅ Test 25 — rationale 없어도 Driver whyItMatters는 실제 근거를 인용함(순수 일반론 금지)");
+}
+
 const tests = [
   test1_decisionObjectCreation,
   test2_driverGeneration,
@@ -460,6 +623,11 @@ const tests = [
   test18_multipleSourceConflict,
   test19_regenerationIdempotent,
   test20_exportCompatibility,
+  test21_thesisBreakerEvidenceFallsBackToKeyEvidence,
+  test22_valuationGapBreakerIsMissingNotUnverified,
+  test23_gateRejectsVerifiedBreakerWithoutEvidence,
+  test24_noReportBasisSurfacesP0MissingInfo,
+  test25_driverFallbackCitesRealEvidenceWhenRationaleMissing,
 ];
 
 console.log("=== VC Investment Decision Intelligence(PR-J) 테스트 ===\n");

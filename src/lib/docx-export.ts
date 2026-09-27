@@ -31,7 +31,7 @@ import type { VCDecisionMemoSection } from "@/lib/vc-decision-memo";
  * 않는다(순수 추출). PR-K에서 Decision-First memo 섹션도 같은 파서를 그대로
  * 재사용할 수 있게 함수로 분리했다(중복 렌더링 로직을 만들지 않기 위함).
  */
-function renderMarkdownLinesToParagraphs(content: string): Paragraph[] {
+export function renderMarkdownLinesToParagraphs(content: string): Paragraph[] {
   const paragraphs: Paragraph[] = [];
   const contentLines = content.split("\n");
   for (const line of contentLines) {

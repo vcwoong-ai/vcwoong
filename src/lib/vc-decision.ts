@@ -190,12 +190,20 @@ export function buildInvestmentDrivers(
   return strengths.map((s) => {
     const dim = assessment.dimensions[s.dimension];
     const evidenceState = mapConfidenceToEvidenceState(s.confidence);
+    // AI가 이 차원의 rationale을 비워서 줬을 때(실제 프로덕션에서 발생하는
+    // 경우 — deal-scoring-shared.ts의 parseScoreResponse는 필드 누락 시
+    // 빈 문자열로 채운다), 점수만 언급하는 순수 일반론 대신 이미 계산된
+    // 실제 근거 발췌를 그대로 인용한다 — 새 AI 호출 없이도 "무엇에 근거해
+    // 강점인가"를 항상 구체적으로 답할 수 있다.
+    const evidenceFallback = dim.keyEvidence[0]
+      ? `${dim.keyEvidence[0].raw}${dim.keyEvidence[0].documentName ? `(${dim.keyEvidence[0].documentName})` : ""}에 근거해 평가가 높습니다.`
+      : `${s.label} 평가가 상대적으로 높습니다.`;
     return {
       id: `driver:${s.dimension}`,
       dimension: s.dimension,
       title: `${s.label} — ${s.score}점`,
-      description: s.rationale || `${s.label} 평가가 상대적으로 높습니다.`,
-      whyItMatters: s.rationale || `${s.label}이(가) 투자 매력도의 핵심 축 중 하나로 평가됩니다.`,
+      description: s.rationale || evidenceFallback,
+      whyItMatters: s.rationale || evidenceFallback,
       evidenceState,
       evidence: dim.keyEvidence.map((e) => ({
         raw: e.raw,
@@ -246,7 +254,11 @@ export function buildThesisBreakers(
     const dim = r.dimension ? assessment.dimensions[r.dimension] : undefined;
     const evidenceState: VCEvidenceState = dim
       ? mapConfidenceToEvidenceState(dim.confidence)
-      : "UNVERIFIED"; // 밸류에이션처럼 차원이 없는 리스크는 evidence.ts 근거 자체가 unverified라 이 상태다
+      // 밸류에이션처럼 차원이 없는 리스크는 애초에 근거 배열을 채울 수 있는
+      // 대상(dim.keyEvidence)이 없다 — "확인했지만 근거가 약함(UNVERIFIED)"이
+      // 아니라 "근거 자체가 없음(MISSING)"이 정확한 상태이고, MISSING이어야
+      // Decision Gate가 evidence-free 상태를 정당하게 예외 처리한다.
+      : "MISSING";
     return {
       id: `breaker:${r.trigger}:${r.dimension ?? "none"}`,
       trigger: r.trigger,
@@ -254,8 +266,16 @@ export function buildThesisBreakers(
       title: r.label,
       whyItMatters: r.detail,
       evidenceState,
+      // 근거 없음(UNSUPPORTED_KEY_CLAIM 등)이면 그 unsupported claim을 보여주고,
+      // 근거는 충분하지만 그 근거 자체가 나쁜 신호인 경우(LOW_SCORE처럼 확신도
+      // 높은데 점수가 낮은 경우)는 unsupportedClaims가 비어 있어도 dim.keyEvidence
+      // (실제 확인된 근거)를 대신 보여준다 — VERIFIED 상태인데 근거 발췌가
+      // 하나도 없는 Thesis Breaker가 생기지 않도록 한다(§checkVerifiedDimensions와
+      // 동일한 원칙을 breaker에도 적용).
       evidence: dim
-        ? dim.unsupportedClaims.map((c) => ({ raw: c.raw }))
+        ? dim.unsupportedClaims.length > 0
+          ? dim.unsupportedClaims.map((c) => ({ raw: c.raw }))
+          : dim.keyEvidence.map((e) => ({ raw: e.raw, documentName: e.documentName, location: e.location }))
         : [],
       probability: "NOT_ASSESSED",
       decisionImpact: dim
@@ -299,6 +319,22 @@ export function buildMissingInformation(
   if (!assessment) return [];
 
   const items: VCMissingInformation[] = [];
+
+  // (a-0) 보고서 자체가 아직 없어 근거 계산이 원천적으로 불가능한 경우
+  // (deal-scoring-evidence.ts의 basis="no_report") — 이 경우 다른 모든
+  // 차원이 NO_EVIDENCE라 claimsTotal=0이 되어 아래 riskFlag 기반 로직이
+  // 하나도 발동하지 않는다. 그 결과 "정보 공백이 하나도 없다"처럼 보이는
+  // 게 가장 위험한 착시이므로, 이 구조적 사실 자체를 P0 항목으로 명시한다.
+  if (assessment.basis === "no_report") {
+    items.push({
+      id: "missing:no_report",
+      priority: "P0",
+      item: "투자심의보고서 미생성 — 근거 확인 자체가 불가능",
+      whyItMatters: "보고서가 아직 생성되지 않아 모든 점수가 문서 원문만으로 산출됐습니다. 근거 대조(evidence tracing)를 수행할 수 없어 현재 점수·강점·리스크는 검증되지 않은 상태입니다.",
+      decisionImpact: "CRITICAL",
+      requiredEvidence: "투자심의보고서 생성 후 재채점(딜 스코어 재계산)",
+    });
+  }
 
   // (a) 근거 공백 risk flag 자체를 미해결 정보로 승격한다.
   for (const flag of assessment.riskFlags) {
