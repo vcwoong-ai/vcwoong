@@ -20,6 +20,7 @@ export type VCDecisionGateFailureReason =
   | "P0_MISSING_INFO_WITHOUT_EVIDENCE_REQUIREMENT"
   | "VERIFIED_DIMENSION_WITHOUT_EVIDENCE"
   | "DRIVER_WITHOUT_EVIDENCE_OR_MISSING_STATE"
+  | "THESIS_BREAKER_WITHOUT_EVIDENCE_OR_MISSING_STATE"
   | "THESIS_BREAKER_WITH_ASSESSED_PROBABILITY"
   | "VALUATION_NOT_COMPUTABLE_WITHOUT_REQUIRED_INPUT"
   | "GENERIC_LANGUAGE_WITHOUT_SPECIFICS";
@@ -76,6 +77,12 @@ function checkDrivers(drivers: VCInvestmentDriver[]): VCDecisionGateResult {
 
 function checkThesisBreakers(breakers: VCThesisBreaker[]): VCDecisionGateResult {
   for (const b of breakers) {
+    // checkDrivers와 동일한 원칙: MISSING은 "근거가 없다"는 상태 자체가
+    // 정상이지만, 그 외 상태(특히 VERIFIED)를 주장하면서 근거 발췌가
+    // 하나도 없으면 안 된다.
+    if (b.evidenceState !== "MISSING" && b.evidence.length === 0) {
+      return { ok: false, reason: "THESIS_BREAKER_WITHOUT_EVIDENCE_OR_MISSING_STATE", detail: b.id };
+    }
     // TS 타입이 이미 리터럴 "NOT_ASSESSED"만 허용하지만, JSON 역직렬화 등
     // 타입을 우회하는 경로에 대비해 런타임에서도 방어적으로 재확인한다.
     if ((b.probability as string) !== "NOT_ASSESSED") {
