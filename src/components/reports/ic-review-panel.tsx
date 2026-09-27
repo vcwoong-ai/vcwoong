@@ -23,11 +23,13 @@ import {
 } from "@/lib/ic-review";
 import { buildInvestmentDecision } from "@/lib/vc-decision";
 import { checkVCDecisionGate } from "@/lib/vc-decision-gate";
+import { buildDecisionMemoSectionRefs, type VCDecisionMemoSectionRef } from "@/lib/vc-decision-memo";
 import { VC_EVIDENCE_STATE_LABEL, VC_PRIORITY_LABEL } from "@/lib/vc-decision-types";
 import type { ScoreDimensionKey } from "@/lib/deal-scoring-shared";
 import type { ScoreEvidenceAssessment } from "@/lib/deal-scoring-evidence";
 import type { NumericClaim } from "@/lib/evidence";
 import type { IcQuestion, QuestionPriority } from "@/lib/ic-questions";
+import { SectionKey } from "@prisma/client";
 
 const EVIDENCE_STATE_CLASS: Record<string, string> = {
   VERIFIED: "bg-green-50 text-green-700 border-green-200",
@@ -70,10 +72,15 @@ export function IcReviewPanel({
   reportId,
   dealId,
   canEdit,
+  sections = [],
 }: {
   reportId: string;
   dealId: string;
   canEdit: boolean;
+  /** PR-K: Decision → Evidence 참조("관련 상세 섹션")를 만드는 데만 쓴다 —
+   * 부모(report-page-client.tsx)가 이미 들고 있는 값이라 새 fetch를 만들지
+   * 않는다. 생략해도(구버전 호출부) 참조 없이 정상 동작한다. */
+  sections?: Array<{ sectionKey: string; title: string }>;
 }) {
   const [score, setScore] = useState<DealScoreData | null>(null);
   const [dealFacts, setDealFacts] = useState<{ investAmount?: number | null; valuation?: number | null }>({});
@@ -130,6 +137,20 @@ export function IcReviewPanel({
   // 방어적으로 재확인한다(vc-decision-gate.ts). 실패하면 그 내용을 신뢰
   // 가능한 것처럼 보여주지 않고 명시적으로 경고만 표시한다.
   const gate = useMemo(() => (decision ? checkVCDecisionGate(decision) : null), [decision]);
+
+  // PR-K: Decision → Evidence 참조 — deal-scoring-evidence.ts의 기존
+  // DIMENSION_SECTION_MAP을 그대로 재사용해 "이 driver/dimension은 어느
+  // 상세 섹션과 연결되는가"만 찾는다(새 매핑 없음, 새 fetch 없음 — sections는
+  // 부모가 이미 들고 있던 값).
+  const sectionRefs = useMemo(
+    () => buildDecisionMemoSectionRefs(sections.map((s) => ({ sectionKey: s.sectionKey as SectionKey, title: s.title }))),
+    [sections]
+  );
+
+  function sectionRefFor(dimension: ScoreDimensionKey | undefined): VCDecisionMemoSectionRef | undefined {
+    if (!dimension) return undefined;
+    return sectionRefs.find((r) => r.dimension === dimension);
+  }
 
   const hasP0MissingInfo = decision?.missingInformation.some((m) => m.priority === "P0") ?? false;
 
@@ -226,6 +247,15 @@ export function IcReviewPanel({
                       <span className="text-gray-900">{m.item}</span>
                       <p className="mt-0.5 text-gray-500">{m.whyItMatters}</p>
                       <p className="mt-0.5 text-gray-400">필요 근거: {m.requiredEvidence}</p>
+                      {sectionRefFor(m.relatedDimension) && (
+                        <a
+                          href={`#section-${sectionRefFor(m.relatedDimension)!.sectionKey}`}
+                          className="mt-0.5 inline-block text-blue-600 hover:underline"
+                        >
+                          → {sectionRefFor(m.relatedDimension)!.sectionOrder}.{" "}
+                          {sectionRefFor(m.relatedDimension)!.sectionTitle} 섹션에서 확인
+                        </a>
+                      )}
                     </div>
                   </li>
                 ))}
@@ -238,16 +268,21 @@ export function IcReviewPanel({
               Decision Map ({decision.decisionDimensions.length + 1}개 차원)
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
-              {decision.decisionDimensions.map((d) => (
-                <div
-                  key={d.dimension}
-                  className={`rounded border px-2 py-1.5 text-[10px] ${EVIDENCE_STATE_CLASS[d.state]}`}
-                  title={d.contradiction ? `상충: ${d.contradiction.valueA} vs ${d.contradiction.valueB}` : undefined}
-                >
-                  <div className="font-medium text-gray-900">{d.label}</div>
-                  <div>{VC_EVIDENCE_STATE_LABEL[d.state]}</div>
-                </div>
-              ))}
+              {decision.decisionDimensions.map((d) => {
+                const ref = sectionRefFor(d.dimension as ScoreDimensionKey);
+                const Wrapper = ref ? "a" : "div";
+                return (
+                  <Wrapper
+                    key={d.dimension}
+                    {...(ref ? { href: `#section-${ref.sectionKey}` } : {})}
+                    className={`rounded border px-2 py-1.5 text-[10px] ${EVIDENCE_STATE_CLASS[d.state]} ${ref ? "hover:opacity-80" : ""}`}
+                    title={d.contradiction ? `상충: ${d.contradiction.valueA} vs ${d.contradiction.valueB}` : undefined}
+                  >
+                    <div className="font-medium text-gray-900">{d.label}</div>
+                    <div>{VC_EVIDENCE_STATE_LABEL[d.state]}</div>
+                  </Wrapper>
+                );
+              })}
               <div className="rounded border px-2 py-1.5 text-[10px] bg-gray-50 text-gray-500 border-gray-200">
                 <div className="font-medium text-gray-900">밸류에이션</div>
                 <div>{VC_EVIDENCE_STATE_LABEL[decision.valuation.evidenceState]}</div>
@@ -307,6 +342,14 @@ export function IcReviewPanel({
                         )}
                         <p className="mt-0.5 text-gray-400">무엇이 뒤집을 수 있나: {d.whatCouldInvalidate}</p>
                         <p className="mt-0.5 text-gray-400">검증 필요: {d.verificationRequirement}</p>
+                        {sectionRefFor(d.dimension) && (
+                          <a
+                            href={`#section-${sectionRefFor(d.dimension)!.sectionKey}`}
+                            className="mt-0.5 inline-block text-blue-600 hover:underline"
+                          >
+                            → {sectionRefFor(d.dimension)!.sectionOrder}. {sectionRefFor(d.dimension)!.sectionTitle} 섹션에서 확인
+                          </a>
+                        )}
                       </li>
                     ))}
                   </ul>
@@ -345,6 +388,14 @@ export function IcReviewPanel({
                         <p className="mt-0.5 text-gray-400">검증 필요: {b.verificationRequirement}</p>
                         {b.icQuestion && (
                           <p className="mt-0.5 text-gray-400">관련 IC 질문: {b.icQuestion.question}</p>
+                        )}
+                        {sectionRefFor(b.dimension) && (
+                          <a
+                            href={`#section-${sectionRefFor(b.dimension)!.sectionKey}`}
+                            className="mt-0.5 inline-block text-blue-600 hover:underline"
+                          >
+                            → {sectionRefFor(b.dimension)!.sectionOrder}. {sectionRefFor(b.dimension)!.sectionTitle} 섹션에서 확인
+                          </a>
                         )}
                       </li>
                     ))}

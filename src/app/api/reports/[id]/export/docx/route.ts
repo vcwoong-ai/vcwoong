@@ -29,7 +29,7 @@ export async function POST(
 
   const result = await loadReportForExport(session.user.id, params.id);
   if ("error" in result) return result.error;
-  const { report, canUseEngine } = result;
+  const { report, canUseEngine, decisionMemoSections } = result;
 
   try {
     let buffer: Buffer | null = null;
@@ -91,10 +91,13 @@ export async function POST(
       }
     }
 
-    // 3순위: 기본 양식
+    // 3순위: 기본 양식(PR-K: Decision-First memo가 여기서만 삽입된다 —
+    // 1/2순위는 회사가 업로드한 자체 템플릿의 1:1 서식 재현이 목적이라
+    // 새 섹션을 끼워 넣지 않는다. 아래 §Known limitations 참고)
     if (!buffer) {
       buffer = await generateReportDOCX(
-        report as Parameters<typeof generateReportDOCX>[0]
+        report as Parameters<typeof generateReportDOCX>[0],
+        decisionMemoSections
       );
     }
 

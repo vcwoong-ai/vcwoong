@@ -23,9 +23,79 @@ import {
 } from "docx";
 import { ReportWithSections } from "@/types";
 import { SECTION_META } from "@/types";
+import type { VCDecisionMemoSection } from "@/lib/vc-decision-memo";
+
+/**
+ * 섹션 본문(마크다운 방언: ### / ## 헤딩, - 불릿, **굵게**)을 문단으로 바꾼다.
+ * 기존 generateReportDOCX의 본문 루프에서 그대로 뽑아낸 것 — 동작은 바꾸지
+ * 않는다(순수 추출). PR-K에서 Decision-First memo 섹션도 같은 파서를 그대로
+ * 재사용할 수 있게 함수로 분리했다(중복 렌더링 로직을 만들지 않기 위함).
+ */
+function renderMarkdownLinesToParagraphs(content: string): Paragraph[] {
+  const paragraphs: Paragraph[] = [];
+  const contentLines = content.split("\n");
+  for (const line of contentLines) {
+    if (!line.trim()) {
+      paragraphs.push(new Paragraph({ text: "" }));
+      continue;
+    }
+
+    if (line.startsWith("### ")) {
+      paragraphs.push(
+        new Paragraph({
+          text: line.replace("### ", ""),
+          heading: HeadingLevel.HEADING_3,
+          spacing: { before: 300, after: 100 },
+        })
+      );
+    } else if (line.startsWith("## ")) {
+      paragraphs.push(
+        new Paragraph({
+          text: line.replace("## ", ""),
+          heading: HeadingLevel.HEADING_2,
+          spacing: { before: 400, after: 200 },
+        })
+      );
+    } else if (line.startsWith("- ") || line.startsWith("• ")) {
+      paragraphs.push(
+        new Paragraph({
+          children: [
+            new TextRun({ text: "• " + line.replace(/^[-•]\s/, ""), size: 20 }),
+          ],
+          indent: { left: 360 },
+          spacing: { after: 100 },
+        })
+      );
+    } else if (line.match(/^\*\*(.+)\*\*/)) {
+      const parts = line.split(/\*\*(.+?)\*\*/g);
+      const runs = parts.map((part, idx) =>
+        idx % 2 === 1
+          ? new TextRun({ text: part, bold: true, size: 20 })
+          : new TextRun({ text: part, size: 20 })
+      );
+      paragraphs.push(
+        new Paragraph({
+          children: runs,
+          spacing: { after: 120 },
+        })
+      );
+    } else {
+      paragraphs.push(
+        new Paragraph({
+          children: [new TextRun({ text: line, size: 20 })],
+          spacing: { after: 120 },
+        })
+      );
+    }
+  }
+  return paragraphs;
+}
 
 export async function generateReportDOCX(
-  report: ReportWithSections
+  report: ReportWithSections,
+  /** PR-K: Decision-First memo(vc-decision-memo.ts가 조립) — 표지 다음,
+   * 기존 10개 섹션 앞에 삽입한다. 생략하면 기존 동작과 완전히 동일하다. */
+  decisionMemoSections: VCDecisionMemoSection[] = []
 ): Promise<Buffer> {
   const deal = report.deal;
   const sections = [...report.sections].sort((a, b) => a.order - b.order);
@@ -147,6 +217,25 @@ export async function generateReportDOCX(
   // Summary table
   children.push(summaryTable);
 
+  // PR-K: Decision-First memo — 기존 10개 섹션보다 먼저, 표지/요약표 바로
+  // 다음에 배치한다(§14 순서 그대로). 비어 있으면(딜 스코어 미계산 등)
+  // decisionMemoSections 자체가 빈 배열이라 아무것도 추가되지 않는다.
+  for (const memoSection of decisionMemoSections) {
+    children.push(
+      new Paragraph({
+        children: [new PageBreak()],
+      })
+    );
+    children.push(
+      new Paragraph({
+        text: memoSection.title,
+        heading: HeadingLevel.HEADING_1,
+        spacing: { before: 600, after: 300 },
+      })
+    );
+    children.push(...renderMarkdownLinesToParagraphs(memoSection.content));
+  }
+
   // Page break before content
   children.push(
     new Paragraph({
@@ -168,61 +257,7 @@ export async function generateReportDOCX(
     );
 
     // Section content - parse markdown-like formatting
-    const contentLines = section.content.split("\n");
-    for (const line of contentLines) {
-      if (!line.trim()) {
-        children.push(new Paragraph({ text: "" }));
-        continue;
-      }
-
-      if (line.startsWith("### ")) {
-        children.push(
-          new Paragraph({
-            text: line.replace("### ", ""),
-            heading: HeadingLevel.HEADING_3,
-            spacing: { before: 300, after: 100 },
-          })
-        );
-      } else if (line.startsWith("## ")) {
-        children.push(
-          new Paragraph({
-            text: line.replace("## ", ""),
-            heading: HeadingLevel.HEADING_2,
-            spacing: { before: 400, after: 200 },
-          })
-        );
-      } else if (line.startsWith("- ") || line.startsWith("• ")) {
-        children.push(
-          new Paragraph({
-            children: [
-              new TextRun({ text: "• " + line.replace(/^[-•]\s/, ""), size: 20 }),
-            ],
-            indent: { left: 360 },
-            spacing: { after: 100 },
-          })
-        );
-      } else if (line.match(/^\*\*(.+)\*\*/)) {
-        const parts = line.split(/\*\*(.+?)\*\*/g);
-        const runs = parts.map((part, idx) =>
-          idx % 2 === 1
-            ? new TextRun({ text: part, bold: true, size: 20 })
-            : new TextRun({ text: part, size: 20 })
-        );
-        children.push(
-          new Paragraph({
-            children: runs,
-            spacing: { after: 120 },
-          })
-        );
-      } else {
-        children.push(
-          new Paragraph({
-            children: [new TextRun({ text: line, size: 20 })],
-            spacing: { after: 120 },
-          })
-        );
-      }
-    }
+    children.push(...renderMarkdownLinesToParagraphs(section.content));
 
     // Page break after each section (except last)
     if (section !== sections[sections.length - 1]) {

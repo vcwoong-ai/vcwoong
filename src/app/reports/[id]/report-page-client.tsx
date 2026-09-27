@@ -562,7 +562,12 @@ export function ReportPageClient({
       </div>
 
       {report.sections.length > 0 && (
-        <IcReviewPanel reportId={report.id} dealId={report.deal.id} canEdit={canEdit} />
+        <IcReviewPanel
+          reportId={report.id}
+          dealId={report.deal.id}
+          canEdit={canEdit}
+          sections={report.sections}
+        />
       )}
 
       {report.sections.length > 0 && (

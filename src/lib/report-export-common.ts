@@ -4,6 +4,13 @@ import { hasFeature } from "@/lib/plans";
 import { getUserPlanKey } from "@/lib/subscription";
 import { ReportStatus } from "@prisma/client";
 import { getUserTeamContext, reportReadWhere } from "@/lib/team-access";
+import { traceReportEvidence } from "@/lib/evidence";
+import { verdictsToMap } from "@/lib/evidence-ai";
+import type { ScoreEvidenceAssessment } from "@/lib/deal-scoring-evidence";
+import type { ScoreDimensionKey } from "@/lib/deal-scoring-shared";
+import type { IcQuestion } from "@/lib/ic-questions";
+import { buildInvestmentDecision } from "@/lib/vc-decision";
+import { buildDecisionMemoSectionRefs, buildDecisionMemoSections } from "@/lib/vc-decision-memo";
 
 export async function loadReportForExport(userId: string, reportId: string) {
   const { teamId } = await getUserTeamContext(userId);
@@ -17,10 +24,15 @@ export async function loadReportForExport(userId: string, reportId: string) {
           // parsedText: 양식 재현 시 표준 섹션에 대응 안 되는 슬라이드/헤딩
           // (인력 구성·주주 구성 등)을 원본 IR 자료에서 대신 채우기 위해 필요.
           documents: { select: { name: true, metadata: true, parsedText: true } },
+          // PR-K: Decision-First memo(vc-decision-memo.ts)가 필요로 하는 값 —
+          // 새 AI 호출이 아니라 이미 계산·저장된 값을 추가로 select만 한다.
+          score: true,
         },
       },
       template: true,
       sections: { orderBy: { order: "asc" } },
+      evidenceCheck: { select: { verdicts: true } },
+      icQuestions: { select: { questions: true } },
     },
   });
 
@@ -44,7 +56,38 @@ export async function loadReportForExport(userId: string, reportId: string) {
   const canUseEngine =
     templateReady && hasFeature(await getUserPlanKey(userId), "templateEngine");
 
-  return { report, canUseEngine } as const;
+  // PR-K: Decision-First memo — /api/reports/[id]/evidence GET(traceReportEvidence)·
+  // /api/deals/[id]/score(evidenceAssessment)·IC Questions 패널이 이미 화면에서
+  // 쓰는 것과 정확히 같은 함수·같은 캐시만 재사용한다(evidence-ai.ts의
+  // verdictsToMap도 새 AI 호출이 아니라 캐시 조회다). vc-decision.ts는 여기서도
+  // 순수 함수로만 호출된다 — export 전용 새 생성 파이프라인이 아니다.
+  const evidence = traceReportEvidence(
+    report.sections.map((s) => ({ sectionKey: s.sectionKey, content: s.content })),
+    report.deal.documents,
+    { investAmount: report.deal.investAmount, valuation: report.deal.valuation },
+    verdictsToMap(report.evidenceCheck?.verdicts)
+  );
+  const assessment = (report.deal.score?.evidenceAssessment ?? null) as unknown as
+    | ScoreEvidenceAssessment
+    | null;
+  const rationale = (report.deal.score?.rationale ?? {}) as unknown as Partial<
+    Record<ScoreDimensionKey, string>
+  >;
+  const questions = (report.icQuestions?.questions ?? null) as unknown as IcQuestion[] | null;
+  const decision = buildInvestmentDecision(
+    report.deal.score?.overall ?? 0,
+    assessment,
+    rationale,
+    evidence.claims,
+    questions,
+    { investAmount: report.deal.investAmount, valuation: report.deal.valuation }
+  );
+  const sectionRefs = buildDecisionMemoSectionRefs(
+    report.sections.map((s) => ({ sectionKey: s.sectionKey, title: s.title }))
+  );
+  const decisionMemoSections = buildDecisionMemoSections(decision, sectionRefs);
+
+  return { report, canUseEngine, decisionMemoSections } as const;
 }
 
 export async function markExported(reportId: string) {
