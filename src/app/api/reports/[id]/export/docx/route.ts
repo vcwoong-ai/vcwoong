@@ -60,6 +60,9 @@ export async function POST(
                 투자라운드: report.deal.investRound ?? "",
               },
               documents: report.deal.documents,
+              // PR-L.1: 1순위(원본 파일 1:1 재현)에도 Decision-First memo를
+              // 표지 보존 + 첫 매핑 섹션 직전 삽입 방식으로 전달한다.
+              decisionMemoSections,
             });
             buffer = result.buffer;
             mode = `reconstructed:${result.filledSections}/${result.detectedHeadings}` +
@@ -77,23 +80,30 @@ export async function POST(
 
       // 2순위: 섹션 순서만 반영한 신규 DOCX
       if (!buffer) {
-        buffer = await generateTemplateBasedDOCX(report.sections, sectionMap, {
-          companyName: report.deal.companyName,
-          dealInfo: {
-            investRound: report.deal.investRound,
-            investAmount: report.deal.investAmount,
-            valuation: report.deal.valuation,
-            sector: report.deal.sector,
+        buffer = await generateTemplateBasedDOCX(
+          report.sections,
+          sectionMap,
+          {
+            companyName: report.deal.companyName,
+            dealInfo: {
+              investRound: report.deal.investRound,
+              investAmount: report.deal.investAmount,
+              valuation: report.deal.valuation,
+              sector: report.deal.sector,
+            },
+            reportDate: new Date(),
           },
-          reportDate: new Date(),
-        });
+          // PR-L.1: 2순위(docx 라이브러리 기반 신규 생성)에도 표지/요약표
+          // 다음, 기존 섹션 앞에 삽입한다.
+          decisionMemoSections
+        );
         mode = "template-ordered";
       }
     }
 
-    // 3순위: 기본 양식(PR-K: Decision-First memo가 여기서만 삽입된다 —
-    // 1/2순위는 회사가 업로드한 자체 템플릿의 1:1 서식 재현이 목적이라
-    // 새 섹션을 끼워 넣지 않는다. 아래 §Known limitations 참고)
+    // 3순위: 기본 양식(PR-K: Decision-First memo). PR-L.1부터는 1/2순위
+    // (회사가 업로드한 자체 템플릿 기반 export)에도 memo가 삽입된다 — 위
+    // 두 분기의 decisionMemoSections 전달 참고.
     if (!buffer) {
       buffer = await generateReportDOCX(
         report as Parameters<typeof generateReportDOCX>[0],

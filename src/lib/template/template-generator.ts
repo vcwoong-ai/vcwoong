@@ -30,6 +30,8 @@ import {
 import { SectionKey } from "@prisma/client";
 import { SECTION_META } from "@/types";
 import type { TemplateSectionMap } from "./template-mapper";
+import { renderMarkdownLinesToParagraphs } from "@/lib/docx-export";
+import type { VCDecisionMemoSection } from "@/lib/vc-decision-memo";
 
 interface ReportSectionData {
   sectionKey: SectionKey;
@@ -232,11 +234,15 @@ function createInvestmentTable(options: GenerateOptions): Table {
  * @param sections     AI가 생성한 보고서 섹션들
  * @param sectionMap   템플릿 매핑 정보 (없으면 기본 순서 사용)
  * @param options      회사/딜 정보
+ * @param decisionMemoSections PR-L.1: Decision-First memo(vc-decision-memo.ts가
+ *   조립) — 표지/투자 조건 요약표 다음, 기존 섹션 앞에 삽입한다. 생략하면
+ *   기존 동작과 완전히 동일하다.
  */
 export async function generateTemplateBasedDOCX(
   sections: ReportSectionData[],
   sectionMap: TemplateSectionMap | null,
-  options: GenerateOptions
+  options: GenerateOptions,
+  decisionMemoSections: VCDecisionMemoSection[] = []
 ): Promise<Buffer> {
   const children: (Paragraph | Table)[] = [];
 
@@ -311,6 +317,24 @@ export async function generateTemplateBasedDOCX(
     createInvestmentTable(options),
     new Paragraph({ spacing: { after: 400 } })
   );
+
+  // ── Decision-First Memo (PR-L.1) ──────────────────
+  // generateReportDOCX(docx-export.ts)와 동일한 렌더러(renderMarkdownLinesToParagraphs)를
+  // 재사용해 표지/요약표 다음, 기존 섹션 앞에 삽입한다. 비어 있으면
+  // 아무것도 추가되지 않아 기존 동작과 완전히 동일하다.
+  for (const memoSection of decisionMemoSections) {
+    children.push(
+      new Paragraph({
+        children: [
+          new TextRun({ text: memoSection.title, bold: true, size: 28, color: "1F3864", font: "맑은 고딕" }),
+        ],
+        heading: HeadingLevel.HEADING_1,
+        spacing: { before: 600, after: 200 },
+      }),
+      ...renderMarkdownLinesToParagraphs(memoSection.content),
+      new Paragraph({ children: [new PageBreak()] })
+    );
+  }
 
   // ── 섹션 내용 ──────────────────────────────────────
   // 템플릿 매핑이 있으면 매핑 순서대로, 없으면 기본 순서
