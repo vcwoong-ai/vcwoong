@@ -24,3 +24,11 @@ export const MA_ADJUSTMENT_STATUS_LABEL: Record<MaAdjustmentStatus, string> = {
   APPROVED: "승인됨",
   REJECTED: "반려됨",
 };
+
+/** ma-deal-dashboard.ts의 ReadinessState — IC 대시보드(PR #102) 전용 라벨 */
+export const READINESS_STATE_LABEL: Record<"READY" | "PARTIAL" | "MISSING" | "NOT_STARTED", string> = {
+  READY: "준비됨",
+  PARTIAL: "부분 준비",
+  MISSING: "정보 없음",
+  NOT_STARTED: "시작 전",
+};
