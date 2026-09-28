@@ -12,11 +12,16 @@
  * - QoE→LBO 브릿지: qoe-lbo-bridge.ts(PR-E, 수정 없음) — Entry EBITDA(억원)를
  *   임의로 지어내지 않고 이 브릿지의 provenance 그대로 노출한다.
  *
- * DD(실사)/evidence-lineage는 아직 Prisma에 영속화 모델이 없다(schema.prisma
- * 확인 — MADeal/MADocument/MAReport/MAReportSection/MAFinancialPeriod/
- * MAFinancialLineItem/MAFinancialAdjustment뿐). 그래서 이 대시보드의 DD
- * 카테고리는 전부 NOT_STARTED로 표시한다 — AI로 추정하지 않고 실제
- * 데이터 부재를 그대로 보여준다.
+ * ## Decision Readiness(PR #104부터)
+ *
+ * "이 딜이 지금 얼마나 준비됐는가"는 더 이상 이 파일이 판단하지 않는다.
+ * PR #103의 `buildPEDecisionReadiness()`(pe-decision-readiness.ts, 수정하지
+ * 않음)가 유일한 판정처다 — 이 파일은 그 함수가 요구하는 입력 모양으로
+ * 변환하는 `toPEDecisionReadinessInput()`만 제공한다(새 판단 로직 없음,
+ * 순수 매핑). 이전에 여기 있던 `computeReadinessMatrix`/
+ * `computeMissingInformation`(자체 readiness 판정 — 예: "조정 0건이면
+ * QOE=PARTIAL")은 PR #103 엔진의 판정과 어긋날 수 있는 중복 로직이라
+ * 제거했다.
  */
 
 import { calculateAdjustedEbitda, type QoEResult } from "./qoe";
@@ -28,8 +33,11 @@ import type {
   MaFinancialSourceType,
 } from "./financial-types";
 import type { QoEAdjustmentInput, QoEAdjustmentStatus } from "./qoe-types";
+import type { PEDecisionAdjustmentRow, PEDecisionReadinessInput } from "./pe-decision-readiness";
 
 export interface DashboardLineItemRow {
+  /** PR #104부터 필수 — pe-decision-readiness.ts의 fact-conflict 표시에 실제 DB id로 필요함 */
+  id: string;
   lineItem: string;
   value: number;
   currency: string;
@@ -241,112 +249,40 @@ export function computeFinancialQuality(periods: DashboardPeriod[]): FinancialQu
   };
 }
 
-// ── Decision Readiness ────────────────────────────────────────────────────
-
-export type ReadinessState = "READY" | "PARTIAL" | "MISSING" | "NOT_STARTED";
-
-export interface ReadinessRow {
-  key: string;
-  label: string;
-  state: ReadinessState;
-}
-
-/** DD는 아직 영속화 모델이 없어 데이터 자체가 존재할 수 없다 — 항상 NOT_STARTED. */
-const DD_CATEGORY_LABELS: Array<{ key: string; label: string }> = [
-  { key: "commercial-dd", label: "상업 실사" },
-  { key: "operational-dd", label: "운영 실사" },
-  { key: "legal-dd", label: "법무 실사" },
-  { key: "tax-dd", label: "세무 실사" },
-  { key: "hr-dd", label: "인사 실사" },
-  { key: "technology-dd", label: "기술 실사" },
-  { key: "it-security-dd", label: "IT 보안 실사" },
-  { key: "regulatory-dd", label: "규제 실사" },
-  { key: "esg-dd", label: "ESG 실사" },
-  { key: "management-dd", label: "경영진 실사" },
-];
-
-export interface ReadinessInput {
-  hasPeriods: boolean;
-  latestEbitda: FinancialCalcResult | null;
-  latestQoEAdjustmentCount: number;
-  dartImported: boolean;
-  lboEntryEbitdaAvailable: boolean;
-}
+// ── Decision Readiness 입력 변환(판단 없음 — pe-decision-readiness.ts로 그대로 전달) ──
 
 /**
- * 각 행의 판정 규칙(결정적, AI/주관적 점수 없음):
- *
- * - FINANCIAL: 재무기간이 없으면 NOT_STARTED, 있는데 최근 기간 EBITDA를
- *   못 구하면(필수 계정 누락) MISSING, 구해지면 READY.
- * - QOE: 재무기간이 없으면 NOT_STARTED, EBITDA를 못 구하면(QoE 계산 자체가
- *   불가능) MISSING, EBITDA는 구해지는데 조정 기록이 하나도 없으면(=아직
- *   아무도 QoE 검토를 안 함) PARTIAL, 조정이 1건이라도 있으면 READY.
- * - DART: 임포트된 적 없으면 NOT_STARTED, 있으면 READY.
- * - LBO: (QoE 승인 반영) Entry EBITDA를 브릿지가 못 만들면 MISSING, 만들면
- *   PARTIAL — 영속화된 "IC가 확정한 케이스"가 없으므로 READY는 절대
- *   자동으로 매기지 않는다(사람이 실제로 시뮬레이션을 검토·확정해야 READY).
- * - DD 10종: 영속화 모델 자체가 없으므로 전부 NOT_STARTED.
+ * `DashboardPeriod[]`(이미 이 파일의 다른 함수들이 쓰는 모양)를
+ * `buildPEDecisionReadiness()`(pe-decision-readiness.ts, PR #103, 수정 없음)의
+ * 입력 모양으로 옮겨 담기만 한다 — 새 판단/계산 없음. `lboAssumptions`/
+ * `ddCase`/`evidenceLineage`/`commercialCustomers`는 지금 어떤 실제 딜에도
+ * 영속화할 방법이 없으므로(schema.prisma 확인 — MADeal/MADocument/MAReport/
+ * MAReportSection/MAFinancialPeriod/MAFinancialLineItem/MAFinancialAdjustment
+ * 뿐) 임의로 지어내지 않고 그대로 undefined로 둔다 — engine이 이미 이
+ * 경우를 NOT_STARTED/PARTIAL로 정직하게 처리한다.
  */
-export function computeReadinessMatrix(input: ReadinessInput): ReadinessRow[] {
-  const financial: ReadinessState = !input.hasPeriods
-    ? "NOT_STARTED"
-    : input.latestEbitda?.status === "ok"
-      ? "READY"
-      : "MISSING";
-
-  const qoe: ReadinessState = !input.hasPeriods
-    ? "NOT_STARTED"
-    : input.latestEbitda?.status !== "ok"
-      ? "MISSING"
-      : input.latestQoEAdjustmentCount > 0
-        ? "READY"
-        : "PARTIAL";
-
-  const dart: ReadinessState = input.dartImported ? "READY" : "NOT_STARTED";
-
-  const lbo: ReadinessState = input.lboEntryEbitdaAvailable ? "PARTIAL" : "MISSING";
-
-  return [
-    { key: "financial", label: "재무", state: financial },
-    { key: "qoe", label: "QoE", state: qoe },
-    { key: "dart", label: "DART", state: dart },
-    { key: "lbo", label: "LBO", state: lbo },
-    ...DD_CATEGORY_LABELS.map((c) => ({ ...c, state: "NOT_STARTED" as ReadinessState })),
-  ];
-}
-
-// ── 미확인/추가 확인 필요 ───────────────────────────────────────────────
-
-export interface MissingInfoItem {
-  id: string;
-  label: string;
-}
-
-export function computeMissingInformation(input: ReadinessInput): MissingInfoItem[] {
-  const items: MissingInfoItem[] = [];
-  if (!input.hasPeriods) {
-    items.push({ id: "no-financials", label: "등록된 재무 기간이 없습니다" });
-  } else if (input.latestEbitda?.status !== "ok") {
-    items.push({
-      id: "ebitda-missing",
-      label: "최근 재무기간에서 EBITDA를 계산할 수 없습니다(필요 계정 누락)",
-    });
-  }
-  if (input.hasPeriods && input.latestQoEAdjustmentCount === 0) {
-    items.push({ id: "qoe-not-reviewed", label: "QoE 조정 검토가 아직 이뤄지지 않았습니다" });
-  }
-  if (!input.dartImported) {
-    items.push({ id: "dart-not-imported", label: "DART 공시 데이터가 아직 연동되지 않았습니다" });
-  }
-  if (!input.lboEntryEbitdaAvailable) {
-    items.push({
-      id: "lbo-input-missing",
-      label: "LBO 시뮬레이션에 필요한 Entry EBITDA를 아직 계산할 수 없습니다",
-    });
-  }
-  items.push({
-    id: "dd-not-started",
-    label: "실사(DD) 데이터가 아직 적재되지 않았습니다(상업·운영·법무·세무 등 전 카테고리)",
-  });
-  return items;
+export function toPEDecisionReadinessInput(periods: DashboardPeriod[]): PEDecisionReadinessInput {
+  return {
+    periods: periods.map((p) => ({
+      id: p.id,
+      fiscalYear: p.fiscalYear,
+      periodType: p.periodType,
+      currency: p.currency,
+      lineItems: p.lineItems.map((li) => ({
+        id: li.id,
+        lineItem: li.lineItem,
+        value: li.value,
+        currency: li.currency,
+        source: li.source,
+        sourceName: li.sourceName,
+        sourceLocation: li.sourceLocation,
+      })),
+      adjustments: p.adjustments as unknown as PEDecisionAdjustmentRow[],
+      normalizedSummary: {
+        revenue: p.normalizedSummary.revenue,
+        ebitda: p.normalizedSummary.ebitda,
+        netDebt: p.normalizedSummary.netDebt,
+      },
+    })),
+  };
 }

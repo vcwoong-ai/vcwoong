@@ -13,8 +13,6 @@ import {
   computeLboEntryEbitda,
   computeDartStatus,
   computeFinancialQuality,
-  computeReadinessMatrix,
-  computeMissingInformation,
   type DashboardPeriod,
 } from "../src/lib/pe/ma-deal-dashboard";
 import type { FinancialCalcResult } from "../src/lib/pe/financial-types";
@@ -45,7 +43,7 @@ function period(overrides: Partial<DashboardPeriod> & { fiscalYear: number }): D
 function testQoESummaryOnlyReflectsApprovedAdjustments() {
   const p = period({
     fiscalYear: 2024,
-    lineItems: [{ lineItem: "EBITDA", value: 5_000_000_000, currency: "KRW", source: "MANUAL" }],
+    lineItems: [{ id: "li-1", lineItem: "EBITDA", value: 5_000_000_000, currency: "KRW", source: "MANUAL" }],
     adjustments: [
       { metric: "EBITDA", reportedValue: 5_000_000_000, adjustmentValue: 1_000_000_000, reason: "승인된 조정", status: "APPROVED", adjustmentType: "OTHER", source: "MANUAL" },
       { metric: "EBITDA", reportedValue: 5_000_000_000, adjustmentValue: 2_000_000_000, reason: "아직 초안", status: "DRAFT", adjustmentType: "OTHER", source: "MANUAL" },
@@ -62,7 +60,7 @@ function testQoESummaryOnlyReflectsApprovedAdjustments() {
 function testQoESummaryWithNoAdjustmentsEqualsBase() {
   const p = period({
     fiscalYear: 2024,
-    lineItems: [{ lineItem: "EBITDA", value: 3_000_000_000, currency: "KRW", source: "MANUAL" }],
+    lineItems: [{ id: "li-1", lineItem: "EBITDA", value: 3_000_000_000, currency: "KRW", source: "MANUAL" }],
   });
   const summary = computeQoESummary(p);
   assert(summary.adjustedEbitda.status === "ok" && summary.adjustedEbitda.value === 3_000_000_000, "조정이 없으면 Adjusted EBITDA = Base EBITDA");
@@ -83,7 +81,7 @@ function testQoESummaryMissingBaseEbitdaPropagates() {
 function testLboEntryEbitdaBridgeSuccess() {
   const p = period({
     fiscalYear: 2024,
-    lineItems: [{ lineItem: "EBITDA", value: 12_550_000_000, currency: "KRW", source: "MANUAL" }],
+    lineItems: [{ id: "li-1", lineItem: "EBITDA", value: 12_550_000_000, currency: "KRW", source: "MANUAL" }],
   });
   const qoe = computeQoESummary(p);
   const result = computeLboEntryEbitda(p, qoe);
@@ -112,15 +110,15 @@ function testLboEntryEbitdaBridgeMissingWhenEbitdaMissing() {
 // ── DART 상태 ──────────────────────────────────────────────────────────
 
 function testDartStatusDetectsImportedPeriods() {
-  const p1 = period({ fiscalYear: 2023, lineItems: [{ lineItem: "REVENUE", value: 1, currency: "KRW", source: "MANUAL" }] });
-  const p2 = period({ fiscalYear: 2024, lineItems: [{ lineItem: "REVENUE", value: 1, currency: "KRW", source: "DART" }] });
+  const p1 = period({ fiscalYear: 2023, lineItems: [{ id: "li-1", lineItem: "REVENUE", value: 1, currency: "KRW", source: "MANUAL" }] });
+  const p2 = period({ fiscalYear: 2024, lineItems: [{ id: "li-2", lineItem: "REVENUE", value: 1, currency: "KRW", source: "DART" }] });
   const status = computeDartStatus([p2, p1]);
   assert(status.imported === true && status.periodsCount === 1 && status.latestFiscalYear === 2024, "DART 출처 line item이 있는 기간만 집계해야 함");
   console.log("✅ DART 상태: source=DART line item이 있는 기간만 '연동됨'으로 집계");
 }
 
 function testDartStatusNoneImported() {
-  const p1 = period({ fiscalYear: 2024, lineItems: [{ lineItem: "REVENUE", value: 1, currency: "KRW", source: "MANUAL" }] });
+  const p1 = period({ fiscalYear: 2024, lineItems: [{ id: "li-1", lineItem: "REVENUE", value: 1, currency: "KRW", source: "MANUAL" }] });
   const status = computeDartStatus([p1]);
   assert(status.imported === false && status.latestFiscalYear === null, "DART 데이터가 없으면 미연동이어야 함");
   console.log("✅ DART 데이터가 없으면 미연동(imported=false, latestFiscalYear=null)");
@@ -153,84 +151,13 @@ function testFinancialQualityGrowthNotAvailableWithoutPriorPeriod() {
   console.log("✅ 비교 가능한 직전 기간이 없으면 성장률은 not_available");
 }
 
-// ── Decision Readiness ────────────────────────────────────────────────
-
-function testReadinessMatrixAllReadyWhenDataComplete() {
-  const rows = computeReadinessMatrix({
-    hasPeriods: true,
-    latestEbitda: ok(1),
-    latestQoEAdjustmentCount: 2,
-    dartImported: true,
-    lboEntryEbitdaAvailable: true,
-  });
-  const byKey = Object.fromEntries(rows.map((r) => [r.key, r.state]));
-  assert(byKey.financial === "READY", "재무 데이터가 있으면 READY");
-  assert(byKey.qoe === "READY", "QoE 조정이 1건 이상이면 READY");
-  assert(byKey.dart === "READY", "DART가 연동되면 READY");
-  assert(byKey.lbo === "PARTIAL", "LBO는 입력이 준비돼도 영속화된 확정 케이스가 없어 PARTIAL을 넘지 않아야 함");
-  assert(byKey["commercial-dd"] === "NOT_STARTED", "DD는 영속화 모델이 없어 항상 NOT_STARTED여야 함");
-  assert(rows.length === 4 + 10, "재무/QoE/DART/LBO 4개 + DD 10개 = 14행이어야 함");
-  console.log("✅ 데이터가 모두 있으면 재무/QoE/DART=READY, LBO=PARTIAL(자동 READY 없음), DD 10종=NOT_STARTED");
-}
-
-function testReadinessMatrixNotStartedWhenNoPeriods() {
-  const rows = computeReadinessMatrix({
-    hasPeriods: false,
-    latestEbitda: null,
-    latestQoEAdjustmentCount: 0,
-    dartImported: false,
-    lboEntryEbitdaAvailable: false,
-  });
-  const byKey = Object.fromEntries(rows.map((r) => [r.key, r.state]));
-  assert(byKey.financial === "NOT_STARTED" && byKey.qoe === "NOT_STARTED", "재무기간이 아예 없으면 재무/QoE 모두 NOT_STARTED");
-  assert(byKey.lbo === "MISSING", "EBITDA를 못 구하면 LBO는 MISSING");
-  console.log("✅ 재무 데이터가 전혀 없으면 재무/QoE=NOT_STARTED, LBO=MISSING");
-}
-
-function testReadinessMatrixPartialQoeWhenNoAdjustmentsReviewed() {
-  const rows = computeReadinessMatrix({
-    hasPeriods: true,
-    latestEbitda: ok(1),
-    latestQoEAdjustmentCount: 0,
-    dartImported: false,
-    lboEntryEbitdaAvailable: true,
-  });
-  const byKey = Object.fromEntries(rows.map((r) => [r.key, r.state]));
-  assert(byKey.qoe === "PARTIAL", "EBITDA는 있지만 QoE 조정 검토가 없으면 PARTIAL이어야 함(자동 READY 금지)");
-  console.log("✅ EBITDA는 있지만 QoE 조정 기록이 없으면 QoE=PARTIAL(검토 안 됐다고 정직하게 표시)");
-}
-
-// ── Missing Information ───────────────────────────────────────────────
-
-function testMissingInformationListsGaps() {
-  const items = computeMissingInformation({
-    hasPeriods: false,
-    latestEbitda: null,
-    latestQoEAdjustmentCount: 0,
-    dartImported: false,
-    lboEntryEbitdaAvailable: false,
-  });
-  const ids = items.map((i) => i.id);
-  assert(ids.includes("no-financials"), "재무기간 없음이 목록에 있어야 함");
-  assert(ids.includes("dart-not-imported"), "DART 미연동이 목록에 있어야 함");
-  assert(ids.includes("lbo-input-missing"), "LBO 입력 부족이 목록에 있어야 함");
-  assert(ids.includes("dd-not-started"), "DD 미적재가 목록에 있어야 함(항상 포함)");
-  console.log("✅ 데이터가 전혀 없을 때 미확인 목록이 실제 부재를 정확히 나열(추정 없음)");
-}
-
-function testMissingInformationEmptyWhenComplete() {
-  const items = computeMissingInformation({
-    hasPeriods: true,
-    latestEbitda: ok(1),
-    latestQoEAdjustmentCount: 1,
-    dartImported: true,
-    lboEntryEbitdaAvailable: true,
-  });
-  const ids = items.map((i) => i.id);
-  assert(!ids.includes("no-financials") && !ids.includes("dart-not-imported") && !ids.includes("lbo-input-missing"), "데이터가 갖춰지면 해당 항목은 목록에서 빠져야 함");
-  assert(ids.includes("dd-not-started"), "DD는 영속화 모델이 없는 한 항상 목록에 남아야 함");
-  console.log("✅ 데이터가 갖춰지면 해당 gap은 목록에서 제외되지만 DD 미적재는 계속 표시됨");
-}
+// Decision Readiness 판정 자체는 PR #104부터 이 파일이 하지 않는다 — 그
+// 책임은 pe-decision-readiness.ts(PR #103)로 전부 이관됐고, 그 판정 로직의
+// 테스트는 tools/test-pe-decision-readiness.ts가 담당한다. 이 파일이 하던
+// "readiness 판정" 테스트(computeReadinessMatrix/computeMissingInformation)는
+// 그 로직 자체가 제거됐으므로 함께 삭제한다. 이 파일이 만든 DashboardPeriod를
+// pe-decision-readiness.ts의 입력으로 올바르게 옮기는지는
+// tools/test-pe-overview-readiness.ts(PR #104, 신규)가 확인한다.
 
 function main() {
   console.log("\n=== PE IC Decision Dashboard 조립 레이어 테스트 ===\n");
@@ -245,11 +172,6 @@ function main() {
   testFinancialQualityComputesGrowthAndRatios();
   testFinancialQualityHandlesMissingGracefully();
   testFinancialQualityGrowthNotAvailableWithoutPriorPeriod();
-  testReadinessMatrixAllReadyWhenDataComplete();
-  testReadinessMatrixNotStartedWhenNoPeriods();
-  testReadinessMatrixPartialQoeWhenNoAdjustmentsReviewed();
-  testMissingInformationListsGaps();
-  testMissingInformationEmptyWhenComplete();
   console.log("\n✅ PE IC Decision Dashboard 조립 레이어 테스트 통과\n");
 }
 

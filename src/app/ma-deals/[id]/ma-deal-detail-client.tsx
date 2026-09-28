@@ -19,11 +19,11 @@ import {
   computeLboEntryEbitda,
   computeDartStatus,
   computeFinancialQuality,
-  computeReadinessMatrix,
-  computeMissingInformation,
+  toPEDecisionReadinessInput,
   type DashboardPeriod,
   type DashboardAdjustmentRow,
 } from "@/lib/pe/ma-deal-dashboard";
+import { buildPEDecisionReadiness } from "@/lib/pe/pe-decision-readiness";
 
 interface LineItem {
   id: string;
@@ -121,7 +121,9 @@ export function MaDealDetailClient({
   // 한 번만 계산해 내려주면 재무 기간을 추가해도 Overview가 새로고침 전까지
   // 옛 데이터를 보여주는 문제가 있어(실사용 중 발견), 여기서 periods와
   // 항상 같은 소스를 보도록 옮겼다 — 새 계산 로직은 없다(ma-deal-dashboard.ts
-  // 그대로 재사용).
+  // 그대로 재사용). Decision Readiness는 PR #104부터 buildPEDecisionReadiness()
+  // (pe-decision-readiness.ts, PR #103, 수정 없음)가 유일한 판정처다 — 여기서
+  // 재판정하지 않고 그 결과를 그대로 전달만 한다.
   const dashboard: MaDealDashboardData = useMemo(() => {
     const dashboardPeriods: DashboardPeriod[] = periods.map((p) => ({
       id: p.id,
@@ -140,20 +142,12 @@ export function MaDealDetailClient({
     const qoeSummary = latest ? computeQoESummary(latest) : null;
     const lboEntryEbitda = computeLboEntryEbitda(latest, qoeSummary);
     const dartStatus = computeDartStatus(dashboardPeriods);
-    const readinessInput = {
-      hasPeriods: dashboardPeriods.length > 0,
-      latestEbitda: latest?.normalizedSummary.ebitda ?? null,
-      latestQoEAdjustmentCount: latest?.adjustments.length ?? 0,
-      dartImported: dartStatus.imported,
-      lboEntryEbitdaAvailable: lboEntryEbitda.status === "ok",
-    };
     return {
       qoeSummary,
       lboEntryEbitda,
       dartStatus,
       financialQuality: computeFinancialQuality(dashboardPeriods),
-      readiness: computeReadinessMatrix(readinessInput),
-      missingInformation: computeMissingInformation(readinessInput),
+      decisionReadiness: buildPEDecisionReadiness(toPEDecisionReadinessInput(dashboardPeriods)),
     };
   }, [periods]);
 
