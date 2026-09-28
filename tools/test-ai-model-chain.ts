@@ -1,20 +1,25 @@
 /**
- * DeepSeek → Gemini 2.5 Pro → Claude Sonnet 4.5 모델 체인 회귀 테스트.
+ * DeepSeek → MiMo-V2.6-Pro → Muse Spark 1.3 모델 체인 회귀 테스트.
  *
  * 배경: Production fallback 기본값이 무료 티어(openrouter/free,
- * meta-llama/llama-3.3-70b-instruct)에서 유료·고품질 모델(google/gemini-2.5-pro,
- * anthropic/claude-sonnet-4.5)로 바뀌었다(claude.ts의 DEFAULT_FALLBACK_CHAIN
- * 참고) — DeepSeek는 primary로 그대로 유지한다(가격 대비 성능이 좋고 정상
- * 응답 시 충분하므로, 실패했을 때만 비용이 더 드는 모델로 넘어간다).
+ * meta-llama/llama-3.3-70b-instruct)에서 유료·고품질 모델로 바뀌었다
+ * (claude.ts의 DEFAULT_FALLBACK_CHAIN 참고). 2026-09-25에 그 유료 체인
+ * 자체도 google/gemini-2.5-pro·anthropic/claude-sonnet-4.5에서 가격 대비
+ * 성능이 더 나은 xiaomi/mimo-v2.6-pro·meta/muse-spark-1.3으로 교체했다.
+ * DeepSeek는 primary로 그대로 유지한다(가격 대비 성능이 좋고 정상 응답
+ * 시 충분하므로, 실패했을 때만 비용이 더 드는 모델로 넘어간다).
  *
  * 이 파일은 claude.ts/section-generation-gate.ts의 일반화된 로직
  * (runModelChain, checkGenerationGate)이 이미 다른 테스트 파일에서
  * 검증돼 있다는 전제 위에서, "실제 모델 정체성"으로 그 로직을 다시
  * 확인한다 — MODEL/FALLBACK_MODELS를 직접 import해서 "환경변수를
- * 아무것도 안 건드리면 정말로 deepseek→gemini→claude 순서가 되는가"를
+ * 아무것도 안 건드리면 정말로 deepseek→mimo→muse-spark 순서가 되는가"를
  * 실측한다(다른 test:* 스크립트들처럼 --env-file 없이 실행되므로
  * AI_MODEL/AI_FALLBACK_MODELS가 비어있다고 가정한다 — test:runtime-budget
  * 등도 같은 전제로 REQUEST_TIMEOUT_MS 등 기본값을 직접 검증한다).
+ *
+ * 아래 변수명(GEMINI/CLAUDE)은 리팩터 부담을 줄이기 위해 그대로 뒀다 —
+ * 실제 가리키는 모델은 위 새 체인이다.
  *
  * Usage: npm run test:ai-model-chain
  */
@@ -33,8 +38,11 @@ function assert(cond: boolean, msg: string) {
 }
 
 const DEEPSEEK = "deepseek/deepseek-v4-flash-0731";
-const GEMINI = "google/gemini-2.5-pro";
-const CLAUDE = "anthropic/claude-sonnet-4.5";
+// 2026-09-25: DEFAULT_FALLBACK_CHAIN이 xiaomi/mimo-v2.6-pro →
+// meta/muse-spark-1.3으로 바뀌었다(claude.ts 참고) — 변수명(GEMINI/CLAUDE)은
+// 남기되 실제 값만 새 체인으로 갱신해 아래 테스트 로직을 그대로 재사용한다.
+const GEMINI = "xiaomi/mimo-v2.6-pro";
+const CLAUDE = "meta/muse-spark-1.3";
 
 function assertRealChainIdentity() {
   assert(

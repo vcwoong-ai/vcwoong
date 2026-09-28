@@ -81,6 +81,7 @@ model User {
   funds              Fund[]
   portfolioCompanies PortfolioCompany[]
   inboundDeals       InboundDeal[]
+  maDeals            MADeal[]
 
   @@index([teamId])
 }
@@ -97,6 +98,7 @@ model Team {
   funds              Fund[]
   portfolioCompanies PortfolioCompany[]
   inboundDeals       InboundDeal[]
+  maDeals            MADeal[]
 }
 
 model Deal {
@@ -632,4 +634,222 @@ enum InboundStatus {
   QUALIFIED
   PROMOTED
   REJECTED
+}
+
+// ───────────────────────────────────────────────
+// PE 트랙 — Domain Foundation (PR-A)
+// schema.prisma(PostgreSQL)와 동일 — @db.Text만 제외(SQLite 불필요)
+// ───────────────────────────────────────────────
+
+model MADeal {
+  id          String       @id @default(cuid())
+  name        String
+  companyName String
+  dealType    MaDealType
+  status      MaDealStatus @default(ACTIVE)
+  userId      String
+  teamId      String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  user      User         @relation(fields: [userId], references: [id])
+  team      Team?        @relation(fields: [teamId], references: [id])
+  documents MADocument[]
+  reports   MAReport[]
+  financialPeriods MAFinancialPeriod[]
+
+  @@index([userId])
+  @@index([teamId])
+  @@index([status])
+}
+
+model MADocument {
+  id         String         @id @default(cuid())
+  maDealId   String
+  name       String
+  type       MaDocumentType
+  url        String
+  size       Int
+  mimeType   String
+  parsedText String?
+  metadata   Json?
+  createdAt  DateTime       @default(now())
+
+  maDeal MADeal @relation(fields: [maDealId], references: [id], onDelete: Cascade)
+
+  @@index([maDealId])
+}
+
+model MAReport {
+  id        String         @id @default(cuid())
+  maDealId  String
+  title     String
+  status    MaReportStatus @default(PENDING)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  maDeal   MADeal            @relation(fields: [maDealId], references: [id], onDelete: Cascade)
+  sections MAReportSection[]
+
+  @@index([maDealId])
+  @@index([status])
+}
+
+model MAReportSection {
+  id         String        @id @default(cuid())
+  maReportId String
+  sectionKey MaSectionKey
+  title      String
+  content    String
+  order      Int
+  status     SectionStatus @default(DRAFT)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  maReport MAReport @relation(fields: [maReportId], references: [id], onDelete: Cascade)
+
+  @@index([maReportId])
+}
+
+enum MaDealType {
+  BUYOUT
+  GROWTH_EQUITY
+  CARVE_OUT
+  MBO
+  SECONDARY
+  MINORITY
+}
+
+enum MaDealStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum MaDocumentType {
+  MANAGEMENT_ACCOUNTS
+  DD_MATERIAL
+  FINANCIAL_MODEL
+  CONTRACT
+  OTHER
+}
+
+enum MaReportStatus {
+  PENDING
+  DRAFT
+}
+
+enum MaSectionKey {
+  DEAL_OVERVIEW
+  FINANCIAL_NORMALIZATION
+  QOE_ANALYSIS
+  LBO_ANALYSIS
+  DD_SUMMARY
+  RETURNS_ANALYSIS
+  RISK_FACTORS
+  RECOMMENDATION
+}
+
+// ───────────────────────────────────────────────
+// PE 트랙 — Financial Normalization Foundation (PR-B)
+// schema.prisma(PostgreSQL)와 동일 — @db.Text만 제외(SQLite 불필요)
+// ───────────────────────────────────────────────
+
+model MAFinancialPeriod {
+  id         String                @id @default(cuid())
+  maDealId   String
+  fiscalYear Int
+  periodType MaFinancialPeriodType
+  startDate  DateTime
+  endDate    DateTime
+  currency   String
+  createdAt  DateTime              @default(now())
+  updatedAt  DateTime              @updatedAt
+
+  maDeal      MADeal                   @relation(fields: [maDealId], references: [id], onDelete: Cascade)
+  lineItems   MAFinancialLineItem[]
+  adjustments MAFinancialAdjustment[]
+
+  @@unique([maDealId, fiscalYear, periodType])
+  @@index([maDealId])
+  @@index([fiscalYear])
+}
+
+model MAFinancialLineItem {
+  id                String                   @id @default(cuid())
+  financialPeriodId String
+  statementType     MaFinancialStatementType
+  lineItem          String
+  value             Float
+  currency          String
+  source            MaFinancialSourceType
+  sourceName        String?
+  sourceLocation    String?
+  isNormalized      Boolean                  @default(false)
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+
+  financialPeriod MAFinancialPeriod @relation(fields: [financialPeriodId], references: [id], onDelete: Cascade)
+
+  @@index([financialPeriodId])
+  @@index([financialPeriodId, lineItem])
+}
+
+model MAFinancialAdjustment {
+  id                String                @id @default(cuid())
+  financialPeriodId String
+  metric            String
+  reportedValue     Float
+  adjustmentValue   Float
+  normalizedValue   Float
+  reason            String
+  source            MaFinancialSourceType
+  sourceName        String?
+  sourceLocation    String?
+  status            MaAdjustmentStatus    @default(APPROVED)
+  adjustmentType    MaAdjustmentType      @default(OTHER)
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+
+  financialPeriod MAFinancialPeriod @relation(fields: [financialPeriodId], references: [id], onDelete: Cascade)
+
+  @@index([financialPeriodId])
+}
+
+enum MaFinancialPeriodType {
+  ANNUAL
+  QUARTERLY
+  TTM
+}
+
+enum MaFinancialStatementType {
+  INCOME_STATEMENT
+  BALANCE_SHEET
+  CASH_FLOW
+}
+
+enum MaFinancialSourceType {
+  UPLOADED_DOCUMENT
+  EXCEL
+  DART
+  MANUAL
+}
+
+enum MaAdjustmentStatus {
+  DRAFT
+  PROPOSED
+  APPROVED
+  REJECTED
+}
+
+enum MaAdjustmentType {
+  ONE_OFF_EXPENSE
+  OWNER_COMPENSATION_NORMALIZATION
+  RELATED_PARTY_NORMALIZATION
+  RESTRUCTURING
+  ONE_TIME_PROFESSIONAL_FEE
+  NON_RECURRING_OPERATING_COST
+  ONE_OFF_INCOME
+  NON_RECURRING_REVENUE
+  UNSUSTAINABLE_MARGIN
+  OTHER
 }

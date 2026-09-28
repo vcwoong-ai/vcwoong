@@ -78,10 +78,10 @@ export class ManufacturingAgent extends BaseAgent {
       input,
       SectionKey.PRODUCT_TECHNOLOGY,
       `## 기업: ${input.companyName} (제조/하드웨어)
-${input.additionalContext ?? ""}
 
 ## 자료
 ${documentContext}
+${input.additionalContext ?? ""}
 
 ## 제품/기술 (제조 특화)
 ### 1. 핵심 제품 포트폴리오·GPM
@@ -100,10 +100,10 @@ ${documentContext}
       input,
       SectionKey.MARKET_ANALYSIS,
       `## 기업: ${input.companyName}
-${input.additionalContext ?? ""}
 
 ## 자료
 ${documentContext}
+${input.additionalContext ?? ""}
 
 ## 시장분석 (제조 특화)
 ### 1. TAM/수요 사이클 (전방산업)
@@ -124,10 +124,10 @@ ${documentContext}
       input,
       SectionKey.FINANCIAL_STATUS,
       `## 기업: ${input.companyName}
-${input.additionalContext ?? ""}
 
 ## 자료
 ${documentContext}
+${input.additionalContext ?? ""}
 
 ## 재무현황 (제조 특화)
 ### 1. 손익 표 (최근 3개년) — 매출총이익·EBITDA
@@ -148,10 +148,10 @@ ${documentContext}
       `## 기업: ${input.companyName}
 ${input.investRound ? `- 라운드: ${input.investRound}` : ""}
 ${input.valuation ? `- Post-money: ${input.valuation}억원` : ""}
-${input.additionalContext ?? ""}
 
 ## 자료
 ${documentContext}
+${input.additionalContext ?? ""}
 
 ## 밸류에이션 (제조 특화)
 ### 1. 라운드 요약
@@ -170,10 +170,10 @@ ${documentContext}
       input,
       SectionKey.RISK_ANALYSIS,
       `## 기업: ${input.companyName}
-${input.additionalContext ?? ""}
 
 ## 자료
 ${documentContext}
+${input.additionalContext ?? ""}
 
 ## 리스크 (제조 특화)
 ### 1. 원가·원자재 변동

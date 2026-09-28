@@ -77,10 +77,10 @@ export class DeepTechAgent extends BaseAgent {
       input,
       SectionKey.PRODUCT_TECHNOLOGY,
       `## 기업: ${input.companyName} (AI/딥테크)
-${input.additionalContext ?? ""}
 
 ## 자료
 ${documentContext}${infraAnalysis}
+${input.additionalContext ?? ""}
 
 ## 제품/기술 (딥테크 특화)
 ### 1. 핵심 기술·TRL
@@ -100,10 +100,10 @@ ${documentContext}${infraAnalysis}
       input,
       SectionKey.MARKET_ANALYSIS,
       `## 기업: ${input.companyName}
-${input.additionalContext ?? ""}
 
 ## 자료
 ${documentContext}${infraAnalysis}
+${input.additionalContext ?? ""}
 
 ## 시장분석 (딥테크)
 ### 1. TAM·채택 사이클
@@ -123,10 +123,10 @@ ${documentContext}${infraAnalysis}
       input,
       SectionKey.FINANCIAL_STATUS,
       `## 기업: ${input.companyName}
-${input.additionalContext ?? ""}
 
 ## 자료
 ${documentContext}${infraAnalysis}
+${input.additionalContext ?? ""}
 
 ## 재무현황 (딥테크)
 ### 1. 매출·그로스마진 (있는 경우)
@@ -150,10 +150,10 @@ ${documentContext}${infraAnalysis}
       `## 기업: ${input.companyName}
 ${input.investRound ? `- 라운드: ${input.investRound}` : ""}
 ${input.valuation ? `- Post-money: ${input.valuation}억원` : ""}
-${input.additionalContext ?? ""}
 
 ## 자료
 ${documentContext}${infraAnalysis}
+${input.additionalContext ?? ""}
 
 ## 밸류에이션 (딥테크)
 ### 1. 라운드 요약
@@ -173,10 +173,10 @@ ${documentContext}${infraAnalysis}
       input,
       SectionKey.RISK_ANALYSIS,
       `## 기업: ${input.companyName}
-${input.additionalContext ?? ""}
 
 ## 자료
 ${documentContext}${infraAnalysis}
+${input.additionalContext ?? ""}
 
 ## 리스크 (딥테크)
 ### 1. 기술·TRL 리스크

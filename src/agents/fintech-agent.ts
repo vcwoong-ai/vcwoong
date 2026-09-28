@@ -75,10 +75,10 @@ export class FintechAgent extends BaseAgent {
       input,
       SectionKey.PRODUCT_TECHNOLOGY,
       `## 기업: ${input.companyName} (핀테크)
-${input.additionalContext ?? ""}
 
 ## 자료
 ${documentContext}${fintechAnalysis}
+${input.additionalContext ?? ""}
 
 ## 제품/기술 (핀테크 특화)
 ### 1. 핵심 상품·서비스 (결제/대출/보험/자산 등)
@@ -98,10 +98,10 @@ ${documentContext}${fintechAnalysis}
       input,
       SectionKey.MARKET_ANALYSIS,
       `## 기업: ${input.companyName} (핀테크)
-${input.additionalContext ?? ""}
 
 ## 자료
 ${documentContext}${fintechAnalysis}
+${input.additionalContext ?? ""}
 
 ## 시장분석 (핀테크 특화)
 ### 1. TAM/성장 드라이버 (전자금융·대안신용 등)
@@ -126,10 +126,10 @@ ${documentContext}${fintechAnalysis}
       `## 투자 대상 기업 정보
 - 기업명: ${input.companyName}
 - 섹터: 핀테크/금융
-${input.additionalContext ?? ""}
 
 ## 제공 자료
 ${documentContext}${fintechAnalysis}
+${input.additionalContext ?? ""}
 
 ## 재무현황 (핀테크 특화)
 ### 1. TPV / Take Rate / GMV 분해 (자동추출 수치 인용)
@@ -151,10 +151,10 @@ ${documentContext}${fintechAnalysis}
       `## 기업: ${input.companyName}
 ${input.investRound ? `- 라운드: ${input.investRound}` : ""}
 ${input.valuation ? `- Post-money: ${input.valuation}억원` : ""}
-${input.additionalContext ?? ""}
 
 ## 자료
 ${documentContext}${fintechAnalysis}
+${input.additionalContext ?? ""}
 
 ## 밸류에이션 (핀테크 특화)
 ### 1. 라운드 요약
@@ -176,10 +176,10 @@ ${documentContext}${fintechAnalysis}
       input,
       SectionKey.RISK_ANALYSIS,
       `## 기업: ${input.companyName}
-${input.additionalContext ?? ""}
 
 ## 자료
 ${documentContext}${fintechAnalysis}
+${input.additionalContext ?? ""}
 
 ## 리스크 (핀테크 특화)
 ### 1. 규제/라이선스

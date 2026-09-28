@@ -14,11 +14,21 @@ export function buildSectionPrompt(
   sectionKey: SectionKey,
   context: SectionPromptContext
 ): string {
+  // 프롬프트 캐싱(OpenRouter/DeepSeek 자동 prefix 캐싱) 고려한 순서:
+  // 같은 리포트의 섹션 10개를 순차 호출할 때 base(기업정보+사업성
+  // 프레임+원문 자료, 보통 가장 큰 덩어리)는 매 호출 동일하다. 반면
+  // additionalContext(직전 섹션 요약 continuity, closingHint 등)와
+  // sectionInstructions는 섹션마다 달라진다. 캐시는 "앞부분이 똑같은
+  // 만큼만" 걸리므로, 변하는 내용을 base 뒤 — 즉 프롬프트의 뒷부분 —
+  // 로 몰아둬야 캐시 적중 범위(=원문 자료 전체)가 최대가 된다. 이전
+  // 버전은 additionalContext를 원문 자료보다 앞(buildBaseContext 안)에
+  // 넣고 있어서, 섹션마다 바뀌는 값 때문에 그 뒤에 오는 원문 자료
+  // 전체가 매번 캐시 미스였다.
   const base = buildBaseContext(context);
   const sectionInstructions = SECTION_INSTRUCTIONS[sectionKey];
 
   return `${base}
-
+${context.additionalContext ? `\n## 추가 컨텍스트\n${context.additionalContext}\n` : ""}
 ## 작성 요청
 아래 지침에 따라 **${getSectionTitle(sectionKey)}** 섹션을 작성해주세요.
 
@@ -41,7 +51,6 @@ function buildBaseContext(context: SectionPromptContext): string {
 ${context.investRound ? `- 투자 라운드: ${context.investRound}` : ""}
 ${context.investAmount ? `- 투자 금액: ${context.investAmount.toLocaleString()}억원` : ""}
 ${context.valuation ? `- 투자 후 기업가치: ${context.valuation.toLocaleString()}억원` : ""}
-${context.additionalContext ? `\n## 추가 컨텍스트\n${context.additionalContext}` : ""}
 
 ## 사업성("돈이 되는가") 진단 프레임 — 관련 섹션에서 자연스럽게 녹여 쓸 것
 "좋은 기술"이 아니라 "어떻게 돈을 버는가"가 드러나야 합니다. 아래 11개

@@ -26,6 +26,7 @@ import {
   MAX_EXTRACTION_ATTEMPTS,
   createExtractionDeadline,
 } from "./slide-extraction";
+import type { VCDecisionMemoSection } from "../vc-decision-memo";
 
 /**
  * 매핑표에 없는 헤딩도 텍스트 키워드로 SectionKey를 추정한다.
@@ -67,6 +68,13 @@ export interface ReconstructInput {
    * 이 보조 추출 없이 매핑 안 된 자리는 그대로 둔다(기존 동작).
    */
   documents?: Array<{ name: string; parsedText: string | null }>;
+  /**
+   * PR-L.1: Decision-First memo(vc-decision-memo.ts가 조립) — 표지(원본
+   * 템플릿의 제목/회사명 등 body 최상단 단락)는 그대로 두고, 첫 번째로
+   * 매핑된 섹션 제목 바로 앞에 삽입한다. 생략하면 기존 동작과 완전히
+   * 동일하다(§backward compatibility).
+   */
+  decisionMemoSections?: VCDecisionMemoSection[];
 }
 
 export interface ReconstructResult {
@@ -368,18 +376,42 @@ export async function reconstructDOCX(
     appendedSections.push(s.sectionKey);
   }
 
+  // PR-L.1: Decision-First memo — 원본 표지(body 맨 앞의 제목/회사명 등
+  // 단락)는 건드리지 않고, 첫 번째로 매핑된 섹션 제목(headingMap의 가장
+  // 이른 블록 인덱스) 바로 앞에 삽입한다. leftover 섹션과 정확히 같은
+  // 렌더러(renderContent/buildParagraph)만 재사용한다 — 새 markdown
+  // 파서를 만들지 않는다. headingMap이 비어 있으면 이 함수가 이미 위에서
+  // 에러를 던지므로(§277행) firstHeadingIdx는 항상 유효하다.
+  let leadXml = "";
+  for (const m of input.decisionMemoSections ?? []) {
+    leadXml +=
+      buildParagraph(globalProto, m.title, { bold: true }) +
+      renderContent(globalProto, m.content) +
+      buildEmptyParagraph(globalProto);
+  }
+  const firstHeadingIdx = Math.min(...Array.from(headingMap.keys()));
+
   const sectPrBlockIdx = blocks.findIndex((b) => b.kind === "sectPr");
 
   let rebuilt = "";
+  let leadInserted = false;
+  const emitBlock = (i: number) => {
+    if (leadXml && !leadInserted && i === firstHeadingIdx) {
+      rebuilt += leadXml;
+      leadInserted = true;
+    }
+    rebuilt += blocks[i].xml;
+  };
+
   let cursor = 0;
   for (const r of replacedRanges) {
-    for (let i = cursor; i < r.from; i++) rebuilt += blocks[i].xml;
+    for (let i = cursor; i < r.from; i++) emitBlock(i);
     rebuilt += r.xml;
     cursor = r.to;
   }
   for (let i = cursor; i < blocks.length; i++) {
     if (tailXml && i === sectPrBlockIdx) rebuilt += tailXml;
-    rebuilt += blocks[i].xml;
+    emitBlock(i);
   }
   if (tailXml && sectPrBlockIdx === -1) rebuilt += tailXml;
 
