@@ -48,16 +48,21 @@ function formatEok(n: number): string {
 
 export function LboSimulatorPanel({
   initialEbitda,
+  initialEbitdaInEok,
 }: {
   /** 재무 탭에 이미 데이터가 있으면 인수 EBITDA 초기값으로 참고만 한다(자동 계산 아님) */
   initialEbitda?: FinancialCalcResult;
+  /** QoE(승인된 조정만 반영) → LBO 브릿지가 이미 억원으로 환산해둔 값 — 있으면 initialEbitda보다 우선한다(§9 IC 스냅샷과 같은 숫자를 그대로 이어받기 위함, 여기서 다시 계산하지 않음) */
+  initialEbitdaInEok?: number;
 }) {
   const [assumptions, setAssumptions] = useState<LboAssumptions>(() => ({
     ...DEFAULT_ASSUMPTIONS,
     entryEbitda:
-      initialEbitda?.status === "ok"
-        ? Math.round((initialEbitda.value / 100_000_000) * 10) / 10
-        : DEFAULT_ASSUMPTIONS.entryEbitda,
+      initialEbitdaInEok !== undefined
+        ? initialEbitdaInEok
+        : initialEbitda?.status === "ok"
+          ? Math.round((initialEbitda.value / 100_000_000) * 10) / 10
+          : DEFAULT_ASSUMPTIONS.entryEbitda,
   }));
 
   const result = useMemo(() => calculateLboModel(assumptions), [assumptions]);

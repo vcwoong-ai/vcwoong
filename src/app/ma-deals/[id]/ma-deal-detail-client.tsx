@@ -13,6 +13,17 @@ import type { FinancialCalcResult } from "@/lib/pe/financial-types";
 import { useToast } from "@/hooks/use-toast";
 import { AddFinancialPeriodDialog } from "@/components/ma-deals/add-financial-period-dialog";
 import { LboSimulatorPanel } from "@/components/ma-deals/lbo-simulator-panel";
+import { MaDealOverview, type MaDealDashboardData } from "@/components/ma-deals/ma-deal-overview";
+import {
+  computeQoESummary,
+  computeLboEntryEbitda,
+  computeDartStatus,
+  computeFinancialQuality,
+  computeReadinessMatrix,
+  computeMissingInformation,
+  type DashboardPeriod,
+  type DashboardAdjustmentRow,
+} from "@/lib/pe/ma-deal-dashboard";
 
 interface LineItem {
   id: string;
@@ -31,6 +42,7 @@ interface Adjustment {
   normalizedValue: number;
   reason: string;
   status: string;
+  adjustmentType: string;
   source: string;
 }
 
@@ -102,6 +114,48 @@ export function MaDealDetailClient({
   const [periods, setPeriods] = useState<Period[]>(initialPeriods);
   const [importingDart, setImportingDart] = useState(false);
   const [togglingStatus, setTogglingStatus] = useState(false);
+  const [activeTab, setActiveTab] = useState("overview");
+
+  // IC Decision Dashboard(PR #102) — periods state(재무 추가/DART 임포트 시
+  // refreshPeriods()로 이미 최신화됨)에서 매번 다시 계산한다. page.tsx가
+  // 한 번만 계산해 내려주면 재무 기간을 추가해도 Overview가 새로고침 전까지
+  // 옛 데이터를 보여주는 문제가 있어(실사용 중 발견), 여기서 periods와
+  // 항상 같은 소스를 보도록 옮겼다 — 새 계산 로직은 없다(ma-deal-dashboard.ts
+  // 그대로 재사용).
+  const dashboard: MaDealDashboardData = useMemo(() => {
+    const dashboardPeriods: DashboardPeriod[] = periods.map((p) => ({
+      id: p.id,
+      fiscalYear: p.fiscalYear,
+      periodType: p.periodType as DashboardPeriod["periodType"],
+      currency: p.currency,
+      lineItems: p.lineItems,
+      adjustments: p.adjustments as DashboardAdjustmentRow[],
+      normalizedSummary: {
+        revenue: p.normalizedSummary.revenue,
+        ebitda: p.normalizedSummary.ebitda,
+        netDebt: p.normalizedSummary.netDebt,
+      },
+    }));
+    const latest = dashboardPeriods[0] ?? null;
+    const qoeSummary = latest ? computeQoESummary(latest) : null;
+    const lboEntryEbitda = computeLboEntryEbitda(latest, qoeSummary);
+    const dartStatus = computeDartStatus(dashboardPeriods);
+    const readinessInput = {
+      hasPeriods: dashboardPeriods.length > 0,
+      latestEbitda: latest?.normalizedSummary.ebitda ?? null,
+      latestQoEAdjustmentCount: latest?.adjustments.length ?? 0,
+      dartImported: dartStatus.imported,
+      lboEntryEbitdaAvailable: lboEntryEbitda.status === "ok",
+    };
+    return {
+      qoeSummary,
+      lboEntryEbitda,
+      dartStatus,
+      financialQuality: computeFinancialQuality(dashboardPeriods),
+      readiness: computeReadinessMatrix(readinessInput),
+      missingInformation: computeMissingInformation(readinessInput),
+    };
+  }, [periods]);
 
   const dartPeriods = useMemo(
     () => periods.filter((p) => p.lineItems.some((li) => li.source === "DART")),
@@ -179,7 +233,7 @@ export function MaDealDetailClient({
         )}
       </div>
 
-      <Tabs defaultValue="overview">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="w-full sm:w-auto overflow-x-auto justify-start">
           <TabsTrigger value="overview" className="flex items-center gap-1.5">
             <Building2 className="w-3.5 h-3.5" />
@@ -200,41 +254,7 @@ export function MaDealDetailClient({
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">딜 기본 정보</CardTitle>
-            </CardHeader>
-            <CardContent className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
-              <div>
-                <p className="text-xs text-gray-400">딜 유형</p>
-                <p className="font-medium">{MA_DEAL_TYPE_LABEL[maDeal.dealType]}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-400">상태</p>
-                <p className="font-medium">{MA_DEAL_STATUS_LABEL[maDeal.status]}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-400">최근 재무기간</p>
-                <p className="font-medium">
-                  {latestPeriod
-                    ? `FY${latestPeriod.fiscalYear} ${PERIOD_TYPE_LABEL[latestPeriod.periodType]}`
-                    : "등록된 재무 데이터 없음"}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-400">등록일</p>
-                <p className="font-medium">{new Date(maDeal.createdAt).toLocaleDateString()}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-400">최근 수정</p>
-                <p className="font-medium">{new Date(maDeal.updatedAt).toLocaleDateString()}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <p className="text-xs text-gray-400">
-            문서 업로드를 통한 AI 사실 추출·DD 종합은 다음 라운드에서 연결될 예정입니다.
-            지금은 재무 데이터를 직접 입력하거나 DART에서 가져올 수 있습니다.
-          </p>
+          <MaDealOverview maDeal={maDeal} dashboard={dashboard} onNavigateTab={setActiveTab} />
         </TabsContent>
 
         <TabsContent value="financials" className="space-y-4">
@@ -343,7 +363,14 @@ export function MaDealDetailClient({
         </TabsContent>
 
         <TabsContent value="lbo">
-          <LboSimulatorPanel initialEbitda={latestPeriod?.normalizedSummary.ebitda} />
+          <LboSimulatorPanel
+            initialEbitda={latestPeriod?.normalizedSummary.ebitda}
+            initialEbitdaInEok={
+              dashboard.lboEntryEbitda.status === "ok"
+                ? dashboard.lboEntryEbitda.lbo.entryEbitdaInEok
+                : undefined
+            }
+          />
         </TabsContent>
       </Tabs>
     </div>
