@@ -16,6 +16,7 @@ import {
   LayoutTemplate,
   LineChart,
   Sparkles,
+  Landmark,
   X,
 } from "lucide-react";
 
@@ -34,6 +35,11 @@ const navItems = [
     label: "딜 관리",
     href: "/deals",
     icon: Briefcase,
+  },
+  {
+    label: "PE/M&A 딜",
+    href: "/ma-deals",
+    icon: Landmark,
   },
   {
     label: "보고서",
