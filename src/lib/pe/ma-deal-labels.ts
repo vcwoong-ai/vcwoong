@@ -2,7 +2,7 @@
  * 완전히 분리된 파일이다 — VC/PE 라벨을 한 파일에서 관리하면 한쪽 문구
  * 수정이 다른 쪽 화면에 실수로 영향을 줄 수 있다(ma-team-access.ts와 같은
  * 분리 이유). */
-import type { MaDealType, MaDealStatus, MaAdjustmentStatus } from "@prisma/client";
+import type { MaDealType, MaDealStatus, MaAdjustmentStatus, MaDocumentType, MaFinancialSourceType } from "@prisma/client";
 import type { ReadinessState, PEDecisionDomainKey } from "./pe-decision-readiness";
 
 export const MA_DEAL_TYPE_LABEL: Record<MaDealType, string> = {
@@ -46,4 +46,21 @@ export const PE_DECISION_DOMAIN_LABEL: Record<PEDecisionDomainKey, string> = {
   EVIDENCE: "근거 추적",
   COMMERCIAL: "상업 데이터",
   DART: "DART 공시",
+};
+
+/** MADocument.type(PR #106 Data Room에서 처음 사용) */
+export const MA_DOCUMENT_TYPE_LABEL: Record<MaDocumentType, string> = {
+  MANAGEMENT_ACCOUNTS: "경영 자료",
+  DD_MATERIAL: "실사 자료",
+  FINANCIAL_MODEL: "재무 모델",
+  CONTRACT: "계약서",
+  OTHER: "기타",
+};
+
+/** MAFinancialLineItem.source / PEEvidence.sourceType 공용(financial-types.ts, PR-B) */
+export const MA_FINANCIAL_SOURCE_LABEL: Record<MaFinancialSourceType, string> = {
+  UPLOADED_DOCUMENT: "업로드 문서",
+  EXCEL: "엑셀",
+  DART: "DART",
+  MANUAL: "수기 입력",
 };
