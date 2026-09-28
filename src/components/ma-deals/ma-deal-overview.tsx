@@ -11,10 +11,9 @@ import type {
   QoESummaryView,
   DartStatusView,
   FinancialQualityView,
-  ReadinessRow,
-  MissingInfoItem,
   computeLboEntryEbitda,
 } from "@/lib/pe/ma-deal-dashboard";
+import type { PEDecisionReadiness } from "@/lib/pe/pe-decision-readiness";
 
 interface MaDeal {
   dealType: MaDealType;
@@ -28,8 +27,8 @@ export interface MaDealDashboardData {
   lboEntryEbitda: ReturnType<typeof computeLboEntryEbitda>;
   dartStatus: DartStatusView;
   financialQuality: FinancialQualityView;
-  readiness: ReadinessRow[];
-  missingInformation: MissingInfoItem[];
+  /** pe-decision-readiness.ts의 buildPEDecisionReadiness() 결과 그대로(PR #103, 수정 없음) — UI는 재해석하지 않는다 */
+  decisionReadiness: PEDecisionReadiness;
 }
 
 /**
@@ -89,9 +88,9 @@ export function MaDealOverview({
         <MaDealDartStatus dart={dashboard.dartStatus} onOpenDart={() => onNavigateTab("dart")} />
       </div>
 
-      <MaDealReadiness rows={dashboard.readiness} />
+      <MaDealReadiness readiness={dashboard.decisionReadiness} />
 
-      <MaDealMissingInfo items={dashboard.missingInformation} />
+      <MaDealMissingInfo readiness={dashboard.decisionReadiness} />
     </div>
   );
 }
