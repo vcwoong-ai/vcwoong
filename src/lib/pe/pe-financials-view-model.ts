@@ -46,16 +46,20 @@ export type CanonicalAccountLookup =
   | { status: "ok"; value: number; currency: string; source: MaFinancialSourceType; sourceName?: string | null }
   | { status: "conflict"; values: number[] };
 
-/** 같은 기간·같은 계정에 line item이 여러 개면(값이 다르면) 값을 대신
- * 골라주지 않고 "conflict"로 정직하게 반환한다(pe-decision-readiness.ts의
- * detectFactConflicts()와 같은 원칙 — 값을 조용히 무시하지 않는다). */
+/** 같은 기간·같은 계정에 line item이 여러 개면(값 또는 통화가 다르면) 값을
+ * 대신 골라주지 않고 "conflict"로 정직하게 반환한다(pe-decision-readiness.ts의
+ * detectFactConflicts()가 `${lineItem}|${currency}`로 묶는 것과 같은 원칙 —
+ * 값이 같아도 통화가 다르면 서로 다른 사실이므로 값만으로 중복 제거하지
+ * 않는다. 값을 조용히 무시하거나 하나만 골라 보여주지 않는다). */
 export function lookupCanonicalAccount(
   period: FinancialsPeriodLike,
   lineItem: CanonicalLineItem
 ): CanonicalAccountLookup {
   const matches = period.lineItems.filter((li) => li.lineItem === lineItem);
   if (matches.length === 0) return { status: "missing" };
-  const distinctValues = Array.from(new Set(matches.map((m) => m.value)));
+  const distinctValues = Array.from(new Set(matches.map((m) => `${m.value}|${m.currency}`))).map(
+    (key) => Number(key.split("|")[0])
+  );
   if (distinctValues.length > 1) return { status: "conflict", values: distinctValues };
   const m = matches[0];
   return {

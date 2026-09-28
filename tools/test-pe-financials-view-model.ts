@@ -53,6 +53,17 @@ function test3_conflictNotSilentlyResolved() {
   console.log("✅ Test 3 — 값이 다른 중복 line item은 conflict(임의 선택 없음)");
 }
 
+function test3b_sameValueDifferentCurrencyIsConflict() {
+  const p = period({
+    id: "p1",
+    fiscalYear: 2024,
+    lineItems: [li({ lineItem: "REVENUE", value: 1000, currency: "KRW", source: "MANUAL" }), li({ lineItem: "REVENUE", value: 1000, currency: "USD", source: "MANUAL" })],
+  });
+  const result = lookupCanonicalAccount(p, "REVENUE");
+  assert(result.status === "conflict", "값이 같아도 통화가 다르면 서로 다른 사실이므로 conflict여야 함(값만으로 중복 제거 금지, PR #106 최종 리뷰에서 발견)");
+  console.log("✅ Test 3b — 같은 값이라도 통화가 다르면 conflict(값만으로 병합 금지)");
+}
+
 function test4_sameValueDuplicateIsNotConflict() {
   const p = period({
     id: "p1",
@@ -133,6 +144,7 @@ function main() {
   test1_missingAccount();
   test2_okAccountWithSource();
   test3_conflictNotSilentlyResolved();
+  test3b_sameValueDifferentCurrencyIsConflict();
   test4_sameValueDuplicateIsNotConflict();
   test5_differentPeriodNotConflated();
   test6_differentAccountNotConflated();
