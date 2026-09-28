@@ -1,12 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Building2, Landmark, Calculator, TrendingUp, RefreshCw } from "lucide-react";
+import { Building2, Landmark, Calculator, TrendingUp, RefreshCw, FolderOpen } from "lucide-react";
 import type { MaDealType, MaDealStatus } from "@prisma/client";
 import { MA_DEAL_TYPE_LABEL, MA_DEAL_STATUS_LABEL, MA_ADJUSTMENT_STATUS_LABEL } from "@/lib/pe/ma-deal-labels";
 import type { FinancialCalcResult } from "@/lib/pe/financial-types";
@@ -14,6 +14,10 @@ import { useToast } from "@/hooks/use-toast";
 import { AddFinancialPeriodDialog } from "@/components/ma-deals/add-financial-period-dialog";
 import { LboSimulatorPanel } from "@/components/ma-deals/lbo-simulator-panel";
 import { MaDealOverview, type MaDealDashboardData } from "@/components/ma-deals/ma-deal-overview";
+import { MaDealDataRoom } from "@/components/ma-deals/ma-deal-data-room";
+import { MaDealFinancialDataQuality } from "@/components/ma-deals/ma-deal-financial-data-quality";
+import { MaDealCanonicalAccountsTable } from "@/components/ma-deals/ma-deal-canonical-accounts-table";
+import { MaDealReadiness } from "@/components/ma-deals/ma-deal-readiness";
 import {
   computeQoESummary,
   computeLboEntryEbitda,
@@ -24,6 +28,12 @@ import {
   type DashboardAdjustmentRow,
 } from "@/lib/pe/ma-deal-dashboard";
 import { buildPEDecisionReadiness } from "@/lib/pe/pe-decision-readiness";
+import { computeFinancialDataQuality } from "@/lib/pe/pe-financials-view-model";
+import type {
+  DataRoomDocumentRow,
+  DataRoomEvidenceRow,
+  DataRoomFindingRow,
+} from "@/lib/pe/pe-data-room-view-model";
 
 interface LineItem {
   id: string;
@@ -32,6 +42,7 @@ interface LineItem {
   value: number;
   currency: string;
   source: string;
+  sourceName?: string | null;
 }
 
 interface Adjustment {
@@ -116,6 +127,32 @@ export function MaDealDetailClient({
   const [togglingStatus, setTogglingStatus] = useState(false);
   const [activeTab, setActiveTab] = useState("overview");
 
+  // Data Room(PR #106) — 개요/재무 탭과 달리 처음 탭을 열 때만 지연 로딩한다
+  // (모든 딜이 문서를 갖는 건 아니므로 항상 미리 불러올 필요가 없음).
+  const [dataRoomLoaded, setDataRoomLoaded] = useState(false);
+  const [dataRoomLoading, setDataRoomLoading] = useState(false);
+  const [documents, setDocuments] = useState<DataRoomDocumentRow[]>([]);
+  const [evidence, setEvidence] = useState<DataRoomEvidenceRow[]>([]);
+  const [findings, setFindings] = useState<DataRoomFindingRow[]>([]);
+
+  useEffect(() => {
+    if (activeTab !== "data-room" || dataRoomLoaded || dataRoomLoading) return;
+    setDataRoomLoading(true);
+    fetch(`/api/ma-deals/${maDeal.id}/documents`)
+      .then((res) => (res.ok ? res.json() : Promise.reject(res)))
+      .then((json) => {
+        setDocuments(json.data?.documents ?? []);
+        setEvidence(json.data?.evidence ?? []);
+        setFindings(json.data?.findings ?? []);
+        setDataRoomLoaded(true);
+      })
+      .catch(() => {
+        toast.error("Data Room을 불러오지 못했습니다");
+      })
+      .finally(() => setDataRoomLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, dataRoomLoaded, dataRoomLoading, maDeal.id]);
+
   // IC Decision Dashboard(PR #102) — periods state(재무 추가/DART 임포트 시
   // refreshPeriods()로 이미 최신화됨)에서 매번 다시 계산한다. page.tsx가
   // 한 번만 계산해 내려주면 재무 기간을 추가해도 Overview가 새로고침 전까지
@@ -154,6 +191,14 @@ export function MaDealDetailClient({
   const dartPeriods = useMemo(
     () => periods.filter((p) => p.lineItems.some((li) => li.source === "DART")),
     [periods]
+  );
+
+  // Financials 탭 데이터 품질 요약(PR #106) — computeFinancialDataQuality()는
+  // 순수 집계(새 재무 계산 없음)이고, conflict 개수는 dashboard.decisionReadiness가
+  // 이미 계산한 factConflicts를 그대로 받는다(재계산 없음).
+  const financialDataQuality = useMemo(
+    () => computeFinancialDataQuality(periods, dashboard.decisionReadiness.factConflicts.length),
+    [periods, dashboard.decisionReadiness.factConflicts.length]
   );
 
   const refreshPeriods = async () => {
@@ -233,6 +278,10 @@ export function MaDealDetailClient({
             <Building2 className="w-3.5 h-3.5" />
             개요
           </TabsTrigger>
+          <TabsTrigger value="data-room" className="flex items-center gap-1.5">
+            <FolderOpen className="w-3.5 h-3.5" />
+            데이터룸
+          </TabsTrigger>
           <TabsTrigger value="financials" className="flex items-center gap-1.5">
             <Calculator className="w-3.5 h-3.5" />
             재무 · QoE
@@ -251,12 +300,31 @@ export function MaDealDetailClient({
           <MaDealOverview maDeal={maDeal} dashboard={dashboard} onNavigateTab={setActiveTab} />
         </TabsContent>
 
+        <TabsContent value="data-room" className="space-y-4">
+          <MaDealDataRoom
+            documents={documents}
+            evidence={evidence}
+            findings={findings}
+            loading={dataRoomLoading && !dataRoomLoaded}
+          />
+        </TabsContent>
+
         <TabsContent value="financials" className="space-y-4">
           <div className="flex justify-end">
             {canEdit && (
               <AddFinancialPeriodDialog maDealId={maDeal.id} onCreated={refreshPeriods} />
             )}
           </div>
+          {periods.length > 0 && (
+            <>
+              <MaDealFinancialDataQuality
+                quality={financialDataQuality}
+                conflicts={dashboard.decisionReadiness.factConflicts}
+              />
+              <MaDealCanonicalAccountsTable periods={periods} />
+              <MaDealReadiness readiness={dashboard.decisionReadiness} />
+            </>
+          )}
           {periods.length === 0 ? (
             <p className="text-center text-gray-400 py-12">
               등록된 재무 데이터가 없습니다. 재무 기간을 추가하거나 DART 탭에서 가져와보세요.
