@@ -657,6 +657,7 @@ model MADeal {
   documents MADocument[]
   reports   MAReport[]
   financialPeriods MAFinancialPeriod[]
+  ddCase    PEDDCase?
 
   @@index([userId])
   @@index([teamId])
@@ -675,7 +676,8 @@ model MADocument {
   metadata   Json?
   createdAt  DateTime       @default(now())
 
-  maDeal MADeal @relation(fields: [maDealId], references: [id], onDelete: Cascade)
+  maDeal     MADeal       @relation(fields: [maDealId], references: [id], onDelete: Cascade)
+  peEvidence PEEvidence[]
 
   @@index([maDealId])
 }
@@ -768,6 +770,7 @@ model MAFinancialPeriod {
   maDeal      MADeal                   @relation(fields: [maDealId], references: [id], onDelete: Cascade)
   lineItems   MAFinancialLineItem[]
   adjustments MAFinancialAdjustment[]
+  ddFindings  PEDDFinding[]
 
   @@unique([maDealId, fiscalYear, periodType])
   @@index([maDealId])
@@ -852,4 +855,114 @@ enum MaAdjustmentType {
   NON_RECURRING_REVENUE
   UNSUSTAINABLE_MARGIN
   OTHER
+}
+
+// ───────────────────────────────────────────────
+// PE 트랙 — DD & Evidence Persistence Foundation (PR #105)
+// schema.prisma(PostgreSQL)와 동일 — @db.Text만 제외(SQLite 불필요)
+// ───────────────────────────────────────────────
+
+model PEDDCase {
+  id        String         @id @default(cuid())
+  maDealId  String         @unique
+  status    PEDDCaseStatus @default(ACTIVE)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  maDeal   MADeal        @relation(fields: [maDealId], references: [id], onDelete: Cascade)
+  findings PEDDFinding[]
+  evidence PEEvidence[]
+
+  @@index([maDealId])
+}
+
+model PEDDFinding {
+  id       String @id @default(cuid())
+  ddCaseId String
+
+  category    PEDDCategory
+  subCategory String?
+  title       String
+  description String
+  severity    PEDDSeverity
+  status      PEDDFindingStatus @default(DRAFT)
+
+  financialPeriodId String?
+  owner       String?
+  resolution  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ddCase          PEDDCase           @relation(fields: [ddCaseId], references: [id], onDelete: Cascade)
+  financialPeriod MAFinancialPeriod? @relation(fields: [financialPeriodId], references: [id], onDelete: SetNull)
+  evidence        PEEvidence[]
+
+  @@index([ddCaseId])
+  @@index([financialPeriodId])
+  @@index([status])
+}
+
+model PEEvidence {
+  id       String  @id @default(cuid())
+  ddCaseId String
+  findingId String?
+  documentId String?
+
+  sourceType        MaFinancialSourceType
+  sourceName        String
+  sourceLocation     String?
+  externalReference  String?
+  locator            String?
+  excerpt            String?
+  confidence         Float?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ddCase   PEDDCase     @relation(fields: [ddCaseId], references: [id], onDelete: Cascade)
+  finding  PEDDFinding? @relation(fields: [findingId], references: [id], onDelete: SetNull)
+  document MADocument?  @relation(fields: [documentId], references: [id], onDelete: SetNull)
+
+  @@index([ddCaseId])
+  @@index([findingId])
+  @@index([documentId])
+}
+
+enum PEDDCaseStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum PEDDCategory {
+  FINANCIAL
+  COMMERCIAL
+  OPERATIONAL
+  LEGAL
+  TAX
+  HR
+  TECHNOLOGY
+  IT_SECURITY
+  REGULATORY
+  ESG
+  MANAGEMENT
+  OTHER
+}
+
+enum PEDDSeverity {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+  INFO
+}
+
+enum PEDDFindingStatus {
+  DRAFT
+  IN_REVIEW
+  CONFIRMED
+  MITIGATED
+  ACCEPTED
+  REJECTED
+  CLOSED
 }

@@ -690,6 +690,7 @@ model MADeal {
   documents MADocument[]
   reports   MAReport[]
   financialPeriods MAFinancialPeriod[]
+  ddCase    PEDDCase?
 
   @@index([userId])
   @@index([teamId])
@@ -708,7 +709,11 @@ model MADocument {
   metadata   Json?
   createdAt  DateTime       @default(now())
 
-  maDeal MADeal @relation(fields: [maDealId], references: [id], onDelete: Cascade)
+  maDeal     MADeal       @relation(fields: [maDealId], references: [id], onDelete: Cascade)
+  /// 이 문서를 근거로 인용하는 PE DD Evidence(PR #105) — 문서가 삭제돼도
+  /// evidence 자체는 감사 기록으로 남아야 하므로 documentId만 SetNull된다
+  /// (PEEvidence 모델 정의 참고).
+  peEvidence PEEvidence[]
 
   @@index([maDealId])
 }
@@ -810,6 +815,9 @@ model MAFinancialPeriod {
   maDeal      MADeal                   @relation(fields: [maDealId], references: [id], onDelete: Cascade)
   lineItems   MAFinancialLineItem[]
   adjustments MAFinancialAdjustment[]
+  /// 이 기간을 참조하는 PE DD Finding(PR #105) — 기간이 삭제돼도 finding
+  /// 자체는 남아야 하므로 financialPeriodId만 SetNull된다.
+  ddFindings  PEDDFinding[]
 
   @@unique([maDealId, fiscalYear, periodType])
   @@index([maDealId])
@@ -913,4 +921,160 @@ enum MaAdjustmentType {
   NON_RECURRING_REVENUE
   UNSUSTAINABLE_MARGIN
   OTHER
+}
+
+// ───────────────────────────────────────────────
+// PE 트랙 — DD & Evidence Persistence Foundation (PR #105)
+//
+// PEDDCase/PEDDFinding/PEEvidence는 사실과 워크플로 상태(status/severity/
+// 근거 참조)만 저장한다. "이 finding이 실제로 타당한가", "readiness가
+// 무엇인가"는 여전히 순수 결정론적 엔진(dd-lineage.ts의 validatePEDDCase(),
+// pe-decision-readiness.ts의 buildPEDecisionReadiness())이 판단한다 — 이
+// 스키마 자체는 그 판단을 내리지 않는다. AI는 이 테이블에 직접
+// CONFIRMED/승인/readiness를 쓸 수 없다(모든 쓰기는 pe-dd-repository.ts의
+// requiresEvidenceForStatus() 검증을 통과해야 함).
+//
+// PEDDCategory/PEDDSeverity/PEDDFindingStatus 값은 src/lib/pe/dd-types.ts의
+// PE_DD_CATEGORIES/PE_DD_SEVERITIES/PE_DD_FINDING_STATUSES와 정확히
+// 일치해야 한다(MaAdjustmentStatus가 QOE_ADJUSTMENT_STATUSES와 일치해야
+// 하는 것과 같은 원칙).
+//
+// Evidence Lineage(PR-F, evidence-lineage-types.ts)의 PEEvidenceSource/
+// PEEvidenceItem은 이 PR에서 DB 테이블로 만들지 않는다(그 타입 자체가
+// "결정론적 순수 데이터, DB에 저장하지 않는다"고 명시함) — 대신 PEEvidence
+// 한 행이 Source+Evidence 두 개념을 함께 담고, pe-dd-persistence-adapter.ts가
+// 조회 시점에 createEvidenceSource()/createEvidenceItem()(evidence-lineage.ts,
+// 수정 없음)을 그대로 호출해 순수 lineage 노드로 펼친다.
+//
+// PEClaim은 이 PR에서 영속화하지 않는다 — DD finding의 evidence 요구사항은
+// evidenceIds만으로 충분히 만족되고(claimIds는 항상 빈 배열), claim 수준
+// 구조화가 실제로 필요해지면 이 스키마를 확장 없이(추가적으로만) 붙일 수
+// 있다.
+//
+// Commercial DD(고객/매출 데이터)는 이 PR에서 영속화하지 않는다 — 아직
+// 실제 UI/AI 파이프라인이 없어 대규모 스키마를 미리 만들 근거가 없다
+// (후속 PR에서 필요해지면 별도로 설계).
+// ───────────────────────────────────────────────
+
+model PEDDCase {
+  id        String         @id @default(cuid())
+  /// MADeal 1개당 canonical DD case 1개만 허용(버저닝 없음)
+  maDealId  String         @unique
+  status    PEDDCaseStatus @default(ACTIVE)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  maDeal   MADeal        @relation(fields: [maDealId], references: [id], onDelete: Cascade)
+  findings PEDDFinding[]
+  evidence PEEvidence[]
+
+  @@index([maDealId])
+}
+
+model PEDDFinding {
+  id       String @id @default(cuid())
+  ddCaseId String
+
+  category    PEDDCategory
+  /// 자유 텍스트 — dd-types.ts PEDDSubCategory와 동일하게 고정 enum으로 만들지 않는다
+  subCategory String?
+  title       String
+  description String            @db.Text
+  severity    PEDDSeverity
+  status      PEDDFindingStatus @default(DRAFT)
+
+  /// MAFinancialPeriod.id — 딜 무관 finding(예: 순수 LEGAL 이슈)은 비워둘 수 있다.
+  /// 반드시 ddCase와 같은 MADeal에 속한 기간이어야 한다(FK만으로는 보장되지
+  /// 않아 pe-dd-repository.ts가 쓰기 시점에 별도 검증한다).
+  financialPeriodId String?
+  /// 자유 텍스트(담당자명/팀명) — User FK로 강제하지 않는다(dd-types.ts owner?: string과 동일 계약)
+  owner       String?
+  resolution  String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ddCase          PEDDCase           @relation(fields: [ddCaseId], references: [id], onDelete: Cascade)
+  financialPeriod MAFinancialPeriod? @relation(fields: [financialPeriodId], references: [id], onDelete: SetNull)
+  evidence        PEEvidence[]
+
+  @@index([ddCaseId])
+  @@index([financialPeriodId])
+  @@index([status])
+}
+
+/// Source(문서/출처)와 Evidence(그 안의 구체적 근거)를 한 행에 담는다(§0 주석 참고).
+/// PEDDFinding.evidenceIds가 요구하는 "근거 1건"의 단위가 바로 이 행이다.
+model PEEvidence {
+  id       String  @id @default(cuid())
+  ddCaseId String
+  /// 특정 finding에 연결하지 않고 DD case 레벨 근거로만 둘 수도 있다(optional)
+  findingId String?
+  /// 업로드 문서에서 온 근거일 때만 — DART/수기입력 등은 비워둔다
+  documentId String?
+
+  sourceType        MaFinancialSourceType
+  sourceName        String
+  /// 알 때만 채운다 — 추정 금지(evidence-lineage-types.ts PEEvidenceSource와 동일 계약)
+  sourceLocation     String?
+  externalReference  String?
+  /// Source보다 더 구체적인 위치(예: "23페이지 표3")
+  locator            String?
+  excerpt            String? @db.Text
+  /// 0~1 범위(evidence-lineage.ts createEvidenceItem()과 동일 규칙, 쓰기 시점에 검증)
+  confidence         Float?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ddCase   PEDDCase     @relation(fields: [ddCaseId], references: [id], onDelete: Cascade)
+  finding  PEDDFinding? @relation(fields: [findingId], references: [id], onDelete: SetNull)
+  document MADocument?  @relation(fields: [documentId], references: [id], onDelete: SetNull)
+
+  @@index([ddCaseId])
+  @@index([findingId])
+  @@index([documentId])
+}
+
+enum PEDDCaseStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+/// src/lib/pe/dd-types.ts PE_DD_CATEGORIES와 값이 정확히 일치해야 한다.
+enum PEDDCategory {
+  FINANCIAL
+  COMMERCIAL
+  OPERATIONAL
+  LEGAL
+  TAX
+  HR
+  TECHNOLOGY
+  IT_SECURITY
+  REGULATORY
+  ESG
+  MANAGEMENT
+  OTHER
+}
+
+/// src/lib/pe/dd-types.ts PE_DD_SEVERITIES와 값이 정확히 일치해야 한다.
+enum PEDDSeverity {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+  INFO
+}
+
+/// src/lib/pe/dd-types.ts PE_DD_FINDING_STATUSES와 값이 정확히 일치해야 한다.
+/// CONFIRMED/MITIGATED/ACCEPTED/CLOSED는 evidence가 최소 1건 있어야만
+/// pe-dd-repository.ts가 쓰기를 허용한다(requiresEvidenceForStatus() 재사용).
+enum PEDDFindingStatus {
+  DRAFT
+  IN_REVIEW
+  CONFIRMED
+  MITIGATED
+  ACCEPTED
+  REJECTED
+  CLOSED
 }
