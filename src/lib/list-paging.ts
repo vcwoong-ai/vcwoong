@@ -15,6 +15,7 @@ export const DEALS_PAGE_SIZE = 24;
 export const REPORTS_PAGE_SIZE = 24;
 export const SOURCING_PAGE_SIZE = 30;
 export const TEMPLATES_PAGE_SIZE = 24;
+export const MA_DEALS_PAGE_SIZE = 24;
 
 /** 한 번에 불러올 수 있는 최대치 — `?limit=999999` 같은 요청으로 상한을 무력화하지 못하게 한다 */
 const MAX_LIST_LIMIT = 300;
