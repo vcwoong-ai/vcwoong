@@ -92,6 +92,148 @@ function normalizeLabel(label: string): string {
   return label.trim().toLowerCase();
 }
 
+// ── 2a. Canonical metric/period/scenario normalization(PR-M, additive) ───
+// 위 exact-label 그룹핑을 대체하지 않는다 — "같은 지표를 다른 문구로
+// 적었을 때"만 추가로 잡아내는 두 번째 그룹핑이다. label 재추출이나
+// evidence.ts 변경 없이, 이미 NumericClaim.label에 들어있는 문자열만
+// 검사한다.
+//
+// 지표 용어는 이미 report-generation 프롬프트(section-prompts.ts:
+// "매출액, 매출원가, 매출총이익, 영업이익(손실), 당기순이익(손실)",
+// system-prompts.ts: "매출, ... EBITDA, 영업이익률, ... ARR, MRR")가
+// AI 생성 본문에서 표준으로 쓰는 용어만 그대로 재사용한다 — 새 온톨로지를
+// 만들지 않는다.
+
+type CanonicalMetricKey =
+  | "GROSS_PROFIT"
+  | "COGS"
+  | "REVENUE"
+  | "OPERATING_MARGIN"
+  | "OPERATING_PROFIT"
+  | "NET_MARGIN"
+  | "NET_PROFIT"
+  | "CASH"
+  | "ARR"
+  | "MRR"
+  | "NRR"
+  | "CAC"
+  | "LTV"
+  | "CHURN";
+
+// 구체적인(복합) 용어를 먼저 검사한다 — 그렇지 않으면 "매출총이익"이
+// "매출"의 부분 문자열로 오인돼 서로 다른 지표가 같은 지표로 합쳐진다
+// (§오탐 방지: 매출 vs 매출총이익, 영업이익 vs 영업이익률, 순이익 vs 순이익률).
+const METRIC_PATTERNS: Array<{ re: RegExp; key: CanonicalMetricKey }> = [
+  { re: /매출\s*총\s*이익/, key: "GROSS_PROFIT" },
+  { re: /매출\s*원가/, key: "COGS" },
+  { re: /매출(?:\s*액)?/, key: "REVENUE" },
+  { re: /영업\s*이익\s*률/, key: "OPERATING_MARGIN" },
+  { re: /영업\s*이익/, key: "OPERATING_PROFIT" },
+  { re: /순\s*이익\s*률/, key: "NET_MARGIN" },
+  { re: /(?:당기\s*)?순\s*이익/, key: "NET_PROFIT" },
+  { re: /현금성\s*자산/, key: "CASH" },
+  { re: /현금\s*보유/, key: "CASH" },
+  { re: /현금(?!\s*흐름)/, key: "CASH" },
+  { re: /\bARR\b/i, key: "ARR" },
+  { re: /\bMRR\b/i, key: "MRR" },
+  { re: /\bNRR\b/i, key: "NRR" },
+  { re: /\bCAC\b/i, key: "CAC" },
+  { re: /\bLTV\b/i, key: "LTV" },
+  { re: /churn/i, key: "CHURN" },
+];
+
+function canonicalMetricKey(label: string): CanonicalMetricKey | null {
+  for (const { re, key } of METRIC_PATTERNS) {
+    if (re.test(label)) return key;
+  }
+  return null;
+}
+
+/**
+ * PR-M.1: "2024A"/"2024E"/"FY24A"/"FY24E"/"FY2024A"/"FY2024E"처럼 연도
+ * 숫자 바로 뒤에 실적(Actual)/추정(Estimate) 접미사가 붙는 금융 관용
+ * 표기를 인식한다. 임의의 "A"/"E" 문자가 아니라 **2~4자리 연도 숫자에
+ * 직접 붙어 있을 때만** 인식하도록 `\d{2,4}`를 앞에 강제해, ARR/CAC/LTV/
+ * AI/MA/SA/Series A/CompanyA처럼 숫자 없이 A·E가 들어간 용어가 실적/추정
+ * 시나리오로 오인되지 않는다(§false-positive attack).
+ */
+const YEAR_SUFFIX_RE = /\b(?:FY\s?)?(\d{2,4})([AE])\b/;
+
+function yearSuffixMatch(label: string): { year: string; scenario: "ACTUAL" | "FORECAST" } | null {
+  const m = YEAR_SUFFIX_RE.exec(label);
+  if (!m) return null;
+  return {
+    year: m[1].length === 2 ? `20${m[1]}` : m[1],
+    scenario: m[2] === "A" ? "ACTUAL" : "FORECAST",
+  };
+}
+
+/** FY20xx/FY xx, 20xx년, 20xxA/20xxE, Q1~Q4, TTM/LTM — 명시된 게 없으면
+ * UNSPECIFIED. 서로 다른 회계연도·분기·TTM/LTM은 절대 같은 키로 묶이지 않는다. */
+function canonicalPeriodKey(label: string): string {
+  const suffix = yearSuffixMatch(label);
+  if (suffix) return `FY${suffix.year}`;
+
+  const tokens: string[] = [];
+  const fy = /FY\s?(\d{2,4})/i.exec(label);
+  if (fy) tokens.push(`FY${fy[1].length === 2 ? `20${fy[1]}` : fy[1]}`);
+  const yearOnly = /(\d{4})\s?년/.exec(label);
+  if (yearOnly) tokens.push(`FY${yearOnly[1]}`);
+  const quarter = /\bQ([1-4])\b/i.exec(label);
+  if (quarter) tokens.push(`Q${quarter[1]}`);
+  if (/\bTTM\b/i.test(label)) tokens.push("TTM");
+  if (/\bLTM\b/i.test(label)) tokens.push("LTM");
+  if (tokens.length === 0) return "UNSPECIFIED";
+  // 토큰 등장 순서 차이("FY24 Q1" vs "Q1 FY24")로 다른 키가 되지 않게 정렬한다.
+  return Array.from(new Set(tokens)).sort().join("+");
+}
+
+/** 실적/확정 vs 예상/전망/목표/추정, 그리고 2024A/2024E류 연도-접미사
+ * 표기 — 명시된 게 없으면 UNSPECIFIED. ACTUAL과 FORECAST는 절대 같은
+ * 키로 묶이지 않는다. */
+function canonicalScenarioKey(label: string): "ACTUAL" | "FORECAST" | "UNSPECIFIED" {
+  const suffix = yearSuffixMatch(label);
+  if (suffix) return suffix.scenario;
+  if (/실적|확정/.test(label)) return "ACTUAL";
+  if (/예상|전망|목표|추정/.test(label)) return "FORECAST";
+  return "UNSPECIFIED";
+}
+
+/**
+ * canonical 그룹은 (metricKey, periodKey, scenarioKey, unit)이 전부 동일한
+ * claim끼리만 묶는다 — 통화/단위 변환은 하지 않고 기존 unit 문자열을
+ * 그대로 재사용한다(§요청: 통화 정규화 금지).
+ *
+ * exact-label 그룹이 이미 완전히 잡아낸 경우(=그룹 안 모든 claim의 label이
+ * 서로 같음)는 중복 보고하지 않는다 — 이 함수는 "다른 문구로 적힌 같은
+ * 지표"만 추가로 잡아내는 게 목적이다.
+ */
+function detectCanonicalContradictions(claims: NumericClaim[]): ContradictionGroup[] {
+  const groups = new Map<string, NumericClaim[]>();
+  for (const c of claims) {
+    if (c.claimType !== "numeric") continue;
+    if (c.confidence === "UNSUPPORTED") continue;
+    if (!c.label) continue;
+    const metricKey = canonicalMetricKey(c.label);
+    if (!metricKey) continue;
+    const key = `${metricKey}|${canonicalPeriodKey(c.label)}|${canonicalScenarioKey(c.label)}|${c.unit}`;
+    const list = groups.get(key) ?? [];
+    list.push(c);
+    groups.set(key, list);
+  }
+
+  const contradictions: ContradictionGroup[] = [];
+  Array.from(groups.entries()).forEach(([key, group]) => {
+    const distinctValues = new Set(group.map((c) => c.value));
+    if (distinctValues.size < 2) return;
+    const distinctLabels = new Set(group.map((c) => normalizeLabel(c.label)));
+    if (distinctLabels.size < 2) return; // exact-label 그룹이 이미 완전히 커버함
+    const [metricKey, , , unit] = key.split("|");
+    contradictions.push({ label: metricKey, unit, claims: group });
+  });
+  return contradictions;
+}
+
 export function detectContradictions(claims: NumericClaim[]): ContradictionGroup[] {
   const groups = new Map<string, NumericClaim[]>();
   for (const c of claims) {
@@ -111,6 +253,9 @@ export function detectContradictions(claims: NumericClaim[]): ContradictionGroup
       contradictions.push({ label, unit, claims: group });
     }
   });
+  // PR-M: 정확히 같은 문구가 아니어도 같은 지표를 가리키는 claim들도
+  // 추가로 검사한다(기존 exact-label 결과는 그대로 두고 덧붙이기만 함).
+  contradictions.push(...detectCanonicalContradictions(claims));
   return contradictions;
 }
 
@@ -118,8 +263,11 @@ function contradictionForDimension(
   dimClaims: NumericClaim[],
   contradictions: ContradictionGroup[]
 ): ContradictionGroup | undefined {
-  const dimKeys = new Set(dimClaims.map((c) => `${normalizeLabel(c.label)}|${c.unit}`));
-  return contradictions.find((g) => dimKeys.has(`${normalizeLabel(g.label)}|${g.unit}`));
+  // claimKey(claim 고유 식별자)로 매칭한다 — canonical 그룹은 서로 다른
+  // label 문자열의 claim을 한데 묶으므로, label|unit을 다시 만들어
+  // 비교하는 방식으로는 canonical 그룹을 찾을 수 없다.
+  const dimClaimKeys = new Set(dimClaims.map((c) => c.claimKey));
+  return contradictions.find((g) => g.claims.some((c) => dimClaimKeys.has(c.claimKey)));
 }
 
 // ── 3. Decision Dimensions ───────────────────────────────────────────────
