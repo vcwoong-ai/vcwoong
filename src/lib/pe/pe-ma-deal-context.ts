@@ -60,7 +60,14 @@ export async function loadMaDealIcContext(
 
   const periods = await prisma.mAFinancialPeriod.findMany({
     where: { maDealId },
-    include: { lineItems: true, adjustments: true },
+    // lineItems/adjustments도 명시적으로 정렬한다(PR #112) — 정렬 없는
+    // include는 Postgres가 행 순서를 보장하지 않아, 데이터가 전혀
+    // 바뀌지 않아도 findLineItem()(Array.find, 첫 항목 사용)이 매번 다른
+    // 값을 고를 수 있고 fingerprint도 흔들릴 수 있다(§20 false staleness).
+    include: {
+      lineItems: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] },
+      adjustments: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] },
+    },
     orderBy: [{ fiscalYear: "desc" }, { periodType: "asc" }],
   });
 

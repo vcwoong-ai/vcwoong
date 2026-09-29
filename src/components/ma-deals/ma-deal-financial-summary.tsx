@@ -1,14 +1,30 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AlertTriangle } from "lucide-react";
 import { CalcValue, CalcPercent, CalcMultiple } from "./financial-value";
 import type { FinancialQualityView } from "@/lib/pe/ma-deal-dashboard";
 
-export function MaDealFinancialSummary({ quality }: { quality: FinancialQualityView }) {
+/**
+ * PR #112 — `conflictCount`는 새 계산이 아니다: 호출자가 이미 계산해 둔
+ * `readiness.factConflicts.length`(buildPEDecisionReadiness(), 수정 없음)를
+ * 그대로 옮겨 받을 뿐이다. 이 카드가 지금까지 이 값을 몰랐다는 게 문제였다
+ * — 재무 데이터에 모순이 있어 Decision Readiness가 BLOCKED여도, 이 카드는
+ * findLineItem()이 조용히 골라온 값을 아무 경고 없이 보여주고 있었다
+ * (재무 · QoE 탭의 MaDealFinancialDataQuality는 이미 이 경고를 보여주고
+ * 있었지만, 위원회 자료 탭의 이 카드만 빠져 있었다).
+ */
+export function MaDealFinancialSummary({ quality, conflictCount = 0 }: { quality: FinancialQualityView; conflictCount?: number }) {
   return (
     <Card>
       <CardHeader>
         <CardTitle className="text-base">핵심 재무 지표</CardTitle>
         {quality.latestPeriodLabel && (
           <p className="text-xs text-gray-400">{quality.latestPeriodLabel} 기준</p>
+        )}
+        {conflictCount > 0 && (
+          <p className="text-xs font-medium text-red-700 flex items-center gap-1.5 mt-1">
+            <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+            아래 수치는 서로 다른 출처 간 모순 {conflictCount}건이 있는 상태에서 계산된 값입니다 — 데이터룸에서 확인 필요
+          </p>
         )}
       </CardHeader>
       <CardContent>

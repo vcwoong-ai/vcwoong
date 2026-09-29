@@ -283,6 +283,31 @@ function testDeterminism() {
   console.log("✅ Test 23 — 동일 입력 → 동일 출력(결정론)");
 }
 
+/**
+ * PR #112 — Postgres는 ORDER BY 없는 SELECT의 행 순서를 보장하지 않는다.
+ * `buildPEDDCaseFromRows()`가 findingRows/evidenceRows를 그대로(입력받은
+ * 순서로) 옮겨 담으면, DB가 우연히 다른 순서로 행을 반환하는 것만으로
+ * `decision.dd`의 fingerprint가 흔들릴 수 있다(false staleness). 이 함수는
+ * 이제 내부적으로 createdAt/id로 재정렬하므로, 호출자가 어떤 순서로 row를
+ * 넘기든 항상 같은 결과가 나와야 한다.
+ */
+function testOrderIndependenceFromDbRowOrder() {
+  const early = new Date("2026-01-01T00:00:00.000Z");
+  const late = new Date("2026-06-01T00:00:00.000Z");
+  const f1 = findingRow({ id: "f1", ddCaseId: "case1", title: "먼저 생성된 finding", createdAt: early });
+  const f2 = findingRow({ id: "f2", ddCaseId: "case1", title: "나중에 생성된 finding", createdAt: late });
+  const e1 = evidenceRow({ id: "e1", ddCaseId: "case1", sourceName: "먼저 생성된 evidence", createdAt: early });
+  const e2 = evidenceRow({ id: "e2", ddCaseId: "case1", sourceName: "나중에 생성된 evidence", createdAt: late });
+
+  // "정상" 순서(오래된 것부터)로 온 경우와, DB가 뒤바뀐 순서로 반환한 경우를 비교한다.
+  const inOrder = buildPEDDCaseFromRows([], [f1, f2], [e1, e2]);
+  const outOfOrder = buildPEDDCaseFromRows([], [f2, f1], [e2, e1]);
+
+  assert(JSON.stringify(inOrder) === JSON.stringify(outOfOrder), "findingRows/evidenceRows가 어떤 순서로 들어오든(DB가 반환한 순서와 무관하게) 결과가 완전히 동일해야 함 — 그렇지 않으면 fingerprint가 DB 행 순서만으로 흔들릴 수 있음(false staleness)");
+  assert(inOrder.findings[0].id === "f1" && inOrder.findings[1].id === "f2", "findings는 createdAt 오름차순으로 정렬돼야 함");
+  console.log("✅ Test 24 — findingRows/evidenceRows를 DB가 어떤 순서로 반환해도 buildPEDDCaseFromRows() 결과가 동일함(fingerprint 비결정성 방지)");
+}
+
 function main() {
   console.log("\n=== PE DD & Evidence Persistence Foundation 테스트 ===\n");
   testCategoryEnumMatchesDdTypes();
@@ -308,6 +333,7 @@ function main() {
   testConfirmedFindingWithoutEvidenceIsInvalidLineage();
   testEvidenceSourceAndItemAreSeparateDeterministicNodes();
   testDeterminism();
+  testOrderIndependenceFromDbRowOrder();
   console.log("\n✅ PE DD & Evidence Persistence Foundation 테스트 통과\n");
 }
 

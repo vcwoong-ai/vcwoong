@@ -34,8 +34,16 @@ export async function GET(
     );
   }
 
+  // parsedText(문서 하나당 최대 50만자, document-parser.ts 주석 참고)는
+  // 이 화면(Data Room 목록/문서 상세 다이얼로그) 어디에서도 쓰지 않는다
+  // (pe-data-room-view-model.ts의 DataRoomDocumentRow에 애초에 그 필드가
+  // 없음) — select로 명시해 필요 없는 대용량 컬럼을 매번 통째로 내려받지
+  // 않는다(PR #112, §29 "entire document content loading" 방지. VC 쪽
+  // deals/[id]/page.tsx가 이미 같은 이유로 parsedText를 피하는 것과 동일한
+  // 관례).
   const documents = await prisma.mADocument.findMany({
     where: { maDealId: params.id },
+    select: { id: true, name: true, type: true, size: true, mimeType: true, createdAt: true },
     orderBy: { createdAt: "desc" },
   });
 

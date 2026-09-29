@@ -38,7 +38,13 @@ export async function GET(
 
   const periods = await prisma.mAFinancialPeriod.findMany({
     where: { maDealId: params.id },
-    include: { lineItems: true, adjustments: true },
+    // 정렬 없는 include는 행 순서를 보장하지 않는다(PR #112) — pe-ma-deal-context.ts와
+    // 동일하게 명시적으로 정렬해, 데이터가 안 바뀌었는데도 findLineItem()이
+    // 매번 다른 항목을 고르는 일을 막는다(§20 false staleness/비결정성).
+    include: {
+      lineItems: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] },
+      adjustments: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] },
+    },
     orderBy: [{ fiscalYear: "desc" }, { periodType: "asc" }],
   });
 

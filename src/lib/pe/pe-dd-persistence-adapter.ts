@@ -46,12 +46,24 @@ import { buildPEDDCase } from "./dd-lineage";
 import type { PEDDCase, PEDDFinding } from "./dd-types";
 import type { PEFinancialPeriodIdentity } from "./evidence-lineage-types";
 
+/** createdAt 오름차순, 동률이면 id로 재정렬 — Postgres는 ORDER BY 없는
+ * SELECT의 행 순서를 보장하지 않는다(다른 행 UPDATE로 물리적 위치가
+ * 바뀌는 것만으로도 findMany() 결과 순서가 달라질 수 있음). 이 배열
+ * 순서가 그대로 `decision.dd`/fingerprint 해시 입력에 들어가므로(§20),
+ * 정렬하지 않으면 데이터가 실제로는 전혀 바뀌지 않았는데도 DB 행 순서만
+ * 달라져 fingerprint가 바뀌는 "false staleness"가 생길 수 있다. */
+function byCreatedAtThenId<T extends { createdAt: Date; id: string }>(rows: T[]): T[] {
+  return [...rows].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id));
+}
+
 /** DB row 3종(순수 데이터)만으로 PEDDCase를 조립한다 — DB 호출 없음(순수 함수). */
 export function buildPEDDCaseFromRows(
   periods: MAFinancialPeriod[],
-  findingRows: PEDDFindingRow[],
-  evidenceRows: PEEvidenceRow[]
+  findingRowsInput: PEDDFindingRow[],
+  evidenceRowsInput: PEEvidenceRow[]
 ): PEDDCase {
+  const findingRows = byCreatedAtThenId(findingRowsInput);
+  const evidenceRows = byCreatedAtThenId(evidenceRowsInput);
   const periodIdentities: PEFinancialPeriodIdentity[] = periods.map((p) => ({
     id: p.id,
     fiscalYear: p.fiscalYear,

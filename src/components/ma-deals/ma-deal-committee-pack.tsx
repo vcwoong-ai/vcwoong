@@ -141,7 +141,7 @@ export function MaDealCommitteePack({
       <MaDealThesis items={decision.thesis} />
       <MaDealDrivers drivers={decision.drivers} />
       <MaDealThesisBreakers breakers={decision.breakers} />
-      <MaDealFinancialSummary quality={dashboard.financialQuality} />
+      <MaDealFinancialSummary quality={dashboard.financialQuality} conflictCount={dashboard.decisionReadiness.factConflicts.length} />
       <MaDealQoeSummary qoe={dashboard.qoeSummary} onOpenFinancials={() => onNavigateTab("financials")} />
       <MaDealIcSnapshot lboEntryEbitda={dashboard.lboEntryEbitda} onOpenLbo={() => onNavigateTab("lbo")} />
       <MaDealDdFindings findings={decision.dd.findings} />
