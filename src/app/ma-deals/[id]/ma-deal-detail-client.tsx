@@ -6,7 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Building2, Landmark, Calculator, TrendingUp, RefreshCw, FolderOpen, ClipboardList, Gavel, ListChecks } from "lucide-react";
+import { Building2, Landmark, Calculator, TrendingUp, RefreshCw, FolderOpen, ClipboardList, Gavel, ListChecks, Presentation } from "lucide-react";
 import type { MaDealType, MaDealStatus } from "@prisma/client";
 import { MA_DEAL_TYPE_LABEL, MA_DEAL_STATUS_LABEL, MA_ADJUSTMENT_STATUS_LABEL } from "@/lib/pe/ma-deal-labels";
 import type { FinancialCalcResult } from "@/lib/pe/financial-types";
@@ -21,6 +21,7 @@ import { MaDealReadiness } from "@/components/ma-deals/ma-deal-readiness";
 import { MaDealIcWorkspace } from "@/components/ma-deals/ma-deal-ic-workspace";
 import { MaDealIcDecision } from "@/components/ma-deals/ma-deal-ic-decision";
 import { MaDealIcReviewWorkspace } from "@/components/ma-deals/ma-deal-ic-review-workspace";
+import { MaDealCommitteePack } from "@/components/ma-deals/ma-deal-committee-pack";
 import {
   buildMaDealDashboard,
   type DashboardPeriod,
@@ -111,11 +112,15 @@ const PERIOD_TYPE_LABEL: Record<string, string> = {
   TTM: "TTM",
 };
 
+/** 문서 목록(데이터룸 API)을 필요로 하는 탭 — 한 번만 로드해 공유한다(PR #109/#110). */
+const DOCUMENT_DEPENDENT_TABS = ["data-room", "ic-review-workflow", "committee-pack"];
+
 export function MaDealDetailClient({
   maDeal,
   periods: initialPeriods,
   ddCase,
   canEdit,
+  currentUserId,
 }: {
   maDeal: MaDeal;
   periods: Period[];
@@ -123,6 +128,9 @@ export function MaDealDetailClient({
    * readiness의 DD/EVIDENCE 도메인이 함께 쓴다. 클라이언트에서 다시 조회하지 않는다. */
   ddCase: PEDDCase | undefined;
   canEdit: boolean;
+  /** page.tsx의 session.user.id(PR #110) — Committee Pack 리뷰 패널이 "내 서명"을
+   * 가려내는 데 쓴다. 클라이언트에서 별도로 세션을 다시 조회하지 않는다. */
+  currentUserId: string;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -140,9 +148,9 @@ export function MaDealDetailClient({
   const [findings, setFindings] = useState<DataRoomFindingRow[]>([]);
 
   useEffect(() => {
-    // "검토 Workflow" 탭의 문서 연결 select도 같은 문서 목록을 쓴다(§Step9 —
-    // 데이터룸을 먼저 열지 않아도 문서를 고를 수 있어야 한다).
-    if ((activeTab !== "data-room" && activeTab !== "ic-review-workflow") || dataRoomLoaded || dataRoomLoading) return;
+    // "검토 Workflow"/"위원회 자료" 탭의 문서 연결 select도 같은 문서 목록을
+    // 쓴다(§Step9/PR #110 — 데이터룸을 먼저 열지 않아도 문서를 고를 수 있어야 한다).
+    if (!DOCUMENT_DEPENDENT_TABS.includes(activeTab) || dataRoomLoaded || dataRoomLoading) return;
     setDataRoomLoading(true);
     fetch(`/api/ma-deals/${maDeal.id}/documents`)
       .then((res) => (res.ok ? res.json() : Promise.reject(res)))
@@ -183,7 +191,7 @@ export function MaDealDetailClient({
   };
 
   useEffect(() => {
-    if ((activeTab !== "data-room" && activeTab !== "ic-review-workflow") || evidenceRequestsLoaded || evidenceRequestsLoading) return;
+    if (!DOCUMENT_DEPENDENT_TABS.includes(activeTab) || evidenceRequestsLoaded || evidenceRequestsLoading) return;
     refreshEvidenceRequests();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, evidenceRequestsLoaded, evidenceRequestsLoading, maDeal.id]);
@@ -322,6 +330,10 @@ export function MaDealDetailClient({
             <ListChecks className="w-3.5 h-3.5" />
             검토 Workflow
           </TabsTrigger>
+          <TabsTrigger value="committee-pack" className="flex items-center gap-1.5">
+            <Presentation className="w-3.5 h-3.5" />
+            위원회 자료
+          </TabsTrigger>
           <TabsTrigger value="data-room" className="flex items-center gap-1.5">
             <FolderOpen className="w-3.5 h-3.5" />
             데이터룸
@@ -378,6 +390,20 @@ export function MaDealDetailClient({
             evidenceRequestsLoading={evidenceRequestsLoading && !evidenceRequestsLoaded}
             canEdit={canEdit}
             onRefresh={refreshEvidenceRequests}
+          />
+        </TabsContent>
+
+        <TabsContent value="committee-pack" className="space-y-4">
+          <MaDealCommitteePack
+            maDeal={maDeal}
+            dashboard={dashboard}
+            ddCase={ddCase}
+            evidenceRequests={evidenceRequests}
+            evidenceRequestsLoading={evidenceRequestsLoading && !evidenceRequestsLoaded}
+            canEdit={canEdit}
+            currentUserId={currentUserId}
+            onNavigateTab={setActiveTab}
+            onEvidenceRequestCreated={refreshEvidenceRequests}
           />
         </TabsContent>
 

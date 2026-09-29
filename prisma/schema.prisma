@@ -82,6 +82,8 @@ model User {
   portfolioCompanies PortfolioCompany[]
   inboundDeals       InboundDeal[]
   maDeals            MADeal[]
+  peIcReviews        PEICReview[]
+  peIcReviewComments PEICReviewComment[]
 
   @@index([teamId])
 }
@@ -691,6 +693,8 @@ model MADeal {
   reports   MAReport[]
   financialPeriods MAFinancialPeriod[]
   ddCase    PEDDCase?
+  icReviews        PEICReview[]
+  icReviewComments PEICReviewComment[]
 
   @@index([userId])
   @@index([teamId])
@@ -1095,6 +1099,86 @@ enum PEICQuestionPriorityDb {
   P0
   P1
   P2
+}
+
+/// PE IC Committee Pack — Review Sign-off(PR #110). "검토했다"는 사실만
+/// 기록한다 — 절대 투자 승인/추천을 뜻하지 않는다(pe-ic-review-signoff-types.ts
+/// 상단 주석 참고). REVIEWED는 여기 저장하되, 저장 당시의 canonical
+/// fingerprint와 지금 fingerprint가 다르면 UI/API는 이 값을 그대로 쓰지 않고
+/// RE_REVIEW_REQUIRED로 파생 표시한다(§Step13 — 값 자체는 덮어쓰지 않음,
+/// 새로 재검토해야만 갱신).
+model PEICReview {
+  id       String @id @default(cuid())
+  maDealId String
+
+  reviewerId String
+  status     PEICReviewSignoffStatus @default(NOT_REVIEWED)
+
+  /// 현재 상태에 대한 리뷰어의 메모. CHANGES_REQUESTED로 전환할 때는
+  /// repository가 이 필드를 필수로 요구한다(§Step11).
+  comment String? @db.Text
+
+  /// REVIEWED로 전환한 시점에 계산한 buildPECommitteePack().fingerprint를
+  /// 그대로 저장한다 — 재무/QoE/LBO/DD/근거요청 등 canonical 데이터가 아니다,
+  /// 그 데이터들의 해시일 뿐이다.
+  reviewedFingerprint String?
+  /// computeCommitteePackFingerprintBreakdown()의 JSON 직렬화 — §Step14
+  /// "무엇이 바뀌었는가"를 새 히스토리 테이블 없이 보여주기 위한 것.
+  /// 리뷰 이력 전체가 아니라 "마지막 검토 시점의 스냅샷 1개"만 저장한다.
+  reviewedFingerprintBreakdown String? @db.Text
+  reviewedAt          DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  maDeal   MADeal @relation(fields: [maDealId], references: [id], onDelete: Cascade)
+  reviewer User   @relation(fields: [reviewerId], references: [id], onDelete: Cascade)
+
+  comments PEICReviewComment[]
+
+  @@unique([maDealId, reviewerId])
+  @@index([maDealId])
+}
+
+enum PEICReviewSignoffStatus {
+  NOT_REVIEWED
+  IN_REVIEW
+  CHANGES_REQUESTED
+  REVIEWED
+}
+
+/// 리뷰어가 특정 대상(Committee Pack 전체/IC Question/Review Item/Evidence
+/// Request)에 남기는 메모(§Step10). 의견/메모일 뿐 canonical 재무 데이터를
+/// 절대 바꾸지 않는다 — targetType/targetId는 PEEvidenceRequest의
+/// reviewItemSourceType/reviewItemSourceId와 동일하게 결정론적 문자열
+/// 키만 쓴다(review item을 FK로 잡지 않는 이유도 동일, §Step3 주석 참고).
+model PEICReviewComment {
+  id       String @id @default(cuid())
+  maDealId String
+  reviewId String?
+
+  authorId   String
+  targetType PEICReviewCommentTargetType
+  /// COMMITTEE_PACK 전체에 대한 메모면 null.
+  targetId   String?
+
+  text      String   @db.Text
+  createdAt DateTime @default(now())
+
+  maDeal MADeal      @relation(fields: [maDealId], references: [id], onDelete: Cascade)
+  author User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  review PEICReview? @relation(fields: [reviewId], references: [id], onDelete: SetNull)
+
+  @@index([maDealId])
+  @@index([targetType, targetId])
+  @@index([reviewId])
+}
+
+enum PEICReviewCommentTargetType {
+  COMMITTEE_PACK
+  IC_QUESTION
+  REVIEW_ITEM
+  EVIDENCE_REQUEST
 }
 
 enum PEDDCaseStatus {

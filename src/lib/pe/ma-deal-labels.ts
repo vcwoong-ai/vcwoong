@@ -7,6 +7,7 @@ import type { ReadinessState, PEDecisionDomainKey } from "./pe-decision-readines
 import type { PEDDCategory, PEDDSeverity, PEDDFindingStatus } from "./dd-types";
 import type { PEThesisStatus, PEThesisBreakerState, PEICQuestionPriority, PEICProcessState } from "./pe-ic-decision-types";
 import type { PEICReviewItemType, PEICReviewItemStatus, PEEvidenceRequestStatus, PEICReviewState } from "./pe-ic-review-types";
+import type { PEICReviewSignoffStatus, PEICReviewDisplayState, PEICReviewCommentTargetType } from "./pe-ic-review-signoff-types";
 
 export const MA_DEAL_TYPE_LABEL: Record<MaDealType, string> = {
   BUYOUT: "바이아웃",
@@ -176,4 +177,31 @@ export const PE_IC_REVIEW_STATE_LABEL: Record<PEICReviewState, string> = {
   PARTIALLY_READY: "부분적으로 준비됨",
   NOT_READY: "아직 준비 안 됨",
   BLOCKED: "데이터 모순으로 차단됨",
+};
+
+/** pe-ic-review-signoff-types.ts PEICReviewSignoffStatus(PR #110) — "검토했다"는
+ * 사실만 뜻한다. 투자 승인/추천이 아니다(§7 최우선 원칙, 파일 상단 주석 참고). */
+export const PE_IC_REVIEW_SIGNOFF_STATUS_LABEL: Record<PEICReviewSignoffStatus, string> = {
+  NOT_REVIEWED: "미검토",
+  IN_REVIEW: "검토 중",
+  CHANGES_REQUESTED: "변경 요청",
+  REVIEWED: "검토 완료",
+};
+
+/** pe-ic-review-signoff-types.ts PEICReviewDisplayState(PR #110) — RE_REVIEW_REQUIRED는
+ * DB에 저장되지 않는 파생 표시 상태다(computeReviewDisplayState() 참고). */
+export const PE_IC_REVIEW_DISPLAY_STATE_LABEL: Record<PEICReviewDisplayState, string> = {
+  NOT_REVIEWED: "미검토",
+  IN_REVIEW: "검토 중",
+  CHANGES_REQUESTED: "변경 요청",
+  REVIEWED: "검토 완료",
+  RE_REVIEW_REQUIRED: "재검토 필요",
+};
+
+/** pe-ic-review-signoff-types.ts PEICReviewCommentTargetType(PR #110) */
+export const PE_IC_REVIEW_COMMENT_TARGET_TYPE_LABEL: Record<PEICReviewCommentTargetType, string> = {
+  COMMITTEE_PACK: "위원회 자료 전체",
+  IC_QUESTION: "IC 질문",
+  REVIEW_ITEM: "검토 항목",
+  EVIDENCE_REQUEST: "근거 요청",
 };

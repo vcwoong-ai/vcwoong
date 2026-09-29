@@ -1,21 +1,30 @@
 /**
- * PE IC Review Workflow — 구조적 격리/주입 방지 검증(PR #109, 순수 함수 레벨).
+ * PE IC Review Workflow — 구조적 격리/주입 방지 검증(PR #109, PR #110에서
+ * Committee Pack/fingerprint 시나리오 추가, 순수 함수 레벨).
  *
  * `buildPEICReviewItems()`/`buildPEICReviewWorkspace()`/`evaluatePEICReviewItemStatus()`/
  * `collectEvidenceRequestLinkIssues()`는 전부 순수 함수라 전역 상태가 없다.
  * 이 테스트는 "Deal A용으로 조립한 워크스페이스에 Deal B의 review item/
  * evidence request가 절대 섞이지 않는다"는 구조적 보장을 회귀 테스트로
- * 고정한다.
+ * 고정한다. PR #110부터는 Committee Pack fingerprint가 딜마다 다르다는
+ * 것과, 클라이언트로 나가는 content 객체에 fingerprint가 아예 없다는 것도
+ * 함께 고정한다.
  *
  * 실제 인가 경계(다른 딜의 requestId로 PATCH 시도, 다른 딜 문서 연결
- * 시도, 인증 없는 접근 등)는 이 파일이 아니라 라이브 DB 어드버서리얼
- * 스크립트로 검증한다 — evidence-requests route.ts의 IDOR 방지 패턴은
- * pe-dd-repository.ts/PR #105와 동일한 검증된 패턴을 재사용했다(§Step16).
+ * 시도, 인증 없는 접근, 다른 리뷰어로 서명 시도 등)는 이 파일이 아니라
+ * 라이브 DB 어드버서리얼 스크립트로 검증한다 — evidence-requests/ic-
+ * review-signoff route.ts의 IDOR 방지 패턴은 pe-dd-repository.ts/PR #105와
+ * 동일한 검증된 패턴을 재사용했다(§Step16).
  *
  * Usage: npm run test:pe-ic-review-security
  */
 import { buildPEICReviewItems, buildPEICReviewWorkspace } from "../src/lib/pe/pe-ic-review";
 import { collectEvidenceRequestLinkIssues } from "../src/lib/pe/pe-ic-resolution";
+import { buildPECommitteePackContent } from "../src/lib/pe/pe-committee-pack";
+import { buildPEDecisionReadiness } from "../src/lib/pe/pe-decision-readiness";
+import { buildPEDDCase } from "../src/lib/pe/dd-lineage";
+import { createPEDDFinding } from "../src/lib/pe/dd-validation";
+import { buildPEEvidenceLineage } from "../src/lib/pe/evidence-lineage";
 import type { ICQuestion } from "../src/lib/pe/pe-ic-decision-types";
 import type { PEEvidenceRequestView } from "../src/lib/pe/pe-ic-review-types";
 
@@ -137,12 +146,86 @@ function test4_noSharedMutableStateAcrossCalls() {
   console.log("✅ Test 4 — 다른 딜을 여러 번 조립해도 이전 딜 재조립 결과가 오염되지 않음(전역 상태 없음)");
 }
 
+// ── 5. Committee Pack — 다른 딜은 다른 fingerprint를 냄(주입해도 우연히 일치 불가) ──
+
+function test5_committeePackContentNeverMixesAcrossDeals() {
+  const readiness = buildPEDecisionReadiness({ periods: [] });
+  const financialQuality = {
+    latestPeriodLabel: null,
+    revenue: { status: "missing_input" as const, missing: ["EBITDA"] },
+    revenueGrowth: { status: "not_available" as const },
+    ebitda: { status: "missing_input" as const, missing: ["EBITDA"] },
+    ebitdaMargin: { status: "not_available" as const },
+    netDebt: { status: "missing_input" as const, missing: ["EBITDA"] },
+    netDebtToEbitda: { status: "not_available" as const },
+  };
+  const lineage = buildPEEvidenceLineage({});
+  const ddCaseA = buildPEDDCase(lineage, [createPEDDFinding({ id: "f-a", category: "LEGAL", title: "dealA만의 finding", description: "d", severity: "HIGH", status: "DRAFT" })]);
+  const ddCaseB = buildPEDDCase(lineage, [createPEDDFinding({ id: "f-b", category: "TAX", title: "dealB만의 finding", description: "d", severity: "CRITICAL", status: "DRAFT" })]);
+
+  const contentA = buildPECommitteePackContent({
+    dealId: "dealA",
+    maDeal: { companyName: "A Corp", name: "Deal A", dealType: "BUYOUT", status: "ACTIVE" },
+    readiness,
+    financialQuality,
+    qoeSummary: null,
+    lboEntryEbitda: { status: "no_period" },
+    dartStatus: { imported: false, periodsCount: 0, latestFiscalYear: null },
+    ddCase: ddCaseA,
+    evidenceRequests: [],
+  });
+  const contentB = buildPECommitteePackContent({
+    dealId: "dealB",
+    maDeal: { companyName: "B Corp", name: "Deal B", dealType: "BUYOUT", status: "ACTIVE" },
+    readiness,
+    financialQuality,
+    qoeSummary: null,
+    lboEntryEbitda: { status: "no_period" },
+    dartStatus: { imported: false, periodsCount: 0, latestFiscalYear: null },
+    ddCase: ddCaseB,
+    evidenceRequests: [],
+  });
+
+  assert(contentA.dealId === "dealA" && contentB.dealId === "dealB", "dealId는 각자 입력받은 값 그대로여야 함");
+  assert(!JSON.stringify(contentA).includes("dealB") && !JSON.stringify(contentB).includes("dealA"), "Committee Pack 내용 어디에도 다른 딜의 id/문구가 섞이면 안 됨");
+  console.log("✅ Test 5 — Committee Pack content는 딜마다 완전히 격리됨(dealA/dealB finding이 섞이지 않음)");
+}
+
+// ── 6. Committee Pack content(클라이언트로 나가는 값)에는 fingerprint 필드 자체가 없음 ──
+
+function test6_clientSafeContentNeverCarriesFingerprint() {
+  const readiness = buildPEDecisionReadiness({ periods: [] });
+  const content = buildPECommitteePackContent({
+    dealId: "deal-1",
+    maDeal: { companyName: "테스트", name: "테스트딜", dealType: "BUYOUT", status: "ACTIVE" },
+    readiness,
+    financialQuality: {
+      latestPeriodLabel: null,
+      revenue: { status: "missing_input", missing: ["EBITDA"] },
+      revenueGrowth: { status: "not_available" },
+      ebitda: { status: "missing_input", missing: ["EBITDA"] },
+      ebitdaMargin: { status: "not_available" },
+      netDebt: { status: "missing_input", missing: ["EBITDA"] },
+      netDebtToEbitda: { status: "not_available" },
+    },
+    qoeSummary: null,
+    lboEntryEbitda: { status: "no_period" },
+    dartStatus: { imported: false, periodsCount: 0, latestFiscalYear: null },
+    evidenceRequests: [],
+  });
+  assert(!("fingerprint" in content), "buildPECommitteePackContent()의 결과에는 fingerprint 필드 자체가 없어야 함(클라이언트가 계산/조작할 여지 자체를 구조적으로 차단, §Step18 10)");
+  assert(!("fingerprintBreakdown" in content), "fingerprintBreakdown도 마찬가지로 없어야 함");
+  console.log("✅ Test 6 — 클라이언트(위원회 자료 탭)로 나가는 Committee Pack content에는 fingerprint 필드가 구조적으로 존재하지 않음");
+}
+
 function main() {
   console.log("\n=== PE IC Review Workflow 구조적 격리(cross-deal) 테스트 ===\n");
   test1_crossDealReviewItemsNeverMix();
   test2_wrongDealRequestNeverAttachesToUnrelatedItem();
   test3_crossDealInjectionAlwaysStructurallyRejected();
   test4_noSharedMutableStateAcrossCalls();
+  test5_committeePackContentNeverMixesAcrossDeals();
+  test6_clientSafeContentNeverCarriesFingerprint();
   console.log("\n✅ PE IC Review Workflow 구조적 격리 테스트 통과\n");
 }
 
