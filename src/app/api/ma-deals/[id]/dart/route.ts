@@ -36,8 +36,8 @@ export async function GET(
   const periods = await prisma.mAFinancialPeriod.findMany({
     where: { maDealId: params.id, lineItems: { some: { source: "DART" } } },
     include: {
-      lineItems: { where: { source: "DART" } },
-      adjustments: true,
+      lineItems: { where: { source: "DART" }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] },
+      adjustments: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] },
     },
     orderBy: [{ fiscalYear: "desc" }, { periodType: "asc" }],
   });

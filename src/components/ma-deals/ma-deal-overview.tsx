@@ -81,7 +81,7 @@ export function MaDealOverview({
         onOpenLbo={() => onNavigateTab("lbo")}
       />
 
-      <MaDealFinancialSummary quality={dashboard.financialQuality} />
+      <MaDealFinancialSummary quality={dashboard.financialQuality} conflictCount={dashboard.decisionReadiness.factConflicts.length} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <MaDealQoeSummary qoe={dashboard.qoeSummary} onOpenFinancials={() => onNavigateTab("financials")} />

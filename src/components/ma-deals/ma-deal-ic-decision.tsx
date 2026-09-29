@@ -78,7 +78,7 @@ export function MaDealIcDecision({
       <MaDealDrivers drivers={decision.drivers} />
       <MaDealThesisBreakers breakers={decision.breakers} />
 
-      <MaDealFinancialSummary quality={dashboard.financialQuality} />
+      <MaDealFinancialSummary quality={dashboard.financialQuality} conflictCount={decision.financial.conflictCount} />
       <MaDealQoeSummary qoe={dashboard.qoeSummary} onOpenFinancials={() => onNavigateTab("financials")} />
       {decision.lbo.entryEbitdaStatus === "ok" && decision.lbo.upstreamBlocked && (
         <div className="flex items-start gap-1.5 text-xs text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2">
