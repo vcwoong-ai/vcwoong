@@ -28,7 +28,27 @@
     --border: 214 32% 91%;
     --input: 214 32% 91%;
     --ring: 221 83% 53%;
-    --radius: 0.625rem;
+    /* 라운드는 낮게 — 분석 화면은 카드가 둥글수록 장난감처럼 읽힌다 */
+    --radius: 0.5rem;
+
+    /* 분석 화면 시맨틱 상태(VC 근거 상태 · PE 준비 상태 공용).
+       색만으로 의미를 전달하지 않는다 — 항상 아이콘+텍스트와 함께 쓴다.
+       글자색은 각 배경 위에서 WCAG AA(4.5:1) 이상이 되도록 골랐다. */
+    --state-positive: 152 55% 26%;
+    --state-positive-bg: 150 38% 96%;
+    --state-positive-line: 150 26% 80%;
+    --state-info: 216 50% 32%;
+    --state-info-bg: 214 40% 96%;
+    --state-info-line: 214 28% 82%;
+    --state-caution: 30 85% 27%;
+    --state-caution-bg: 42 75% 95%;
+    --state-caution-line: 38 55% 76%;
+    --state-neutral: 215 14% 38%;
+    --state-neutral-bg: 210 20% 97%;
+    --state-neutral-line: 214 16% 84%;
+    --state-critical: 0 62% 36%;
+    --state-critical-bg: 0 70% 97%;
+    --state-critical-line: 0 50% 82%;
   }
 
   .dark {
@@ -53,6 +73,21 @@
     --border: 217 33% 17%;
     --input: 217 33% 17%;
     --ring: 217 91% 60%;
+    --state-positive: 150 50% 70%;
+    --state-positive-bg: 150 30% 14%;
+    --state-positive-line: 150 25% 26%;
+    --state-info: 214 70% 78%;
+    --state-info-bg: 216 32% 16%;
+    --state-info-line: 216 28% 28%;
+    --state-caution: 40 85% 70%;
+    --state-caution-bg: 36 40% 15%;
+    --state-caution-line: 36 40% 28%;
+    --state-neutral: 214 18% 72%;
+    --state-neutral-bg: 217 25% 15%;
+    --state-neutral-line: 217 20% 26%;
+    --state-critical: 0 85% 78%;
+    --state-critical-bg: 0 35% 15%;
+    --state-critical-line: 0 35% 28%;
   }
 
   * {

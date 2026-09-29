@@ -8,9 +8,9 @@ const Card = React.forwardRef<
   <div
     ref={ref}
     className={cn(
-      // shadow-sm 단일 그림자 대신 다층 그림자(globals.css의 .shadow-card).
-      // 아주 옅게 두 겹 깔면 종이처럼 떠 보여서 훨씬 정돈돼 보인다.
-      "rounded-xl border border-slate-200/80 bg-card text-card-foreground shadow-card",
+      // 분석 화면은 그림자로 띄우기보다 헤어라인 경계로 구획한다 — 그림자가 많으면
+      // 카드끼리 떠다니는 SaaS 대시보드처럼 읽히고, 정보 밀도가 높은 화면에서 산만하다.
+      "rounded-lg border border-slate-200 bg-card text-card-foreground",
       className
     )}
     {...props}

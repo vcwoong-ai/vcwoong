@@ -50,6 +50,14 @@ const config: Config = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        // 분석 화면 시맨틱 상태(globals.css) — text-state-*, bg-state-*-bg, border-state-*-line
+        state: {
+          positive: { DEFAULT: "hsl(var(--state-positive))", bg: "hsl(var(--state-positive-bg))", line: "hsl(var(--state-positive-line))" },
+          info: { DEFAULT: "hsl(var(--state-info))", bg: "hsl(var(--state-info-bg))", line: "hsl(var(--state-info-line))" },
+          caution: { DEFAULT: "hsl(var(--state-caution))", bg: "hsl(var(--state-caution-bg))", line: "hsl(var(--state-caution-line))" },
+          neutral: { DEFAULT: "hsl(var(--state-neutral))", bg: "hsl(var(--state-neutral-bg))", line: "hsl(var(--state-neutral-line))" },
+          critical: { DEFAULT: "hsl(var(--state-critical))", bg: "hsl(var(--state-critical-bg))", line: "hsl(var(--state-critical-line))" },
+        },
         success: "hsl(var(--success))",
         warning: "hsl(var(--warning))",
       },
