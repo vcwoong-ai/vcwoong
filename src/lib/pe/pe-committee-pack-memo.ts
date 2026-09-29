@@ -172,7 +172,14 @@ export function buildPECommitteePackMarkdown(pack: PECommitteePack): string {
   sections.push("", "## 11. Evidence", evidenceSection(pack));
   sections.push("", "## 12. IC Review", icReviewSection(pack));
   sections.push("", "## 13. IC Questions", questionsSection(decision.questions));
-  sections.push("", "## 14. Current State", pack.currentReviewStateLabel);
+  sections.push(
+    "",
+    "## 14. Current State",
+    pack.currentReviewStateLabel,
+    "",
+    `정합성 해시(fingerprint): \`${pack.fingerprint}\``,
+    "이 값은 이 문서를 생성한 시점의 canonical 데이터 해시입니다 — 화면의 \"검토 이력\" 스냅샷에 기록된 fingerprint와 대조하면, 이 문서가 어느 검토 시점의 자료와 일치하는지(또는 그 이후 자료가 바뀌었는지) 확인할 수 있습니다."
+  );
 
   return sections.join("\n");
 }

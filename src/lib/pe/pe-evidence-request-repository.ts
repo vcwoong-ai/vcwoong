@@ -25,6 +25,7 @@ import type { Prisma, PEEvidenceRequest as PEEvidenceRequestRow, PEEvidenceReque
 import { maDealReadWhere, maDealWriteWhere } from "./ma-team-access";
 import type { PEDDActor, PEDDResult } from "./pe-dd-repository";
 import { isValidEvidenceRequestTransition } from "./pe-ic-review-types";
+import { recordAuditEvent } from "./pe-ic-review-audit-repository";
 export type { PEDDActor, PEDDResult };
 export { isValidEvidenceRequestTransition };
 
@@ -60,6 +61,10 @@ export interface CreatePEEvidenceRequestInput {
   priority: PEICQuestionPriorityDb;
 }
 
+/** 근거 요청 생성 + 감사 이벤트 기록을 한 트랜잭션으로 묶는다(PR #111 §43,
+ * §12 EVIDENCE_REQUESTED — "어떤 근거가 이 결정을 뒷받침했는가"를 감사
+ * 타임라인에서도 추적 가능하게 한다. pe-ic-review-audit-repository.ts의
+ * 쓰기 헬퍼를 그대로 재사용할 뿐 새 감사 로직을 만들지 않는다). */
 export async function createPEEvidenceRequest(
   actor: PEDDActor,
   ddCaseId: string,
@@ -71,18 +76,30 @@ export async function createPEEvidenceRequest(
   const issues = collectCreateEvidenceRequestIssues(input);
   if (issues.length > 0) return { status: "invalid", issues };
 
-  const created = await prisma.pEEvidenceRequest.create({
-    data: {
-      ddCaseId,
-      reviewItemSourceType: input.reviewItemSourceType,
-      reviewItemSourceId: input.reviewItemSourceId,
-      title: input.title,
-      requestedDocument: input.requestedDocument,
-      requestedFact: input.requestedFact,
-      reason: input.reason,
-      priority: input.priority,
-      createdByUserId: actor.userId,
-    },
+  const created = await prisma.$transaction(async (tx) => {
+    const row = await tx.pEEvidenceRequest.create({
+      data: {
+        ddCaseId,
+        reviewItemSourceType: input.reviewItemSourceType,
+        reviewItemSourceId: input.reviewItemSourceId,
+        title: input.title,
+        requestedDocument: input.requestedDocument,
+        requestedFact: input.requestedFact,
+        reason: input.reason,
+        priority: input.priority,
+        createdByUserId: actor.userId,
+      },
+    });
+
+    await recordAuditEvent(tx, {
+      maDealId: ddCase.maDealId,
+      actorId: actor.userId,
+      eventType: "EVIDENCE_REQUESTED",
+      targetType: input.reviewItemSourceType,
+      targetId: input.reviewItemSourceId,
+    });
+
+    return row;
   });
   return { status: "ok", data: created };
 }

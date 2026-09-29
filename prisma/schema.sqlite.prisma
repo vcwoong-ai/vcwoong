@@ -84,6 +84,8 @@ model User {
   maDeals            MADeal[]
   peIcReviews        PEICReview[]
   peIcReviewComments PEICReviewComment[]
+  peIcReviewSnapshots PEICReviewSnapshot[]
+  peIcAuditEvents     PEICAuditEvent[]
 
   @@index([teamId])
 }
@@ -662,6 +664,8 @@ model MADeal {
   ddCase    PEDDCase?
   icReviews        PEICReview[]
   icReviewComments PEICReviewComment[]
+  icReviewSnapshots PEICReviewSnapshot[]
+  icAuditEvents     PEICAuditEvent[]
 
   @@index([userId])
   @@index([teamId])
@@ -1035,6 +1039,66 @@ enum PEICReviewCommentTargetType {
   IC_QUESTION
   REVIEW_ITEM
   EVIDENCE_REQUEST
+}
+
+model PEICReviewSnapshot {
+  id       String @id @default(cuid())
+  maDealId String
+  version  Int
+
+  reviewerId String
+
+  fingerprint String
+  fingerprintBreakdown String
+
+  openQuestionCodes String
+  openQuestionCount Int
+  openP0Count       Int
+
+  comment    String?
+  reviewedAt DateTime
+
+  createdAt DateTime @default(now())
+
+  maDeal   MADeal @relation(fields: [maDealId], references: [id], onDelete: Cascade)
+  reviewer User   @relation(fields: [reviewerId], references: [id], onDelete: Cascade)
+
+  auditEvents PEICAuditEvent[]
+
+  @@unique([maDealId, version])
+  @@index([maDealId, createdAt])
+}
+
+model PEICAuditEvent {
+  id       String @id @default(cuid())
+  maDealId String
+  reviewSnapshotId String?
+
+  actorId   String
+  eventType PEICAuditEventType
+
+  targetType String?
+  targetId   String?
+
+  metadata Json?
+
+  createdAt DateTime @default(now())
+
+  maDeal         MADeal              @relation(fields: [maDealId], references: [id], onDelete: Cascade)
+  actor          User                @relation(fields: [actorId], references: [id], onDelete: Cascade)
+  reviewSnapshot PEICReviewSnapshot? @relation(fields: [reviewSnapshotId], references: [id], onDelete: SetNull)
+
+  @@index([maDealId, createdAt])
+  @@index([actorId, createdAt])
+  @@index([reviewSnapshotId])
+}
+
+enum PEICAuditEventType {
+  REVIEW_STARTED
+  CHANGE_REQUESTED
+  REVIEW_COMPLETED
+  COMMENT_ADDED
+  EVIDENCE_REQUESTED
 }
 
 enum PEDDCaseStatus {

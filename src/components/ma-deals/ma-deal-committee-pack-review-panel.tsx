@@ -34,10 +34,16 @@ export function MaDealCommitteePackReviewPanel({
   maDealId,
   currentUserId,
   canEdit,
+  onReviewChanged,
 }: {
   maDealId: string;
   currentUserId: string;
   canEdit: boolean;
+  /** PR #111 — 서명 상태 변경/코멘트 작성이 성공할 때마다 호출된다. 이
+   * 패널 자신의 `refresh()`와는 별개로, 형제 컴포넌트(검토 이력/Audit
+   * Trail 카드)에게 "새 스냅샷/감사 이벤트가 생겼을 수 있다"고 알리는
+   * 용도일 뿐이다 — 이 컴포넌트는 그 카드의 상태를 직접 알지 못한다. */
+  onReviewChanged?: () => void;
 }) {
   const toast = useToast();
   const [reviews, setReviews] = useState<PEICReviewView[]>([]);
@@ -99,6 +105,7 @@ export function MaDealCommitteePackReviewPanel({
       }
       toast.success("검토 상태를 업데이트했습니다");
       await refresh();
+      onReviewChanged?.();
     } catch (e) {
       toast.error("상태 변경 실패", { description: e instanceof Error ? e.message : "다시 시도해 주세요" });
     } finally {
@@ -121,6 +128,7 @@ export function MaDealCommitteePackReviewPanel({
       }
       setNewComment("");
       await refresh();
+      onReviewChanged?.();
     } catch (e) {
       toast.error("코멘트 작성 실패", { description: e instanceof Error ? e.message : "다시 시도해 주세요" });
     } finally {
