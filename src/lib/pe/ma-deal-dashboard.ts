@@ -34,6 +34,8 @@ import type {
 } from "./financial-types";
 import type { QoEAdjustmentInput, QoEAdjustmentStatus } from "./qoe-types";
 import type { PEDecisionAdjustmentRow, PEDecisionReadinessInput } from "./pe-decision-readiness";
+import type { PEDDCase } from "./dd-types";
+import type { PEEvidenceLineage } from "./evidence-lineage-types";
 
 export interface DashboardLineItemRow {
   /** PR #104부터 필수 — pe-decision-readiness.ts의 fact-conflict 표시에 실제 DB id로 필요함 */
@@ -254,15 +256,25 @@ export function computeFinancialQuality(periods: DashboardPeriod[]): FinancialQu
 /**
  * `DashboardPeriod[]`(이미 이 파일의 다른 함수들이 쓰는 모양)를
  * `buildPEDecisionReadiness()`(pe-decision-readiness.ts, PR #103, 수정 없음)의
- * 입력 모양으로 옮겨 담기만 한다 — 새 판단/계산 없음. `lboAssumptions`/
- * `ddCase`/`evidenceLineage`/`commercialCustomers`는 지금 어떤 실제 딜에도
- * 영속화할 방법이 없으므로(schema.prisma 확인 — MADeal/MADocument/MAReport/
- * MAReportSection/MAFinancialPeriod/MAFinancialLineItem/MAFinancialAdjustment
- * 뿐) 임의로 지어내지 않고 그대로 undefined로 둔다 — engine이 이미 이
- * 경우를 NOT_STARTED/PARTIAL로 정직하게 처리한다.
+ * 입력 모양으로 옮겨 담기만 한다 — 새 판단/계산 없음.
+ *
+ * `lboAssumptions`/`commercialCustomers`는 여전히 어떤 실제 딜에도 영속화할
+ * 방법이 없으므로(LBO 시뮬레이터는 세션 한정 클라이언트 state일 뿐 DB
+ * 테이블이 없음 — lbo-simulator-panel.tsx 참고. 고객 매출 데이터셋도
+ * schema.prisma에 없음) 계속 undefined로 둔다.
+ *
+ * `ddCase`/`evidenceLineage`는 PR #105부터 실제로 영속화되므로(PEDDCase/
+ * PEDDFinding/PEEvidence) `extra` 인자로 받으면 그대로 전달한다(PR #107) —
+ * 호출자(page.tsx)가 이미 조회해 온 값을 옮겨 담을 뿐, 여기서 새로 조회하거나
+ * 판단하지 않는다.
  */
-export function toPEDecisionReadinessInput(periods: DashboardPeriod[]): PEDecisionReadinessInput {
+export function toPEDecisionReadinessInput(
+  periods: DashboardPeriod[],
+  extra?: { ddCase?: PEDDCase; evidenceLineage?: PEEvidenceLineage }
+): PEDecisionReadinessInput {
   return {
+    ddCase: extra?.ddCase,
+    evidenceLineage: extra?.evidenceLineage,
     periods: periods.map((p) => ({
       id: p.id,
       fiscalYear: p.fiscalYear,

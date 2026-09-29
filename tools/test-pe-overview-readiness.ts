@@ -21,6 +21,8 @@ import {
 } from "../src/lib/pe/ma-deal-dashboard";
 import { buildPEDecisionReadiness, type PEDecisionReadinessInput } from "../src/lib/pe/pe-decision-readiness";
 import type { FinancialCalcResult } from "../src/lib/pe/financial-types";
+import { buildPEDDCase } from "../src/lib/pe/dd-lineage";
+import { buildPEEvidenceLineage, createEvidenceSource, createEvidenceItem, createClaim } from "../src/lib/pe/evidence-lineage";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -231,6 +233,60 @@ function test8_existingOverviewDataStillWorks() {
   console.log("✅ Test 8 — 기존 PR #102 Overview 데이터(QoE/LBO/DART/재무품질) 정상 동작 + Decision Readiness 병행 계산 무충돌");
 }
 
+// ── Test 9(PR #107): ddCase/evidenceLineage를 실제로 전달하면 DD/EVIDENCE가
+// 더 이상 NOT_STARTED에 묶여있지 않고 실제 데이터를 반영해야 한다 ──────────
+//
+// page.tsx가 PR #105의 영속화 데이터를 조회해 toPEDecisionReadinessInput()의
+// 두 번째 인자로 넘기게 됐다(ma-deal-dashboard.ts 변경) — 이 테스트는 그
+// 전달 자체가 무결하게 이뤄지는지만 확인한다(새 판단 로직 없음, 여기서도
+// buildPEDecisionReadiness() 자체의 판정은 재검증하지 않음).
+
+function test9_ddCaseAndEvidenceLineagePassThroughToReadiness() {
+  const periods: DashboardPeriod[] = [
+    period({
+      fiscalYear: 2024,
+      lineItems: [
+        { id: "li-rev", lineItem: "REVENUE", value: 1_000_000_000, currency: "KRW", source: "MANUAL" },
+        { id: "li-ebitda", lineItem: "EBITDA", value: 200_000_000, currency: "KRW", source: "MANUAL" },
+      ],
+      normalizedSummary: { revenue: ok(1_000_000_000), ebitda: ok(200_000_000), netDebt: ok(0) },
+    }),
+  ];
+
+  const source = createEvidenceSource({ id: "src-1", sourceType: "UPLOADED_DOCUMENT", sourceName: "실사 자료.pdf" });
+  const evidenceItem = createEvidenceItem({ id: "ev-1", sourceId: "src-1", excerpt: "고객 이탈률 상승 확인" });
+  const claim = createClaim({ id: "claim-1", statement: "주요 고객 이탈률이 상승했다", claimType: "qualitative", evidenceIds: ["ev-1"] });
+  const lineage = buildPEEvidenceLineage({ sources: [source], evidence: [evidenceItem], claims: [claim] });
+  const ddCase = buildPEDDCase(lineage, [
+    {
+      id: "finding-1",
+      category: "COMMERCIAL",
+      title: "고객 집중도 리스크",
+      description: "상위 3개 고객이 매출의 60% 이상을 차지",
+      severity: "HIGH",
+      status: "CONFIRMED",
+      evidenceIds: ["ev-1"],
+      claimIds: [],
+    },
+  ]);
+
+  // ddCase를 전달하지 않으면(기존 호출부) 여전히 undefined로 남아야 한다 —
+  // 이 인자는 opt-in이지 기본 동작을 바꾸지 않는다.
+  const withoutDdCase = buildPEDecisionReadiness(toPEDecisionReadinessInput(periods));
+  assert(domainOf(withoutDdCase, "DD").status === "NOT_STARTED", "두 번째 인자를 생략하면 기존과 동일하게 DD=NOT_STARTED");
+
+  const withDdCase = buildPEDecisionReadiness(
+    toPEDecisionReadinessInput(periods, { ddCase, evidenceLineage: ddCase.lineage })
+  );
+  const dd = domainOf(withDdCase, "DD");
+  const evidence = domainOf(withDdCase, "EVIDENCE");
+  assert(dd.status === "PARTIAL", "실제 finding이 있으면 DD가 더 이상 NOT_STARTED가 아니어야 함(PARTIAL)");
+  assert(dd.counts?.total === 1, "DD finding 개수가 실제 ddCase.findings.length와 일치해야 함");
+  assert(evidence.status === "READY", "claim이 evidence로 뒷받침되면 EVIDENCE=READY여야 함");
+  assert(evidence.counts?.totalClaims === 1, "claim 개수가 실제 lineage.claims.length와 일치해야 함");
+  console.log("✅ Test 9 — ddCase/evidenceLineage를 넘기면 DD/EVIDENCE가 실제 데이터를 반영(재판정 없이 그대로 전달)");
+}
+
 function main() {
   console.log("\n=== PE Overview ↔ Decision Readiness Engine 연결 테스트 ===\n");
   test1_adapterPassesThroughUnchanged();
@@ -241,9 +297,10 @@ function main() {
   test6_evidenceNotStartedNeverFabricatedAsVerified();
   test7_sparseDealNoFabrication();
   test8_existingOverviewDataStillWorks();
-  // Test 9(VC regression)은 이 파일이 아니라 `npm run test:all` 전체 회귀로
-  // 확인한다 — 이 PR은 VC 관련 파일을 하나도 건드리지 않았으므로 별도의
-  // VC 전용 테스트를 새로 만들 필요가 없다(회귀 위험 자체가 구조적으로 없음).
+  test9_ddCaseAndEvidenceLineagePassThroughToReadiness();
+  // VC regression은 이 파일이 아니라 `npm run test:all` 전체 회귀로 확인한다
+  // — 이 PR은 VC 관련 파일을 하나도 건드리지 않았으므로 별도의 VC 전용
+  // 테스트를 새로 만들 필요가 없다(회귀 위험 자체가 구조적으로 없음).
   console.log("\n✅ PE Overview ↔ Decision Readiness Engine 연결 테스트 통과\n");
 }
 
