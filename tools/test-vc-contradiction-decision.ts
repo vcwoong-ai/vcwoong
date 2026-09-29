@@ -15,6 +15,7 @@ import { buildInvestmentDecision, buildContradictions, buildMissingInformation }
 import { checkVCDecisionGate } from "../src/lib/vc-decision-gate";
 import { traceReportEvidence } from "../src/lib/evidence";
 import { detectContradictions } from "../src/lib/vc-decision";
+import { buildDeterministicIcQuestions } from "../src/lib/ic-questions";
 import type {
   ScoreEvidenceAssessment,
   DimensionEvidenceAssessment,
@@ -276,8 +277,15 @@ function test10_missingInfoDedupe() {
   const market = items.filter((m) => m.relatedDimension === "marketSize" && m.item === "시장성 평가를 뒷받침하는 근거");
   assert(market.length <= 1, `같은 차원·같은 문구가 P0/P1로 중복 표시되면 안 됨, 실제 ${market.length}건`);
   if (market.length === 1) assert(market[0].priority === "P0", "중복 시 더 높은 우선순위(P0)만 남김");
-  const bare = items.find((m) => m.item === "8,000억원");
-  assert(!bare, "항목 제목이 숫자만('8,000억원')이면 안 됨 — 무슨 주장인지 알 수 없다");
+  const bare = items.find((m) => /^[\d.,]+\s?(억원|%|배)?$/.test(m.item));
+  assert(!bare, "항목 제목이 숫자만이면 안 됨 — 무슨 주장인지 알 수 없다");
+  const unresolvedClaim = claim({ raw: "120억원", sectionKey: "INVESTMENT_OVERVIEW", label: "2024년 매출", value: "120", unit: "억원", status: "unverified", confidence: "UNSUPPORTED" });
+  const withUnresolved = buildMissingInformation(a, [unresolvedClaim], []);
+  const u = withUnresolved.find((m) => m.id.startsWith("missing:unresolved:"));
+  assert(!!u && u.item.includes("2024년 매출") && u.item.includes("120억원"), `미확인 주장 항목은 라벨(무엇의 수치인지)을 포함해야 함: ${u?.item}`);
+  const dupClaim = claim({ raw: "8,000억원", sectionKey: "MARKET_ANALYSIS", label: "시장", value: "8000", unit: "억원", status: "unverified", confidence: "UNSUPPORTED" });
+  const dup = buildMissingInformation(a, [dupClaim], []);
+  assert(dup.filter((m) => m.item.includes("8,000억원")).length <= 1, "이미 P0로 올라온 같은 주장을 P1로 한 번 더 올리면 안 됨");
   console.log("✅ Test 10 — 같은 공백이 P0·P1로 중복되지 않고, 항목 제목이 숫자만이 아님");
 }
 
@@ -321,6 +329,34 @@ function test12_icQuestionLinked() {
   console.log("✅ Test 12 — 상충이 기존 IC 질문과 연결됨(새로 지어내지 않음)");
 }
 
+// ── 13. 결정적 IC 질문 생성기가 상충을 질문으로 만든다 ───────────────────
+function test13_icQuestionGeneratorCoversContradictions() {
+  const claims = [rev("95", "IR.pdf"), rev("110", "감사.pdf")];
+  const contradictions = buildContradictions(claims);
+  const a = assessment({});
+  // 다른 신호로 후보가 10개 이상 생겨도 상충 질문은 밀려나지 않아야 한다.
+  const noisy = assessment(
+    Object.fromEntries(
+      (["marketSize", "team", "product", "businessModel", "financials", "moat"] as ScoreDimensionKey[]).map((k) => [
+        k,
+        dim(k, 80, "UNSUPPORTED", { unsupportedClaims: Array.from({ length: 3 }, (_, i) => ({ raw: `${k}주장${i}억원` })) }),
+      ])
+    ) as Partial<Record<ScoreDimensionKey, DimensionEvidenceAssessment>>
+  );
+  const qs = buildDeterministicIcQuestions({}, a, DEAL, contradictions);
+  const q = qs.find((x) => x.trigger === "CONTRADICTION");
+  assert(!!q, "상충은 IC 질문이 되어야 함");
+  assert(q!.priority === "HIGH", "상충 질문은 HIGH");
+  assert(q!.question.includes("95억원") && q!.question.includes("110억원"), "질문에 상충하는 값이 모두 적혀야 함");
+  assert(q!.question.includes("IR.pdf") && q!.question.includes("감사.pdf"), "질문에 각 값의 출처가 적혀야 함");
+  assert(q!.source === "deterministic", "결정적으로 만든 질문");
+  const crowded = buildDeterministicIcQuestions({}, noisy, DEAL, contradictions);
+  assert(crowded.some((x) => x.trigger === "CONTRADICTION"), "다른 질문이 많아도 상충 질문은 상위 10개 제한에 밀려 사라지면 안 됨");
+  const none = buildDeterministicIcQuestions({}, a, DEAL, []);
+  assert(!none.some((x) => x.trigger === "CONTRADICTION"), "상충이 없으면 상충 질문도 없음");
+  console.log("✅ Test 13 — 상충이 결정적 IC 질문(값·출처 포함, HIGH)이 되고 상위 10개 제한에 밀리지 않음");
+}
+
 function main() {
   console.log("\n=== VC 수치 상충 결정 레이어 테스트 ===\n");
   test1_contradictedDriverIsNotVerified();
@@ -335,7 +371,8 @@ function main() {
   test10_missingInfoDedupe();
   test11_labelDoesNotLeakAcrossSentences();
   test12_icQuestionLinked();
-  console.log("\n✅ VC 수치 상충 결정 레이어 테스트 통과(12/12)\n");
+  test13_icQuestionGeneratorCoversContradictions();
+  console.log("\n✅ VC 수치 상충 결정 레이어 테스트 통과(13/13)\n");
 }
 
 main();

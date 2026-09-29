@@ -670,12 +670,18 @@ export function buildMissingInformation(
   }
 
   // (b) 개별 unresolved claim(문서 어디에도 없는 주장)도 놓치지 않는다.
+  // 이미 (a)에서 같은 주장을 항목으로 올렸다면(예: "근거 없는 핵심 주장: 8,000억원")
+  // P1로 한 번 더 올리지 않는다 — 같은 공백이 P0와 P1로 이중 표시되던 문제.
+  // 제목에는 숫자만이 아니라 그 수치가 무엇인지(라벨)와 어느 섹션인지를 붙인다.
   const unresolved = selectUnresolvedEvidence(claims, questions, max);
   for (const u of unresolved) {
+    if (items.some((it) => it.item.includes(u.claim))) continue;
+    const source = (claims ?? []).find((c) => c.raw === u.claim && c.sectionKey === u.sectionKey);
+    const label = source?.label?.trim();
     items.push({
       id: `missing:unresolved:${u.claim.slice(0, 40)}`,
       priority: "P1",
-      item: u.claim,
+      item: `보고서 주장 근거 미확인: ${label ? `${label} ` : ""}${u.claim}`,
       whyItMatters: "보고서에 사용된 주장이지만 업로드 자료 어디에서도 확인되지 않았습니다.",
       decisionImpact: "MEDIUM",
       requiredEvidence: "해당 주장의 1차 출처 문서",
@@ -773,8 +779,9 @@ export function synthesizeInvestmentThesis(
   }
   if (contradictionBreakers.length > 0) {
     const names = contradictedDrivers.map((d) => d.title.split(" — ")[0]);
+    const excluded = names.length > 0 ? ` ${names.join(", ")} 근거는 논지에서 제외했고,` : "";
     parts.push(
-      `${contradictionBreakers.length}건의 수치 상충(${contradictionBreakers.map((b) => b.title.split(" 수치 상충")[0]).join(", ")})이 있어${names.length > 0 ? ` ${names.join(", ")}은(는) 논지의 근거로 쓸 수 없고,` : ""} 정본 확인 전에는 해당 지표를 결정에 사용할 수 없습니다.`
+      `${contradictionBreakers.length}건의 수치 상충(${contradictionBreakers.map((b) => b.title.split(" 수치 상충")[0]).join(", ")})이 있어${excluded} 정본 확인 전에는 해당 지표를 결정에 사용할 수 없습니다.`
     );
   }
   if (breakerTitles.length > 0) {

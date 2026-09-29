@@ -4,6 +4,9 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { buildDeterministicIcQuestions, toIcQuestionsResult } from "@/lib/ic-questions";
 import { refineIcQuestionsWithAI } from "@/lib/ic-questions-ai";
+import { traceReportEvidence } from "@/lib/evidence";
+import { verdictsToMap } from "@/lib/evidence-ai";
+import { buildContradictions } from "@/lib/vc-decision";
 import type { ScoreEvidenceAssessment } from "@/lib/deal-scoring-evidence";
 import type { ScoreDimensionKey } from "@/lib/deal-scoring-shared";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
@@ -41,10 +44,15 @@ export async function POST(
   const report = await prisma.report.findFirst({
     where: { id: params.id, ...reportWriteWhere(session.user.id, teamId, role) },
     include: {
+      // 수치 상충은 IC에서 반드시 물어야 하는 질문이라, 화면(GET /decision)과 같은
+      // 근거 추적(traceReportEvidence)으로 상충을 찾아 질문 생성에 넘긴다.
+      sections: { select: { sectionKey: true, content: true } },
+      evidenceCheck: { select: { verdicts: true } },
       deal: {
         select: {
           investAmount: true,
           valuation: true,
+          documents: { select: { id: true, name: true, parsedText: true } },
           score: { select: { rationale: true, evidenceAssessment: true } },
         },
       },
@@ -83,10 +91,19 @@ export async function POST(
     Record<ScoreDimensionKey, string>
   >;
 
-  const deterministic = buildDeterministicIcQuestions(rationale, assessment, {
-    investAmount: report.deal.investAmount,
-    valuation: report.deal.valuation,
-  });
+  const claims = traceReportEvidence(
+    report.sections.map((s) => ({ sectionKey: s.sectionKey, content: s.content })),
+    report.deal.documents,
+    { investAmount: report.deal.investAmount, valuation: report.deal.valuation },
+    verdictsToMap(report.evidenceCheck?.verdicts as never)
+  ).claims;
+
+  const deterministic = buildDeterministicIcQuestions(
+    rationale,
+    assessment,
+    { investAmount: report.deal.investAmount, valuation: report.deal.valuation },
+    buildContradictions(claims)
+  );
 
   const refined = await refineIcQuestionsWithAI(deterministic);
   const modelUsed = refined.some((q) => q.source === "ai_refined")
