@@ -4,6 +4,7 @@
  * 분리 이유). */
 import type { MaDealType, MaDealStatus, MaAdjustmentStatus, MaDocumentType, MaFinancialSourceType } from "@prisma/client";
 import type { ReadinessState, PEDecisionDomainKey } from "./pe-decision-readiness";
+import type { PEDDCategory, PEDDSeverity, PEDDFindingStatus } from "./dd-types";
 
 export const MA_DEAL_TYPE_LABEL: Record<MaDealType, string> = {
   BUYOUT: "바이아웃",
@@ -63,4 +64,40 @@ export const MA_FINANCIAL_SOURCE_LABEL: Record<MaFinancialSourceType, string> = 
   EXCEL: "엑셀",
   DART: "DART",
   MANUAL: "수기 입력",
+};
+
+/** dd-types.ts PE_DD_CATEGORIES(PR-G, IC 워크스페이스에서 처음 사용, PR #107) */
+export const PE_DD_CATEGORY_LABEL: Record<PEDDCategory, string> = {
+  FINANCIAL: "재무",
+  COMMERCIAL: "상업",
+  OPERATIONAL: "운영",
+  LEGAL: "법무",
+  TAX: "세무",
+  HR: "인사",
+  TECHNOLOGY: "기술",
+  IT_SECURITY: "IT 보안",
+  REGULATORY: "규제",
+  ESG: "ESG",
+  MANAGEMENT: "경영진",
+  OTHER: "기타",
+};
+
+/** dd-types.ts PE_DD_SEVERITIES(PR-G, PR #107) — "투자 찬반"이 아니라 문제의 심각도 */
+export const PE_DD_SEVERITY_LABEL: Record<PEDDSeverity, string> = {
+  CRITICAL: "치명적",
+  HIGH: "높음",
+  MEDIUM: "보통",
+  LOW: "낮음",
+  INFO: "참고",
+};
+
+/** dd-types.ts PE_DD_FINDING_STATUSES(PR-G, PR #107) */
+export const PE_DD_FINDING_STATUS_LABEL: Record<PEDDFindingStatus, string> = {
+  DRAFT: "초안",
+  IN_REVIEW: "검토 중",
+  CONFIRMED: "확인됨",
+  MITIGATED: "완화됨",
+  ACCEPTED: "수용됨",
+  REJECTED: "기각됨",
+  CLOSED: "종결됨",
 };

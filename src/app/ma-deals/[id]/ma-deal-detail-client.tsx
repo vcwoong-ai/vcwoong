@@ -6,7 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Building2, Landmark, Calculator, TrendingUp, RefreshCw, FolderOpen } from "lucide-react";
+import { Building2, Landmark, Calculator, TrendingUp, RefreshCw, FolderOpen, ClipboardList } from "lucide-react";
 import type { MaDealType, MaDealStatus } from "@prisma/client";
 import { MA_DEAL_TYPE_LABEL, MA_DEAL_STATUS_LABEL, MA_ADJUSTMENT_STATUS_LABEL } from "@/lib/pe/ma-deal-labels";
 import type { FinancialCalcResult } from "@/lib/pe/financial-types";
@@ -18,6 +18,7 @@ import { MaDealDataRoom } from "@/components/ma-deals/ma-deal-data-room";
 import { MaDealFinancialDataQuality } from "@/components/ma-deals/ma-deal-financial-data-quality";
 import { MaDealCanonicalAccountsTable } from "@/components/ma-deals/ma-deal-canonical-accounts-table";
 import { MaDealReadiness } from "@/components/ma-deals/ma-deal-readiness";
+import { MaDealIcWorkspace } from "@/components/ma-deals/ma-deal-ic-workspace";
 import {
   computeQoESummary,
   computeLboEntryEbitda,
@@ -34,6 +35,7 @@ import type {
   DataRoomEvidenceRow,
   DataRoomFindingRow,
 } from "@/lib/pe/pe-data-room-view-model";
+import type { PEDDCase } from "@/lib/pe/dd-types";
 
 interface LineItem {
   id: string;
@@ -114,10 +116,14 @@ const PERIOD_TYPE_LABEL: Record<string, string> = {
 export function MaDealDetailClient({
   maDeal,
   periods: initialPeriods,
+  ddCase,
   canEdit,
 }: {
   maDeal: MaDeal;
   periods: Period[];
+  /** page.tsx가 서버에서 이미 조회해 내려준 값(PR #107) — IC 워크스페이스와
+   * readiness의 DD/EVIDENCE 도메인이 함께 쓴다. 클라이언트에서 다시 조회하지 않는다. */
+  ddCase: PEDDCase | undefined;
   canEdit: boolean;
 }) {
   const router = useRouter();
@@ -184,9 +190,14 @@ export function MaDealDetailClient({
       lboEntryEbitda,
       dartStatus,
       financialQuality: computeFinancialQuality(dashboardPeriods),
-      decisionReadiness: buildPEDecisionReadiness(toPEDecisionReadinessInput(dashboardPeriods)),
+      // ddCase/evidenceLineage(PR #107) — PR #105부터 실제로 영속화된 값을
+      // readiness의 DD/EVIDENCE 도메인에 그대로 전달한다(재판정 없음, 새
+      // 계산 없음 — toPEDecisionReadinessInput()은 순수 매핑).
+      decisionReadiness: buildPEDecisionReadiness(
+        toPEDecisionReadinessInput(dashboardPeriods, { ddCase, evidenceLineage: ddCase?.lineage })
+      ),
     };
-  }, [periods]);
+  }, [periods, ddCase]);
 
   const dartPeriods = useMemo(
     () => periods.filter((p) => p.lineItems.some((li) => li.source === "DART")),
@@ -278,6 +289,10 @@ export function MaDealDetailClient({
             <Building2 className="w-3.5 h-3.5" />
             개요
           </TabsTrigger>
+          <TabsTrigger value="ic-review" className="flex items-center gap-1.5">
+            <ClipboardList className="w-3.5 h-3.5" />
+            IC 검토
+          </TabsTrigger>
           <TabsTrigger value="data-room" className="flex items-center gap-1.5">
             <FolderOpen className="w-3.5 h-3.5" />
             데이터룸
@@ -298,6 +313,16 @@ export function MaDealDetailClient({
 
         <TabsContent value="overview" className="space-y-4">
           <MaDealOverview maDeal={maDeal} dashboard={dashboard} onNavigateTab={setActiveTab} />
+        </TabsContent>
+
+        <TabsContent value="ic-review" className="space-y-4">
+          <MaDealIcWorkspace
+            maDeal={maDeal}
+            dashboard={dashboard}
+            ddCase={ddCase}
+            periods={periods}
+            onNavigateTab={setActiveTab}
+          />
         </TabsContent>
 
         <TabsContent value="data-room" className="space-y-4">
