@@ -19,6 +19,7 @@ import type { PEICDecision, PEThesisItem, PEInvestmentDriver, PEThesisBreaker, P
 import type { FinancialCalcResult } from "./financial-types";
 import type { PEDDFinding, PEDDCategory } from "./dd-types";
 import type { ICQuestion } from "./pe-ic-decision-types";
+import type { PEICReviewWorkspace } from "./pe-ic-review-types";
 import {
   READINESS_STATE_LABEL,
   PE_DECISION_DOMAIN_LABEL,
@@ -27,6 +28,8 @@ import {
   PE_THESIS_STATUS_LABEL as THESIS_STATUS_LABEL,
   PE_THESIS_BREAKER_STATE_LABEL as BREAKER_STATE_LABEL,
   PE_IC_QUESTION_PRIORITY_LABEL as QUESTION_PRIORITY_LABEL,
+  PE_IC_REVIEW_ITEM_STATUS_LABEL,
+  PE_EVIDENCE_REQUEST_STATUS_LABEL,
 } from "./ma-deal-labels";
 
 const NO_DATA = "자료 없음";
@@ -106,6 +109,54 @@ function questionsSection(questions: ICQuestion[]): string {
   return lines.join("\n");
 }
 
+/**
+ * IC Review Status(PR #109) — `buildPEICReviewWorkspace()`(pe-ic-review.ts)가
+ * 이미 만든 워크스페이스를 그대로 옮겨 적을 뿐, 여기서 새로 판정하지
+ * 않는다. UI(ma-deal-ic-review-workspace.tsx)와 정확히 같은 입력(현재
+ * questions + 영속된 evidence requests)에서 나온 같은 객체를 export
+ * route가 넘겨준다 — 화면과 메모가 다른 결론을 낼 수 없다.
+ *
+ * `reviewWorkspace`가 없으면(과거 호출 시그니처, 테스트 호환) "자료
+ * 없음"을 명시한다 — 억지로 채우지 않는다(§9).
+ */
+function reviewStatusSection(reviewWorkspace: PEICReviewWorkspace | undefined): string {
+  if (!reviewWorkspace) return NO_DATA;
+
+  const lines: string[] = [`- 전체 검토 상태: ${reviewWorkspace.overallState}`];
+
+  if (reviewWorkspace.openItems.length === 0) {
+    lines.push("- 미해결 항목 없음");
+  } else {
+    lines.push(`- 미해결 항목 ${reviewWorkspace.openItems.length}건:`);
+    for (const priority of ["P0", "P1", "P2"] as const) {
+      const items = reviewWorkspace.openItems.filter((i) => i.priority === priority);
+      if (items.length === 0) continue;
+      lines.push(`  - **${QUESTION_PRIORITY_LABEL[priority]}** (${items.length}건)`);
+      lines.push(...items.map((i) => `    - [${PE_IC_REVIEW_ITEM_STATUS_LABEL[i.status]}] ${i.title}`));
+    }
+  }
+
+  if (reviewWorkspace.evidenceRequests.length === 0) {
+    lines.push("- 근거 요청 없음");
+  } else {
+    lines.push(`- 근거 요청 ${reviewWorkspace.evidenceRequests.length}건:`);
+    for (const status of ["REQUESTED", "RECEIVED", "UNDER_REVIEW", "ACCEPTED", "REJECTED"] as const) {
+      const count = reviewWorkspace.evidenceRequests.filter((r) => r.status === status).length;
+      if (count === 0) continue;
+      lines.push(`  - ${PE_EVIDENCE_REQUEST_STATUS_LABEL[status]}: ${count}건`);
+    }
+  }
+
+  if (reviewWorkspace.resolvedItems.length === 0) {
+    lines.push("- 최근 해소된 항목 없음");
+  } else {
+    lines.push(`- 최근 해소된 항목 ${reviewWorkspace.resolvedItems.length}건:`);
+    lines.push(...reviewWorkspace.resolvedItems.map((i) => `  - ${i.title}`));
+  }
+
+  return lines.join("\n");
+}
+
 function readinessSection(decision: PEICDecision): string {
   return decision.readiness.domains
     .map((d) => `- ${PE_DECISION_DOMAIN_LABEL[d.domain]}: ${READINESS_STATE_LABEL[d.status]} — ${d.reason}`)
@@ -128,7 +179,8 @@ function evidenceAppendixSection(decision: PEICDecision): string {
 
 export function buildPEICMemoMarkdown(
   decision: PEICDecision,
-  maDeal: { companyName: string; name: string; dealTypeLabel: string; statusLabel: string }
+  maDeal: { companyName: string; name: string; dealTypeLabel: string; statusLabel: string },
+  reviewWorkspace?: PEICReviewWorkspace
 ): string {
   const { financial, qoe, lbo, dd, questions } = decision;
 
@@ -208,8 +260,9 @@ export function buildPEICMemoMarkdown(
 
   sections.push("", "## 12. Missing Information", missingInfoSection(decision));
   sections.push("", "## 13. IC Questions", questionsSection(questions));
-  sections.push("", "## 14. Decision Readiness", readinessSection(decision));
-  sections.push("", "## 15. Appendix / Evidence", evidenceAppendixSection(decision));
+  sections.push("", "## 14. IC Review Status", reviewStatusSection(reviewWorkspace));
+  sections.push("", "## 15. Decision Readiness", readinessSection(decision));
+  sections.push("", "## 16. Appendix / Evidence", evidenceAppendixSection(decision));
 
   return sections.join("\n");
 }

@@ -41,12 +41,16 @@ export function MaDealIcDecision({
   maDeal,
   dashboard,
   ddCase,
+  canEdit,
   onNavigateTab,
+  onEvidenceRequestCreated,
 }: {
   maDeal: MaDeal;
   dashboard: MaDealDashboardData;
   ddCase: PEDDCase | undefined;
+  canEdit: boolean;
   onNavigateTab: (tab: string) => void;
+  onEvidenceRequestCreated: () => void | Promise<void>;
 }) {
   const decision = buildPEICDecision({
     dealId: maDeal.id,
@@ -88,7 +92,12 @@ export function MaDealIcDecision({
 
       <MaDealReadiness readiness={decision.readiness} />
       <MaDealMissingInfo readiness={decision.readiness} />
-      <MaDealIcQuestions questions={decision.questions} />
+      <MaDealIcQuestions
+        maDealId={maDeal.id}
+        questions={decision.questions}
+        canEdit={canEdit}
+        onRequestCreated={onEvidenceRequestCreated}
+      />
     </div>
   );
 }

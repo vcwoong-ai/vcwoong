@@ -6,6 +6,7 @@ import type { MaDealType, MaDealStatus, MaAdjustmentStatus, MaDocumentType, MaFi
 import type { ReadinessState, PEDecisionDomainKey } from "./pe-decision-readiness";
 import type { PEDDCategory, PEDDSeverity, PEDDFindingStatus } from "./dd-types";
 import type { PEThesisStatus, PEThesisBreakerState, PEICQuestionPriority, PEICProcessState } from "./pe-ic-decision-types";
+import type { PEICReviewItemType, PEICReviewItemStatus, PEEvidenceRequestStatus, PEICReviewState } from "./pe-ic-review-types";
 
 export const MA_DEAL_TYPE_LABEL: Record<MaDealType, string> = {
   BUYOUT: "바이아웃",
@@ -133,4 +134,46 @@ export const PE_IC_QUESTION_PRIORITY_LABEL: Record<PEICQuestionPriority, string>
   P0: "P0 · 즉시 확인 필요",
   P1: "P1 · 중요",
   P2: "P2 · 참고",
+};
+
+/** pe-ic-review-types.ts PEICReviewItemType(PR #109) — ICQuestion을 워크플로
+ * 관점으로 재분류한 8종 카테고리. 새 판단이 아니라 표시용 라벨만 붙인다. */
+export const PE_IC_REVIEW_ITEM_TYPE_LABEL: Record<PEICReviewItemType, string> = {
+  BLOCKER: "모순/차단",
+  MISSING_INFORMATION: "정보 누락",
+  IC_QUESTION: "IC 질문",
+  DD_FOLLOWUP: "DD 후속조치",
+  FINANCIAL_RECONCILIATION: "재무 데이터 대사",
+  QOE_FOLLOWUP: "QoE 후속조치",
+  LBO_ASSUMPTION: "LBO 가정",
+  EVIDENCE_GAP: "근거 공백",
+};
+
+/** pe-ic-review-types.ts PEICReviewItemStatus(PR #109) — RESOLVED는 canonical
+ * 조건이 실제로 사라졌을 때만 나온다(pe-ic-resolution.ts 주석 참고). */
+export const PE_IC_REVIEW_ITEM_STATUS_LABEL: Record<PEICReviewItemStatus, string> = {
+  OPEN: "미착수",
+  IN_REVIEW: "검토 중",
+  WAITING_FOR_EVIDENCE: "근거 대기",
+  EVIDENCE_RECEIVED: "근거 접수됨",
+  RESOLVED: "해소됨",
+  REJECTED: "기각됨",
+};
+
+/** pe-ic-review-types.ts PEEvidenceRequestStatus(PR #109) */
+export const PE_EVIDENCE_REQUEST_STATUS_LABEL: Record<PEEvidenceRequestStatus, string> = {
+  REQUESTED: "요청함",
+  RECEIVED: "자료 접수됨",
+  UNDER_REVIEW: "검토 중",
+  ACCEPTED: "승인됨",
+  REJECTED: "반려됨",
+};
+
+/** pe-ic-review-types.ts PEICReviewState(PR #109) — buildPEICDecision().processState를
+ * 그대로 옮긴 값이다(재판정 없음, PE_IC_PROCESS_STATE_LABEL과 동일 의미). */
+export const PE_IC_REVIEW_STATE_LABEL: Record<PEICReviewState, string> = {
+  READY_FOR_IC: "IC 검토 가능",
+  PARTIALLY_READY: "부분적으로 준비됨",
+  NOT_READY: "아직 준비 안 됨",
+  BLOCKED: "데이터 모순으로 차단됨",
 };

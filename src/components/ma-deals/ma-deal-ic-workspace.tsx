@@ -36,17 +36,23 @@ interface MaDeal {
  * 순간의 스냅샷"만 압축해서 보여준다(같은 표를 그대로 복제하지 않기 위함).
  */
 export function MaDealIcWorkspace({
+  maDealId,
   maDeal,
   dashboard,
   ddCase,
   periods,
+  canEdit,
   onNavigateTab,
+  onEvidenceRequestCreated,
 }: {
+  maDealId: string;
   maDeal: MaDeal;
   dashboard: MaDealDashboardData;
   ddCase: PEDDCase | undefined;
   periods: Array<FinancialsPeriodLike & { periodType: string; currency: string }>;
+  canEdit: boolean;
   onNavigateTab: (tab: string) => void;
+  onEvidenceRequestCreated: () => void | Promise<void>;
 }) {
   const readiness = dashboard.decisionReadiness;
   const evidenceDomain = readiness.domains.find((d) => d.domain === "EVIDENCE")!;
@@ -113,7 +119,12 @@ export function MaDealIcWorkspace({
       <MaDealMissingInfo readiness={readiness} />
 
       {/* I. IC Questions */}
-      <MaDealIcQuestions questions={questions} />
+      <MaDealIcQuestions
+        maDealId={maDealId}
+        questions={questions}
+        canEdit={canEdit}
+        onRequestCreated={onEvidenceRequestCreated}
+      />
     </div>
   );
 }
