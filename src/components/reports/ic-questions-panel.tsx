@@ -13,9 +13,9 @@ interface IcQuestionsData {
 }
 
 const PRIORITY_META: Record<QuestionPriority, { label: string; className: string }> = {
-  HIGH: { label: "HIGH", className: "bg-red-50 text-red-700 border-red-200" },
-  MEDIUM: { label: "MEDIUM", className: "bg-amber-50 text-amber-700 border-amber-200" },
-  LOW: { label: "LOW", className: "bg-gray-50 text-gray-600 border-gray-200" },
+  HIGH: { label: "HIGH", className: "bg-state-critical-bg text-state-critical border-state-critical-line" },
+  MEDIUM: { label: "MEDIUM", className: "bg-state-caution-bg text-state-caution border-state-caution-line" },
+  LOW: { label: "LOW", className: "bg-state-neutral-bg text-state-neutral border-state-neutral-line" },
 };
 
 const TRIGGER_LABEL: Record<IcQuestion["trigger"], string> = {
@@ -23,6 +23,7 @@ const TRIGGER_LABEL: Record<IcQuestion["trigger"], string> = {
   HIGH_SCORE_LOW_EVIDENCE: "고득점·근거 부족",
   RATIONALE_EVIDENCE_MISMATCH: "평가 근거 불일치",
   VALUATION_EVIDENCE_GAP: "밸류에이션 근거 부족",
+  CONTRADICTION: "수치 상충",
 };
 
 function QuestionCard({ q }: { q: IcQuestion }) {
@@ -31,22 +32,22 @@ function QuestionCard({ q }: { q: IcQuestion }) {
     <li className="rounded border border-gray-100 bg-gray-50/60 px-3 py-2.5">
       <div className="flex items-start justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className={`text-[11px] rounded border px-1.5 py-0.5 ${meta.className}`}>
+          <span className={`text-xs rounded border px-1.5 py-0.5 ${meta.className}`}>
             {meta.label}
           </span>
-          <span className="text-[11px] text-gray-400">
+          <span className="text-xs text-gray-400">
             {QUESTION_CATEGORY_LABEL[q.category]}
           </span>
-          <span className="text-[11px] text-gray-300">·</span>
-          <span className="text-[11px] text-gray-400">{TRIGGER_LABEL[q.trigger]}</span>
+          <span className="text-xs text-gray-300">·</span>
+          <span className="text-xs text-gray-400">{TRIGGER_LABEL[q.trigger]}</span>
         </div>
       </div>
       <p className="mt-1.5 text-sm text-gray-900">{q.question}</p>
-      <p className="mt-1 text-[11px] text-gray-500">
+      <p className="mt-1 text-xs text-gray-500">
         <span className="font-medium text-gray-600">왜 중요한가</span> — {q.whyItMatters}
       </p>
       {(q.relatedClaim || q.relatedEvidence) && (
-        <p className="mt-1 text-[11px] text-gray-400 break-words">
+        <p className="mt-1 text-xs text-gray-400 break-words">
           {q.relatedClaim && <>연관 주장: &ldquo;{q.relatedClaim}&rdquo; </>}
           {q.relatedEvidence && <>· 근거 상태: {q.relatedEvidence}</>}
         </p>
@@ -58,9 +59,12 @@ function QuestionCard({ q }: { q: IcQuestion }) {
 export function IcQuestionsPanel({
   reportId,
   canEdit,
+  onGenerated,
 }: {
   reportId: string;
   canEdit: boolean;
+  /** 질문 생성이 끝나면 호출 — 결정 요약이 질문 연결을 다시 불러오게 한다 */
+  onGenerated?: () => void;
 }) {
   const [data, setData] = useState<IcQuestionsData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -96,6 +100,7 @@ export function IcQuestionsPanel({
       if (!res.ok) throw new Error(json.error ?? "IC 질문 생성 실패");
       setData(json.data);
       setExpanded(false);
+      onGenerated?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : "IC 질문 생성 실패");
     } finally {
@@ -150,7 +155,7 @@ export function IcQuestionsPanel({
             {(["HIGH", "MEDIUM", "LOW"] as const).map((priority) =>
               grouped[priority].length > 0 ? (
                 <div key={priority}>
-                  <p className="text-[11px] font-medium text-gray-400 mb-1.5">
+                  <p className="text-xs font-medium text-gray-400 mb-1.5">
                     {PRIORITY_META[priority].label} ({grouped[priority].length})
                   </p>
                   <ul className="space-y-2">
@@ -167,7 +172,7 @@ export function IcQuestionsPanel({
             <button
               type="button"
               onClick={() => setExpanded(true)}
-              className="mt-3 flex items-center gap-1 text-[11px] text-blue-600 hover:underline"
+              className="mt-3 flex items-center gap-1 text-xs text-blue-600 hover:underline"
             >
               <ChevronDown className="w-3 h-3" />
               전체 {data.questions.length}개 보기
@@ -177,14 +182,14 @@ export function IcQuestionsPanel({
             <button
               type="button"
               onClick={() => setExpanded(false)}
-              className="mt-3 flex items-center gap-1 text-[11px] text-blue-600 hover:underline"
+              className="mt-3 flex items-center gap-1 text-xs text-blue-600 hover:underline"
             >
               <ChevronUp className="w-3 h-3" />
               Top 5만 보기
             </button>
           )}
 
-          <p className="mt-2 text-[11px] text-gray-400">{data.modelUsed}</p>
+          <p className="mt-2 text-xs text-gray-400">{data.modelUsed}</p>
         </>
       ) : (
         <div className="mt-3 rounded-lg border border-dashed border-gray-200 bg-gray-50/50 px-4 py-6 text-center">

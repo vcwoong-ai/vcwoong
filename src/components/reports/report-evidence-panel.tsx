@@ -42,27 +42,27 @@ const STATUS_META: Record<
 > = {
   document: {
     label: "문서 확인",
-    className: "bg-green-50 text-green-700 border-green-200",
+    className: "bg-state-positive-bg text-state-positive border-state-positive-line",
     icon: FileText,
   },
   deal: {
     label: "딜 입력",
-    className: "bg-blue-50 text-blue-700 border-blue-200",
+    className: "bg-state-info-bg text-state-info border-state-info-line",
     icon: PenLine,
   },
   unverified: {
     label: "근거 없음",
-    className: "bg-red-50 text-red-700 border-red-200",
+    className: "bg-state-critical-bg text-state-critical border-state-critical-line",
     icon: AlertTriangle,
   },
 };
 
 /** hallucination 위험도 관점 — report-quality.ts의 summarizeEvidenceForQuality와 짝 */
 const CONFIDENCE_META: Record<ClaimConfidence, { label: string; className: string }> = {
-  HIGH: { label: "확신 높음", className: "bg-green-50 text-green-700 border-green-200" },
-  MEDIUM: { label: "검토 필요", className: "bg-amber-50 text-amber-700 border-amber-200" },
+  HIGH: { label: "확신 높음", className: "bg-state-positive-bg text-state-positive border-state-positive-line" },
+  MEDIUM: { label: "검토 필요", className: "bg-state-caution-bg text-state-caution border-state-caution-line" },
   LOW: { label: "약한 근거", className: "bg-orange-50 text-orange-700 border-orange-200" },
-  UNSUPPORTED: { label: "환각 위험", className: "bg-red-50 text-red-700 border-red-200" },
+  UNSUPPORTED: { label: "환각 위험", className: "bg-state-critical-bg text-state-critical border-state-critical-line" },
 };
 
 const sectionTitle = (key: string) =>
@@ -161,7 +161,7 @@ export function ReportEvidencePanel({
   const unsupportedCount = data.confidenceTotals?.UNSUPPORTED ?? totals.unverified;
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-5">
+    <div className="rounded-lg border border-gray-200 bg-white p-5">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2 font-medium text-gray-900">
           <FileSearch className="w-4 h-4" />
@@ -183,7 +183,7 @@ export function ReportEvidencePanel({
           return (
             <div
               key={status}
-              className={`rounded-xl border px-3 py-3 text-center ${meta.className}`}
+              className={`rounded-lg border px-3 py-3 text-center ${meta.className}`}
             >
               <div className="flex items-center justify-center gap-1.5 text-xs opacity-80">
                 <Icon className="w-3.5 h-3.5 shrink-0" />
@@ -208,11 +208,11 @@ export function ReportEvidencePanel({
             setOnlyUnverified((v) => !v);
             setExpanded(false);
           }}
-          className="text-[11px] rounded border border-gray-200 px-2 py-1 text-gray-600 hover:bg-gray-50"
+          className="text-xs rounded border border-gray-200 px-2 py-1 text-gray-600 hover:bg-gray-50"
         >
           {onlyUnverified ? "전체 보기" : "근거 없음만 보기"}
         </button>
-        <span className="text-[11px] text-gray-400">
+        <span className="text-xs text-gray-400">
           {filteredCount}건 중 {visible.length}건 표시
         </span>
       </div>
@@ -243,27 +243,27 @@ export function ReportEvidencePanel({
                       {c.label ? `${c.label} · ` : ""}
                       {c.raw}
                     </span>
-                    <span className="ml-2 text-[11px] text-gray-400">
+                    <span className="ml-2 text-xs text-gray-400">
                       {sectionTitle(c.sectionKey)}
                     </span>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
                     {confMeta && (
                       <span
-                        className={`text-[11px] rounded border px-1.5 py-0.5 ${confMeta.className}`}
+                        className={`text-xs rounded border px-1.5 py-0.5 ${confMeta.className}`}
                       >
                         {confMeta.label}
                       </span>
                     )}
                     <span
-                      className={`text-[11px] rounded border px-1.5 py-0.5 ${meta.className}`}
+                      className={`text-xs rounded border px-1.5 py-0.5 ${meta.className}`}
                     >
                       {meta.label}
                     </span>
                   </div>
                 </div>
                 {c.source && (
-                  <p className="mt-1 text-[11px] text-gray-500 break-words">
+                  <p className="mt-1 text-xs text-gray-500 break-words">
                     <span className="text-gray-400">
                       {c.source.documentName}
                       {c.source.location ? ` · ${c.source.location}` : ""}
@@ -282,7 +282,7 @@ export function ReportEvidencePanel({
         <button
           type="button"
           onClick={() => setExpanded(true)}
-          className="mt-2 text-[11px] text-blue-600 hover:underline"
+          className="mt-2 text-xs text-blue-600 hover:underline"
         >
           {filteredCount - visible.length}건 더 보기
         </button>

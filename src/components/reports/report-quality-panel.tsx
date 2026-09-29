@@ -90,12 +90,9 @@ export function ReportQualityPanel({
 
   const scoreColor =
     data.overallScore >= 75 ? "#16a34a" : data.overallScore >= 55 ? "#d97706" : "#dc2626";
-  const tone =
-    data.overallScore >= 75
-      ? "bg-green-50 text-green-800 border-green-200"
-      : data.overallScore >= 55
-        ? "bg-amber-50 text-amber-800 border-amber-200"
-        : "bg-red-50 text-red-800 border-red-200";
+  // 작성 품질은 투자 판단이 아니다 — 화면에서 결정 요약보다 시끄럽게 튀지 않도록 중립 톤으로 두고,
+  // 상태는 게이지 색과 라벨로만 전달한다(예전에는 낮은 점수면 전체가 빨간 면이었다).
+  const tone = "bg-white text-slate-800 border-slate-200";
   const scoreLabel =
     data.overallScore >= 75 ? "우수" : data.overallScore >= 55 ? "보통" : "미흡";
 
@@ -105,7 +102,7 @@ export function ReportQualityPanel({
   const dashOffset = circumference * (1 - data.overallScore / 100);
 
   return (
-    <div className={`rounded-xl border p-5 ${tone}`}>
+    <div className={`rounded-lg border p-5 ${tone}`} data-testid="report-quality-panel">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-4">
           <div className="relative w-20 h-20 flex-shrink-0">
@@ -128,14 +125,15 @@ export function ReportQualityPanel({
               <span className="text-xl font-bold" style={{ color: scoreColor }}>
                 {data.overallScore}
               </span>
-              <span className="text-[10px] opacity-60">/100</span>
+              <span className="text-xs opacity-60">/100</span>
             </div>
           </div>
           <div>
             <div className="flex items-center gap-2 font-medium">
               <ShieldCheck className="w-4 h-4" />
-              자동 품질 점수
+              작성 품질 점수
               <Badge variant="secondary">{scoreLabel}</Badge>
+              <span className="text-xs font-normal text-slate-500">보고서 문장 품질 — 투자 판단이 아닙니다</span>
             </div>
             {data.suggestions[0] && (
               <p className="text-sm mt-1.5 opacity-90 max-w-md">{data.suggestions[0]}</p>
@@ -218,7 +216,7 @@ export function ReportQualityPanel({
                   : issues.join(" · ") || "OK"
               }
             >
-              <div className="truncate opacity-70 flex items-center justify-center gap-1 text-[11px]">
+              <div className="truncate opacity-70 flex items-center justify-center gap-1 text-xs">
                 {improving ? (
                   <Loader2 className="w-2.5 h-2.5 animate-spin" />
                 ) : (
@@ -234,7 +232,7 @@ export function ReportQualityPanel({
         })}
       </div>
       {onImproveSection && (
-        <p className="text-[11px] mt-2 opacity-70">
+        <p className="text-xs mt-2 opacity-70">
           점수 70 미만 섹션을 클릭하면 해당 이슈를 반영해 재생성합니다.
         </p>
       )}
