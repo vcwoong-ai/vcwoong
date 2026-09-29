@@ -60,9 +60,17 @@ export function MaDealCanonicalAccountsTable({
                       <td key={p.id} className="px-4 py-2.5">
                         {lookup.status === "missing" && <span className="text-gray-300">—</span>}
                         {lookup.status === "conflict" && (
-                          <span className="text-red-600 text-xs" title={lookup.values.join(", ")}>
-                            모순({lookup.values.length}개 값)
-                          </span>
+                          <div className="space-y-0.5">
+                            {lookup.values.map((v, i) => (
+                              <p key={i} className="text-xs text-red-600">
+                                <span className="font-medium">{v.currency} {formatWon(v.value)}</span>
+                                {" — "}
+                                {MA_FINANCIAL_SOURCE_LABEL[v.source] ?? "출처 불명"}
+                                {v.sourceName ? ` · ${v.sourceName}` : ""}
+                              </p>
+                            ))}
+                            <p className="text-[10px] text-red-500 font-medium">⚠ 모순 — 값을 임의로 선택하지 않았습니다</p>
+                          </div>
                         )}
                         {lookup.status === "ok" && (
                           <div>

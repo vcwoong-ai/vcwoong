@@ -313,7 +313,13 @@ export function MaDealDetailClient({
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="w-full sm:w-auto overflow-x-auto justify-start">
+        {/* `sm:w-auto`가 640px 이상에서 폭 제약을 풀어버려 탭 9개가 자연
+         * 너비로 렌더되면서 페이지 전체가 가로로 밀리는 문제가 있었다
+         * (768px/1024px에서 실측 확인, PR #111/#112에서 "이 PR 범위 밖의
+         * 기존 문제"로 남겨뒀던 바로 그 오버플로). w-full을 모든 화면
+         * 폭에서 유지해 탭 바 자기 자신만 가로 스크롤되게 고정한다 —
+         * 페이지 자체는 넘치지 않는다. */}
+        <TabsList className="w-full overflow-x-auto justify-start">
           <TabsTrigger value="overview" className="flex items-center gap-1.5">
             <Building2 className="w-3.5 h-3.5" />
             개요
