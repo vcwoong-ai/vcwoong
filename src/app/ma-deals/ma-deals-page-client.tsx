@@ -10,6 +10,7 @@ import { Search } from "lucide-react";
 import { MaDealType, MaDealStatus } from "@prisma/client";
 import { useToast } from "@/hooks/use-toast";
 import { useConfirm } from "@/hooks/use-confirm";
+import type { MaDealListReadinessSummary } from "@/lib/pe/ma-deal-list-readiness";
 
 interface MaDeal {
   id: string;
@@ -24,11 +25,13 @@ interface MaDeal {
 
 export function MaDealsPageClient({
   deals: initialDeals,
+  readiness: initialReadiness,
   total,
   pageSize,
   currentUserId,
 }: {
   deals: MaDeal[];
+  readiness: Record<string, MaDealListReadinessSummary>;
   total: number;
   pageSize: number;
   currentUserId: string;
@@ -38,6 +41,7 @@ export function MaDealsPageClient({
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [loadedDeals, setLoadedDeals] = useState<MaDeal[]>(initialDeals);
+  const [readiness, setReadiness] = useState<Record<string, MaDealListReadinessSummary>>(initialReadiness);
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
   const [archivingId, setArchivingId] = useState<string | null>(null);
@@ -82,12 +86,13 @@ export function MaDealsPageClient({
       const nextPage = Math.floor(loadedDeals.length / pageSize) + 1;
       const res = await fetch(`/api/ma-deals?page=${nextPage}&pageSize=${pageSize}`);
       if (!res.ok) throw new Error(`목록을 더 불러오지 못했습니다 (${res.status})`);
-      const json = (await res.json()) as { data?: MaDeal[] };
+      const json = (await res.json()) as { data?: MaDeal[]; readiness?: Record<string, MaDealListReadinessSummary> };
       const next = json.data ?? [];
       setLoadedDeals((prev) => {
         const seen = new Set(prev.map((d) => d.id));
         return [...prev, ...next.filter((d) => !seen.has(d.id))];
       });
+      setReadiness((prev) => ({ ...prev, ...(json.readiness ?? {}) }));
     } catch (error) {
       setLoadMoreError(
         error instanceof Error ? error.message : "목록을 더 불러오지 못했습니다"
@@ -132,6 +137,7 @@ export function MaDealsPageClient({
             <MaDealCard
               key={deal.id}
               deal={deal}
+              readiness={readiness[deal.id]}
               onArchive={
                 deal.userId === currentUserId
                   ? () => handleArchive(deal.id, deal.companyName)

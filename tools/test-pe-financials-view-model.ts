@@ -53,6 +53,29 @@ function test3_conflictNotSilentlyResolved() {
   console.log("✅ Test 3 — 값이 다른 중복 line item은 conflict(임의 선택 없음)");
 }
 
+/** PE 프론트엔드 제품화 — conflict일 때 "모순 N건"이라고만 뭉뚱그리지 않고
+ * 각 값의 출처(source)까지 그대로 보여줘야 한다(§6 "show both"). */
+function test3c_conflictValuesCarrySourceAttribution() {
+  const p = period({
+    id: "p1",
+    fiscalYear: 2024,
+    lineItems: [
+      li({ lineItem: "REVENUE", value: 1000, source: "DART", sourceName: "2024 사업보고서" }),
+      li({ lineItem: "REVENUE", value: 1200, source: "MANUAL", sourceName: "경영 자료" }),
+    ],
+  });
+  const result = lookupCanonicalAccount(p, "REVENUE");
+  assert(result.status === "conflict", "conflict여야 함");
+  if (result.status === "conflict") {
+    assert(
+      result.values.some((v) => v.value === 1000 && v.source === "DART" && v.sourceName === "2024 사업보고서") &&
+        result.values.some((v) => v.value === 1200 && v.source === "MANUAL" && v.sourceName === "경영 자료"),
+      "각 conflict 값은 자신의 출처(source/sourceName)를 그대로 유지해야 함 — 숫자만 남기고 출처를 지우면 안 됨"
+    );
+  }
+  console.log("✅ Test 3c — conflict 값마다 출처(source/sourceName)가 그대로 유지됨(화면에 '어느 출처가 어떤 값'인지 보여주기 위함)");
+}
+
 function test3b_sameValueDifferentCurrencyIsConflict() {
   const p = period({
     id: "p1",
@@ -144,6 +167,7 @@ function main() {
   test1_missingAccount();
   test2_okAccountWithSource();
   test3_conflictNotSilentlyResolved();
+  test3c_conflictValuesCarrySourceAttribution();
   test3b_sameValueDifferentCurrencyIsConflict();
   test4_sameValueDuplicateIsNotConflict();
   test5_differentPeriodNotConflated();

@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { MaDealType } from "@prisma/client";
 import { getUserTeamContext } from "@/lib/team-access";
 import { maDealReadWhere } from "@/lib/pe/ma-team-access";
+import { loadMaDealListReadinessSummaries } from "@/lib/pe/ma-deal-list-readiness";
 
 const createMaDealSchema = z.object({
   name: z.string().min(1, "딜 이름을 입력해주세요"),
@@ -60,8 +61,17 @@ export async function GET(request: NextRequest) {
     prisma.mADeal.count({ where }),
   ]);
 
+  // 초기 SSR 로드(page.tsx)와 정확히 같은 배치 조회 함수를 쓴다 — "더 보기"로
+  // 불러온 카드가 다른 계산 경로를 타서 첫 페이지와 다른 결론을 보이면
+  // 안 된다(§5 dangerous duplication 금지).
+  const readiness = await loadMaDealListReadinessSummaries(
+    maDeals.map((d) => d.id),
+    session.user.id
+  );
+
   return NextResponse.json({
     data: maDeals,
+    readiness,
     total,
     page,
     pageSize,
