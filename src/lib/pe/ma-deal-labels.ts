@@ -8,6 +8,7 @@ import type { PEDDCategory, PEDDSeverity, PEDDFindingStatus } from "./dd-types";
 import type { PEThesisStatus, PEThesisBreakerState, PEICQuestionPriority, PEICProcessState } from "./pe-ic-decision-types";
 import type { PEICReviewItemType, PEICReviewItemStatus, PEEvidenceRequestStatus, PEICReviewState } from "./pe-ic-review-types";
 import type { PEICReviewSignoffStatus, PEICReviewDisplayState, PEICReviewCommentTargetType } from "./pe-ic-review-signoff-types";
+import type { PEICAuditEventType } from "./pe-ic-review-audit-types";
 
 export const MA_DEAL_TYPE_LABEL: Record<MaDealType, string> = {
   BUYOUT: "바이아웃",
@@ -204,4 +205,13 @@ export const PE_IC_REVIEW_COMMENT_TARGET_TYPE_LABEL: Record<PEICReviewCommentTar
   IC_QUESTION: "IC 질문",
   REVIEW_ITEM: "검토 항목",
   EVIDENCE_REQUEST: "근거 요청",
+};
+
+/** pe-ic-review-audit-types.ts PEICAuditEventType(PR #111) */
+export const PE_IC_AUDIT_EVENT_TYPE_LABEL: Record<PEICAuditEventType, string> = {
+  REVIEW_STARTED: "검토 시작",
+  CHANGE_REQUESTED: "변경 요청",
+  REVIEW_COMPLETED: "검토 완료",
+  COMMENT_ADDED: "코멘트 작성",
+  EVIDENCE_REQUESTED: "근거 요청 생성",
 };

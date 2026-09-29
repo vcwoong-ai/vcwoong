@@ -7,6 +7,7 @@ import { loadPECommitteePackForDeal } from "@/lib/pe/pe-committee-pack-loader";
 import { listPEICReviews, upsertOwnPEICReview, type PEDDActor } from "@/lib/pe/pe-ic-review-signoff-repository";
 import { toPEICReviewView } from "@/lib/pe/pe-ic-review-signoff-types";
 import { PE_IC_REVIEW_SIGNOFF_STATUSES } from "@/lib/pe/pe-ic-review-signoff-types";
+import { extractOpenQuestionSummary } from "@/lib/pe/pe-ic-review-audit";
 import { z } from "zod";
 
 const patchSchema = z.object({
@@ -59,8 +60,11 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   const packResult = await loadPECommitteePackForDeal(actor, params.id);
   if (packResult.status === "not_found") return NextResponse.json({ error: "PE 딜을 찾을 수 없습니다" }, { status: 404 });
   const breakdown = packResult.data.pack.fingerprintBreakdown;
+  // REVIEWED 스냅샷에 담을 "지금 미해결 항목" 요약 — 같은 pack.decision.questions에서
+  // 뽑는다(새 계산이 아니라 이미 계산된 questions를 요약만 하는 것, §4).
+  const openQuestionSummary = extractOpenQuestionSummary(packResult.data.pack.decision.questions);
 
-  const result = await upsertOwnPEICReview(actor, params.id, parsed.data, breakdown);
+  const result = await upsertOwnPEICReview(actor, params.id, parsed.data, breakdown, openQuestionSummary);
   if (result.status === "not_found") return NextResponse.json({ error: "쓰기 권한이 없습니다" }, { status: 404 });
   if (result.status === "invalid") return NextResponse.json({ error: "요청을 처리할 수 없습니다", issues: result.issues }, { status: 400 });
 

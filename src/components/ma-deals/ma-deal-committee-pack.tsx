@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AlertTriangle } from "lucide-react";
@@ -15,6 +15,7 @@ import { MaDealDdFindings } from "./ma-deal-dd-findings";
 import { MaDealIcQuestions } from "./ma-deal-ic-questions";
 import { MaDealCommitteePackExport } from "./ma-deal-committee-pack-export";
 import { MaDealCommitteePackReviewPanel } from "./ma-deal-committee-pack-review-panel";
+import { MaDealReviewHistory } from "./ma-deal-review-history";
 import { PE_IC_REVIEW_STATE_LABEL, MA_DEAL_TYPE_LABEL, MA_DEAL_STATUS_LABEL } from "@/lib/pe/ma-deal-labels";
 import type { MaDealDashboardData } from "./ma-deal-overview";
 import type { PEDDCase } from "@/lib/pe/dd-types";
@@ -93,6 +94,12 @@ export function MaDealCommitteePack({
 
   const { decision, review } = pack;
 
+  // PR #111 — 리뷰 패널에서 서명/코멘트를 남기면 그 즉시 검토 이력 카드도
+  // 최신 스냅샷/감사 이벤트를 다시 불러온다(두 컴포넌트가 서로 다른
+  // API를 각자 조회하므로, 신호를 안 주면 새로고침 전까진 예전 화면
+  // 그대로 남아 있게 된다 — 감사 이력이 실시간처럼 보이는 게 중요함).
+  const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -148,7 +155,15 @@ export function MaDealCommitteePack({
       {evidenceRequestsLoading ? (
         <p className="text-center text-gray-400 py-8">검토 현황을 불러오는 중...</p>
       ) : (
-        <MaDealCommitteePackReviewPanel maDealId={maDeal.id} currentUserId={currentUserId} canEdit={canEdit} />
+        <>
+          <MaDealCommitteePackReviewPanel
+            maDealId={maDeal.id}
+            currentUserId={currentUserId}
+            canEdit={canEdit}
+            onReviewChanged={() => setHistoryRefreshKey((k) => k + 1)}
+          />
+          <MaDealReviewHistory maDealId={maDeal.id} refreshKey={historyRefreshKey} />
+        </>
       )}
     </div>
   );
