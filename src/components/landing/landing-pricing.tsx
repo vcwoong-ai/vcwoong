@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import { CheckCircle } from "lucide-react";
 import {
   PUBLIC_PLANS,
@@ -12,6 +13,12 @@ import {
 /** 랜딩 #pricing — /pricing 과 동일하게 월간/연간 토글 */
 export function LandingPricing() {
   const [cycle, setCycle] = useState<BillingCycle>("monthly");
+  const { status } = useSession();
+  /** 로그인 상태면 바로 설정으로, 아니면 가입부터 — 플랜 정보를 함께 넘겨
+   * 가입 직후 그 플랜이 보이는 화면으로 이어지게 한다(비로그인 사용자가
+   * /settings로 가면 로그인 화면에 막혀 어떤 플랜을 보려던 건지 사라졌었다). */
+  const upgradeHref = (planKey: string) =>
+    status === "authenticated" ? "/settings#subscription" : `/register?plan=${planKey}`;
 
   return (
     <section id="pricing" className="py-24 px-6 bg-white">
@@ -116,7 +123,7 @@ export function LandingPricing() {
                   ))}
                 </ul>
                 <Link
-                  href={plan.price === 0 ? "/register" : "/settings#subscription"}
+                  href={plan.price === 0 ? "/register" : upgradeHref(plan.key)}
                   className={`block text-center py-3 rounded-sm font-medium text-sm transition-colors ${
                     plan.highlight
                       ? "bg-white text-black hover:bg-white/90"
