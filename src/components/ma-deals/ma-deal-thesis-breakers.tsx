@@ -35,13 +35,13 @@ export function MaDealThesisBreakers({ breakers }: { breakers: PEThesisBreaker[]
                     <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
                     {b.condition}
                   </p>
-                  <Badge variant={STATE_VARIANT[b.currentState]} className="text-[10px] shrink-0">
+                  <Badge variant={STATE_VARIANT[b.currentState]} className="text-xs shrink-0">
                     {PE_THESIS_BREAKER_STATE_LABEL[b.currentState]}
                   </Badge>
                 </div>
                 <p className="text-xs text-gray-500">{b.whyItMatters}</p>
-                <p className="text-[11px] text-gray-400">검증 필요: {b.verificationRequired}</p>
-                <p className="text-[11px] text-gray-400">영향: {b.decisionImpact}</p>
+                <p className="text-xs text-gray-400">검증 필요: {b.verificationRequired}</p>
+                <p className="text-xs text-gray-400">영향: {b.decisionImpact}</p>
               </li>
             ))}
           </ul>

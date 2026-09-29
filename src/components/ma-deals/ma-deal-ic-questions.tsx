@@ -63,13 +63,13 @@ export function MaDealIcQuestions({
               <li key={q.code} className="border rounded-md px-3 py-2 space-y-1">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    <Badge variant={PRIORITY_VARIANT[q.priority]} className="text-[10px]">
+                    <Badge variant={PRIORITY_VARIANT[q.priority]} className="text-xs">
                       {PE_IC_QUESTION_PRIORITY_LABEL[q.priority]}
                     </Badge>
-                    <Badge variant={SOURCE_VARIANT[q.sourceType]} className="text-[10px]">
+                    <Badge variant={SOURCE_VARIANT[q.sourceType]} className="text-xs">
                       {SOURCE_LABEL[q.sourceType]}
                     </Badge>
-                    <Badge variant="outline" className="text-[10px]">
+                    <Badge variant="outline" className="text-xs">
                       {q.domainLabel}
                     </Badge>
                   </div>

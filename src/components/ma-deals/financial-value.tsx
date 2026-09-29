@@ -13,7 +13,7 @@ export const PERIOD_TYPE_LABEL: Record<string, string> = {
 
 /** FinancialCalcResult를 렌더링한다 — missing_input/currency_mismatch를 0으로 숨기지 않는다 */
 export function CalcValue({ result }: { result: FinancialCalcResult | undefined | null }) {
-  if (!result) return <span className="text-gray-300">—</span>;
+  if (!result) return <span className="text-slate-400">—</span>;
   if (result.status === "ok") return <span className="font-medium">{formatWon(result.value)}</span>;
   if (result.status === "currency_mismatch")
     return (
@@ -21,7 +21,7 @@ export function CalcValue({ result }: { result: FinancialCalcResult | undefined 
         통화 불일치
       </span>
     );
-  return <span className="text-gray-300 text-xs">계산 불가</span>;
+  return <span className="text-slate-500 text-xs">계산 불가</span>;
 }
 
 /** DerivedRatio(ma-deal-dashboard.ts) — 비율(%)을 렌더링한다 */
@@ -30,7 +30,7 @@ export function CalcPercent({
 }: {
   result: { status: "ok"; value: number } | { status: "not_available" } | undefined | null;
 }) {
-  if (!result || result.status !== "ok") return <span className="text-gray-300 text-xs">계산 불가</span>;
+  if (!result || result.status !== "ok") return <span className="text-slate-500 text-xs">계산 불가</span>;
   return <span className="font-medium">{(result.value * 100).toLocaleString(undefined, { maximumFractionDigits: 1 })}%</span>;
 }
 
@@ -40,6 +40,6 @@ export function CalcMultiple({
 }: {
   result: { status: "ok"; value: number } | { status: "not_available" } | undefined | null;
 }) {
-  if (!result || result.status !== "ok") return <span className="text-gray-300 text-xs">계산 불가</span>;
+  if (!result || result.status !== "ok") return <span className="text-slate-500 text-xs">계산 불가</span>;
   return <span className="font-medium">{result.value.toLocaleString(undefined, { maximumFractionDigits: 2 })}x</span>;
 }

@@ -1,8 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
-import { READINESS_STATE_LABEL } from "@/lib/pe/ma-deal-labels";
+import { ReadinessBadge } from "./readiness-badge";
 import type { PEDecisionDomainResult } from "@/lib/pe/pe-decision-readiness";
 import type { PEDDCase } from "@/lib/pe/dd-types";
 
@@ -56,9 +55,7 @@ export function MaDealEvidenceStatus({
           </div>
         )}
         <div className="flex items-center gap-2 border-t pt-3">
-          <Badge variant="outline" className="text-xs">
-            {READINESS_STATE_LABEL[evidenceDomain.status]}
-          </Badge>
+          <ReadinessBadge state={evidenceDomain.status} />
           <p className="text-xs text-gray-500">{evidenceDomain.reason}</p>
         </div>
       </CardContent>

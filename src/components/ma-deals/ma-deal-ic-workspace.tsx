@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { MA_DEAL_TYPE_LABEL, MA_DEAL_STATUS_LABEL, READINESS_STATE_LABEL } from "@/lib/pe/ma-deal-labels";
+import { ReadinessBadge } from "./readiness-badge";
+import { MA_DEAL_TYPE_LABEL, MA_DEAL_STATUS_LABEL } from "@/lib/pe/ma-deal-labels";
 import { MaDealReadiness } from "./ma-deal-readiness";
 import { MaDealMissingInfo } from "./ma-deal-missing-info";
 import { MaDealQoeSummary } from "./ma-deal-qoe-summary";
@@ -72,7 +73,9 @@ export function MaDealIcWorkspace({
           <Badge variant={maDeal.status === "ACTIVE" ? "default" : "secondary"}>
             {MA_DEAL_STATUS_LABEL[maDeal.status]}
           </Badge>
-          <Badge variant="secondary">종합 준비 상태: {READINESS_STATE_LABEL[readiness.overall]}</Badge>
+          <span className="inline-flex items-center gap-1.5 text-xs text-slate-500">
+            종합 준비 상태 <ReadinessBadge state={readiness.overall} />
+          </span>
           <Badge variant="outline">
             재무기간 {dashboard.financialQuality.latestPeriodLabel ?? "없음"}
           </Badge>

@@ -73,7 +73,7 @@ export function MaDealDocumentDetailDialog({
                             연결된 DD finding: <span className="font-medium">{ev.linkedFinding.title}</span>
                           </p>
                         ) : (
-                          <p className="text-xs text-gray-300 mt-1">연결된 DD finding 없음</p>
+                          <p className="text-xs text-slate-500 mt-1">연결된 DD finding 없음</p>
                         )}
                       </li>
                     ))}

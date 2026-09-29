@@ -150,7 +150,7 @@ export function MaDealDataRoom({
                             {doc.linkedEvidence.length}건
                           </Badge>
                         ) : (
-                          <span className="text-gray-300 text-xs">—</span>
+                          <span className="text-slate-400 text-xs">—</span>
                         )}
                       </td>
                     </tr>

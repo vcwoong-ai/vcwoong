@@ -1,16 +1,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { ReadinessBadge } from "./readiness-badge";
 import { AlertTriangle } from "lucide-react";
-import { READINESS_STATE_LABEL, PE_DECISION_DOMAIN_LABEL } from "@/lib/pe/ma-deal-labels";
-import { MANDATORY_DOMAINS, type PEDecisionReadiness, type ReadinessState } from "@/lib/pe/pe-decision-readiness";
-
-const STATE_VARIANT: Record<ReadinessState, "default" | "secondary" | "destructive" | "outline"> = {
-  READY: "default",
-  PARTIAL: "secondary",
-  MISSING: "destructive",
-  NOT_STARTED: "outline",
-  BLOCKED: "destructive",
-};
+import { PE_DECISION_DOMAIN_LABEL } from "@/lib/pe/ma-deal-labels";
+import { MANDATORY_DOMAINS, type PEDecisionReadiness } from "@/lib/pe/pe-decision-readiness";
 
 /**
  * pe-decision-readiness.ts의 buildPEDecisionReadiness() 결과(PR #103, 수정
@@ -24,9 +16,7 @@ export function MaDealReadiness({ readiness }: { readiness: PEDecisionReadiness 
       <CardHeader>
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <CardTitle className="text-base">Decision Readiness(검증 준비 상태)</CardTitle>
-          <Badge variant={STATE_VARIANT[readiness.overall]} className="text-xs">
-            {READINESS_STATE_LABEL[readiness.overall]}
-          </Badge>
+          <ReadinessBadge state={readiness.overall} />
         </div>
         <p className="text-xs text-gray-500">{readiness.summary}</p>
       </CardHeader>
@@ -38,12 +28,10 @@ export function MaDealReadiness({ readiness }: { readiness: PEDecisionReadiness 
                 <span className="flex items-center gap-1">
                   {PE_DECISION_DOMAIN_LABEL[domain.domain]}
                   {!MANDATORY_DOMAINS.includes(domain.domain) && (
-                    <span className="text-[10px] text-gray-400">(정보성)</span>
+                    <span className="text-xs text-gray-400">(정보성)</span>
                   )}
                 </span>
-                <Badge variant={STATE_VARIANT[domain.status]} className="text-xs shrink-0">
-                  {READINESS_STATE_LABEL[domain.status]}
-                </Badge>
+                <ReadinessBadge state={domain.status} className="shrink-0" />
               </div>
               <p className="text-xs text-gray-500">{domain.reason}</p>
             </div>
