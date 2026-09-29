@@ -39,6 +39,7 @@ export default async function MaDealDetailPage({
         periods={JSON.parse(JSON.stringify(periodsWithSummary))}
         ddCase={ddCase ? JSON.parse(JSON.stringify(ddCase)) : undefined}
         canEdit={canEdit}
+        currentUserId={session.user.id}
       />
     </AppLayout>
   );

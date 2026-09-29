@@ -82,6 +82,8 @@ model User {
   portfolioCompanies PortfolioCompany[]
   inboundDeals       InboundDeal[]
   maDeals            MADeal[]
+  peIcReviews        PEICReview[]
+  peIcReviewComments PEICReviewComment[]
 
   @@index([teamId])
 }
@@ -658,6 +660,8 @@ model MADeal {
   reports   MAReport[]
   financialPeriods MAFinancialPeriod[]
   ddCase    PEDDCase?
+  icReviews        PEICReview[]
+  icReviewComments PEICReviewComment[]
 
   @@index([userId])
   @@index([teamId])
@@ -971,6 +975,66 @@ enum PEICQuestionPriorityDb {
   P0
   P1
   P2
+}
+
+model PEICReview {
+  id       String @id @default(cuid())
+  maDealId String
+
+  reviewerId String
+  status     PEICReviewSignoffStatus @default(NOT_REVIEWED)
+
+  comment String?
+
+  reviewedFingerprint String?
+  reviewedFingerprintBreakdown String?
+  reviewedAt          DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  maDeal   MADeal @relation(fields: [maDealId], references: [id], onDelete: Cascade)
+  reviewer User   @relation(fields: [reviewerId], references: [id], onDelete: Cascade)
+
+  comments PEICReviewComment[]
+
+  @@unique([maDealId, reviewerId])
+  @@index([maDealId])
+}
+
+enum PEICReviewSignoffStatus {
+  NOT_REVIEWED
+  IN_REVIEW
+  CHANGES_REQUESTED
+  REVIEWED
+}
+
+model PEICReviewComment {
+  id       String @id @default(cuid())
+  maDealId String
+  reviewId String?
+
+  authorId   String
+  targetType PEICReviewCommentTargetType
+  targetId   String?
+
+  text      String
+  createdAt DateTime @default(now())
+
+  maDeal MADeal      @relation(fields: [maDealId], references: [id], onDelete: Cascade)
+  author User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  review PEICReview? @relation(fields: [reviewId], references: [id], onDelete: SetNull)
+
+  @@index([maDealId])
+  @@index([targetType, targetId])
+  @@index([reviewId])
+}
+
+enum PEICReviewCommentTargetType {
+  COMMITTEE_PACK
+  IC_QUESTION
+  REVIEW_ITEM
+  EVIDENCE_REQUEST
 }
 
 enum PEDDCaseStatus {
