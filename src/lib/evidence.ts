@@ -138,21 +138,40 @@ function normalizeNumber(raw: string): string {
  * 숫자 앞 문맥에서 라벨을 뽑는다. 줄 시작이나 구분자(·, |, ,)까지만 거슬러
  * 올라가 앞 문장이 통째로 딸려오지 않게 한다.
  */
+/** 라벨은 끝 24자만 쓴다. 자를 때 단어 중간에서 끊긴 앞 조각은 버린다("은 2024년…" 방지). */
+function tailLabel(seg: string): string {
+  if (seg.length <= 24) return seg;
+  const cut = seg.slice(-24);
+  return cut.replace(/^\S*\s+/, "") || cut;
+}
+
 function labelBefore(text: string, index: number): string {
   const lineStart = text.lastIndexOf("\n", index - 1) + 1;
-  const head = text.slice(Math.max(lineStart, index - 40), index);
-  const seg = (head.split(/[·|,()]/).pop() ?? "")
+  const windowStart = Math.max(lineStart, index - 40);
+  let head = text.slice(windowStart, index);
+  // 40자 창이 단어 중간에서 잘렸으면 그 조각("000억원 규모이며…")은 버린다 —
+  // 잘린 숫자 조각이 라벨에 남으면 엉뚱한 지표로 분류된다.
+  if (windowStart > lineStart && !/\s/.test(text[windowStart - 1] ?? "")) {
+    const firstSpace = head.search(/\s/);
+    head = firstSpace === -1 ? "" : head.slice(firstSpace);
+  }
+  // 천 단위 콤마("8,000")는 구분자가 아니다. 문장 끝(". ")은 구분자다 — 앞
+  // 문장의 지표명("영업이익 -12억원을 기록했다.")이 뒤 숫자의 라벨로 딸려와
+  // 서로 다른 지표가 같은 지표로 묶이는(가짜 상충) 문제를 막는다.
+  const protectedHead = head.replace(/(\d),(?=\d)/g, "$1\u0000");
+  const seg = (protectedHead.split(/[·|,()]|[.!?。]\s+/).pop() ?? "")
+    .replace(/\u0000/g, ",")
     .replace(/^[\s\-*#>]+/, "")
-    .replace(/[:：\s]+$/, "")
+    .replace(/[:：\s\-−–+]+$/, "")
     .trim();
-  if (seg) return seg.slice(-24);
+  if (seg) return tailLabel(seg);
 
   // 표 행(| ARR | 24.7억원 |)은 숫자 바로 앞이 구분자라 라벨이 비는데,
   // 이때는 그 행의 첫 칸이 사실상의 항목명이다.
   const line = text.slice(lineStart, index);
   if (line.trimStart().startsWith("|")) {
     const firstCell = line.split("|").map((c) => c.trim()).find(Boolean);
-    if (firstCell) return firstCell.slice(-24);
+    if (firstCell) return tailLabel(firstCell);
   }
   return "";
 }

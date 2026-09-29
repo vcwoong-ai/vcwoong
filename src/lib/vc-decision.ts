@@ -15,6 +15,7 @@
 import { SCORE_DIMENSIONS, type ScoreDimensionKey } from "./deal-scoring-shared";
 import {
   DIMENSION_FLAG,
+  DIMENSION_SECTION_MAP,
   type ScoreEvidenceAssessment,
   type ScoreConfidence,
   type DecisionImpact,
@@ -32,7 +33,9 @@ import {
   type KeyRisk,
 } from "./ic-review";
 import type {
+  VCContradiction,
   VCDecisionDimension,
+  VCDecisionDimensionKey,
   VCDecisionImpact,
   VCEvidenceState,
   VCInvestmentDecision,
@@ -259,15 +262,99 @@ export function detectContradictions(claims: NumericClaim[]): ContradictionGroup
   return contradictions;
 }
 
-function contradictionForDimension(
-  dimClaims: NumericClaim[],
-  contradictions: ContradictionGroup[]
-): ContradictionGroup | undefined {
-  // claimKey(claim 고유 식별자)로 매칭한다 — canonical 그룹은 서로 다른
-  // label 문자열의 claim을 한데 묶으므로, label|unit을 다시 만들어
-  // 비교하는 방식으로는 canonical 그룹을 찾을 수 없다.
-  const dimClaimKeys = new Set(dimClaims.map((c) => c.claimKey));
-  return contradictions.find((g) => g.claims.some((c) => dimClaimKeys.has(c.claimKey)));
+const METRIC_DISPLAY_LABEL: Record<CanonicalMetricKey, string> = {
+  GROSS_PROFIT: "매출총이익",
+  COGS: "매출원가",
+  REVENUE: "매출",
+  OPERATING_MARGIN: "영업이익률",
+  OPERATING_PROFIT: "영업이익",
+  NET_MARGIN: "순이익률",
+  NET_PROFIT: "당기순이익",
+  CASH: "현금성자산",
+  ARR: "ARR",
+  MRR: "MRR",
+  NRR: "NRR",
+  CAC: "CAC",
+  LTV: "LTV",
+  CHURN: "Churn",
+};
+
+const VALUATION_SECTION_KEYS = ["VALUATION", "INVESTMENT_TERMS"];
+
+/** claim이 쓰인 섹션 → 판단 차원. 기존 DIMENSION_SECTION_MAP을 그대로 재사용한다(새 매핑 없음). */
+function dimensionForClaim(c: NumericClaim): VCDecisionDimensionKey | undefined {
+  for (const { key } of SCORE_DIMENSIONS) {
+    if ((DIMENSION_SECTION_MAP[key] as string[]).includes(c.sectionKey)) return key;
+  }
+  if (VALUATION_SECTION_KEYS.includes(c.sectionKey)) return "valuation";
+  return undefined;
+}
+
+function claimsSignature(claims: NumericClaim[]): string {
+  return claims
+    .map((c) => c.claimKey)
+    .sort()
+    .join("||");
+}
+
+/** 안정적인 짧은 id — 같은 입력이면 항상 같은 id(결정성). */
+function shortHash(text: string): string {
+  let h = 5381;
+  for (let i = 0; i < text.length; i++) h = ((h << 5) + h + text.charCodeAt(i)) >>> 0;
+  return h.toString(36);
+}
+
+/**
+ * 모든 claim에서 수치 상충을 찾아 결정 레이어의 1급 객체로 만든다.
+ *
+ * 예전에는 각 차원의 keyEvidence(최대 3개)에 든 claim끼리만 비교했다 — 상충
+ * claim이 3개 밖으로 밀리거나 밸류에이션·투자조건처럼 스코어 차원이 없는
+ * 섹션에 있으면 결정 화면에서 아예 보이지 않았다. 여기서는 전체 claim을
+ * 대상으로 하고, 상충 그룹의 값은 하나도 잘라내지 않는다.
+ */
+export function buildContradictions(
+  claims: NumericClaim[] | null | undefined,
+  questions?: IcQuestion[] | null
+): VCContradiction[] {
+  const groups = detectContradictions(claims ?? []);
+  const seen = new Set<string>();
+  const result: VCContradiction[] = [];
+  for (const g of groups) {
+    const signature = claimsSignature(g.claims);
+    if (seen.has(signature)) continue;
+    seen.add(signature);
+
+    const dimension = g.claims.map(dimensionForClaim).find((d) => d !== undefined);
+    const canonicalLabel = METRIC_DISPLAY_LABEL[g.label as CanonicalMetricKey];
+    const metricLabel = canonicalLabel ?? g.claims[0].label ?? g.label;
+    const values = g.claims.map((c) => ({
+      raw: c.raw,
+      value: c.value,
+      unit: c.unit,
+      period: canonicalPeriodKey(c.label),
+      scenario: canonicalScenarioKey(c.label),
+      sectionKey: c.sectionKey,
+      documentName: c.source?.documentName,
+      location: c.source?.location,
+      snippet: c.source?.snippet,
+    }));
+    const directlyDecisive = dimension === "financials" || dimension === "valuation";
+    result.push({
+      id: `contradiction:${shortHash(signature)}`,
+      metricLabel,
+      unit: g.unit,
+      dimension,
+      values,
+      decisionImpact: directlyDecisive ? "CRITICAL" : "HIGH",
+      verificationRequirement: `상충하는 ${values.length}개 값(${values.map((v) => v.raw).join(" / ")})을 각 출처 원문과 대조해 정본을 확인하십시오 — 확인 전에는 이 지표를 결정 근거로 쓰지 마십시오.`,
+      icQuestion:
+        questions?.find((q) => q.relatedClaim && g.claims.some((c) => c.raw === q.relatedClaim)) ??
+        (dimension && dimension !== "valuation"
+          ? questions?.find((q) => q.relatedDimension === dimension)
+          : undefined),
+    });
+  }
+  return result;
 }
 
 // ── 3. Decision Dimensions ───────────────────────────────────────────────
@@ -278,7 +365,7 @@ export function buildDecisionDimensions(
 ): VCDecisionDimension[] {
   if (!assessment) return [];
   const allClaims = claims ?? [];
-  const contradictions = detectContradictions(allClaims);
+  const allContradictions = detectContradictions(allClaims);
 
   return SCORE_DIMENSIONS.map(({ key }) => {
     const dim = assessment.dimensions[key];
@@ -293,11 +380,13 @@ export function buildDecisionDimensions(
         missingInfoCount: 0,
       };
     }
-    // 이 차원에 매핑된 claim만 상충 탐지 대상으로 좁힌다(전체 claim이 아니라).
-    const dimClaims = allClaims.filter(
-      (c) => c.claimType === "numeric" && dim.keyEvidence.some((k) => k.raw === c.raw)
+    // 이 차원에 매핑된 섹션(DIMENSION_SECTION_MAP)의 claim이 낀 상충이 있으면
+    // 이 차원은 상충 상태다. keyEvidence(최대 3개)가 아니라 전체 claim 기준이라
+    // 상충 claim이 keyEvidence 밖으로 밀려도 숨지 않는다.
+    const sectionKeys = DIMENSION_SECTION_MAP[key] as string[];
+    const contradiction = allContradictions.find((g) =>
+      g.claims.some((c) => c.claimType === "numeric" && sectionKeys.includes(c.sectionKey))
     );
-    const contradiction = contradictionForDimension(dimClaims, contradictions);
     const state = contradiction ? "CONTRADICTED" : mapConfidenceToEvidenceState(dim.confidence);
 
     return {
@@ -331,13 +420,19 @@ const MAX_DRIVERS = 5;
 export function buildInvestmentDrivers(
   assessment: ScoreEvidenceAssessment | null | undefined,
   rationale: Partial<Record<ScoreDimensionKey, string>> | undefined,
-  max = MAX_DRIVERS
+  max = MAX_DRIVERS,
+  /** 수치 상충이 있는 차원 — 그 차원의 강점을 "확인됨"으로 보여주면 상충이 결정
+   * 레이어에서 숨는다(Decision Map은 '상충'인데 Driver는 '확인됨'이던 문제). */
+  contradictedDimensions: ReadonlySet<string> = new Set()
 ): VCInvestmentDriver[] {
   if (!assessment) return [];
   const strengths: KeyStrength[] = selectKeyStrengths(assessment, rationale, max);
   return strengths.map((s) => {
     const dim = assessment.dimensions[s.dimension];
-    const evidenceState = mapConfidenceToEvidenceState(s.confidence);
+    const contradicted = contradictedDimensions.has(s.dimension);
+    const evidenceState: VCEvidenceState = contradicted
+      ? "CONTRADICTED"
+      : mapConfidenceToEvidenceState(s.confidence);
     // AI가 이 차원의 rationale을 비워서 줬을 때(실제 프로덕션에서 발생하는
     // 경우 — deal-scoring-shared.ts의 parseScoreResponse는 필드 누락 시
     // 빈 문자열로 채운다), 점수만 언급하는 순수 일반론 대신 이미 계산된
@@ -358,12 +453,14 @@ export function buildInvestmentDrivers(
         documentName: e.documentName,
         location: e.location,
       })),
-      whatCouldInvalidate:
-        dim.unsupportedClaims[0]?.raw
+      whatCouldInvalidate: contradicted
+        ? "이 차원의 수치가 출처마다 다릅니다 — 정본 값이 확정되면 이 강점의 근거가 달라질 수 있습니다."
+        : dim.unsupportedClaims[0]?.raw
           ? `"${dim.unsupportedClaims[0].raw}"가 사실과 다르거나 재현되지 않으면 이 강점의 근거가 약해집니다.`
           : dim.uncertaintyNote || "현재 근거 범위를 벗어나는 반증 자료가 나오면 재평가가 필요합니다.",
-      verificationRequirement:
-        evidenceState === "VERIFIED"
+      verificationRequirement: contradicted
+        ? "수치 상충 해소 전에는 IC 상정 불가 — 상충하는 값의 원문 출처 대조 필요"
+        : evidenceState === "VERIFIED"
           ? "추가 검증 없이 IC 상정 가능(근거 확인됨)"
           : "원문 자료(계약서·실측 데이터 등) 재확인 필요",
       decisionImpact: mapDecisionImpactToVC(s.decisionImpact ?? dim.decisionImpact, s.confidence),
@@ -390,15 +487,37 @@ function findIcQuestionForRisk(
   return undefined;
 }
 
+function contradictionBreaker(c: VCContradiction): VCThesisBreaker {
+  const summary = c.values
+    .map((v) => `${v.raw}${v.documentName ? `(${v.documentName})` : ""}`)
+    .join(" vs ");
+  return {
+    id: `breaker:CONTRADICTION:${c.id}`,
+    trigger: "CONTRADICTION",
+    dimension: c.dimension && c.dimension !== "valuation" ? c.dimension : undefined,
+    title: `${c.metricLabel} 수치 상충 (${c.values.length}개 값)`,
+    whyItMatters: `같은 지표(${c.metricLabel})에 서로 다른 값이 ${c.values.length}개 있습니다: ${summary}. 어느 값이 맞는지 확인되기 전에는 이 지표에 근거한 논지를 신뢰할 수 없습니다.`,
+    evidenceState: "CONTRADICTED",
+    evidence: c.values.map((v) => ({ raw: v.raw, documentName: v.documentName, location: v.location })),
+    probability: "NOT_ASSESSED",
+    decisionImpact: c.decisionImpact,
+    verificationRequirement: c.verificationRequirement,
+    icQuestion: c.icQuestion,
+  };
+}
+
 export function buildThesisBreakers(
   assessment: ScoreEvidenceAssessment | null | undefined,
   rationale: Partial<Record<ScoreDimensionKey, string>> | undefined,
   questions: IcQuestion[] | null | undefined,
-  max = MAX_THESIS_BREAKERS
+  max = MAX_THESIS_BREAKERS,
+  /** 수치 상충은 개수 제한(max) 없이 전부 Thesis Breaker로 올린다 — 잘라내면 상충이 숨는다. */
+  contradictions: VCContradiction[] = []
 ): VCThesisBreaker[] {
-  if (!assessment) return [];
+  const contradictionBreakers = contradictions.map(contradictionBreaker);
+  if (!assessment) return contradictionBreakers;
   const risks: KeyRisk[] = selectKeyRisks(assessment, rationale, max);
-  return risks.map((r) => {
+  const riskBreakers: VCThesisBreaker[] = risks.map((r) => {
     const dim = r.dimension ? assessment.dimensions[r.dimension] : undefined;
     const evidenceState: VCEvidenceState = dim
       ? mapConfidenceToEvidenceState(dim.confidence)
@@ -433,6 +552,7 @@ export function buildThesisBreakers(
       icQuestion: findIcQuestionForRisk(r, questions),
     };
   });
+  return [...contradictionBreakers, ...riskBreakers];
 }
 
 // ── 6. Missing Information (first-class output) ─────────────────────────
@@ -458,13 +578,30 @@ function priorityForFlag(flag: RiskFlag): VCPriority {
 
 const PRIORITY_RANK: Record<VCPriority, number> = { P0: 3, P1: 2, P2: 1 };
 
+/** 수치 상충은 그 자체가 결정을 막는 정보 공백이다 — 어느 값이 정본인지 모르는 채로는 판단할 수 없다. */
+function contradictionMissingInfo(c: VCContradiction): VCMissingInformation {
+  return {
+    id: `missing:${c.id}`,
+    priority: "P0",
+    item: `${c.metricLabel} 수치 상충 해소 (${c.values.map((v) => v.raw).join(" vs ")})`,
+    whyItMatters: `같은 지표에 서로 다른 값이 ${c.values.length}개 있어, 어느 값이 정본인지 확인되기 전에는 이 지표에 근거한 판단이 성립하지 않습니다.`,
+    decisionImpact: c.decisionImpact,
+    requiredEvidence: "상충하는 값 각각의 1차 출처 원문 대조(감사보고서·재무제표·계약서 등)",
+    relatedDimension: c.dimension && c.dimension !== "valuation" ? c.dimension : undefined,
+    icQuestion: c.icQuestion,
+  };
+}
+
 export function buildMissingInformation(
   assessment: ScoreEvidenceAssessment | null | undefined,
   claims: NumericClaim[] | null | undefined,
   questions: IcQuestion[] | null | undefined,
-  max = MAX_MISSING_INFO
+  max = MAX_MISSING_INFO,
+  /** 상충은 개수 제한 없이 전부 포함한다(P0 최상단) — 잘라내면 상충이 숨는다. */
+  contradictions: VCContradiction[] = []
 ): VCMissingInformation[] {
-  if (!assessment) return [];
+  const contradictionItems = contradictions.map(contradictionMissingInfo);
+  if (!assessment) return contradictionItems;
 
   const items: VCMissingInformation[] = [];
 
@@ -522,7 +659,7 @@ export function buildMissingInformation(
       priority: priorityForFlag(flag),
       item:
         flag === "UNSUPPORTED_KEY_CLAIM" && dim.unsupportedClaims[0]
-          ? dim.unsupportedClaims[0].raw
+          ? `근거 없는 핵심 주장: ${dim.unsupportedClaims[0].raw}(${dimensionLabel(dim.dimension)})`
           : `${dimensionLabel(dim.dimension)} 평가를 뒷받침하는 근거`,
       whyItMatters: dim.uncertaintyNote || `${dimensionLabel(dim.dimension)} 점수(${dim.score}점)의 근거 확인이 필요합니다.`,
       decisionImpact: mapDecisionImpactToVC(dim.decisionImpact, dim.confidence),
@@ -546,9 +683,17 @@ export function buildMissingInformation(
     });
   }
 
-  const deduped = items.filter((it, i) => items.findIndex((o) => o.id === it.id) === i);
+  // 같은 차원·같은 문구가 서로 다른 신호(HIGH_SCORE_LOW_EVIDENCE/차원별 GAP 등)로
+  // 두 번 올라오면 가장 높은 우선순위 하나만 남긴다 — 같은 공백이 P0와 P1로 중복 표시되던 문제.
+  const byKey = new Map<string, VCMissingInformation>();
+  for (const it of items) {
+    const key = `${it.relatedDimension ?? ""}|${it.item}`;
+    const prev = byKey.get(key);
+    if (!prev || PRIORITY_RANK[it.priority] > PRIORITY_RANK[prev.priority]) byKey.set(key, it);
+  }
+  const deduped = Array.from(byKey.values()).filter((it, i, arr) => arr.findIndex((o) => o.id === it.id) === i);
   deduped.sort((a, b) => PRIORITY_RANK[b.priority] - PRIORITY_RANK[a.priority]);
-  return deduped.slice(0, max);
+  return [...contradictionItems, ...deduped.slice(0, max)];
 }
 
 // ── 7. Valuation & Return ────────────────────────────────────────────────
@@ -612,14 +757,25 @@ export function synthesizeInvestmentThesis(
   missingInformation: VCMissingInformation[]
 ): string {
   const p0Count = missingInformation.filter((m) => m.priority === "P0").length;
-  const driverTitles = drivers.slice(0, 3).map((d) => d.title.split(" — ")[0]);
-  const breakerTitles = breakers.slice(0, 3).map((b) => b.title);
+  // 수치가 상충하는 차원의 driver는 논지의 근거로 삼지 않는다 — 정본이 불명확한 값 위에 논지를 세우지 않는다.
+  const solidDrivers = drivers.filter((d) => d.evidenceState !== "CONTRADICTED");
+  const contradictedDrivers = drivers.filter((d) => d.evidenceState === "CONTRADICTED");
+  const driverTitles = solidDrivers.slice(0, 3).map((d) => d.title.split(" — ")[0]);
+  const contradictionBreakers = breakers.filter((b) => b.trigger === "CONTRADICTION");
+  const otherBreakers = breakers.filter((b) => b.trigger !== "CONTRADICTION");
+  const breakerTitles = otherBreakers.slice(0, 3).map((b) => b.title);
 
   const parts: string[] = [];
   if (driverTitles.length > 0) {
     parts.push(`투자 논지는 ${driverTitles.join(", ")}에 근거합니다.`);
   } else {
     parts.push("현재 근거 기반의 명확한 투자 논지 축을 찾지 못했습니다 — 추가 자료가 필요합니다.");
+  }
+  if (contradictionBreakers.length > 0) {
+    const names = contradictedDrivers.map((d) => d.title.split(" — ")[0]);
+    parts.push(
+      `${contradictionBreakers.length}건의 수치 상충(${contradictionBreakers.map((b) => b.title.split(" 수치 상충")[0]).join(", ")})이 있어${names.length > 0 ? ` ${names.join(", ")}은(는) 논지의 근거로 쓸 수 없고,` : ""} 정본 확인 전에는 해당 지표를 결정에 사용할 수 없습니다.`
+    );
   }
   if (breakerTitles.length > 0) {
     parts.push(`이 논지를 흔들 수 있는 요인은 ${breakerTitles.join(", ")}입니다.`);
@@ -646,22 +802,32 @@ export function buildInvestmentDecision(
   const signal = computeInvestmentSignal(overall, overallConfidence);
   const recommendation = computeRecommendation(signal, assessment?.riskFlags ?? []);
 
+  const contradictions = buildContradictions(claims, questions);
   const decisionDimensions = buildDecisionDimensions(assessment, claims);
-  const drivers = buildInvestmentDrivers(assessment, rationale);
-  const thesisBreakers = buildThesisBreakers(assessment, rationale, questions);
-  const missingInformation = buildMissingInformation(assessment, claims, questions);
-  const valuation = buildValuationCase(deal, assessment?.riskFlags ?? []);
+  const contradictedDimensions = new Set<string>(
+    decisionDimensions.filter((d) => d.state === "CONTRADICTED").map((d) => d.dimension)
+  );
+  const drivers = buildInvestmentDrivers(assessment, rationale, undefined, contradictedDimensions);
+  const thesisBreakers = buildThesisBreakers(assessment, rationale, questions, undefined, contradictions);
+  const missingInformation = buildMissingInformation(assessment, claims, questions, undefined, contradictions);
+  const baseValuation = buildValuationCase(deal, assessment?.riskFlags ?? []);
+  // 밸류에이션·투자조건 섹션 수치가 상충하면 밸류에이션 근거 상태도 상충이다.
+  const valuation = contradictions.some((c) => c.dimension === "valuation")
+    ? { ...baseValuation, evidenceState: "CONTRADICTED" as VCEvidenceState }
+    : baseValuation;
   const thesis = synthesizeInvestmentThesis(drivers, thesisBreakers, missingInformation);
 
   return {
     signal,
     recommendation,
     thesis,
-    confidence: mapConfidenceToEvidenceState(overallConfidence),
+    // 수치 상충이 하나라도 있으면 결정 확신도는 상충이다 — 근거 완결성이 높아도 정본이 불명확하다.
+    confidence: contradictions.length > 0 ? "CONTRADICTED" : mapConfidenceToEvidenceState(overallConfidence),
     decisionDimensions,
     drivers,
     thesisBreakers,
     missingInformation,
+    contradictions,
     valuation,
   };
 }
