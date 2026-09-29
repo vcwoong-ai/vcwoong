@@ -6,7 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Building2, Landmark, Calculator, TrendingUp, RefreshCw, FolderOpen, ClipboardList } from "lucide-react";
+import { Building2, Landmark, Calculator, TrendingUp, RefreshCw, FolderOpen, ClipboardList, Gavel } from "lucide-react";
 import type { MaDealType, MaDealStatus } from "@prisma/client";
 import { MA_DEAL_TYPE_LABEL, MA_DEAL_STATUS_LABEL, MA_ADJUSTMENT_STATUS_LABEL } from "@/lib/pe/ma-deal-labels";
 import type { FinancialCalcResult } from "@/lib/pe/financial-types";
@@ -19,16 +19,12 @@ import { MaDealFinancialDataQuality } from "@/components/ma-deals/ma-deal-financ
 import { MaDealCanonicalAccountsTable } from "@/components/ma-deals/ma-deal-canonical-accounts-table";
 import { MaDealReadiness } from "@/components/ma-deals/ma-deal-readiness";
 import { MaDealIcWorkspace } from "@/components/ma-deals/ma-deal-ic-workspace";
+import { MaDealIcDecision } from "@/components/ma-deals/ma-deal-ic-decision";
 import {
-  computeQoESummary,
-  computeLboEntryEbitda,
-  computeDartStatus,
-  computeFinancialQuality,
-  toPEDecisionReadinessInput,
+  buildMaDealDashboard,
   type DashboardPeriod,
   type DashboardAdjustmentRow,
 } from "@/lib/pe/ma-deal-dashboard";
-import { buildPEDecisionReadiness } from "@/lib/pe/pe-decision-readiness";
 import { computeFinancialDataQuality } from "@/lib/pe/pe-financials-view-model";
 import type {
   DataRoomDocumentRow,
@@ -163,41 +159,33 @@ export function MaDealDetailClient({
   // refreshPeriods()로 이미 최신화됨)에서 매번 다시 계산한다. page.tsx가
   // 한 번만 계산해 내려주면 재무 기간을 추가해도 Overview가 새로고침 전까지
   // 옛 데이터를 보여주는 문제가 있어(실사용 중 발견), 여기서 periods와
-  // 항상 같은 소스를 보도록 옮겼다 — 새 계산 로직은 없다(ma-deal-dashboard.ts
-  // 그대로 재사용). Decision Readiness는 PR #104부터 buildPEDecisionReadiness()
-  // (pe-decision-readiness.ts, PR #103, 수정 없음)가 유일한 판정처다 — 여기서
-  // 재판정하지 않고 그 결과를 그대로 전달만 한다.
-  const dashboard: MaDealDashboardData = useMemo(() => {
-    const dashboardPeriods: DashboardPeriod[] = periods.map((p) => ({
-      id: p.id,
-      fiscalYear: p.fiscalYear,
-      periodType: p.periodType as DashboardPeriod["periodType"],
-      currency: p.currency,
-      lineItems: p.lineItems,
-      adjustments: p.adjustments as DashboardAdjustmentRow[],
-      normalizedSummary: {
-        revenue: p.normalizedSummary.revenue,
-        ebitda: p.normalizedSummary.ebitda,
-        netDebt: p.normalizedSummary.netDebt,
-      },
-    }));
-    const latest = dashboardPeriods[0] ?? null;
-    const qoeSummary = latest ? computeQoESummary(latest) : null;
-    const lboEntryEbitda = computeLboEntryEbitda(latest, qoeSummary);
-    const dartStatus = computeDartStatus(dashboardPeriods);
-    return {
-      qoeSummary,
-      lboEntryEbitda,
-      dartStatus,
-      financialQuality: computeFinancialQuality(dashboardPeriods),
-      // ddCase/evidenceLineage(PR #107) — PR #105부터 실제로 영속화된 값을
-      // readiness의 DD/EVIDENCE 도메인에 그대로 전달한다(재판정 없음, 새
-      // 계산 없음 — toPEDecisionReadinessInput()은 순수 매핑).
-      decisionReadiness: buildPEDecisionReadiness(
-        toPEDecisionReadinessInput(dashboardPeriods, { ddCase, evidenceLineage: ddCase?.lineage })
-      ),
-    };
-  }, [periods, ddCase]);
+  // 항상 같은 소스를 보도록 옮겼다 — 새 계산 로직은 없다. PR #108부터는
+  // 이 조립 시퀀스 자체를 `buildMaDealDashboard()`(ma-deal-dashboard.ts,
+  // 순수 함수)로 뽑아 IC Memo export route(서버)도 정확히 같은 함수를
+  // 호출하도록 했다 — UI와 export가 서로 다른 결론을 내는 걸 구조적으로
+  // 막는다. Decision Readiness는 PR #104부터 buildPEDecisionReadiness()
+  // (pe-decision-readiness.ts, PR #103, 수정 없음)가 유일한 판정처다.
+  const dashboardPeriods: DashboardPeriod[] = useMemo(
+    () =>
+      periods.map((p) => ({
+        id: p.id,
+        fiscalYear: p.fiscalYear,
+        periodType: p.periodType as DashboardPeriod["periodType"],
+        currency: p.currency,
+        lineItems: p.lineItems,
+        adjustments: p.adjustments as DashboardAdjustmentRow[],
+        normalizedSummary: {
+          revenue: p.normalizedSummary.revenue,
+          ebitda: p.normalizedSummary.ebitda,
+          netDebt: p.normalizedSummary.netDebt,
+        },
+      })),
+    [periods]
+  );
+  const dashboard: MaDealDashboardData = useMemo(
+    () => buildMaDealDashboard(dashboardPeriods, ddCase),
+    [dashboardPeriods, ddCase]
+  );
 
   const dartPeriods = useMemo(
     () => periods.filter((p) => p.lineItems.some((li) => li.source === "DART")),
@@ -293,6 +281,10 @@ export function MaDealDetailClient({
             <ClipboardList className="w-3.5 h-3.5" />
             IC 검토
           </TabsTrigger>
+          <TabsTrigger value="ic-decision" className="flex items-center gap-1.5">
+            <Gavel className="w-3.5 h-3.5" />
+            IC 의사결정
+          </TabsTrigger>
           <TabsTrigger value="data-room" className="flex items-center gap-1.5">
             <FolderOpen className="w-3.5 h-3.5" />
             데이터룸
@@ -323,6 +315,10 @@ export function MaDealDetailClient({
             periods={periods}
             onNavigateTab={setActiveTab}
           />
+        </TabsContent>
+
+        <TabsContent value="ic-decision" className="space-y-4">
+          <MaDealIcDecision maDeal={maDeal} dashboard={dashboard} ddCase={ddCase} onNavigateTab={setActiveTab} />
         </TabsContent>
 
         <TabsContent value="data-room" className="space-y-4">

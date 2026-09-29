@@ -1,12 +1,14 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import type { ICQuestion, ICQuestionSourceType } from "@/lib/pe/pe-ic-questions";
+import { PE_IC_QUESTION_PRIORITY_LABEL } from "@/lib/pe/ma-deal-labels";
+import type { ICQuestion, ICQuestionSourceType, PEICQuestionPriority } from "@/lib/pe/pe-ic-decision-types";
 
 const SOURCE_LABEL: Record<ICQuestionSourceType, string> = {
   BLOCKER: "모순/차단",
   FACT_CONFLICT: "재무 데이터 충돌",
   MISSING_INFO: "정보 누락",
   DD_FINDING: "DD finding",
+  UNSUPPORTED_THESIS: "근거 없는 주장",
 };
 
 const SOURCE_VARIANT: Record<ICQuestionSourceType, "default" | "secondary" | "destructive" | "outline"> = {
@@ -14,13 +16,21 @@ const SOURCE_VARIANT: Record<ICQuestionSourceType, "default" | "secondary" | "de
   FACT_CONFLICT: "destructive",
   MISSING_INFO: "secondary",
   DD_FINDING: "outline",
+  UNSUPPORTED_THESIS: "outline",
+};
+
+const PRIORITY_VARIANT: Record<PEICQuestionPriority, "default" | "secondary" | "destructive" | "outline"> = {
+  P0: "destructive",
+  P1: "secondary",
+  P2: "outline",
 };
 
 /**
- * IC Questions(PR #107) — pe-ic-questions.ts의 buildICQuestions() 결과를
- * 그대로 나열한다. 모든 질문은 배지로 표시된 출처(BLOCKER/FACT_CONFLICT/
- * MISSING_INFO/DD_FINDING) 중 하나에서 결정론적으로 파생됐다 — 여기서
- * 새 질문을 만들거나 문구를 재해석하지 않는다.
+ * IC Questions(PR #107, PR #108에서 priority 추가) — pe-ic-questions.ts의
+ * buildICQuestions() 결과를 그대로 나열한다. 모든 질문은 배지로 표시된
+ * 출처(BLOCKER/FACT_CONFLICT/MISSING_INFO/DD_FINDING/UNSUPPORTED_THESIS)
+ * 중 하나에서 결정론적으로 파생됐다 — 여기서 새 질문을 만들거나 문구를
+ * 재해석하지 않는다. 정렬은 이미 buildICQuestions()가 P0→P1→P2로 해뒀다.
  */
 export function MaDealIcQuestions({ questions }: { questions: ICQuestion[] }) {
   return (
@@ -39,6 +49,9 @@ export function MaDealIcQuestions({ questions }: { questions: ICQuestion[] }) {
             {questions.map((q) => (
               <li key={q.code} className="border rounded-md px-3 py-2 space-y-1">
                 <div className="flex items-center gap-1.5 flex-wrap">
+                  <Badge variant={PRIORITY_VARIANT[q.priority]} className="text-[10px]">
+                    {PE_IC_QUESTION_PRIORITY_LABEL[q.priority]}
+                  </Badge>
                   <Badge variant={SOURCE_VARIANT[q.sourceType]} className="text-[10px]">
                     {SOURCE_LABEL[q.sourceType]}
                   </Badge>

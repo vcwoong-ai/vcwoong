@@ -22,25 +22,20 @@ import type {
 } from "./pe-decision-readiness";
 import type { PEDDCase, PEDDFinding } from "./dd-types";
 import { PE_DECISION_DOMAIN_LABEL, PE_DD_CATEGORY_LABEL, PE_DD_SEVERITY_LABEL, PE_DD_FINDING_STATUS_LABEL } from "./ma-deal-labels";
+import type { PEThesisItem, PEICQuestionPriority, ICQuestion, ICQuestionSourceType } from "./pe-ic-decision-types";
 
-export type ICQuestionSourceType = "BLOCKER" | "FACT_CONFLICT" | "MISSING_INFO" | "DD_FINDING";
-
-export interface ICQuestion {
-  /** blocker/missingInformation code, factConflict 조합, 또는 DD finding id — 추적용 유일 키 */
-  code: string;
-  sourceType: ICQuestionSourceType;
-  domainLabel: string;
-  question: string;
-  whyItMatters: string;
-  requiredEvidence: string;
-  decisionImpact: string;
-}
+// PR #108 — 타입 자체는 pe-ic-decision-types.ts에 있다(순환 참조 회피 —
+// 그 파일의 PEThesisItem을 이 파일이 입력으로 쓰므로). 기존
+// `@/lib/pe/pe-ic-questions`에서 이 이름들을 그대로 import해온 컴포넌트가
+// 깨지지 않도록 여기서 재수출한다.
+export type { ICQuestion, ICQuestionSourceType };
 
 function fromBlocker(b: PEBlockingCondition): ICQuestion {
   return {
     code: b.code,
     sourceType: "BLOCKER",
     domainLabel: PE_DECISION_DOMAIN_LABEL[b.domain],
+    priority: "P0",
     question: `${b.label} 문제를 해소하지 않고 ${PE_DECISION_DOMAIN_LABEL[b.domain]} 분석 결과를 신뢰해도 되는가?`,
     whyItMatters: b.detail,
     requiredEvidence: "모순/오류를 해소할 원본 근거 또는 정정된 입력",
@@ -54,6 +49,7 @@ function fromFactConflict(c: PEFinancialFactConflict): ICQuestion {
     code: `FACT_CONFLICT:${c.financialPeriodId}:${c.metric}:${c.currency}`,
     sourceType: "FACT_CONFLICT",
     domainLabel: PE_DECISION_DOMAIN_LABEL.FINANCIAL,
+    priority: "P0",
     question: `${c.metric}(${c.currency})에 서로 다른 값(${values})이 존재한다 — 어느 값이 맞는가?`,
     whyItMatters: "같은 재무기간에 동일 계정의 값이 상충해 하위 QoE/LBO 분석을 신뢰할 수 없음",
     requiredEvidence: "각 값의 원문 출처 문서/근거 대조",
@@ -66,6 +62,7 @@ function fromMissingInfo(m: PEMissingInformationItem): ICQuestion {
     code: m.code,
     sourceType: "MISSING_INFO",
     domainLabel: PE_DECISION_DOMAIN_LABEL[m.domain],
+    priority: m.severity === "MATERIAL" ? "P1" : "P2",
     question: `${m.label}은(는) 언제, 어떤 방식으로 확보할 수 있는가?`,
     whyItMatters: m.reason,
     requiredEvidence: `${m.label} 관련 자료/입력`,
@@ -74,6 +71,13 @@ function fromMissingInfo(m: PEMissingInformationItem): ICQuestion {
         ? `${m.blocks.join(", ")} readiness를 막고 있음`
         : `${PE_DECISION_DOMAIN_LABEL[m.domain]} 판단에 참고 정보로 필요(차단 아님)`,
   };
+}
+
+/** severity에서만 우선순위를 유도한다(§7) — 새 위험도 판정이 아니다. */
+function findingPriority(severity: PEDDFinding["severity"]): PEICQuestionPriority {
+  if (severity === "CRITICAL") return "P0";
+  if (severity === "HIGH") return "P1";
+  return "P2";
 }
 
 /** CLOSED/REJECTED는 이미 결론이 난 상태라 IC 질문으로 만들지 않는다(§10 —
@@ -89,6 +93,7 @@ function fromFinding(f: PEDDFinding): ICQuestion | null {
     code: `DD_FINDING:${f.id}`,
     sourceType: "DD_FINDING",
     domainLabel: PE_DD_CATEGORY_LABEL[f.category],
+    priority: findingPriority(f.severity),
     question: `"${f.title}"(${PE_DD_SEVERITY_LABEL[f.severity]}, ${PE_DD_FINDING_STATUS_LABEL[f.status]}) — 해결 방안 또는 다음 조치는 무엇인가?`,
     whyItMatters: f.description,
     requiredEvidence:
@@ -97,23 +102,55 @@ function fromFinding(f: PEDDFinding): ICQuestion | null {
   };
 }
 
+/** UNSUPPORTED이면서 MATERIAL인 thesis item만 질문화한다(§7 소스 8 —
+ * "중요한 근거 없는 thesis 주장") — INFORMATIONAL이거나 이미 근거가 있는
+ * 주장은 질문을 만들 필요가 없다. */
+function fromUnsupportedThesis(t: PEThesisItem): ICQuestion {
+  return {
+    code: `UNSUPPORTED_THESIS:${t.id}`,
+    sourceType: "UNSUPPORTED_THESIS",
+    domainLabel: "Thesis",
+    priority: "P1",
+    question: `"${t.statement}" — 이 주장을 뒷받침할 근거는 무엇인가?`,
+    whyItMatters: "근거 없는 중요 주장은 investment driver로 승격되지 않음(§5)",
+    requiredEvidence: "이 주장을 뒷받침할 문서/데이터",
+    decisionImpact: "근거가 확보되기 전까지 이 주장은 thesis driver에 포함되지 않음",
+  };
+}
+
+const PRIORITY_RANK: Record<PEICQuestionPriority, number> = { P0: 0, P1: 1, P2: 2 };
+
 /**
- * 우선순위: 모순(BLOCKED 원인) → 재무 사실 충돌 → 중요 누락 정보 →
- * 열려 있는 DD finding → 정보성 누락 정보. 각 그룹 내부는 이미 엔진이
- * 반환한 순서(code 기준 안정 정렬)를 그대로 따른다.
+ * 소스별로 먼저 모은 뒤, priority(P0→P1→P2)로 안정 정렬한다(§7). 각 소스
+ * 내부 순서(안정 정렬이므로)와 그룹 순서(모순→재무 충돌→누락 정보→
+ * DD finding→미지지 thesis)는 이전 순서를 그대로 보존한다 — 동일
+ * priority 안에서는 항상 같은 상대 순서를 유지한다(결정론).
  */
-export function buildICQuestions(readiness: PEDecisionReadiness, ddCase?: PEDDCase): ICQuestion[] {
+export function buildICQuestions(
+  readiness: PEDecisionReadiness,
+  ddCase?: PEDDCase,
+  thesisItems: PEThesisItem[] = []
+): ICQuestion[] {
   const material = readiness.missingInformation.filter((m) => m.severity === "MATERIAL");
   const informational = readiness.missingInformation.filter((m) => m.severity === "INFORMATIONAL");
   const findingQuestions = (ddCase?.findings ?? [])
     .map(fromFinding)
     .filter((q): q is ICQuestion => q !== null);
+  const unsupportedThesisQuestions = thesisItems
+    .filter((t) => t.status === "UNSUPPORTED" && t.materiality === "MATERIAL")
+    .map(fromUnsupportedThesis);
 
-  return [
+  const all = [
     ...readiness.blockers.map(fromBlocker),
     ...readiness.factConflicts.map(fromFactConflict),
     ...material.map(fromMissingInfo),
     ...findingQuestions,
+    ...unsupportedThesisQuestions,
     ...informational.map(fromMissingInfo),
   ];
+
+  return all
+    .map((q, index) => ({ q, index }))
+    .sort((a, b) => PRIORITY_RANK[a.q.priority] - PRIORITY_RANK[b.q.priority] || a.index - b.index)
+    .map(({ q }) => q);
 }
