@@ -19,6 +19,7 @@ import type {
   DataRoomFindingRow,
 } from "@/lib/pe/pe-data-room-view-model";
 import { MaDealDocumentDetailDialog } from "./ma-deal-document-detail-dialog";
+import type { PEEvidenceRequestView } from "@/lib/pe/pe-ic-review-types";
 import type { MaDocumentType } from "@prisma/client";
 
 function formatBytes(size: number): string {
@@ -37,11 +38,13 @@ export function MaDealDataRoom({
   documents,
   evidence,
   findings,
+  evidenceRequests,
   loading,
 }: {
   documents: DataRoomDocumentRow[];
   evidence: DataRoomEvidenceRow[];
   findings: DataRoomFindingRow[];
+  evidenceRequests: PEEvidenceRequestView[];
   loading: boolean;
 }) {
   const [typeFilter, setTypeFilter] = useState<string>("ALL");
@@ -159,7 +162,11 @@ export function MaDealDataRoom({
         </Card>
       )}
 
-      <MaDealDocumentDetailDialog document={selected} onOpenChange={(open) => !open && setSelected(null)} />
+      <MaDealDocumentDetailDialog
+        document={selected}
+        linkedEvidenceRequests={selected ? evidenceRequests.filter((r) => r.linkedDocumentId === selected.id) : []}
+        onOpenChange={(open) => !open && setSelected(null)}
+      />
     </div>
   );
 }

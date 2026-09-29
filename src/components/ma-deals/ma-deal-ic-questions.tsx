@@ -1,6 +1,9 @@
+"use client";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PE_IC_QUESTION_PRIORITY_LABEL } from "@/lib/pe/ma-deal-labels";
+import { CreatePEEvidenceRequestDialog } from "./create-pe-evidence-request-dialog";
 import type { ICQuestion, ICQuestionSourceType, PEICQuestionPriority } from "@/lib/pe/pe-ic-decision-types";
 
 const SOURCE_LABEL: Record<ICQuestionSourceType, string> = {
@@ -32,7 +35,17 @@ const PRIORITY_VARIANT: Record<PEICQuestionPriority, "default" | "secondary" | "
  * 중 하나에서 결정론적으로 파생됐다 — 여기서 새 질문을 만들거나 문구를
  * 재해석하지 않는다. 정렬은 이미 buildICQuestions()가 P0→P1→P2로 해뒀다.
  */
-export function MaDealIcQuestions({ questions }: { questions: ICQuestion[] }) {
+export function MaDealIcQuestions({
+  maDealId,
+  questions,
+  canEdit,
+  onRequestCreated,
+}: {
+  maDealId: string;
+  questions: ICQuestion[];
+  canEdit: boolean;
+  onRequestCreated: () => void | Promise<void>;
+}) {
   return (
     <Card>
       <CardHeader>
@@ -48,16 +61,21 @@ export function MaDealIcQuestions({ questions }: { questions: ICQuestion[] }) {
           <ol className="space-y-3">
             {questions.map((q) => (
               <li key={q.code} className="border rounded-md px-3 py-2 space-y-1">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <Badge variant={PRIORITY_VARIANT[q.priority]} className="text-[10px]">
-                    {PE_IC_QUESTION_PRIORITY_LABEL[q.priority]}
-                  </Badge>
-                  <Badge variant={SOURCE_VARIANT[q.sourceType]} className="text-[10px]">
-                    {SOURCE_LABEL[q.sourceType]}
-                  </Badge>
-                  <Badge variant="outline" className="text-[10px]">
-                    {q.domainLabel}
-                  </Badge>
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <Badge variant={PRIORITY_VARIANT[q.priority]} className="text-[10px]">
+                      {PE_IC_QUESTION_PRIORITY_LABEL[q.priority]}
+                    </Badge>
+                    <Badge variant={SOURCE_VARIANT[q.sourceType]} className="text-[10px]">
+                      {SOURCE_LABEL[q.sourceType]}
+                    </Badge>
+                    <Badge variant="outline" className="text-[10px]">
+                      {q.domainLabel}
+                    </Badge>
+                  </div>
+                  {canEdit && (
+                    <CreatePEEvidenceRequestDialog maDealId={maDealId} question={q} onCreated={onRequestCreated} />
+                  )}
                 </div>
                 <p className="text-sm font-medium">{q.question}</p>
                 <p className="text-xs text-gray-500">

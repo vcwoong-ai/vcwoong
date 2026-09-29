@@ -6,7 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Building2, Landmark, Calculator, TrendingUp, RefreshCw, FolderOpen, ClipboardList, Gavel } from "lucide-react";
+import { Building2, Landmark, Calculator, TrendingUp, RefreshCw, FolderOpen, ClipboardList, Gavel, ListChecks } from "lucide-react";
 import type { MaDealType, MaDealStatus } from "@prisma/client";
 import { MA_DEAL_TYPE_LABEL, MA_DEAL_STATUS_LABEL, MA_ADJUSTMENT_STATUS_LABEL } from "@/lib/pe/ma-deal-labels";
 import type { FinancialCalcResult } from "@/lib/pe/financial-types";
@@ -20,6 +20,7 @@ import { MaDealCanonicalAccountsTable } from "@/components/ma-deals/ma-deal-cano
 import { MaDealReadiness } from "@/components/ma-deals/ma-deal-readiness";
 import { MaDealIcWorkspace } from "@/components/ma-deals/ma-deal-ic-workspace";
 import { MaDealIcDecision } from "@/components/ma-deals/ma-deal-ic-decision";
+import { MaDealIcReviewWorkspace } from "@/components/ma-deals/ma-deal-ic-review-workspace";
 import {
   buildMaDealDashboard,
   type DashboardPeriod,
@@ -31,6 +32,7 @@ import type {
   DataRoomEvidenceRow,
   DataRoomFindingRow,
 } from "@/lib/pe/pe-data-room-view-model";
+import type { PEEvidenceRequestView } from "@/lib/pe/pe-ic-review-types";
 import type { PEDDCase } from "@/lib/pe/dd-types";
 
 interface LineItem {
@@ -138,7 +140,9 @@ export function MaDealDetailClient({
   const [findings, setFindings] = useState<DataRoomFindingRow[]>([]);
 
   useEffect(() => {
-    if (activeTab !== "data-room" || dataRoomLoaded || dataRoomLoading) return;
+    // "검토 Workflow" 탭의 문서 연결 select도 같은 문서 목록을 쓴다(§Step9 —
+    // 데이터룸을 먼저 열지 않아도 문서를 고를 수 있어야 한다).
+    if ((activeTab !== "data-room" && activeTab !== "ic-review-workflow") || dataRoomLoaded || dataRoomLoading) return;
     setDataRoomLoading(true);
     fetch(`/api/ma-deals/${maDeal.id}/documents`)
       .then((res) => (res.ok ? res.json() : Promise.reject(res)))
@@ -154,6 +158,35 @@ export function MaDealDetailClient({
       .finally(() => setDataRoomLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, dataRoomLoaded, dataRoomLoading, maDeal.id]);
+
+  // Evidence Request(PR #109) — 데이터룸 문서 상세의 "이 자료로 해결 가능한
+  // 이슈"와 "검토 Workflow" 탭이 공유하는 하나의 state다(중복 조회 방지).
+  // 두 탭 중 아무 쪽이나 먼저 열리면 로딩하고, 이후 재조회는 명시적
+  // refreshEvidenceRequests() 호출(생성/상태변경/문서연결 이후)로만 한다.
+  const [evidenceRequestsLoaded, setEvidenceRequestsLoaded] = useState(false);
+  const [evidenceRequestsLoading, setEvidenceRequestsLoading] = useState(false);
+  const [evidenceRequests, setEvidenceRequests] = useState<PEEvidenceRequestView[]>([]);
+
+  const refreshEvidenceRequests = async () => {
+    setEvidenceRequestsLoading(true);
+    try {
+      const res = await fetch(`/api/ma-deals/${maDeal.id}/evidence-requests`);
+      if (!res.ok) return;
+      const json = await res.json();
+      setEvidenceRequests(json.data ?? []);
+      setEvidenceRequestsLoaded(true);
+    } catch {
+      toast.error("근거 요청 목록을 불러오지 못했습니다");
+    } finally {
+      setEvidenceRequestsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if ((activeTab !== "data-room" && activeTab !== "ic-review-workflow") || evidenceRequestsLoaded || evidenceRequestsLoading) return;
+    refreshEvidenceRequests();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, evidenceRequestsLoaded, evidenceRequestsLoading, maDeal.id]);
 
   // IC Decision Dashboard(PR #102) — periods state(재무 추가/DART 임포트 시
   // refreshPeriods()로 이미 최신화됨)에서 매번 다시 계산한다. page.tsx가
@@ -285,6 +318,10 @@ export function MaDealDetailClient({
             <Gavel className="w-3.5 h-3.5" />
             IC 의사결정
           </TabsTrigger>
+          <TabsTrigger value="ic-review-workflow" className="flex items-center gap-1.5">
+            <ListChecks className="w-3.5 h-3.5" />
+            검토 Workflow
+          </TabsTrigger>
           <TabsTrigger value="data-room" className="flex items-center gap-1.5">
             <FolderOpen className="w-3.5 h-3.5" />
             데이터룸
@@ -309,16 +346,39 @@ export function MaDealDetailClient({
 
         <TabsContent value="ic-review" className="space-y-4">
           <MaDealIcWorkspace
+            maDealId={maDeal.id}
             maDeal={maDeal}
             dashboard={dashboard}
             ddCase={ddCase}
             periods={periods}
+            canEdit={canEdit}
             onNavigateTab={setActiveTab}
+            onEvidenceRequestCreated={refreshEvidenceRequests}
           />
         </TabsContent>
 
         <TabsContent value="ic-decision" className="space-y-4">
-          <MaDealIcDecision maDeal={maDeal} dashboard={dashboard} ddCase={ddCase} onNavigateTab={setActiveTab} />
+          <MaDealIcDecision
+            maDeal={maDeal}
+            dashboard={dashboard}
+            ddCase={ddCase}
+            canEdit={canEdit}
+            onNavigateTab={setActiveTab}
+            onEvidenceRequestCreated={refreshEvidenceRequests}
+          />
+        </TabsContent>
+
+        <TabsContent value="ic-review-workflow" className="space-y-4">
+          <MaDealIcReviewWorkspace
+            maDeal={maDeal}
+            dashboard={dashboard}
+            ddCase={ddCase}
+            documents={documents}
+            evidenceRequests={evidenceRequests}
+            evidenceRequestsLoading={evidenceRequestsLoading && !evidenceRequestsLoaded}
+            canEdit={canEdit}
+            onRefresh={refreshEvidenceRequests}
+          />
         </TabsContent>
 
         <TabsContent value="data-room" className="space-y-4">
@@ -326,6 +386,7 @@ export function MaDealDetailClient({
             documents={documents}
             evidence={evidence}
             findings={findings}
+            evidenceRequests={evidenceRequests}
             loading={dataRoomLoading && !dataRoomLoaded}
           />
         </TabsContent>

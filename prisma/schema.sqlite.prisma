@@ -676,8 +676,9 @@ model MADocument {
   metadata   Json?
   createdAt  DateTime       @default(now())
 
-  maDeal     MADeal       @relation(fields: [maDealId], references: [id], onDelete: Cascade)
-  peEvidence PEEvidence[]
+  maDeal             MADeal              @relation(fields: [maDealId], references: [id], onDelete: Cascade)
+  peEvidence         PEEvidence[]
+  peEvidenceRequests PEEvidenceRequest[]
 
   @@index([maDealId])
 }
@@ -869,9 +870,10 @@ model PEDDCase {
   createdAt DateTime       @default(now())
   updatedAt DateTime       @updatedAt
 
-  maDeal   MADeal        @relation(fields: [maDealId], references: [id], onDelete: Cascade)
-  findings PEDDFinding[]
-  evidence PEEvidence[]
+  maDeal           MADeal              @relation(fields: [maDealId], references: [id], onDelete: Cascade)
+  findings         PEDDFinding[]
+  evidence         PEEvidence[]
+  evidenceRequests PEEvidenceRequest[]
 
   @@index([maDealId])
 }
@@ -927,6 +929,48 @@ model PEEvidence {
   @@index([ddCaseId])
   @@index([findingId])
   @@index([documentId])
+}
+
+model PEEvidenceRequest {
+  id       String @id @default(cuid())
+  ddCaseId String
+
+  reviewItemSourceType String
+  reviewItemSourceId   String
+
+  title             String
+  requestedDocument String?
+  requestedFact     String?
+  reason            String
+  priority          PEICQuestionPriorityDb
+  status            PEEvidenceRequestStatus @default(REQUESTED)
+
+  linkedDocumentId String?
+
+  createdByUserId String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  ddCase         PEDDCase    @relation(fields: [ddCaseId], references: [id], onDelete: Cascade)
+  linkedDocument MADocument? @relation(fields: [linkedDocumentId], references: [id], onDelete: SetNull)
+
+  @@index([ddCaseId])
+  @@index([reviewItemSourceType, reviewItemSourceId])
+  @@index([linkedDocumentId])
+}
+
+enum PEEvidenceRequestStatus {
+  REQUESTED
+  RECEIVED
+  UNDER_REVIEW
+  ACCEPTED
+  REJECTED
+}
+
+enum PEICQuestionPriorityDb {
+  P0
+  P1
+  P2
 }
 
 enum PEDDCaseStatus {

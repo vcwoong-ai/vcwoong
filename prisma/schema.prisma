@@ -714,6 +714,8 @@ model MADocument {
   /// evidence 자체는 감사 기록으로 남아야 하므로 documentId만 SetNull된다
   /// (PEEvidence 모델 정의 참고).
   peEvidence PEEvidence[]
+  /// 이 문서로 해결을 시도하는 evidence request(PR #109) — 동일하게 SetNull.
+  peEvidenceRequests PEEvidenceRequest[]
 
   @@index([maDealId])
 }
@@ -964,9 +966,10 @@ model PEDDCase {
   createdAt DateTime       @default(now())
   updatedAt DateTime       @updatedAt
 
-  maDeal   MADeal        @relation(fields: [maDealId], references: [id], onDelete: Cascade)
-  findings PEDDFinding[]
-  evidence PEEvidence[]
+  maDeal           MADeal              @relation(fields: [maDealId], references: [id], onDelete: Cascade)
+  findings         PEDDFinding[]
+  evidence         PEEvidence[]
+  evidenceRequests PEEvidenceRequest[]
 
   @@index([maDealId])
 }
@@ -1034,6 +1037,64 @@ model PEEvidence {
   @@index([ddCaseId])
   @@index([findingId])
   @@index([documentId])
+}
+
+/// IC 검토 워크플로 메타데이터(PR #109). "review item"(블로커/누락 정보/DD
+/// finding에서 파생된 항목) 자체는 이 테이블에 저장하지 않는다 — 그건 항상
+/// buildPEDecisionReadiness()/buildPEICReviewItems()가 매번 다시 계산하는
+/// 파생값이다(§핵심 원칙 5: "Do not persist derived readiness state"). 이
+/// 테이블이 저장하는 건 오직 사람이 실제로 한 행동, 즉 "이 근거를
+/// 요청했다"는 워크플로 사실뿐이다("Persist only workflow metadata"). 어떤
+/// review item에 대한 요청인지는 그 review item의 결정론적 코드
+/// (pe-ic-review.ts가 만드는 것과 동일한 포맷 — 예: "BLOCKER:xxx",
+/// "DD_FINDING:xxx")로만 연결한다(reviewItemSourceType/reviewItemSourceId).
+model PEEvidenceRequest {
+  id       String @id @default(cuid())
+  ddCaseId String
+
+  /// review item의 결정론적 소스 식별자 — review item을 여기 FK로 잡지 않는
+  /// 이유: review item 자체가 파생값이라 안정적인 PK가 없다(§Step3 주석 참고).
+  reviewItemSourceType String
+  reviewItemSourceId   String
+
+  title             String
+  requestedDocument String?
+  requestedFact     String?
+  reason            String                  @db.Text
+  priority          PEICQuestionPriorityDb
+  status            PEEvidenceRequestStatus @default(REQUESTED)
+
+  /// 실제 연결된 Data Room 문서(있으면). 문서가 삭제돼도 요청 자체는 감사
+  /// 기록으로 남아야 하므로 SetNull(PEEvidence.documentId와 동일 계약).
+  linkedDocumentId String?
+
+  createdByUserId String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  ddCase         PEDDCase    @relation(fields: [ddCaseId], references: [id], onDelete: Cascade)
+  linkedDocument MADocument? @relation(fields: [linkedDocumentId], references: [id], onDelete: SetNull)
+
+  @@index([ddCaseId])
+  @@index([reviewItemSourceType, reviewItemSourceId])
+  @@index([linkedDocumentId])
+}
+
+enum PEEvidenceRequestStatus {
+  REQUESTED
+  RECEIVED
+  UNDER_REVIEW
+  ACCEPTED
+  REJECTED
+}
+
+/// src/lib/pe/pe-ic-decision-types.ts PE_IC_QUESTION_PRIORITIES(PR #108)와
+/// 값이 정확히 일치해야 한다. Prisma enum 이름이 "Priority"와 충돌하지
+/// 않도록 접미사 Db를 붙였다(다른 도메인의 Priority enum과 혼동 방지).
+enum PEICQuestionPriorityDb {
+  P0
+  P1
+  P2
 }
 
 enum PEDDCaseStatus {

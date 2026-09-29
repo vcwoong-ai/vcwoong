@@ -2,10 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getUserTeamContext } from "@/lib/team-access";
+import { prisma } from "@/lib/prisma";
 import { loadMaDealIcContext } from "@/lib/pe/pe-ma-deal-context";
 import { buildMaDealDashboard } from "@/lib/pe/ma-deal-dashboard";
 import { buildPEICDecision } from "@/lib/pe/pe-ic-decision";
 import { buildPEICMemoMarkdown } from "@/lib/pe/pe-ic-memo";
+import { buildPEICReviewWorkspace } from "@/lib/pe/pe-ic-review";
+import { listPEEvidenceRequests, type PEDDActor } from "@/lib/pe/pe-evidence-request-repository";
+import { toPEEvidenceRequestView } from "@/lib/pe/pe-ic-review-types";
 import { generateMarkdownDOCX } from "@/lib/docx-export";
 import { generateMarkdownPPTX } from "@/lib/pptx-export";
 import { MA_DEAL_TYPE_LABEL, MA_DEAL_STATUS_LABEL } from "@/lib/pe/ma-deal-labels";
@@ -31,7 +35,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     return NextResponse.json({ error: "인증이 필요합니다" }, { status: 401 });
   }
 
-  const { teamId } = await getUserTeamContext(session.user.id);
+  const { teamId, role } = await getUserTeamContext(session.user.id);
   const result = await loadMaDealIcContext(session.user.id, teamId, params.id);
   if (result.status === "not_found") {
     return NextResponse.json({ error: "PE 딜을 찾을 수 없습니다" }, { status: 404 });
@@ -51,12 +55,25 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     lboAssumptionKeysProvided: undefined,
   });
 
-  const markdown = buildPEICMemoMarkdown(decision, {
-    companyName: maDeal.companyName,
-    name: maDeal.name,
-    dealTypeLabel: MA_DEAL_TYPE_LABEL[maDeal.dealType],
-    statusLabel: MA_DEAL_STATUS_LABEL[maDeal.status],
-  });
+  // IC Review Status(PR #109) — 화면(ma-deal-ic-review-workspace.tsx)과
+  // 정확히 같은 조립 함수(buildPEICReviewWorkspace)에 정확히 같은 입력
+  // (decision.questions + 영속된 evidence requests)을 넣는다.
+  const actor: PEDDActor = { userId: session.user.id, teamId, role };
+  const ddCaseRow = await prisma.pEDDCase.findUnique({ where: { maDealId: params.id }, select: { id: true } });
+  const evidenceRequestsResult = ddCaseRow ? await listPEEvidenceRequests(actor, ddCaseRow.id) : undefined;
+  const evidenceRequests = evidenceRequestsResult?.status === "ok" ? evidenceRequestsResult.data.map((r) => toPEEvidenceRequestView(r)) : [];
+  const reviewWorkspace = buildPEICReviewWorkspace(maDeal.id, decision.processState, decision.questions, evidenceRequests);
+
+  const markdown = buildPEICMemoMarkdown(
+    decision,
+    {
+      companyName: maDeal.companyName,
+      name: maDeal.name,
+      dealTypeLabel: MA_DEAL_TYPE_LABEL[maDeal.dealType],
+      statusLabel: MA_DEAL_STATUS_LABEL[maDeal.status],
+    },
+    reviewWorkspace
+  );
 
   const format = request.nextUrl.searchParams.get("format") === "pptx" ? "pptx" : "docx";
   const title = `${maDeal.companyName} IC Memo`;
