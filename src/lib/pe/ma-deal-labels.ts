@@ -5,6 +5,7 @@
 import type { MaDealType, MaDealStatus, MaAdjustmentStatus, MaDocumentType, MaFinancialSourceType } from "@prisma/client";
 import type { ReadinessState, PEDecisionDomainKey } from "./pe-decision-readiness";
 import type { PEDDCategory, PEDDSeverity, PEDDFindingStatus } from "./dd-types";
+import type { PEThesisStatus, PEThesisBreakerState, PEICQuestionPriority, PEICProcessState } from "./pe-ic-decision-types";
 
 export const MA_DEAL_TYPE_LABEL: Record<MaDealType, string> = {
   BUYOUT: "바이아웃",
@@ -100,4 +101,36 @@ export const PE_DD_FINDING_STATUS_LABEL: Record<PEDDFindingStatus, string> = {
   ACCEPTED: "수용됨",
   REJECTED: "기각됨",
   CLOSED: "종결됨",
+};
+
+/** pe-ic-decision-types.ts PEICProcessState(PR #108) — "투자해야 하는가"가
+ * 아니라 "IC가 지금 검토할 준비가 됐는가"라는 프로세스 상태다. */
+export const PE_IC_PROCESS_STATE_LABEL: Record<PEICProcessState, string> = {
+  READY_FOR_IC: "IC 검토 가능",
+  PARTIALLY_READY: "부분적으로 준비됨",
+  NOT_READY: "아직 준비 안 됨",
+  BLOCKED: "데이터 모순으로 차단됨",
+};
+
+/** pe-ic-decision-types.ts PEThesisStatus(PR #108) */
+export const PE_THESIS_STATUS_LABEL: Record<PEThesisStatus, string> = {
+  SUPPORTED: "근거 있음",
+  PARTIALLY_SUPPORTED: "부분적으로 뒷받침됨",
+  UNSUPPORTED: "근거 없음",
+  CONTRADICTED: "상충하는 데이터 있음",
+};
+
+/** pe-ic-decision-types.ts PEThesisBreakerState(PR #108) */
+export const PE_THESIS_BREAKER_STATE_LABEL: Record<PEThesisBreakerState, string> = {
+  OPEN: "미해결",
+  MITIGATED: "완화됨",
+  ACCEPTED: "수용됨",
+  CANNOT_BE_ESTABLISHED: "현재 확인 불가",
+};
+
+/** pe-ic-decision-types.ts PEICQuestionPriority(PR #108) */
+export const PE_IC_QUESTION_PRIORITY_LABEL: Record<PEICQuestionPriority, string> = {
+  P0: "P0 · 즉시 확인 필요",
+  P1: "P1 · 중요",
+  P2: "P2 · 참고",
 };

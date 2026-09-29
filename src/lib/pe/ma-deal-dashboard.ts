@@ -33,7 +33,7 @@ import type {
   MaFinancialSourceType,
 } from "./financial-types";
 import type { QoEAdjustmentInput, QoEAdjustmentStatus } from "./qoe-types";
-import type { PEDecisionAdjustmentRow, PEDecisionReadinessInput } from "./pe-decision-readiness";
+import { buildPEDecisionReadiness, type PEDecisionAdjustmentRow, type PEDecisionReadiness, type PEDecisionReadinessInput } from "./pe-decision-readiness";
 import type { PEDDCase } from "./dd-types";
 import type { PEEvidenceLineage } from "./evidence-lineage-types";
 
@@ -296,5 +296,53 @@ export function toPEDecisionReadinessInput(
         netDebt: p.normalizedSummary.netDebt,
       },
     })),
+  };
+}
+
+// ── 전체 대시보드 조립(PR #108) ──────────────────────────────────────────
+
+export interface MaDealDashboardSnapshot {
+  qoeSummary: QoESummaryView | null;
+  lboEntryEbitda: ReturnType<typeof computeLboEntryEbitda>;
+  dartStatus: DartStatusView;
+  financialQuality: FinancialQualityView;
+  decisionReadiness: PEDecisionReadiness;
+}
+
+/**
+ * `periods`(+선택적으로 `ddCase`)로부터 `MaDealDashboardSnapshot` 전체를
+ * 한 번에 조립한다 — 이 파일의 개별 함수를 순서대로 호출하는 것과 완전히
+ * 동일하다(새 계산 없음, 순서/입력만 한 곳에 고정).
+ *
+ * ## 왜 이 함수가 필요한가(PR #108)
+ *
+ * PR #102~#107까지는 이 조립 시퀀스가 `ma-deal-detail-client.tsx`의
+ * `useMemo` 안에만 있었다(클라이언트 전용) — 재무 기간 추가 등 로컬
+ * state 변경에 반응해 즉시 재계산되도록 의도적으로 클라이언트에 둔
+ * 설계였다(그 파일 주석 참고, 여전히 유효). 하지만 PR #108의 IC Memo
+ * 내보내기(export)는 서버 라우트에서 파일을 생성해야 하므로 같은
+ * 조립을 서버에서도 호출할 수 있어야 한다. 이 파일(ma-deal-dashboard.ts)은
+ * 원래도 React/DOM에 의존하지 않는 순수 lib 파일이라 서버·클라이언트
+ * 어디서든 그대로 호출 가능하다 — 이 함수는 그 조립 순서를 한 곳으로
+ * 모아, `ma-deal-detail-client.tsx`(클라이언트)와 IC Memo export
+ * route(서버)가 정확히 같은 함수를 호출하도록 강제한다(§10 "UI와 export가
+ * 서로 다른 결론을 만들면 안 된다"를 구조적으로 보장).
+ */
+export function buildMaDealDashboard(
+  periods: DashboardPeriod[],
+  ddCase?: PEDDCase
+): MaDealDashboardSnapshot {
+  const latest = periods[0] ?? null;
+  const qoeSummary = latest ? computeQoESummary(latest) : null;
+  const lboEntryEbitda = computeLboEntryEbitda(latest, qoeSummary);
+  const dartStatus = computeDartStatus(periods);
+  return {
+    qoeSummary,
+    lboEntryEbitda,
+    dartStatus,
+    financialQuality: computeFinancialQuality(periods),
+    decisionReadiness: buildPEDecisionReadiness(
+      toPEDecisionReadinessInput(periods, { ddCase, evidenceLineage: ddCase?.lineage })
+    ),
   };
 }
