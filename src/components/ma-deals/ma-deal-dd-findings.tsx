@@ -32,19 +32,19 @@ export function MaDealDdFindings({ findings }: { findings: PEDDFinding[] }) {
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <p className="font-medium">{f.title}</p>
                   <div className="flex items-center gap-1.5 shrink-0">
-                    <Badge variant="outline" className="text-[10px]">
+                    <Badge variant="outline" className="text-xs">
                       {PE_DD_CATEGORY_LABEL[f.category]}
                     </Badge>
-                    <Badge variant={SEVERITY_VARIANT[f.severity]} className="text-[10px]">
+                    <Badge variant={SEVERITY_VARIANT[f.severity]} className="text-xs">
                       {PE_DD_SEVERITY_LABEL[f.severity]}
                     </Badge>
-                    <Badge variant="secondary" className="text-[10px]">
+                    <Badge variant="secondary" className="text-xs">
                       {PE_DD_FINDING_STATUS_LABEL[f.status]}
                     </Badge>
                   </div>
                 </div>
                 <p className="text-xs text-gray-500">{f.description}</p>
-                <p className="text-[11px] text-gray-400">
+                <p className="text-xs text-gray-400">
                   연결된 근거 {f.evidenceIds.length}건
                   {f.claimIds.length > 0 && ` · claim ${f.claimIds.length}건`}
                 </p>

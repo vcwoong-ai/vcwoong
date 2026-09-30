@@ -52,6 +52,45 @@ export const VC_EVIDENCE_STATE_LABEL: Record<VCEvidenceState, string> = {
  * 없는 차원을 억지로 만들지 않는다(스코프 밖으로 명시, 보고서에 기재). */
 export type VCDecisionDimensionKey = ScoreDimensionKey | "valuation";
 
+/**
+ * 상충하는 값 하나(같은 지표를 서로 다르게 말하는 claim 하나) — 어느 출처가
+ * 어떤 값을, 어떤 기간·시나리오·단위로 주장하는지 그대로 담는다. 값 하나를
+ * 조용히 고르지 않기 위한 구조라, 그룹의 모든 claim을 빠짐없이 담는다
+ * (예전 `VCDecisionDimension.contradiction`은 앞 2개만 담아 3번째 이후 값이 숨었다).
+ */
+export interface VCContradictionValue {
+  /** 보고서 원문 표기("95억원") */
+  raw: string;
+  /** 비교용 정규화 값("95") */
+  value: string;
+  unit: string;
+  /** "FY2024"/"Q1"/"TTM"… 라벨에 명시된 기간 — 명시가 없으면 "UNSPECIFIED"(추정 금지) */
+  period: string;
+  /** 실적/추정 — 명시가 없으면 "UNSPECIFIED" */
+  scenario: "ACTUAL" | "FORECAST" | "UNSPECIFIED";
+  /** 이 값이 쓰인 보고서 섹션 */
+  sectionKey: string;
+  /** 이 값을 뒷받침한 업로드 자료(있을 때만) */
+  documentName?: string;
+  location?: string;
+  snippet?: string;
+}
+
+/** 같은 지표에 서로 다른 값이 2개 이상 있는 상태 — 결정 레이어의 1급 객체. */
+export interface VCContradiction {
+  id: string;
+  /** 화면 표시용 지표명("매출", "영업이익"…) */
+  metricLabel: string;
+  unit: string;
+  /** 이 상충이 영향을 주는 판단 차원. 매핑된 섹션이 없으면 undefined */
+  dimension?: VCDecisionDimensionKey;
+  /** 상충하는 모든 값(절대 잘라내지 않는다) */
+  values: VCContradictionValue[];
+  decisionImpact: VCDecisionImpact;
+  verificationRequirement: string;
+  icQuestion?: IcQuestion;
+}
+
 export interface VCDecisionDimension {
   dimension: VCDecisionDimensionKey;
   label: string;
@@ -82,7 +121,7 @@ export interface VCInvestmentDriver {
 
 export interface VCThesisBreaker {
   id: string;
-  trigger: RiskFlag | "LOW_SCORE";
+  trigger: RiskFlag | "LOW_SCORE" | "CONTRADICTION";
   dimension?: ScoreDimensionKey;
   title: string;
   whyItMatters: string;
@@ -133,5 +172,7 @@ export interface VCInvestmentDecision {
   thesisBreakers: VCThesisBreaker[];
   /** 우선순위(P0 먼저) 정렬 완료 */
   missingInformation: VCMissingInformation[];
+  /** 수치 상충 전체 목록 — 차원 타일의 요약(`contradiction`)과 달리 모든 값을 담는다 */
+  contradictions: VCContradiction[];
   valuation: VCValuationCase;
 }

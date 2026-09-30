@@ -26,6 +26,7 @@ import {
 import { EditDealDialog } from "@/components/deals/edit-deal-dialog";
 import { TeamShareToggle } from "@/components/team/team-share-toggle";
 import { ReportWizard } from "@/components/reports/report-wizard";
+import { DealDecisionSummary } from "@/components/vc/deal-decision-summary";
 import { DealScoreRadar } from "@/components/deals/deal-score-radar";
 import { DealDartPanel } from "@/components/deals/deal-dart-panel";
 import {
@@ -544,6 +545,9 @@ export function DealDetailClient({
         </div>
       )}
 
+      {/* 투자 판단 — 5초 안에 이 딜의 상태를 읽게 하는 첫 구획(최신 보고서의 canonical 결정 요약) */}
+      <DealDecisionSummary reportId={deal.reports.find((r) => r.sections.length > 0)?.id ?? null} />
+
       {/* Investment details */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
@@ -581,7 +585,7 @@ export function DealDetailClient({
       {/* Tabs */}
       <Tabs defaultValue="documents">
         {/* 탭 3개가 좁은 화면 폭을 넘기므로 가로 스크롤을 허용한다 */}
-        <TabsList className="w-full sm:w-auto overflow-x-auto justify-start">
+        <TabsList className="w-full overflow-x-auto justify-start">
           <TabsTrigger value="documents" className="flex items-center gap-1.5">
             <Upload className="w-3.5 h-3.5" />
             문서 ({deal.documents.length})

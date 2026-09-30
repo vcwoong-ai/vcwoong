@@ -66,11 +66,11 @@ interface DealScore {
 const COLOR = "#2563EB";
 
 const CONFIDENCE_META: Record<ScoreConfidence, { label: string; className: string }> = {
-  HIGH: { label: "확신 높음", className: "bg-green-50 text-green-700 border-green-200" },
-  MEDIUM: { label: "검토 필요", className: "bg-amber-50 text-amber-700 border-amber-200" },
+  HIGH: { label: "확신 높음", className: "bg-state-positive-bg text-state-positive border-state-positive-line" },
+  MEDIUM: { label: "검토 필요", className: "bg-state-caution-bg text-state-caution border-state-caution-line" },
   LOW: { label: "약한 근거", className: "bg-orange-50 text-orange-700 border-orange-200" },
-  UNSUPPORTED: { label: "근거 없음", className: "bg-red-50 text-red-700 border-red-200" },
-  NO_EVIDENCE: { label: "평가 불가", className: "bg-gray-50 text-gray-500 border-gray-200" },
+  UNSUPPORTED: { label: "근거 없음", className: "bg-state-critical-bg text-state-critical border-state-critical-line" },
+  NO_EVIDENCE: { label: "평가 불가", className: "bg-state-neutral-bg text-state-neutral border-state-neutral-line" },
 };
 
 /** 실제 RiskFlag 값(deal-scoring-evidence.ts)에 맞춘 한글 라벨 — 하드코딩 나열이지만 값 자체가 적고 고정적이다 */
@@ -97,9 +97,12 @@ function toRadarData(score: DealScore) {
 export function DealScoreRadar({
   dealId,
   canEdit,
+  onComputed,
 }: {
   dealId: string;
   canEdit: boolean;
+  /** 점수 계산이 끝나면 호출 — 결정 요약이 새 점수로 다시 계산되게 한다 */
+  onComputed?: () => void;
 }) {
   const [score, setScore] = useState<DealScore | null>(null);
   const [benchmark, setBenchmark] = useState<SectorStageBenchmark | null>(null);
@@ -134,6 +137,7 @@ export function DealScoreRadar({
       if (!res.ok) throw new Error(json.error ?? "점수 계산 실패");
       setScore(json.data);
       await load(); // 벤치마크는 GET에서만 계산하므로 재계산 후 다시 불러온다
+      onComputed?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : "점수 계산 실패");
     } finally {
@@ -190,8 +194,8 @@ export function DealScoreRadar({
             <ResponsiveContainer width="100%" height="100%">
               <RadarChart data={toRadarData(score)} outerRadius="75%">
                 <PolarGrid />
-                <PolarAngleAxis dataKey="dimension" tick={{ fontSize: 11 }} />
-                <PolarRadiusAxis domain={[0, 100]} tick={{ fontSize: 9 }} />
+                <PolarAngleAxis dataKey="dimension" tick={{ fontSize: 12, fill: "#475569" }} />
+                <PolarRadiusAxis domain={[0, 100]} tick={{ fontSize: 12, fill: "#64748b" }} />
                 <Radar
                   name="점수"
                   dataKey="value"
@@ -218,12 +222,12 @@ export function DealScoreRadar({
                   <span className="text-gray-700 font-medium">{d.label}</span>{" "}
                   {score[d.key]}점
                   {dimMeta && (
-                    <span className={`ml-1 rounded border px-1 py-0 text-[10px] ${dimMeta.className}`}>
+                    <span className={`ml-1 rounded border px-1 py-0 text-xs ${dimMeta.className}`}>
                       {dim!.evidenceCoverage != null ? `근거 ${dim!.evidenceCoverage}%` : dimMeta.label}
                     </span>
                   )}
                   {dim?.decisionImpact === "HIGH" && (
-                    <span className="ml-1 rounded border border-red-200 bg-red-50 text-red-700 px-1 py-0 text-[10px]">
+                    <span className="ml-1 rounded border border-red-200 bg-red-50 text-red-700 px-1 py-0 text-xs">
                       판단 영향 높음
                     </span>
                   )}
@@ -240,7 +244,7 @@ export function DealScoreRadar({
                 {assessment.riskFlags.map((flag) => (
                   <span
                     key={flag}
-                    className="text-[11px] rounded border border-amber-200 bg-amber-50 text-amber-700 px-1.5 py-0.5"
+                    className="text-xs rounded border border-amber-200 bg-amber-50 text-amber-700 px-1.5 py-0.5"
                   >
                     {RISK_FLAG_LABEL[flag] ?? flag}
                   </span>
@@ -250,7 +254,7 @@ export function DealScoreRadar({
           )}
 
           {assessment && assessment.basis === "no_report" && (
-            <p className="mt-2 text-[11px] text-gray-400">
+            <p className="mt-2 text-xs text-gray-400">
               보고서 없이 문서 원문만으로 채점돼 근거 추적을 계산할 수 없습니다. 보고서 생성 후 다시 계산하면 근거가 연결됩니다.
             </p>
           )}
@@ -297,14 +301,14 @@ export function DealScoreRadar({
           )}
 
           {benchmark && (
-            <p className="mt-3 text-[11px] text-gray-400 border-t border-gray-100 pt-2">
+            <p className="mt-3 text-xs text-gray-400 border-t border-gray-100 pt-2">
               {benchmark.status === "ok"
                 ? `동일 섹터·스테이지 ${benchmark.comparableCount}건 중 상위 ${100 - (benchmark.percentile ?? 0)}% 수준 (평균 ${benchmark.sectorStageAverage}점)`
                 : `벤치마크 데이터 부족 (동일 섹터·스테이지 비교 가능 딜 ${benchmark.comparableCount}건 · 최소 ${benchmark.minRequired}건 필요)`}
             </p>
           )}
 
-          <p className="mt-2 text-[11px] text-gray-400">
+          <p className="mt-2 text-xs text-gray-400">
             {new Date(score.computedAt).toLocaleString("ko-KR")} 계산 · {score.modelUsed}
           </p>
         </>

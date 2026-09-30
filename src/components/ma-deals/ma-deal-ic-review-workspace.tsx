@@ -53,14 +53,14 @@ function ReviewItemCard({ item, onSelect }: { item: PEICReviewItem; onSelect: ()
       className="w-full text-left border rounded-md px-3 py-2 hover:bg-gray-50 space-y-1"
     >
       <div className="flex items-center gap-1.5 flex-wrap">
-        <Badge variant={ITEM_STATUS_VARIANT[item.status] ?? "outline"} className="text-[10px]">
+        <Badge variant={ITEM_STATUS_VARIANT[item.status] ?? "outline"} className="text-xs">
           {PE_IC_REVIEW_ITEM_STATUS_LABEL[item.status]}
         </Badge>
-        <Badge variant="outline" className="text-[10px]">
+        <Badge variant="outline" className="text-xs">
           {PE_IC_REVIEW_ITEM_TYPE_LABEL[item.type]}
         </Badge>
         {item.evidenceRequests.length > 0 && (
-          <span className="text-[10px] text-gray-400">요청 {item.evidenceRequests.length}건</span>
+          <span className="text-xs text-gray-400">요청 {item.evidenceRequests.length}건</span>
         )}
       </div>
       <p className="text-sm font-medium">{item.title}</p>

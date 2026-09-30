@@ -29,7 +29,7 @@ function FingerprintBadge({ fingerprint }: { fingerprint: string }) {
       type="button"
       onClick={copy}
       title={fingerprint}
-      className="inline-flex items-center gap-1 text-[10px] font-mono text-gray-400 hover:text-gray-600 max-w-full"
+      className="inline-flex items-center gap-1 text-xs font-mono text-gray-400 hover:text-gray-600 max-w-full"
     >
       <span className="truncate">{truncateFingerprint(fingerprint)}</span>
       <Copy className="w-3 h-3 shrink-0" />
@@ -145,11 +145,11 @@ export function MaDealReviewHistory({ maDealId, refreshKey }: { maDealId: string
                       <div className="flex items-center justify-between gap-2 flex-wrap">
                         <div className="flex items-center gap-1.5 flex-wrap min-w-0">
                           <span className="font-medium text-sm">Review #{s.version}</span>
-                          <Badge variant={s.isCurrent ? "default" : "outline"} className="text-[10px]">
+                          <Badge variant={s.isCurrent ? "default" : "outline"} className="text-xs">
                             {s.isCurrent ? "현재 기준과 일치" : "과거 기록"}
                           </Badge>
                           {s.openP0Count > 0 && (
-                            <Badge variant="destructive" className="text-[10px]">
+                            <Badge variant="destructive" className="text-xs">
                               P0 {s.openP0Count}건 미해결
                             </Badge>
                           )}

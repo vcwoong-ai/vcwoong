@@ -22,9 +22,9 @@ export function MaDealDrivers({ drivers }: { drivers: PEInvestmentDriver[] }) {
             {drivers.map((d) => (
               <li key={d.id} className="border rounded-md px-3 py-2 text-sm space-y-1">
                 <p className="font-medium">{d.title}</p>
-                <div className="flex items-center gap-1.5 flex-wrap text-[11px] text-gray-400">
+                <div className="flex items-center gap-1.5 flex-wrap text-xs text-gray-400">
                   <span>근거 {d.evidenceIds.length}건</span>
-                  {d.financialRelevance && <Badge variant="outline" className="text-[10px]">{d.financialRelevance}</Badge>}
+                  {d.financialRelevance && <Badge variant="outline" className="text-xs">{d.financialRelevance}</Badge>}
                 </div>
               </li>
             ))}

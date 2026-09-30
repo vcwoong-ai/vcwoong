@@ -58,7 +58,7 @@ export function MaDealCanonicalAccountsTable({
                     const lookup = lookupCanonicalAccount(p, row.key);
                     return (
                       <td key={p.id} className="px-4 py-2.5">
-                        {lookup.status === "missing" && <span className="text-gray-300">—</span>}
+                        {lookup.status === "missing" && <span className="text-slate-400">—</span>}
                         {lookup.status === "conflict" && (
                           <div className="space-y-0.5">
                             {lookup.values.map((v, i) => (
@@ -69,7 +69,7 @@ export function MaDealCanonicalAccountsTable({
                                 {v.sourceName ? ` · ${v.sourceName}` : ""}
                               </p>
                             ))}
-                            <p className="text-[10px] text-red-500 font-medium">⚠ 모순 — 값을 임의로 선택하지 않았습니다</p>
+                            <p className="text-xs text-red-500 font-medium">⚠ 모순 — 값을 임의로 선택하지 않았습니다</p>
                           </div>
                         )}
                         {lookup.status === "ok" && (

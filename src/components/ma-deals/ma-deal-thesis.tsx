@@ -30,17 +30,17 @@ export function MaDealThesis({ items }: { items: PEThesisItem[] }) {
             {items.map((t) => (
               <li key={t.id} className="border rounded-md px-3 py-2 text-sm space-y-1">
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <Badge variant={STATUS_VARIANT[t.status]} className="text-[10px]">
+                  <Badge variant={STATUS_VARIANT[t.status]} className="text-xs">
                     {PE_THESIS_STATUS_LABEL[t.status]}
                   </Badge>
                   {t.materiality === "MATERIAL" && (
-                    <Badge variant="outline" className="text-[10px]">
+                    <Badge variant="outline" className="text-xs">
                       Material
                     </Badge>
                   )}
                 </div>
                 <p>{t.statement}</p>
-                <p className="text-[11px] text-gray-400">근거 {t.supportingEvidenceIds.length}건</p>
+                <p className="text-xs text-gray-400">근거 {t.supportingEvidenceIds.length}건</p>
               </li>
             ))}
           </ul>

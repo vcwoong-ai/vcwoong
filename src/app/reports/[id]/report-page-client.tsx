@@ -8,7 +8,9 @@ import { ReportQualityPanel } from "@/components/reports/report-quality-panel";
 import { ReportEvidencePanel } from "@/components/reports/report-evidence-panel";
 import { ReportDeepDivePanel } from "@/components/reports/report-deep-dive-panel";
 import { IcQuestionsPanel } from "@/components/reports/ic-questions-panel";
-import { IcReviewPanel } from "@/components/reports/ic-review-panel";
+import { DecisionWorkspace } from "@/components/vc/decision-workspace";
+import { SectionHeader } from "@/components/ui/section-header";
+import { Card } from "@/components/ui/card";
 import { decideResumeAction } from "@/components/reports/report-wizard";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -248,6 +250,7 @@ export function ReportPageClient({
     setPageStatus(report.status);
   }, [report.id, report.status]);
   const [qualityRefreshKey, setQualityRefreshKey] = useState(0);
+  const [decisionRefreshKey, setDecisionRefreshKey] = useState(0);
   const [improveRequest, setImproveRequest] = useState<{
     sectionKey: string;
     qualityIssues: string[];
@@ -562,12 +565,46 @@ export function ReportPageClient({
       </div>
 
       {report.sections.length > 0 && (
-        <IcReviewPanel
-          reportId={report.id}
-          dealId={report.deal.id}
-          canEdit={canEdit}
-          sections={report.sections}
+        <Card className="p-5 sm:p-6">
+          <DecisionWorkspace
+            reportId={report.id}
+            dealId={report.deal.id}
+            canEdit={canEdit}
+            refreshKey={decisionRefreshKey}
+            onRefresh={() => setDecisionRefreshKey((k) => k + 1)}
+          />
+        </Card>
+      )}
+
+      {report.sections.length > 0 && (
+        <SectionHeader
+          className="pt-2"
+          eyebrow="Evidence & verification"
+          title="근거 추적 · 보조 검증"
+          description="결정 요약을 뒷받침하는 도구입니다 — 근거 대조, 외부 검증, IC 질문, 작성 품질"
         />
+      )}
+
+      {report.sections.length > 0 && (
+        <ReportEvidencePanel
+          reportId={report.id}
+          refreshKey={qualityRefreshKey}
+          canEdit={canEdit}
+        />
+      )}
+
+      {report.sections.length > 0 && (
+        <div id="ic-questions">
+          <IcQuestionsPanel
+            reportId={report.id}
+            canEdit={canEdit}
+            onGenerated={() => setDecisionRefreshKey((k) => k + 1)}
+          />
+        </div>
+      )}
+
+      {report.sections.length > 0 && (
+        <ReportDeepDivePanel reportId={report.id} canEdit={canEdit} />
       )}
 
       {report.sections.length > 0 && (
@@ -590,22 +627,6 @@ export function ReportPageClient({
         />
       )}
 
-      {report.sections.length > 0 && (
-        <ReportEvidencePanel
-          reportId={report.id}
-          refreshKey={qualityRefreshKey}
-          canEdit={canEdit}
-        />
-      )}
-
-      {report.sections.length > 0 && (
-        <ReportDeepDivePanel reportId={report.id} canEdit={canEdit} />
-      )}
-
-      {report.sections.length > 0 && (
-        <IcQuestionsPanel reportId={report.id} canEdit={canEdit} />
-      )}
-
       {batchImproving && batchProgress && (
         <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800 flex items-center gap-2">
           <Loader2 className="w-4 h-4 animate-spin shrink-0" />
@@ -626,6 +647,14 @@ export function ReportPageClient({
           내보내기(DOCX/PPTX/PDF)는 가능합니다.
         </div>
       )}
+
+      <SectionHeader
+        className="pt-2"
+        id="report-detail"
+        eyebrow="Detailed analysis"
+        title="상세 분석 (보고서 본문)"
+        description="결정 요약의 근거가 되는 보고서 섹션입니다 — 편집·재생성·승인·내보내기"
+      />
 
       <ReportEditor
         reportId={report.id}

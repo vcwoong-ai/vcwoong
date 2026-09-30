@@ -11,7 +11,6 @@ import {
   Inbox,
   Upload,
   Settings,
-  ChevronRight,
   Zap,
   LayoutTemplate,
   LineChart,
@@ -20,63 +19,45 @@ import {
   X,
 } from "lucide-react";
 
-const navItems = [
+interface NavItem {
+  label: string;
+  href: string;
+  icon: typeof LayoutDashboard;
+}
+
+/**
+ * VC와 PE는 한 플랫폼 안의 두 워크스페이스다 — 같은 셸을 쓰되 메뉴에서 어느
+ * 워크스페이스에 있는지 분명히 구분한다. 화면을 억지로 똑같이 만들지 않고
+ * 도메인별 정보 구조는 그대로 둔다.
+ */
+const navGroups: Array<{ heading: string | null; items: NavItem[] }> = [
+  { heading: null, items: [{ label: "대시보드", href: "/dashboard", icon: LayoutDashboard }] },
   {
-    label: "대시보드",
-    href: "/dashboard",
-    icon: LayoutDashboard,
+    heading: "VC 워크스페이스",
+    items: [
+      { label: "딜소싱", href: "/sourcing", icon: Inbox },
+      { label: "딜 관리", href: "/deals", icon: Briefcase },
+      { label: "보고서", href: "/reports", icon: FileText },
+      { label: "보고서 생성", href: "/reports/new", icon: Sparkles },
+    ],
   },
   {
-    label: "딜소싱",
-    href: "/sourcing",
-    icon: Inbox,
+    heading: "PE/M&A 워크스페이스",
+    items: [{ label: "PE/M&A 딜", href: "/ma-deals", icon: Landmark }],
   },
   {
-    label: "딜 관리",
-    href: "/deals",
-    icon: Briefcase,
-  },
-  {
-    label: "PE/M&A 딜",
-    href: "/ma-deals",
-    icon: Landmark,
-  },
-  {
-    label: "보고서",
-    href: "/reports",
-    icon: FileText,
-  },
-  {
-    label: "보고서 생성",
-    href: "/reports/new",
-    icon: Sparkles,
-  },
-  {
-    label: "양식 관리",
-    href: "/templates",
-    icon: LayoutTemplate,
-  },
-  {
-    label: "포트폴리오",
-    href: "/portfolio",
-    icon: LineChart,
-  },
-  {
-    label: "LP 리포팅",
-    href: "/lp-report",
-    icon: FileText,
-  },
-  {
-    label: "파일 업로드",
-    href: "/upload",
-    icon: Upload,
-  },
-  {
-    label: "설정",
-    href: "/settings",
-    icon: Settings,
+    heading: "플랫폼",
+    items: [
+      { label: "양식 관리", href: "/templates", icon: LayoutTemplate },
+      { label: "포트폴리오", href: "/portfolio", icon: LineChart },
+      { label: "LP 리포팅", href: "/lp-report", icon: FileText },
+      { label: "파일 업로드", href: "/upload", icon: Upload },
+      { label: "설정", href: "/settings", icon: Settings },
+    ],
   },
 ];
+
+const navItems: NavItem[] = navGroups.flatMap((g) => g.items);
 
 /**
  * 어떤 메뉴를 활성 표시할지 정한다.
@@ -121,9 +102,8 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
 
       <aside
         className={cn(
-          // 단색 대신 아주 옅은 그라데이션 — 큰 남색 면이 밋밋해 보이는 걸 덜어준다
           "fixed left-0 top-0 h-screen w-64 z-50 flex flex-col text-white",
-          "bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950",
+          "bg-slate-900",
           "border-r border-white/5",
           "overflow-y-auto transition-transform duration-200 lg:transition-none",
           // 모바일에서는 기본으로 화면 밖에 두고, 열었을 때만 밀어 넣는다.
@@ -135,7 +115,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
       {/* Logo */}
       <div className="p-6 border-b border-white/10 flex items-start justify-between gap-2">
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg shadow-blue-500/25">
+          <div className="w-9 h-9 rounded-md flex items-center justify-center flex-shrink-0 bg-blue-600">
             <Zap className="w-5 h-5 text-white" />
           </div>
           <div className="min-w-0">
@@ -154,42 +134,40 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-4 space-y-1">
-        {navItems.map((item) => {
-          const isActive = isActiveHref(pathname, item.href);
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              // 모바일에서 메뉴를 고르면 드로어가 닫혀야 이동한 화면이 보인다.
-              onClick={onClose}
-              className={cn(
-                "group relative flex items-center gap-3 px-3 py-2.5 rounded-lg",
-                "text-sm font-medium transition-colors duration-150",
-                isActive
-                  ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20"
-                  : "text-slate-400 hover:bg-white/5 hover:text-white"
-              )}
-              aria-current={isActive ? "page" : undefined}
-            >
-              {/* 활성 항목 왼쪽 하이라이트 바 — 배경색만으로 구분하는 것보다
-                  어디에 있는지가 한눈에 들어온다 */}
-              {isActive && (
-                <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-1 rounded-r-full bg-white/90" />
-              )}
-              <item.icon
-                className={cn(
-                  "w-4 h-4 flex-shrink-0 transition-transform duration-150",
-                  !isActive && "group-hover:scale-110"
-                )}
-              />
-              <span>{item.label}</span>
-              {isActive && (
-                <ChevronRight className="w-3 h-3 ml-auto opacity-70" />
-              )}
-            </Link>
-          );
-        })}
+      <nav className="flex-1 p-4 space-y-5" aria-label="주 메뉴">
+        {navGroups.map((group, gi) => (
+          <div key={group.heading ?? `g${gi}`} role="group" aria-label={group.heading ?? undefined}>
+            {group.heading && (
+              <p className="px-3 pb-1.5 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
+                {group.heading}
+              </p>
+            )}
+            <div className="space-y-0.5">
+              {group.items.map((item) => {
+                const isActive = isActiveHref(pathname, item.href);
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    // 모바일에서 메뉴를 고르면 드로어가 닫혀야 이동한 화면이 보인다.
+                    onClick={onClose}
+                    className={cn(
+                      "relative flex items-center gap-3 px-3 py-2 rounded-md",
+                      "text-sm font-medium transition-colors duration-150",
+                      isActive ? "bg-white/10 text-white" : "text-slate-400 hover:bg-white/5 hover:text-white"
+                    )}
+                    aria-current={isActive ? "page" : undefined}
+                  >
+                    {/* 활성 표시는 배경 글로우가 아니라 왼쪽 2px 바 — 어디에 있는지가 절제되게 읽힌다 */}
+                    {isActive && <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 bg-blue-400" />}
+                    <item.icon className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                    <span>{item.label}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </nav>
 
       {/* Agent badges */}

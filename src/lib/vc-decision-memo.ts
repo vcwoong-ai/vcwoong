@@ -8,11 +8,11 @@
  * decision 객체를 문자열 템플릿으로 옮기는 순수 함수다.
  *
  * decision이 자체 품질 게이트(vc-decision-gate.ts)를 통과하지 못하면,
- * IcReviewPanel과 동일하게 그 내용을 신뢰 가능한 것처럼 내보내지 않고
+ * 결정 워크스페이스(components/vc)와 동일하게 그 내용을 신뢰 가능한 것처럼 내보내지 않고
  * 명시적 경고 섹션 하나만 반환한다(§4 — export도 UI와 같은 신뢰 기준을
  * 적용해야 한다).
  */
-import type { ScoreDimensionKey } from "./deal-scoring-shared";
+import { SCORE_DIMENSIONS, type ScoreDimensionKey } from "./deal-scoring-shared";
 import { DIMENSION_SECTION_MAP } from "./deal-scoring-evidence";
 import { checkVCDecisionGate } from "./vc-decision-gate";
 import { VC_EVIDENCE_STATE_LABEL, VC_PRIORITY_LABEL, type VCInvestmentDecision } from "./vc-decision-types";
@@ -52,6 +52,10 @@ export function buildDecisionMemoSectionRefs(
     }
   );
   return refs;
+}
+
+function sectionDimensionLabel(dimension: string): string {
+  return SCORE_DIMENSIONS.find((d) => d.key === dimension)?.label ?? dimension;
 }
 
 function sectionRefNote(
@@ -119,12 +123,35 @@ export function buildDecisionMemoSections(
     for (const d of decision.decisionDimensions) {
       const note = sectionRefNote(d.dimension as ScoreDimensionKey, sectionRefs);
       const state = d.contradiction
-        ? `${VC_EVIDENCE_STATE_LABEL[d.state]}(상충: ${d.contradiction.valueA} vs ${d.contradiction.valueB})`
+        ? `${VC_EVIDENCE_STATE_LABEL[d.state]}(상충: ${d.contradiction.valueA} vs ${d.contradiction.valueB} — 아래 '수치 상충' 참조)`
         : VC_EVIDENCE_STATE_LABEL[d.state];
       lines.push(`| ${d.label} | ${state} | ${note || "-"} |`);
     }
     lines.push(`| 밸류에이션 | ${VC_EVIDENCE_STATE_LABEL[decision.valuation.evidenceState]} | - |`);
     sections.push({ title: "투자 결정 요약", content: lines.join("\n") });
+  }
+
+  // 수치 상충 — 어느 출처가 어떤 값을 주장하는지 전부 보여준다(값 하나를 고르지 않는다).
+  const contradictions = decision.contradictions ?? [];
+  if (contradictions.length > 0) {
+    const lines: string[] = [];
+    for (const c of contradictions) {
+      lines.push(`### ${c.metricLabel} — ${c.values.length}개 값이 상충 [영향: ${c.decisionImpact}]`);
+      lines.push("| 출처 | 값 | 기간 | 구분 | 위치 |");
+      lines.push("| --- | --- | --- | --- | --- |");
+      for (const v of c.values) {
+        const scenario = v.scenario === "ACTUAL" ? "실적" : v.scenario === "FORECAST" ? "추정" : "명시 없음";
+        const period = v.period === "UNSPECIFIED" ? "명시 없음" : v.period;
+        lines.push(`| ${v.documentName ?? "출처 미표기"} | ${v.raw} | ${period} | ${scenario} | ${v.location ?? "-"} |`);
+      }
+      if (c.dimension) {
+        lines.push(`- 영향 차원: ${c.dimension === "valuation" ? "밸류에이션" : sectionDimensionLabel(c.dimension)}`);
+      }
+      lines.push(`- 검증 필요: ${c.verificationRequirement}`);
+      if (c.icQuestion) lines.push(`- 관련 IC 질문: ${c.icQuestion.question}`);
+      lines.push("");
+    }
+    sections.push({ title: "수치 상충 (출처별 값 대조)", content: lines.join("\n").trimEnd() });
   }
 
   // Page 2 — Investment Drivers

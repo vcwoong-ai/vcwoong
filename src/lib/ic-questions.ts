@@ -17,6 +17,7 @@
  */
 import { SCORE_DIMENSIONS, type ScoreDimensionKey } from "./deal-scoring-shared";
 import type { ScoreEvidenceAssessment, DimensionEvidenceAssessment, RiskFlag, ScoreConfidence } from "./deal-scoring-evidence";
+import type { VCContradiction } from "./vc-decision-types";
 
 export type QuestionCategory =
   | "Market"
@@ -44,7 +45,8 @@ export type QuestionTrigger =
   | "UNSUPPORTED_CLAIM"
   | "HIGH_SCORE_LOW_EVIDENCE"
   | "RATIONALE_EVIDENCE_MISMATCH"
-  | "VALUATION_EVIDENCE_GAP";
+  | "VALUATION_EVIDENCE_GAP"
+  | "CONTRADICTION";
 
 export interface IcQuestion {
   id: string;
@@ -225,6 +227,29 @@ function valuationGapQuestion(
   };
 }
 
+/**
+ * 같은 지표에 서로 다른 값이 있으면 그 자체가 IC에서 반드시 물어야 할 질문이다.
+ * 어느 값이 맞는지는 시스템이 고르지 않고, 각 값과 출처를 질문에 그대로 적는다.
+ */
+function contradictionQuestion(c: VCContradiction): IcQuestion {
+  const listed = c.values
+    .map((v) => `${v.raw}${v.documentName ? `(${v.documentName})` : ""}`)
+    .join(", ");
+  return {
+    id: `contradiction:${c.id}`,
+    category: c.dimension === "valuation" ? "Valuation" : c.dimension ? DIMENSION_CATEGORY[c.dimension] : "Financials",
+    question: `${c.metricLabel}이(가) 자료마다 다르게 기재돼 있습니다(${listed}). 어느 값이 정본이며, 값이 다른 이유(기준 시점·정의·정정 여부)는 무엇입니까?`,
+    whyItMatters: `같은 지표에 서로 다른 값이 ${c.values.length}개 있어, 정본이 확인되기 전에는 이 지표에 근거한 판단이 성립하지 않습니다.`,
+    trigger: "CONTRADICTION",
+    priority: "HIGH",
+    relatedDimension: c.dimension && c.dimension !== "valuation" ? c.dimension : undefined,
+    relatedClaim: c.values[0]?.raw,
+    relatedEvidence: "UNSUPPORTED",
+    suggestedAnswerType: "FINANCIAL_TABLE",
+    source: "deterministic",
+  };
+}
+
 const PRIORITY_RANK: Record<QuestionPriority, number> = { HIGH: 3, MEDIUM: 2, LOW: 1 };
 
 function dedupeAndRank(candidates: IcQuestion[]): IcQuestion[] {
@@ -248,9 +273,12 @@ function dedupeAndRank(candidates: IcQuestion[]): IcQuestion[] {
 export function buildDeterministicIcQuestions(
   rationale: Partial<Record<ScoreDimensionKey, string>>,
   assessment: ScoreEvidenceAssessment,
-  dealFacts: { investAmount?: number | null; valuation?: number | null }
+  dealFacts: { investAmount?: number | null; valuation?: number | null },
+  /** vc-decision.ts의 buildContradictions() 결과 — 상충은 항상 질문이 된다(개수 제한 예외) */
+  contradictions: VCContradiction[] = []
 ): IcQuestion[] {
   const candidates: IcQuestion[] = [];
+  const contradictionQuestions = contradictions.map(contradictionQuestion);
 
   for (const { key } of SCORE_DIMENSIONS) {
     const dim = assessment.dimensions[key];
@@ -275,7 +303,12 @@ export function buildDeterministicIcQuestions(
   const valuationQ = valuationGapQuestion(assessment.riskFlags, dealFacts);
   if (valuationQ) candidates.push(valuationQ);
 
-  return dedupeAndRank(candidates);
+  // 상충 질문은 상위 10개 제한에 밀려 사라지지 않게 앞에 붙인다.
+  const contradictionIds = new Set(contradictionQuestions.map((q) => q.id));
+  return [
+    ...contradictionQuestions,
+    ...dedupeAndRank(candidates).filter((q) => !contradictionIds.has(q.id)),
+  ];
 }
 
 export function toIcQuestionsResult(

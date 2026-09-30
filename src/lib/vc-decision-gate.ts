@@ -23,7 +23,12 @@ export type VCDecisionGateFailureReason =
   | "THESIS_BREAKER_WITHOUT_EVIDENCE_OR_MISSING_STATE"
   | "THESIS_BREAKER_WITH_ASSESSED_PROBABILITY"
   | "VALUATION_NOT_COMPUTABLE_WITHOUT_REQUIRED_INPUT"
-  | "GENERIC_LANGUAGE_WITHOUT_SPECIFICS";
+  | "GENERIC_LANGUAGE_WITHOUT_SPECIFICS"
+  | "CONTRADICTED_DIMENSION_PRESENTED_AS_SOLID_DRIVER"
+  | "CONTRADICTION_WITHOUT_THESIS_BREAKER"
+  | "CONTRADICTION_WITHOUT_MULTIPLE_VALUES"
+  | "CONTRADICTION_NOT_REFLECTED_IN_CONFIDENCE"
+  | "CONTRADICTED_DIMENSION_WITHOUT_DETAIL";
 
 export interface VCDecisionGateResult {
   ok: boolean;
@@ -65,6 +70,8 @@ function checkMissingInformation(items: VCMissingInformation[]): VCDecisionGateR
 function checkDrivers(drivers: VCInvestmentDriver[]): VCDecisionGateResult {
   for (const d of drivers) {
     if (d.evidenceState === "MISSING") continue; // MISSING은 근거가 없다고 명시하는 것 자체가 정상 상태
+    // CONTRADICTED도 "상충한다"고 명시하는 것 자체가 정상 상태 — 근거는 decision.contradictions가 담는다.
+    if (d.evidenceState === "CONTRADICTED") continue;
     if (d.evidence.length === 0) {
       return { ok: false, reason: "DRIVER_WITHOUT_EVIDENCE_OR_MISSING_STATE", detail: d.id };
     }
@@ -115,12 +122,50 @@ function checkVerifiedDimensions(decision: VCInvestmentDecision): VCDecisionGate
 }
 
 /**
+ * 수치 상충이 결정 레이어에서 숨지 않는지 검증한다 — Decision Map은 '상충'인데
+ * Driver는 '확인됨'으로 보이거나, 상충이 Thesis Breaker/확신도에 반영되지 않는
+ * 상태를 구조적으로 막는다(hidden contradiction).
+ */
+function checkContradictions(decision: VCInvestmentDecision): VCDecisionGateResult {
+  const contradictedDims = new Set(
+    decision.decisionDimensions.filter((d) => d.state === "CONTRADICTED").map((d) => d.dimension as string)
+  );
+  for (const driver of decision.drivers) {
+    if (contradictedDims.has(driver.dimension) && driver.evidenceState !== "CONTRADICTED") {
+      return { ok: false, reason: "CONTRADICTED_DIMENSION_PRESENTED_AS_SOLID_DRIVER", detail: driver.id };
+    }
+  }
+  const contradictions = decision.contradictions ?? [];
+  // 타일은 '상충'인데 무엇이 어떻게 상충하는지 상세가 없으면 투자자가 원인을 알 수 없다.
+  for (const dimKey of Array.from(contradictedDims)) {
+    if (!contradictions.some((c) => c.dimension === dimKey)) {
+      return { ok: false, reason: "CONTRADICTED_DIMENSION_WITHOUT_DETAIL", detail: dimKey };
+    }
+  }
+  for (const c of contradictions) {
+    const distinct = new Set(c.values.map((v) => `${v.value}|${v.unit}`));
+    if (c.values.length < 2 || distinct.size < 2) {
+      return { ok: false, reason: "CONTRADICTION_WITHOUT_MULTIPLE_VALUES", detail: c.id };
+    }
+    const hasBreaker = decision.thesisBreakers.some((b) => b.trigger === "CONTRADICTION" && b.id.endsWith(c.id));
+    if (!hasBreaker) {
+      return { ok: false, reason: "CONTRADICTION_WITHOUT_THESIS_BREAKER", detail: c.id };
+    }
+  }
+  if (contradictions.length > 0 && decision.confidence !== "CONTRADICTED") {
+    return { ok: false, reason: "CONTRADICTION_NOT_REFLECTED_IN_CONFIDENCE" };
+  }
+  return { ok: true };
+}
+
+/**
  * 전체 Investment Decision 객체 하나를 검증한다. 첫 위반에서 바로
  * 실패를 반환한다(section-generation-gate.ts와 동일한 이진 판정 스타일).
  */
 export function checkVCDecisionGate(decision: VCInvestmentDecision): VCDecisionGateResult {
   const checks = [
     () => checkVerifiedDimensions(decision),
+    () => checkContradictions(decision),
     () => checkMissingInformation(decision.missingInformation),
     () => checkDrivers(decision.drivers),
     () => checkThesisBreakers(decision.thesisBreakers),

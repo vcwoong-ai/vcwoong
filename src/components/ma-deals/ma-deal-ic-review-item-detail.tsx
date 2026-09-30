@@ -117,13 +117,13 @@ export function MaDealIcReviewItemDetail({
             </DialogHeader>
             <div className="space-y-4 text-sm">
               <div className="flex items-center gap-1.5 flex-wrap">
-                <Badge variant={STATUS_VARIANT[item.status] ?? "outline"} className="text-[10px]">
+                <Badge variant={STATUS_VARIANT[item.status] ?? "outline"} className="text-xs">
                   {PE_IC_REVIEW_ITEM_STATUS_LABEL[item.status]}
                 </Badge>
-                <Badge variant="outline" className="text-[10px]">
+                <Badge variant="outline" className="text-xs">
                   {PE_IC_REVIEW_ITEM_TYPE_LABEL[item.type]}
                 </Badge>
-                <Badge variant="outline" className="text-[10px]">
+                <Badge variant="outline" className="text-xs">
                   {PE_IC_QUESTION_PRIORITY_LABEL[item.priority]}
                 </Badge>
               </div>
@@ -173,7 +173,7 @@ export function MaDealIcReviewItemDetail({
                           <li key={req.id} className="border rounded-md px-3 py-2 space-y-1.5">
                             <div className="flex items-center justify-between gap-2">
                               <span className="font-medium truncate">{req.title}</span>
-                              <Badge variant={STATUS_VARIANT[req.status] ?? "outline"} className="text-[10px] shrink-0">
+                              <Badge variant={STATUS_VARIANT[req.status] ?? "outline"} className="text-xs shrink-0">
                                 {PE_EVIDENCE_REQUEST_STATUS_LABEL[req.status]}
                               </Badge>
                             </div>
@@ -189,7 +189,7 @@ export function MaDealIcReviewItemDetail({
                                 연결된 문서: <span className="font-medium">{req.linkedDocumentName ?? req.linkedDocumentId}</span>
                               </p>
                             ) : (
-                              <p className="text-xs text-gray-300">아직 연결된 문서 없음</p>
+                              <p className="text-xs text-slate-500">아직 연결된 문서 없음</p>
                             )}
 
                             {canEdit && req.status !== "ACCEPTED" && req.status !== "REJECTED" && (

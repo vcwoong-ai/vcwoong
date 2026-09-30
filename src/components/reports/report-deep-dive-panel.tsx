@@ -28,17 +28,17 @@ const VERDICT_META: Record<
 > = {
   지지: {
     label: "지지",
-    className: "bg-green-50 text-green-700 border-green-200",
+    className: "bg-state-positive-bg text-state-positive border-state-positive-line",
     icon: CheckCircle2,
   },
   불일치: {
     label: "불일치",
-    className: "bg-red-50 text-red-700 border-red-200",
+    className: "bg-state-critical-bg text-state-critical border-state-critical-line",
     icon: XCircle,
   },
   불명확: {
     label: "불명확",
-    className: "bg-gray-50 text-gray-600 border-gray-200",
+    className: "bg-state-neutral-bg text-state-neutral border-state-neutral-line",
     icon: HelpCircle,
   },
 };
@@ -140,19 +140,19 @@ export function ReportDeepDivePanel({
                   <div className="flex items-start justify-between gap-2 flex-wrap">
                     <div className="min-w-0">
                       <span className="text-sm text-gray-900">{c.claim}</span>
-                      <span className="ml-2 text-[11px] text-gray-400">
+                      <span className="ml-2 text-xs text-gray-400">
                         {sectionTitle(c.sectionKey)}
                       </span>
                     </div>
                     <span
-                      className={`flex items-center gap-1 text-[11px] rounded border px-1.5 py-0.5 shrink-0 ${meta.className}`}
+                      className={`flex items-center gap-1 text-xs rounded border px-1.5 py-0.5 shrink-0 ${meta.className}`}
                     >
                       <Icon className="w-3 h-3" />
                       {meta.label}
                     </span>
                   </div>
                   {c.rationale && (
-                    <p className="mt-1 text-[11px] text-gray-500">{c.rationale}</p>
+                    <p className="mt-1 text-xs text-gray-500">{c.rationale}</p>
                   )}
                   {c.sources.length > 0 && (
                     <ul className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
@@ -162,7 +162,7 @@ export function ReportDeepDivePanel({
                             href={s.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-[11px] text-blue-600 hover:underline truncate max-w-[220px] inline-block align-bottom"
+                            className="text-xs text-blue-600 hover:underline truncate max-w-[220px] inline-block align-bottom"
                           >
                             {s.source === "news" ? "📰" : "🔗"} {s.title}
                           </a>
@@ -174,7 +174,7 @@ export function ReportDeepDivePanel({
               );
             })}
           </ul>
-          <p className="mt-2 text-[11px] text-gray-400">
+          <p className="mt-2 text-xs text-gray-400">
             {new Date(data.computedAt).toLocaleString("ko-KR")} 검증 · {data.modelUsed}
           </p>
         </>

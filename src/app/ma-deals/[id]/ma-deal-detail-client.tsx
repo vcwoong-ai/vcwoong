@@ -99,11 +99,11 @@ function formatWon(value: number): string {
 }
 
 function renderCalcResult(result: FinancialCalcResult | undefined): React.ReactNode {
-  if (!result) return <span className="text-gray-300">—</span>;
+  if (!result) return <span className="text-slate-400">—</span>;
   if (result.status === "ok") return <span className="font-medium">{formatWon(result.value)}</span>;
   if (result.status === "currency_mismatch")
     return <span className="text-amber-600 text-xs" title={result.detail}>통화 불일치</span>;
-  return <span className="text-gray-300 text-xs">데이터 없음</span>;
+  return <span className="text-slate-500 text-xs">데이터 없음</span>;
 }
 
 const PERIOD_TYPE_LABEL: Record<string, string> = {

@@ -28,7 +28,7 @@ export function MaDealMissingInfo({ readiness }: { readiness: PEDecisionReadines
               <li key={item.code} className="flex items-start gap-2 text-sm text-gray-700">
                 <AlertCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
                 <span>
-                  <Badge variant="outline" className="text-[10px] mr-1.5 align-middle">
+                  <Badge variant="outline" className="text-xs mr-1.5 align-middle">
                     {PE_DECISION_DOMAIN_LABEL[item.domain]}
                   </Badge>
                   {item.reason}
@@ -41,7 +41,7 @@ export function MaDealMissingInfo({ readiness }: { readiness: PEDecisionReadines
           <ul className="space-y-1.5 border-t pt-3">
             {informational.map((item) => (
               <li key={item.code} className="flex items-start gap-2 text-xs text-gray-500">
-                <AlertCircle className="w-3.5 h-3.5 text-gray-300 shrink-0 mt-0.5" />
+                <AlertCircle className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
                 <span>
                   <span className="text-gray-400">[{PE_DECISION_DOMAIN_LABEL[item.domain]}]</span> {item.reason}
                 </span>

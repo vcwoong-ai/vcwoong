@@ -6,8 +6,8 @@ import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { MaDealType, MaDealStatus } from "@prisma/client";
-import { MA_DEAL_TYPE_LABEL, READINESS_STATE_LABEL, PE_DECISION_DOMAIN_LABEL, PE_IC_REVIEW_SIGNOFF_STATUS_LABEL } from "@/lib/pe/ma-deal-labels";
-import type { ReadinessState } from "@/lib/pe/pe-decision-readiness";
+import { MA_DEAL_TYPE_LABEL, PE_DECISION_DOMAIN_LABEL, PE_IC_REVIEW_SIGNOFF_STATUS_LABEL } from "@/lib/pe/ma-deal-labels";
+import { ReadinessBadge } from "./readiness-badge";
 import type { MaDealListReadinessSummary } from "@/lib/pe/ma-deal-list-readiness";
 
 interface MaDealCardProps {
@@ -28,14 +28,6 @@ interface MaDealCardProps {
   onArchive?: () => void;
   archiving?: boolean;
 }
-
-const STATE_VARIANT: Record<ReadinessState, "default" | "secondary" | "destructive" | "outline"> = {
-  READY: "default",
-  PARTIAL: "secondary",
-  MISSING: "destructive",
-  NOT_STARTED: "outline",
-  BLOCKED: "destructive",
-};
 
 const DOMAIN_ROWS: Array<{ key: "financial" | "qoe" | "lbo" | "dd"; label: string }> = [
   { key: "financial", label: PE_DECISION_DOMAIN_LABEL.FINANCIAL },
@@ -67,9 +59,7 @@ export function MaDealCard({ deal, readiness, onArchive, archiving }: MaDealCard
             </Badge>
           )}
           {readiness && (
-            <Badge variant={STATE_VARIANT[readiness.overall]} className="text-xs ml-auto shrink-0">
-              {READINESS_STATE_LABEL[readiness.overall]}
-            </Badge>
+            <ReadinessBadge state={readiness.overall} className="ml-auto shrink-0" />
           )}
         </div>
 
@@ -83,10 +73,8 @@ export function MaDealCard({ deal, readiness, onArchive, archiving }: MaDealCard
             <div className="grid grid-cols-4 gap-1.5">
               {DOMAIN_ROWS.map((row) => (
                 <div key={row.key} className="min-w-0 text-center">
-                  <p className="text-[10px] text-gray-400 truncate">{row.label}</p>
-                  <Badge variant={STATE_VARIANT[readiness[row.key]]} className="text-[10px] px-1.5 w-full justify-center">
-                    {READINESS_STATE_LABEL[readiness[row.key]]}
-                  </Badge>
+                  <p className="text-xs text-slate-500 truncate">{row.label}</p>
+                  <ReadinessBadge state={readiness[row.key]} compact className="w-full justify-center px-1" />
                 </div>
               ))}
             </div>

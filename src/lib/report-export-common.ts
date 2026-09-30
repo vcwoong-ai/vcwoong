@@ -4,13 +4,8 @@ import { hasFeature } from "@/lib/plans";
 import { getUserPlanKey } from "@/lib/subscription";
 import { ReportStatus } from "@prisma/client";
 import { getUserTeamContext, reportReadWhere } from "@/lib/team-access";
-import { traceReportEvidence } from "@/lib/evidence";
-import { verdictsToMap } from "@/lib/evidence-ai";
-import type { ScoreEvidenceAssessment } from "@/lib/deal-scoring-evidence";
-import type { ScoreDimensionKey } from "@/lib/deal-scoring-shared";
-import type { IcQuestion } from "@/lib/ic-questions";
-import { buildInvestmentDecision } from "@/lib/vc-decision";
-import { buildDecisionMemoSectionRefs, buildDecisionMemoSections } from "@/lib/vc-decision-memo";
+import { computeReportDecision } from "@/lib/vc-decision-loader";
+import { buildDecisionMemoSections } from "@/lib/vc-decision-memo";
 
 export async function loadReportForExport(userId: string, reportId: string) {
   const { teamId } = await getUserTeamContext(userId);
@@ -56,35 +51,9 @@ export async function loadReportForExport(userId: string, reportId: string) {
   const canUseEngine =
     templateReady && hasFeature(await getUserPlanKey(userId), "templateEngine");
 
-  // PR-K: Decision-First memo — /api/reports/[id]/evidence GET(traceReportEvidence)·
-  // /api/deals/[id]/score(evidenceAssessment)·IC Questions 패널이 이미 화면에서
-  // 쓰는 것과 정확히 같은 함수·같은 캐시만 재사용한다(evidence-ai.ts의
-  // verdictsToMap도 새 AI 호출이 아니라 캐시 조회다). vc-decision.ts는 여기서도
-  // 순수 함수로만 호출된다 — export 전용 새 생성 파이프라인이 아니다.
-  const evidence = traceReportEvidence(
-    report.sections.map((s) => ({ sectionKey: s.sectionKey, content: s.content })),
-    report.deal.documents,
-    { investAmount: report.deal.investAmount, valuation: report.deal.valuation },
-    verdictsToMap(report.evidenceCheck?.verdicts)
-  );
-  const assessment = (report.deal.score?.evidenceAssessment ?? null) as unknown as
-    | ScoreEvidenceAssessment
-    | null;
-  const rationale = (report.deal.score?.rationale ?? {}) as unknown as Partial<
-    Record<ScoreDimensionKey, string>
-  >;
-  const questions = (report.icQuestions?.questions ?? null) as unknown as IcQuestion[] | null;
-  const decision = buildInvestmentDecision(
-    report.deal.score?.overall ?? 0,
-    assessment,
-    rationale,
-    evidence.claims,
-    questions,
-    { investAmount: report.deal.investAmount, valuation: report.deal.valuation }
-  );
-  const sectionRefs = buildDecisionMemoSectionRefs(
-    report.sections.map((s) => ({ sectionKey: s.sectionKey, title: s.title }))
-  );
+  // Decision-First memo — 화면(GET /api/reports/[id]/decision)과 같은 조립 함수
+  // (vc-decision-loader.ts)를 쓴다. export 전용 파이프라인이 아니다.
+  const { decision, sectionRefs } = computeReportDecision(report);
   const decisionMemoSections = buildDecisionMemoSections(decision, sectionRefs);
 
   return { report, canUseEngine, decisionMemoSections } as const;

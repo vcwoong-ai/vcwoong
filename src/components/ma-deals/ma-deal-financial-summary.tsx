@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { AlertTriangle } from "lucide-react";
+import { Callout } from "@/components/ui/callout";
 import { CalcValue, CalcPercent, CalcMultiple } from "./financial-value";
 import type { FinancialQualityView } from "@/lib/pe/ma-deal-dashboard";
 
@@ -21,10 +21,9 @@ export function MaDealFinancialSummary({ quality, conflictCount = 0 }: { quality
           <p className="text-xs text-gray-400">{quality.latestPeriodLabel} 기준</p>
         )}
         {conflictCount > 0 && (
-          <p className="text-xs font-medium text-red-700 flex items-center gap-1.5 mt-1">
-            <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+          <Callout tone="critical" className="mt-2" data-testid="pe-financial-conflict-callout">
             아래 수치는 서로 다른 출처 간 모순 {conflictCount}건이 있는 상태에서 계산된 값입니다 — 데이터룸에서 확인 필요
-          </p>
+          </Callout>
         )}
       </CardHeader>
       <CardContent>

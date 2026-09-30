@@ -35,7 +35,10 @@ function baseDecision(overrides: Partial<VCInvestmentDecision> = {}): VCInvestme
     signal: "PROMISING",
     recommendation: "FURTHER_REVIEW_RECOMMENDED",
     thesis: "투자 논지는 제품·기술력, 재무 건전성에 근거합니다.",
-    confidence: "PARTIALLY_VERIFIED",
+    // 실제 엔진(buildInvestmentDecision)은 상충이 하나라도 있으면 결정 확신도를 CONTRADICTED로
+    // 두고, 상충 차원에는 상충 상세(contradictions)와 CONTRADICTION Thesis Breaker를 함께 만든다.
+    // 합성 데이터도 같은 계약을 지켜야 게이트(vc-decision-gate.ts)를 통과한다.
+    confidence: "CONTRADICTED",
     decisionDimensions: [
       {
         dimension: "product",
@@ -109,6 +112,21 @@ function baseDecision(overrides: Partial<VCInvestmentDecision> = {}): VCInvestme
     ],
     thesisBreakers: [
       {
+        id: "breaker:CONTRADICTION:contradiction:test",
+        trigger: "CONTRADICTION",
+        dimension: "financials",
+        title: "매출 수치 상충 (2개 값)",
+        whyItMatters: "같은 지표(매출)에 서로 다른 값이 2개 있습니다: 10억원(IR덱) vs 8.2억원(재무제표).",
+        evidenceState: "CONTRADICTED",
+        evidence: [
+          { raw: "10억원", documentName: "IR덱" },
+          { raw: "8.2억원", documentName: "재무제표" },
+        ],
+        probability: "NOT_ASSESSED",
+        decisionImpact: "CRITICAL",
+        verificationRequirement: "상충하는 값의 원문 출처 대조",
+      },
+      {
         id: "breaker:team:TEAM_EVIDENCE_GAP",
         trigger: "TEAM_EVIDENCE_GAP",
         dimension: "team",
@@ -129,6 +147,20 @@ function baseDecision(overrides: Partial<VCInvestmentDecision> = {}): VCInvestme
           suggestedAnswerType: "DOCUMENT",
           source: "deterministic",
         },
+      },
+    ],
+    contradictions: [
+      {
+        id: "contradiction:test",
+        metricLabel: "매출",
+        unit: "억원",
+        dimension: "financials",
+        values: [
+          { raw: "10억원", value: "10", unit: "억원", period: "FY2024", scenario: "UNSPECIFIED", sectionKey: "FINANCIAL_STATUS", documentName: "IR덱", location: "페이지 3" },
+          { raw: "8.2억원", value: "8.2", unit: "억원", period: "FY2024", scenario: "UNSPECIFIED", sectionKey: "FINANCIAL_STATUS", documentName: "재무제표" },
+        ],
+        decisionImpact: "CRITICAL",
+        verificationRequirement: "상충하는 값의 원문 출처 대조",
       },
     ],
     missingInformation: [
@@ -172,6 +204,33 @@ function baseDecision(overrides: Partial<VCInvestmentDecision> = {}): VCInvestme
     },
     ...overrides,
   };
+}
+
+
+// ── 16. 수치 상충 전용 섹션 — 모든 값이 출처·기간과 함께 export에 실린다 ─────
+
+function test16_contradictionSectionListsEverySource() {
+  const memo = buildDecisionMemoSections(baseDecision(), []);
+  const section = memo.find((s) => s.title === "수치 상충 (출처별 값 대조)");
+  assert(!!section, "상충이 있으면 '수치 상충' 섹션이 있어야 함(화면과 같은 결론을 export에도 싣는다)");
+  const c = section!.content;
+  assert(c.includes("IR덱") && c.includes("재무제표"), "두 출처가 모두 표에 있어야 함");
+  assert(c.includes("10억원") && c.includes("8.2억원"), "두 값이 모두 있어야 함(하나를 고르지 않음)");
+  assert(c.includes("FY2024"), "라벨에 명시된 기간이 표에 있어야 함");
+  assert(c.includes("페이지 3"), "출처 위치가 있으면 표시해야 함");
+  assert(c.includes("| 출처 | 값 | 기간 | 구분 | 위치 |"), "표 형식이어야 함(DOCX/PPTX 마크다운 파서 호환)");
+
+  const none = buildDecisionMemoSections(
+    baseDecision({
+      contradictions: [],
+      confidence: "PARTIALLY_VERIFIED",
+      decisionDimensions: baseDecision().decisionDimensions.map((d) => (d.state === "CONTRADICTED" ? { ...d, state: "UNVERIFIED" as const, contradiction: undefined } : d)),
+      thesisBreakers: baseDecision().thesisBreakers.filter((b) => b.trigger !== "CONTRADICTION"),
+    }),
+    []
+  );
+  assert(!none.some((s) => s.title === "수치 상충 (출처별 값 대조)"), "상충이 없으면 섹션도 없어야 함(필러 금지)");
+  console.log("✅ Test 16 — 수치 상충 섹션이 모든 출처·값·기간·위치를 표로 싣고, 상충이 없으면 만들지 않음");
 }
 
 // ── 1. Decision-first memo contains thesis ───────────────────────────────
@@ -406,6 +465,7 @@ const syncTests = [
   test8_originalSectionsUntouched,
   test9_noAdditionalAICall,
   test10_contradictionsPreserved,
+  test16_contradictionSectionListsEverySource,
   test11_sectionRefs,
   test12_gateFailureBlocksExport,
   test13_emptyDecisionProducesNoSections,
