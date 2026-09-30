@@ -32,6 +32,9 @@ export interface MaDealListReadinessSummary {
   lbo: ReadinessState;
   dd: ReadinessState;
   blockerCount: number;
+  /** 첫 차단 요인의 짧은 이름(엔진의 label 그대로) — 목록의 "다음 행동" 문구용. 없으면 null */
+  topBlockerLabel: string | null;
+  topBlockerDomain: string | null;
   latestPeriodLabel: string | null;
   /** actor 본인의 리뷰 상태 그대로(최신 여부 미계산) — 없으면 null(="미검토"와 구분: 아직 리뷰 행 자체가 없음) */
   myReviewStatus: PEICReviewSignoffStatus | null;
@@ -160,6 +163,8 @@ export async function loadMaDealListReadinessSummaries(
       lbo,
       dd,
       blockerCount: readiness.blockers.length,
+      topBlockerLabel: readiness.blockers[0]?.label ?? null,
+      topBlockerDomain: readiness.blockers[0]?.domain ?? null,
       latestPeriodLabel: latest ? periodLabel(latest.fiscalYear, latest.periodType) : null,
       myReviewStatus: myReviewByDeal.get(dealId) ?? null,
     };

@@ -12,11 +12,11 @@ export function MaDealDrivers({ drivers }: { drivers: PEInvestmentDriver[] }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Key Investment Drivers</CardTitle>
+        <CardTitle className="text-base">핵심 투자 근거</CardTitle>
       </CardHeader>
       <CardContent>
         {drivers.length === 0 ? (
-          <p className="text-sm text-gray-400">근거로 뒷받침되는 driver가 아직 없습니다.</p>
+          <p className="text-sm text-muted-foreground">근거로 뒷받침되는 핵심 투자 요인이 아직 없습니다.</p>
         ) : (
           <ul className="space-y-2">
             {drivers.map((d) => (

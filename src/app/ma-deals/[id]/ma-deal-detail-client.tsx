@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +11,7 @@ import type { MaDealType, MaDealStatus } from "@prisma/client";
 import { MA_DEAL_TYPE_LABEL, MA_DEAL_STATUS_LABEL, MA_ADJUSTMENT_STATUS_LABEL } from "@/lib/pe/ma-deal-labels";
 import type { FinancialCalcResult } from "@/lib/pe/financial-types";
 import { useToast } from "@/hooks/use-toast";
+import { isMaDealTab } from "@/lib/pe/ma-deal-queue";
 import { AddFinancialPeriodDialog } from "@/components/ma-deals/add-financial-period-dialog";
 import { LboSimulatorPanel } from "@/components/ma-deals/lbo-simulator-panel";
 import { MaDealOverview, type MaDealDashboardData } from "@/components/ma-deals/ma-deal-overview";
@@ -137,7 +138,20 @@ export function MaDealDetailClient({
   const [periods, setPeriods] = useState<Period[]>(initialPeriods);
   const [importingDart, setImportingDart] = useState(false);
   const [togglingStatus, setTogglingStatus] = useState(false);
-  const [activeTab, setActiveTab] = useState("overview");
+  // 탭은 URL(?tab=)과 같이 움직인다 — 새로고침·링크 공유·목록의 "다음 행동" 링크가 같은 탭을 연다.
+  // 알 수 없는 값은 무시하고 개요로 시작한다(임의 문자열로 탭이 깨지지 않게).
+  const searchParams = useSearchParams();
+  const [activeTab, setActiveTabState] = useState<string>(() => {
+    const requested = searchParams.get("tab");
+    return isMaDealTab(requested) ? requested : "overview";
+  });
+  const setActiveTab = (tab: string) => {
+    setActiveTabState(tab);
+    const url = new URL(window.location.href);
+    if (tab === "overview") url.searchParams.delete("tab");
+    else url.searchParams.set("tab", tab);
+    window.history.replaceState(null, "", url.toString());
+  };
 
   // Data Room(PR #106) — 개요/재무 탭과 달리 처음 탭을 열 때만 지연 로딩한다
   // (모든 딜이 문서를 갖는 건 아니므로 항상 미리 불러올 필요가 없음).

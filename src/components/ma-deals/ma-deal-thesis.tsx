@@ -21,11 +21,11 @@ export function MaDealThesis({ items }: { items: PEThesisItem[] }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Investment Thesis</CardTitle>
+        <CardTitle className="text-base">투자 논지</CardTitle>
       </CardHeader>
       <CardContent>
         {items.length === 0 ? (
-          <p className="text-sm text-gray-400">아직 등록된 investment thesis claim이 없습니다.</p>
+          <p className="text-sm text-muted-foreground">아직 등록된 투자 논지 근거(claim)가 없습니다. 실사 자료에서 근거를 등록하면 상태(뒷받침됨·상충 등)와 함께 여기에 나타납니다.</p>
         ) : (
           <ul className="space-y-2">
             {items.map((t) => (

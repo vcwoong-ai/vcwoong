@@ -1,4 +1,3 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MA_DEAL_TYPE_LABEL, MA_DEAL_STATUS_LABEL } from "@/lib/pe/ma-deal-labels";
 import { MaDealIcSnapshot } from "./ma-deal-ic-snapshot";
 import { MaDealFinancialSummary } from "./ma-deal-financial-summary";
@@ -6,6 +5,7 @@ import { MaDealQoeSummary } from "./ma-deal-qoe-summary";
 import { MaDealDartStatus } from "./ma-deal-dart-status";
 import { MaDealReadiness } from "./ma-deal-readiness";
 import { MaDealMissingInfo } from "./ma-deal-missing-info";
+import { MaDealStatusPanel } from "./ma-deal-status-panel";
 import type { MaDealType, MaDealStatus } from "@prisma/client";
 import type {
   QoESummaryView,
@@ -46,51 +46,33 @@ export function MaDealOverview({
   dashboard: MaDealDashboardData;
   onNavigateTab: (tab: string) => void;
 }) {
+  const meta = [
+    MA_DEAL_TYPE_LABEL[maDeal.dealType],
+    MA_DEAL_STATUS_LABEL[maDeal.status],
+    dashboard.financialQuality.latestPeriodLabel
+      ? `최근 재무 ${dashboard.financialQuality.latestPeriodLabel}`
+      : "등록된 재무 데이터 없음",
+    `등록 ${new Date(maDeal.createdAt).toLocaleDateString("ko-KR")}`,
+    `수정 ${new Date(maDeal.updatedAt).toLocaleDateString("ko-KR")}`,
+  ];
   return (
     <div className="space-y-4">
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">딜 기본 정보</CardTitle>
-        </CardHeader>
-        <CardContent className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
-          <div>
-            <p className="text-xs text-gray-400">딜 유형</p>
-            <p className="font-medium">{MA_DEAL_TYPE_LABEL[maDeal.dealType]}</p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-400">상태</p>
-            <p className="font-medium">{MA_DEAL_STATUS_LABEL[maDeal.status]}</p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-400">최근 재무기간</p>
-            <p className="font-medium">{dashboard.financialQuality.latestPeriodLabel ?? "등록된 재무 데이터 없음"}</p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-400">등록일</p>
-            <p className="font-medium">{new Date(maDeal.createdAt).toLocaleDateString()}</p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-400">최근 수정</p>
-            <p className="font-medium">{new Date(maDeal.updatedAt).toLocaleDateString()}</p>
-          </div>
-        </CardContent>
-      </Card>
+      <MaDealStatusPanel readiness={dashboard.decisionReadiness} meta={meta} onNavigateTab={onNavigateTab} />
 
-      <MaDealIcSnapshot
-        lboEntryEbitda={dashboard.lboEntryEbitda}
-        onOpenLbo={() => onNavigateTab("lbo")}
-      />
-
-      <MaDealFinancialSummary quality={dashboard.financialQuality} conflictCount={dashboard.decisionReadiness.factConflicts.length} />
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <MaDealQoeSummary qoe={dashboard.qoeSummary} onOpenFinancials={() => onNavigateTab("financials")} />
-        <MaDealDartStatus dart={dashboard.dartStatus} onOpenDart={() => onNavigateTab("dart")} />
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+        <div className="space-y-4 xl:col-span-2">
+          <MaDealFinancialSummary quality={dashboard.financialQuality} conflictCount={dashboard.decisionReadiness.factConflicts.length} />
+          <MaDealIcSnapshot lboEntryEbitda={dashboard.lboEntryEbitda} onOpenLbo={() => onNavigateTab("lbo")} />
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <MaDealQoeSummary qoe={dashboard.qoeSummary} onOpenFinancials={() => onNavigateTab("financials")} />
+            <MaDealDartStatus dart={dashboard.dartStatus} onOpenDart={() => onNavigateTab("dart")} />
+          </div>
+        </div>
+        <div className="space-y-4">
+          <MaDealReadiness readiness={dashboard.decisionReadiness} variant="compact" />
+          <MaDealMissingInfo readiness={dashboard.decisionReadiness} />
+        </div>
       </div>
-
-      <MaDealReadiness readiness={dashboard.decisionReadiness} />
-
-      <MaDealMissingInfo readiness={dashboard.decisionReadiness} />
     </div>
   );
 }

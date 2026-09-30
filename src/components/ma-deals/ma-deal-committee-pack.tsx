@@ -2,7 +2,6 @@
 import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
 
 import { useMemo, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AlertTriangle } from "lucide-react";
 import { buildPECommitteePackContent } from "@/lib/pe/pe-committee-pack";
 import { MaDealThesis } from "./ma-deal-thesis";
@@ -16,6 +15,7 @@ import { MaDealIcQuestions } from "./ma-deal-ic-questions";
 import { MaDealCommitteePackExport } from "./ma-deal-committee-pack-export";
 import { MaDealCommitteePackReviewPanel } from "./ma-deal-committee-pack-review-panel";
 import { MaDealReviewHistory } from "./ma-deal-review-history";
+import { presentBlockerDetail } from "@/lib/pe/blocker-display";
 import { PE_IC_REVIEW_STATE_LABEL, MA_DEAL_TYPE_LABEL, MA_DEAL_STATUS_LABEL } from "@/lib/pe/ma-deal-labels";
 import type { MaDealDashboardData } from "./ma-deal-overview";
 import type { PEDDCase } from "@/lib/pe/dd-types";
@@ -102,41 +102,49 @@ export function MaDealCommitteePack({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div>
-          <h2 className="text-base font-semibold text-gray-900">PE IC Committee Pack</h2>
-          <p className="text-xs text-gray-500">
-            {pack.deal.companyName} · {MA_DEAL_TYPE_LABEL[maDeal.dealType]} · {MA_DEAL_STATUS_LABEL[maDeal.status]}
-          </p>
-        </div>
-        <MaDealCommitteePackExport maDealId={maDeal.id} />
-      </div>
-
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0">
-          <CardTitle className="text-base">Decision Readiness</CardTitle>
-          <StatusBadge tone={REVIEW_STATE_VARIANT[decision.processState] ?? "neutral"}>
+      {/* 문서 머리 — 위원회가 가장 먼저 읽는 것: 어떤 딜이고, 지금 어떤 상태이며, 무엇이 막고 있는가 */}
+      <header className="rounded-lg border border-border bg-card p-5" data-testid="pe-pack-header">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">투자심의위원회 자료</p>
+            <h2 className="mt-1 text-xl font-semibold tracking-tight text-foreground">{pack.deal.companyName}</h2>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              {[
+                MA_DEAL_TYPE_LABEL[maDeal.dealType],
+                MA_DEAL_STATUS_LABEL[maDeal.status],
+                dashboard.financialQuality.latestPeriodLabel ? `재무 기준 ${dashboard.financialQuality.latestPeriodLabel}` : "재무 데이터 없음",
+              ].join(" · ")}
+            </p>
+          </div>
+          <StatusBadge tone={REVIEW_STATE_VARIANT[decision.processState] ?? "neutral"} data-testid="pe-pack-state">
             {PE_IC_REVIEW_STATE_LABEL[decision.processState]}
           </StatusBadge>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          <p className="text-sm text-gray-700">{pack.currentReviewStateLabel}</p>
-          {decision.processState === "BLOCKED" && (
-            <div className="flex items-start gap-1.5 text-xs text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2">
-              <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-              <span>{decision.processStateReasons[0]}</span>
-            </div>
-          )}
-          <div className="flex items-center gap-4 text-xs text-gray-500 pt-1 flex-wrap">
-            <button type="button" className="underline hover:text-gray-700" onClick={() => onNavigateTab("ic-review-workflow")}>
-              미해결 항목 {review.openItems.length}건 보기
+        </div>
+        <p className="mt-3 max-w-3xl text-[15px] leading-relaxed text-foreground" data-testid="pe-pack-state-label">
+          {pack.currentReviewStateLabel}
+        </p>
+        {decision.processState === "BLOCKED" && decision.processStateReasons[0] && (
+          <p className="mt-3 flex items-start gap-1.5 rounded-md border border-state-critical-line bg-state-critical-bg px-3 py-2 text-sm text-state-critical" data-testid="pe-pack-blocker">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            <span>{presentBlockerDetail(decision.processStateReasons[0])}</span>
+          </p>
+        )}
+        <p className="mt-3 text-xs text-muted-foreground">
+          아래 내용은 <strong className="font-medium text-foreground">현재 데이터</strong> 기준입니다. 리뷰어가 서명한 당시의 상태와 이후 자료 변경으로 인한
+          재검토 필요 여부는 맨 아래 &lsquo;검토 이력&rsquo;에서 구분해 확인합니다. &lsquo;검토 완료&rsquo;는 투자 승인이 아닙니다.
+        </p>
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
+          <div className="flex flex-wrap items-center gap-4 text-sm">
+            <button type="button" className="text-primary underline-offset-2 hover:underline" onClick={() => onNavigateTab("ic-review-workflow")}>
+              미해결 항목 {review.openItems.length}건
             </button>
-            <button type="button" className="underline hover:text-gray-700" onClick={() => onNavigateTab("data-room")}>
-              근거 요청 {review.evidenceRequests.length}건 보기
+            <button type="button" className="text-primary underline-offset-2 hover:underline" onClick={() => onNavigateTab("data-room")}>
+              근거 요청 {review.evidenceRequests.length}건
             </button>
           </div>
-        </CardContent>
-      </Card>
+          <MaDealCommitteePackExport maDealId={maDeal.id} />
+        </div>
+      </header>
 
       <MaDealThesis items={decision.thesis} />
       <MaDealDrivers drivers={decision.drivers} />
@@ -153,7 +161,7 @@ export function MaDealCommitteePack({
       />
 
       {evidenceRequestsLoading ? (
-        <p className="text-center text-gray-400 py-8">검토 현황을 불러오는 중...</p>
+        <p className="text-center text-muted-foreground py-8">검토 현황을 불러오는 중...</p>
       ) : (
         <>
           <MaDealCommitteePackReviewPanel
