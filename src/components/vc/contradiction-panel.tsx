@@ -3,6 +3,7 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { SCORE_DIMENSIONS } from "@/lib/deal-scoring-shared";
 import type { VCContradiction } from "@/lib/vc-decision-types";
 import { VC_IMPACT_LABEL, VC_IMPACT_TONE } from "./evidence-state";
+import type { EvidenceTarget } from "./evidence-panel";
 
 const SCENARIO_LABEL = { ACTUAL: "실적", FORECAST: "추정", UNSPECIFIED: "명시 없음" } as const;
 
@@ -18,7 +19,14 @@ function dimensionName(dimension: VCContradiction["dimension"]): string {
  * 영향을 주며 무엇을 확인해야 하는지까지 적는다. 어느 값이 맞는지는 시스템이
  * 고르지 않는다(값 하나를 조용히 선택하지 않음).
  */
-export function ContradictionPanel({ contradictions }: { contradictions: VCContradiction[] }) {
+export function ContradictionPanel({
+  contradictions,
+  onOpenEvidence,
+}: {
+  contradictions: VCContradiction[];
+  /** 각 값의 근거(문서·위치·원문 발췌)를 옆 패널에서 연다 */
+  onOpenEvidence?: (target: EvidenceTarget) => void;
+}) {
   if (contradictions.length === 0) return null;
   return (
     <section aria-labelledby="vc-contradictions-title" data-testid="vc-contradictions" className="space-y-3">
@@ -34,8 +42,8 @@ export function ContradictionPanel({ contradictions }: { contradictions: VCContr
               {VC_IMPACT_LABEL[c.decisionImpact]}
             </StatusBadge>
           </header>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[520px] text-sm">
+          <div className="relative overflow-x-auto">
+            <table className="w-full min-w-[560px] text-sm">
               <caption className="sr-only">{c.metricLabel} 상충 값 비교</caption>
               <thead>
                 <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
@@ -44,6 +52,7 @@ export function ContradictionPanel({ contradictions }: { contradictions: VCContr
                   <th scope="col" className="px-3.5 py-2 font-medium">기간</th>
                   <th scope="col" className="px-3.5 py-2 font-medium">구분</th>
                   <th scope="col" className="px-3.5 py-2 font-medium">위치</th>
+                  {onOpenEvidence && <th scope="col" className="px-3.5 py-2 font-medium"><span className="sr-only">근거 확인</span></th>}
                 </tr>
               </thead>
               <tbody>
@@ -56,6 +65,37 @@ export function ContradictionPanel({ contradictions }: { contradictions: VCContr
                     <td className="px-3.5 py-2 text-slate-700">{v.period === "UNSPECIFIED" ? "명시 없음" : v.period}</td>
                     <td className="px-3.5 py-2 text-slate-700">{SCENARIO_LABEL[v.scenario]}</td>
                     <td className="px-3.5 py-2 text-slate-600">{v.location ?? "-"}</td>
+                    {onOpenEvidence && (
+                      <td className="px-3.5 py-2 text-right">
+                        <button
+                          type="button"
+                          className="whitespace-nowrap text-xs font-medium text-primary underline-offset-2 hover:underline focus-visible:underline"
+                          data-testid="vc-open-evidence"
+                          aria-label={`${c.metricLabel} ${v.raw}${v.documentName ? ` (${v.documentName})` : ""} 근거 확인`}
+                          onClick={() =>
+                            onOpenEvidence({
+                              heading: `${c.metricLabel} — 수치 상충`,
+                              activeIndex: i,
+                              entries: c.values.map((x) => ({
+                                raw: x.raw,
+                                documentName: x.documentName,
+                                location: x.location,
+                                period: x.period,
+                                scenario: x.scenario,
+                                unit: x.unit,
+                                snippet: x.snippet,
+                              })),
+                              notes: [
+                                { label: "영향받는 판단", text: dimensionName(c.dimension) },
+                                { label: "필요한 검증", text: c.verificationRequirement },
+                              ],
+                            })
+                          }
+                        >
+                          근거 확인
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
