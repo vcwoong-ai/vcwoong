@@ -82,11 +82,11 @@ const FIXTURES: FixtureSpec[] = [
     investAmount: 50, valuation: null, expectContradictions: 0,
   },
   {
-    // 음수: 부호만 다른 값은 탐지 못 함(알려진 한계 P3) — 실제 동작을 그대로 기록한다
-    id: "neg", label: "음수 값(-12 vs 12 : 알려진 한계 재현)",
+    // 음수: 부호만 다른 값도 상충으로 탐지되고 표시에 부호가 남는다
+    id: "neg", label: "음수 값(-12 vs 12 : 부호만 다른 상충)",
     sections: [F("FINANCIAL_STATUS", "재무 현황", "영업이익 -12억원을 기록했다. 영업이익 12억원으로도 표기됐다.")],
     docs: [{ name: "IR.pdf", text: "영업이익 12억원" }],
-    investAmount: 50, valuation: 400, expectContradictions: 0,
+    investAmount: 50, valuation: 400, expectContradictions: 1,
   },
   {
     // 매우 긴 출처명 + 한글/영문/특수문자(XML 특수문자 포함)
@@ -285,9 +285,16 @@ async function main() {
 
     // ── IC 질문: 생성 → API/화면/DOCX 동일, AI 없이 상충 질문 생성 ─────
     const multi = created.find((c) => c.spec.id === "multi")!;
+    const pre = (await (await req.get(`${BASE}/api/reports/${multi.reportId}/decision`)).json()).data;
+    assert(pre.questionsSource === "deterministic_preview" && pre.questionsGenerated === false, "저장 전에는 결정적 미리보기");
+    const preContra = pre.questionLinks.filter((l: { question: { trigger: string } }) => l.question.trigger === "CONTRADICTION");
+    assert(preContra.length === pre.decision.contradictions.length, "저장 전에도 상충 전부가 IC 질문으로 연결(사용자 생성 전에도 비어 있지 않음)");
+    const preDocx = plainFromDocx(await (await JSZip.loadAsync(await (await req.post(`${BASE}/api/reports/${multi.reportId}/export/docx`)).body())).file("word/document.xml")!.async("string"));
+    for (const l of preContra) assert(preDocx.includes(l.question.question.slice(0, 40)), "저장 전에도 DOCX가 같은 상충 질문을 싣는다(화면=API=DOCX)");
     const gen = await req.post(`${BASE}/api/reports/${multi.reportId}/ic-questions/generate`);
     assert(gen.ok(), "IC 질문 생성 200(AI 미설정 환경에서도 결정적으로 생성)");
     const api2 = (await (await req.get(`${BASE}/api/reports/${multi.reportId}/decision`)).json()).data;
+    assert(api2.questionsSource === "stored", "생성 후에는 저장본");
     const cq = api2.questionLinks.filter((l: { question: { trigger: string } }) => l.question.trigger === "CONTRADICTION");
     assert(cq.length === api2.decision.contradictions.length, `상충 ${api2.decision.contradictions.length}건이 모두 IC 질문이 됨(실제 ${cq.length})`);
     assert(cq.every((l: { question: { priority: string; source: string; question: string }; linkedTo: unknown[] }) => l.question.priority === "HIGH" && l.question.source === "deterministic" && l.linkedTo.length > 0), "상충 질문은 HIGH·결정적·결정 이슈에 연결");
