@@ -36,14 +36,18 @@ type RegisterForm = z.infer<typeof registerSchema>;
 /**
  * 트랙별 카피만 바꾼다 — DB에 track을 저장하는 필드가 없어(스키마 변경
  * 없이는 영속화 불가) 여기서는 가입 화면의 문구만 트랙에 맞춘다.
- * VC 외 트랙(예: pe)은 랜딩에서 실제로 이 URL로 연결되지 않으므로
- * (아직 "Coming soon" — FAQ로 스크롤) 기본 카피로 안전하게 폴백한다.
+ * 알 수 없는 트랙 값은 기본 카피로 안전하게 폴백한다.
  */
 const TRACK_COPY: Record<string, { eyebrow: string; heading: string; sub: string }> = {
   vc: {
     eyebrow: "TRACK · VC 심사역",
     heading: "VC 트랙으로 시작합니다",
     sub: "섹터 전문 AI 6명이 투자심의보고서 초안을 씁니다. 신용카드 없이 무료로 시작하세요.",
+  },
+  pe: {
+    eyebrow: "TRACK · PE · M&A",
+    heading: "PE · M&A 트랙으로 시작합니다",
+    sub: "재무제표·QoE·LBO 검토와 IC 의사결정 자료를 한 곳에서. 신용카드 없이 무료로 시작하세요.",
   },
 };
 
@@ -102,7 +106,7 @@ function RegisterForm() {
         redirect: false,
       });
 
-      router.push("/dashboard");
+      router.push(track === "pe" ? "/ma-deals" : "/dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "오류가 발생했습니다");
     } finally {
