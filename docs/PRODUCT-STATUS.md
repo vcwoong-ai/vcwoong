@@ -14,7 +14,7 @@ invocation을 트리거하는 건 **브라우저 폴링뿐**이었다 — 탭을
 
 이번에 서버 측 안전망을 추가했다:
 
-- `/api/cron/resume-generations`(신규, Vercel Cron 매 1분, `CRON_SECRET`으로
+- `/api/cron/resume-generations`(신규, Vercel Cron 15분 간격(2026-09 Neon 컴퓨트 한도 소진으로 1분에서 변경), `CRON_SECRET`으로
   인증) — PENDING(checkpoint) 또는 오래 멈춘 GENERATING 보고서를 찾아
   **브라우저 없이** `generateSectionsAsync`를 직접 호출해 이어서 생성한다.
 - `claimPendingGeneration()`(report-generation.ts, 신규 export) — 브라우저

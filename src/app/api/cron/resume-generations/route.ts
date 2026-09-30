@@ -24,7 +24,7 @@ import {
  * (탭이 열려 있으면 즉시 재개돼 더 빠름), 더 이상 "반드시 있어야 하는"
  * 존재가 아니라 "있으면 더 빠른" 가속 경로가 된다.
  *
- * Vercel Cron이 매 tick마다 호출한다(vercel.json의 crons, 매 1분).
+ * Vercel Cron이 매 tick마다 호출한다(vercel.json의 crons, 15분 간격 — Neon 자동 절전(5분)이 동작해야 컴퓨트 한도를 아낄 수 있음).
  * Authorization: Bearer ${CRON_SECRET} 헤더로 Vercel Cron이 보낸 요청인지
  * 확인한다(https://vercel.com/docs/cron-jobs/manage-cron-jobs#securing-cron-jobs).
  */
@@ -45,7 +45,7 @@ export const maxDuration = 240;
  * 누적 시간이 240초를 넘겨 Vercel이 함수를 강제 종료했다("Vercel Runtime
  * Timeout Error: Task timed out after 240 seconds", 실제 12시간 동안
  * 12건 발생). 그래서 MAX_RESUMES_PER_TICK으로 실제 생성 시도 자체를
- * tick당 1건으로 제한한다 — 1분 주기라 처리량 손해는 거의 없고, 이 방식이
+ * tick당 1건으로 제한한다 — 주기가 15분으로 늘어 처리량은 줄지만(브라우저 폴링이 열려 있으면 즉시 재개), 이 방식이
  * "남은 시간을 얼마나 정확히 아는가"에 의존하지 않아 훨씬 안전하다.
  */
 const CRON_BUDGET_MS = 200_000;

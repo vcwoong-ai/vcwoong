@@ -10,6 +10,6 @@
     "src/app/api/upload/route.ts": { "maxDuration": 60 }
   },
   "crons": [
-    { "path": "/api/cron/resume-generations", "schedule": "* * * * *" }
+    { "path": "/api/cron/resume-generations", "schedule": "*/15 * * * *" }
   ]
 }
