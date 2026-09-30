@@ -64,7 +64,8 @@ async function main() {
   page.on("pageerror", (e) => consoleErrors.push(`PAGEERROR: ${e.message.slice(0, 200)}`));
 
   try {
-    await page.goto(`${BASE}/login`);
+    await page.goto(`${BASE}/login`, { waitUntil: "networkidle" });
+    await page.waitForTimeout(1500); // 로그인 폼 하이드레이션 대기 — 그 전에 제출하면 세션이 잡히기 전에 다음 화면으로 넘어간다
     await page.fill("#email", EMAIL);
     await page.fill("#password", PASSWORD);
     await page.click('button[type="submit"]');
@@ -90,10 +91,11 @@ async function main() {
     // ── 4. 위원회 자료 탭 ──────────────────────────────────────────────
     await page.getByRole("tab", { name: "위원회 자료" }).click({ timeout: 45000 });
     await page.waitForTimeout(1000);
-    await page.waitForSelector("text=PE IC Committee Pack", { timeout: 15000 });
+    await page.waitForSelector('[data-testid="pe-pack-header"]', { timeout: 15000 }); // 위원회 자료 문서 머리(투자심의위원회 자료)
     await page.waitForSelector("text=핵심 재무 지표", { timeout: 15000 });
     await page.waitForSelector("text=모순", { timeout: 15000 });
-    const badgeText = await page.locator("text=BLOCKED").first().isVisible().catch(() => false);
+    // 상태는 화면에서 한국어("차단됨")로 표시된다 — 영문 코드(BLOCKED) 노출 여부가 아니라 차단 상태 표시 자체를 확인한다
+    const badgeText = (await page.locator('[data-testid="pe-pack-state"]').innerText().catch(() => "")).includes("차단");
     assert(badgeText, "위원회 자료 탭 상단 Decision Readiness 배지도 BLOCKED여야 함(재무 모순이 있으므로)");
     console.log("✅ 4 — 위원회 자료 탭의 '핵심 재무 지표' 카드에도 경고가 표시되고, 상단 Decision Readiness도 BLOCKED로 일관됨(§37 UI 상태 일관성)");
 
@@ -120,6 +122,14 @@ async function main() {
     await page.fill("textarea[placeholder*='검토 메모']", "PR#112 회귀 확인용 검토");
     await page.getByRole("button", { name: "검토 완료" }).click();
     await page.waitForTimeout(1200);
+    // 제출 → 재조회 → 배지 갱신은 비동기 — 기대한 문구가 나타날 때까지 최대 10초 기다린다
+    await page
+      .waitForFunction(
+        () => Array.from(document.querySelectorAll("span")).some((el) => el.textContent?.includes("현재 상태:") && el.parentElement?.textContent?.includes("검토 완료")),
+        undefined,
+        { timeout: 10000 }
+      )
+      .catch(() => undefined);
     const stateText = await page.locator("span", { hasText: "현재 상태:" }).locator("xpath=..").innerText();
     assert(stateText.includes("검토 완료"), "검토 완료 제출 후 상태 배지가 '검토 완료'여야 함(PR#111 기능 회귀 없음)");
     await page.waitForSelector("text=검토 이력 / Audit Trail", { timeout: 15000 });
@@ -131,7 +141,8 @@ async function main() {
     const mobileBrowser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
     const mobileContext = await mobileBrowser.newContext({ viewport: { width: 390, height: 800 }, isMobile: true, hasTouch: true });
     const mobilePage = await mobileContext.newPage();
-    await mobilePage.goto(`${BASE}/login`);
+    await mobilePage.goto(`${BASE}/login`, { waitUntil: "networkidle" });
+    await mobilePage.waitForTimeout(1500); // 로그인 폼 하이드레이션 대기 — 그 전에 제출하면 세션이 잡히기 전에 다음 화면으로 넘어간다
     await mobilePage.fill("#email", EMAIL);
     await mobilePage.fill("#password", PASSWORD);
     await mobilePage.click('button[type="submit"]');

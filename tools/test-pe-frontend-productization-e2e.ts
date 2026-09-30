@@ -31,7 +31,8 @@ function assert(cond: boolean, msg: string) {
 }
 
 async function login(page: import("playwright").Page) {
-  await page.goto(`${BASE}/login`);
+  await page.goto(`${BASE}/login`, { waitUntil: "networkidle" });
+    await page.waitForTimeout(1500); // 로그인 폼 하이드레이션 대기 — 그 전에 제출하면 세션이 잡히기 전에 다음 화면으로 넘어간다
   await page.fill("#email", EMAIL);
   await page.fill("#password", PASSWORD);
   await page.click('button[type="submit"]');
@@ -84,18 +85,19 @@ async function main() {
     // ── 2. 딜 목록 — canonical readiness 배지가 실제로 렌더됨 ────────────
     await page.goto(`${BASE}/ma-deals`, { waitUntil: "networkidle" });
     await page.waitForTimeout(1200);
-    const dealCard = page.locator(".group", { hasText: "E2E제품화 주식회사" }).first();
+    // 목록은 카드가 아니라 검토 대기열(표)이다 — 한 줄이 한 딜
+    const dealCard = page.locator('[data-testid="pe-deal-row"]', { hasText: "E2E제품화 주식회사" }).first();
     await dealCard.scrollIntoViewIfNeeded();
     await page.waitForTimeout(500);
     const cardText = await dealCard.innerText();
     assert(!cardText.includes("준비 상태 불러오는 중"), "목록 로드 완료 후에는 '불러오는 중' 플레이스홀더가 남아있으면 안 됨");
-    assert(cardText.includes("내 검토"), "카드에 '내 검토' 상태가 표시돼야 함");
+    assert(cardText.includes("내 검토"), "행에 '내 검토' 상태가 표시돼야 함");
     assert(cardText.includes("미검토"), "아직 검토 전이므로 '미검토'로 보여야 함");
     assert(cardText.includes("차단 요인"), "재무 모순이 있으므로 차단 요인 경고가 보여야 함(readiness가 BLOCKED 또는 blocker 존재)");
-    console.log("✅ 2 — 딜 목록 카드에 canonical readiness 배지(도메인별 상태 + 차단 요인 + 내 검토)가 실제 서버 계산값으로 렌더됨");
+    console.log("✅ 2 — 딜 목록(검토 대기열) 행에 canonical readiness 배지(도메인별 상태 + 차단 요인 + 내 검토)가 실제 서버 계산값으로 렌더됨");
 
     // ── 3. 딜 상세 진입 → 개요 탭: 재무 모순 경고 배지 ───────────────────
-    await dealCard.locator("text=상세 보기").click();
+    await dealCard.getByRole("link", { name: "E2E제품화 주식회사" }).click();
     await page.waitForURL(new RegExp(`/ma-deals/${deal.id}`), { timeout: 15000 });
     await page.waitForTimeout(1500); // 콜드 컴파일 레이스(레포 관례)
     await page.waitForSelector('[role="tab"]', { timeout: 45000 });
@@ -145,7 +147,7 @@ async function main() {
     });
     await page.goto(`${BASE}/ma-deals`, { waitUntil: "networkidle" });
     await page.waitForTimeout(1200);
-    const dealCardAfter = page.locator(".group", { hasText: "E2E제품화 주식회사" }).first();
+    const dealCardAfter = page.locator('[data-testid="pe-deal-row"]', { hasText: "E2E제품화 주식회사" }).first();
     const cardTextAfter = await dealCardAfter.innerText();
     assert(cardTextAfter.includes("차단 요인"), "DD finding 추가 후에도 목록에서 여전히 차단 요인이 보여야 함(같은 엔진 재사용, 새 계산 없음)");
     console.log("✅ 8 — canonical 데이터 변경이 목록 배지에도 그대로 반영됨(buildPEDecisionReadiness() 재사용, 별도 계산 없음)");

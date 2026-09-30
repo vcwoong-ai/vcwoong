@@ -33,6 +33,14 @@ async function login(page: Page, email: string, password: string) {
   await page.waitForURL(/dashboard/, { timeout: 90000 });
 }
 
+
+/** 앱 화면 이동 — 이 화면들은 백그라운드 조회가 이어져 networkidle이 30초 안에 안 올 수 있다. 문서 로드 후 각 검증이 자기 셀렉터를 기다린다. */
+async function gotoApp(page: Page, url: string) {
+  const res = await page.goto(url, { waitUntil: "domcontentloaded", timeout: 90000 });
+  await page.waitForTimeout(1200);
+  return res;
+}
+
 async function noHorizontalOverflow(page: Page): Promise<boolean> {
   return page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
 }
@@ -50,6 +58,9 @@ async function main() {
   const vcDeal = await prisma.deal.findFirst({ where: { companyName: "네오비전 주식회사", userId: demoUser!.id }, select: { id: true, reports: { select: { id: true }, take: 1, orderBy: { createdAt: "desc" } } } });
   const vcReportId = vcDeal?.reports[0]?.id;
   if (!vcDeal || !vcReportId) throw new Error("네오비전 시드 딜/보고서가 없습니다");
+
+  // 가입/로그인 속도 제한(RateLimit)은 같은 IP의 반복 실행에서 429를 낸다 — 로컬 SQLite의 제한 기록만 비운다(위에서 로컬 DB임을 확인함)
+  await prisma.rateLimit.deleteMany({});
 
   const stamp = Date.now();
   const emptyUser = await prisma.user.create({
@@ -132,13 +143,17 @@ async function main() {
     assert(onboarding.includes("첫 VC 딜 만들기") && onboarding.includes("첫 PE/M&A 딜 만들기"), "딜이 없으면 빈 대시보드 대신 VC/PE 첫 행동을 안내한다");
     const emptyDash = await empty.innerText("body");
     assert(!emptyDash.includes("네오비전") && !emptyDash.includes("한빛정밀"), "신규 사용자의 대시보드에 다른 계정의 딜이 나타나지 않는다");
-    await empty.goto(`${BASE}/ma-deals`, { waitUntil: "networkidle" });
+    await gotoApp(empty, `${BASE}/ma-deals`);
     assert((await empty.locator('[data-testid="pe-deal-row"]').count()) === 0, "신규 사용자의 PE 목록은 비어 있다");
-    const forbidden = await empty.goto(`${BASE}/ma-deals/${peDeal.id}`, { waitUntil: "networkidle" });
+    const forbidden = await gotoApp(empty, `${BASE}/ma-deals/${peDeal.id}`);
+    await empty.waitForFunction(() => /찾을 수 없|404/.test(document.body.innerText), undefined, { timeout: 20000 }).catch(() => undefined);
     const forbiddenText = await empty.innerText("body");
     assert(forbidden?.status() === 404 || /찾을 수 없|404/.test(forbiddenText), "남의 PE 딜 URL은 열리지 않는다(404)");
     assert(!forbiddenText.includes("한빛정밀"), "남의 PE 딜 이름이 새지 않는다");
-    await empty.goto(`${BASE}/reports/${vcReportId}`, { waitUntil: "networkidle" });
+    // 남의 보고서 URL — 404 페이지가 뜨므로 networkidle 대신 문서 로드 후 잠시 기다린다
+    const otherReport = await empty.goto(`${BASE}/reports/${vcReportId}`, { waitUntil: "domcontentloaded", timeout: 60000 });
+    await empty.waitForFunction(() => /찾을 수 없|404/.test(document.body.innerText), undefined, { timeout: 20000 }).catch(() => undefined);
+    assert(otherReport?.status() === 404 || /찾을 수 없|404/.test(await empty.innerText("body")), "남의 VC 보고서 URL은 열리지 않는다(404)");
     assert(!(await empty.innerText("body")).includes("네오비전"), "남의 VC 보고서 URL도 내용이 새지 않는다");
     await emptyCtx.close();
 
@@ -160,7 +175,7 @@ async function main() {
     assert((await page.innerText("body")).includes("VC — 투자 판단 검토") && (await page.innerText("body")).includes("PE/M&A — 검증 준비 상태"), "VC와 PE는 서로 다른 판단 체계로 나란히 표기된다(점수를 합치지 않음)");
 
     // 5b. VC 목록
-    await page.goto(`${BASE}/deals`, { waitUntil: "networkidle" });
+    await gotoApp(page, `${BASE}/deals`);
     await page.waitForSelector('[data-testid="vc-deal-row"]', { timeout: 60000 });
     await page.waitForSelector('[data-testid="vc-row-next-action"]', { timeout: 60000 });
     const rows = page.locator('[data-testid="vc-deal-row"]');
@@ -179,7 +194,7 @@ async function main() {
     await page.getByRole("button", { name: "검토 대기열" }).click();
 
     // 5c. 근거 패널
-    await page.goto(`${BASE}/reports/${vcReportId}`, { waitUntil: "networkidle" });
+    await gotoApp(page, `${BASE}/reports/${vcReportId}`);
     await page.waitForSelector('[data-testid="vc-contradictions"]', { timeout: 60000 });
     const opener = page.locator('[data-testid="vc-contradictions"] [data-testid="vc-open-evidence"]').first();
     await opener.focus();
@@ -202,7 +217,7 @@ async function main() {
     assert((await page.evaluate(() => document.activeElement?.getAttribute("data-testid"))) === "vc-open-evidence", "닫으면 패널을 연 버튼으로 초점이 돌아온다");
 
     // 5d. PE 목록 → 탭 URL
-    await page.goto(`${BASE}/ma-deals`, { waitUntil: "networkidle" });
+    await gotoApp(page, `${BASE}/ma-deals`);
     await page.waitForSelector('[data-testid="pe-deal-row"]', { timeout: 60000 });
     const peRows = page.locator('[data-testid="pe-deal-row"]');
     assert((await peRows.first().getAttribute("data-deal-id")) !== null, "PE 목록이 표로 보인다");
@@ -217,12 +232,14 @@ async function main() {
     await page.waitForURL(new RegExp(`/ma-deals/${peDeal.id}\\?tab=financials`), { timeout: 60000 });
     await page.waitForSelector('[role="tab"]', { timeout: 60000 });
     assert((await page.getByRole("tab", { name: "재무 · QoE" }).getAttribute("aria-selected")) === "true", "다음 행동 링크가 해당 탭(재무 · QoE)을 바로 연다");
-    await page.reload({ waitUntil: "networkidle" });
+    await page.reload({ waitUntil: "domcontentloaded" });
     await page.waitForSelector('[role="tab"]', { timeout: 60000 });
     assert((await page.getByRole("tab", { name: "재무 · QoE" }).getAttribute("aria-selected")) === "true", "새로고침 후에도 같은 탭이 유지된다");
     await page.getByRole("tab", { name: "LBO 시뮬레이션" }).click();
-    assert(new URL(page.url()).searchParams.get("tab") === "lbo", "탭을 바꾸면 URL이 함께 바뀐다");
-    await page.goto(`${BASE}/ma-deals/${peDeal.id}?tab=%3Cscript%3E`, { waitUntil: "networkidle" });
+    await page.waitForFunction(() => new URL(location.href).searchParams.get("tab") === "lbo", undefined, { timeout: 10000 }).catch(() => undefined);
+    await page.waitForTimeout(1200); // 라우터가 URL을 되돌리지 않고 유지하는지까지 확인
+    assert(new URL(page.url()).searchParams.get("tab") === "lbo", "탭을 바꾸면 URL이 함께 바뀌고 유지된다");
+    await gotoApp(page, `${BASE}/ma-deals/${peDeal.id}?tab=%3Cscript%3E`);
     await page.waitForSelector('[role="tab"]', { timeout: 60000 });
     assert((await page.getByRole("tab", { name: "개요" }).getAttribute("aria-selected")) === "true", "알 수 없는 tab 값은 개요로 안전하게 처리된다");
 
@@ -284,7 +301,7 @@ async function main() {
           await login(p, DEMO.email, DEMO.password);
           loggedIn = true;
         }
-        await p.goto(`${BASE}${path}`, { waitUntil: "networkidle" });
+        await gotoApp(p, `${BASE}${path}`);
         await p.waitForTimeout(1500);
         assert(await noHorizontalOverflow(p), `${w}px · ${name}: 페이지 자체 가로 스크롤 없음`);
       }
@@ -294,13 +311,14 @@ async function main() {
     const a11yCtx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
     const a11y = await a11yCtx.newPage();
     for (const path of ["/", "/pricing"]) {
-      await a11y.goto(`${BASE}${path}`, { waitUntil: "networkidle" });
+      await gotoApp(a11y, `${BASE}${path}`);
       assert((await a11y.locator("h1").count()) === 1, `${path}: h1이 하나`);
       assert((await a11y.locator("img:not([alt])").count()) === 0, `${path}: alt 없는 이미지가 없다`);
     }
     await a11yCtx.close();
 
-    const unexpected = consoleErrors.filter((e) => !/hydrat|favicon|Failed to load resource.*(401|404)/i.test(e));
+    // ERR_TUNNEL_CONNECTION_FAILED: 샌드박스가 외부(Vercel Speed Insights 스크립트) 접속을 막아서 나는 환경 문제 — 다른 E2E도 같은 이유로 제외한다
+    const unexpected = consoleErrors.filter((e) => !/hydrat|favicon|ERR_TUNNEL_CONNECTION_FAILED|Failed to load resource.*(401|404)/i.test(e));
     assert(unexpected.length === 0, `콘솔 에러 없음(실제: ${JSON.stringify(unexpected.slice(0, 3))})`);
     console.log(`\n${pass}개 통과`);
   } finally {
