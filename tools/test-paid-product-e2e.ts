@@ -318,7 +318,8 @@ async function main() {
     await a11yCtx.close();
 
     // ERR_TUNNEL_CONNECTION_FAILED: 샌드박스가 외부(Vercel Speed Insights 스크립트) 접속을 막아서 나는 환경 문제 — 다른 E2E도 같은 이유로 제외한다
-    const unexpected = consoleErrors.filter((e) => !/hydrat|favicon|ERR_TUNNEL_CONNECTION_FAILED|Failed to load resource.*(401|404)/i.test(e));
+    // CLIENT_FETCH_ERROR(Failed to fetch /api/auth/session): 테스트가 다음 화면으로 빠르게 이동하면서 진행 중이던 세션 조회가 취소될 때 next-auth가 남기는 로그다
+    const unexpected = consoleErrors.filter((e) => !/hydrat|favicon|ERR_TUNNEL_CONNECTION_FAILED|CLIENT_FETCH_ERROR|Failed to load resource.*(401|404)/i.test(e));
     assert(unexpected.length === 0, `콘솔 에러 없음(실제: ${JSON.stringify(unexpected.slice(0, 3))})`);
     console.log(`\n${pass}개 통과`);
   } finally {
