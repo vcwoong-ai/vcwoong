@@ -3,7 +3,7 @@ import { Callout } from "@/components/ui/callout";
 import { SectionHeader } from "@/components/ui/section-header";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { ScoreDimensionKey } from "@/lib/deal-scoring-shared";
-import { VC_PRIORITY_LABEL, type VCInvestmentDriver, type VCMissingInformation, type VCPriority, type VCThesisBreaker } from "@/lib/vc-decision-types";
+import { VC_PRIORITY_LABEL, type VCEvidenceState, type VCInvestmentDriver, type VCMissingInformation, type VCPriority, type VCThesisBreaker } from "@/lib/vc-decision-types";
 import type { DecisionQuestionLink } from "@/lib/vc-decision-loader";
 import type { VCDecisionMemoSectionRef } from "@/lib/vc-decision-memo";
 import { QUESTION_CATEGORY_LABEL } from "@/lib/ic-questions";
@@ -39,12 +39,14 @@ function EvidenceQuotes({
   limit = 2,
   heading,
   onOpenEvidence,
+  evidenceState,
 }: {
   evidence: Array<{ raw: string; documentName?: string; location?: string }>;
   limit?: number;
   /** 근거 패널 제목(무엇에 대한 근거인가) */
   heading: string;
   onOpenEvidence?: (target: EvidenceTarget) => void;
+  evidenceState: VCEvidenceState;
 }) {
   if (evidence.length === 0) return <span className="text-slate-500">확인된 근거 발췌 없음</span>;
   return (
@@ -66,6 +68,7 @@ function EvidenceQuotes({
               onClick={() =>
                 onOpenEvidence({
                   heading,
+                  evidenceState,
                   activeIndex: i,
                   entries: evidence.map((x) => ({ raw: x.raw, documentName: x.documentName, location: x.location })),
                 })
@@ -86,7 +89,7 @@ function DecisionMap({ data, refFor }: { data: DecisionApiData; refFor: SectionR
   const { decision } = data;
   return (
     <section aria-labelledby="vc-map-title" data-testid="vc-decision-map">
-      <SectionHeader as="h3" id="vc-map-title" title="Decision Map" description="차원별로 지금 무엇을 알고 무엇을 모르는지" />
+      <SectionHeader as="h3" id="vc-map-title" title="근거 현황 · Decision Map" description="차원별로 지금 무엇을 알고 무엇을 모르는지" />
       <ul className="mt-3 grid grid-cols-1 gap-px overflow-hidden rounded-md border border-slate-200 bg-slate-200 sm:grid-cols-2 lg:grid-cols-4">
         {decision.decisionDimensions.map((d) => {
           const ref = refFor(d.dimension as ScoreDimensionKey);
@@ -137,7 +140,7 @@ function DriverList({ drivers, refFor, onOpenEvidence }: { drivers: VCInvestment
               <p className="mt-1.5 text-sm text-slate-700">{d.whyItMatters}</p>
               <dl className="mt-2.5 grid gap-x-4 gap-y-1.5 text-sm sm:grid-cols-[7rem_1fr]">
                 <dt className="text-xs font-medium text-slate-500">근거</dt>
-                <dd><EvidenceQuotes evidence={d.evidence} heading={`${d.title} — 근거`} onOpenEvidence={onOpenEvidence} /></dd>
+                <dd><EvidenceQuotes evidence={d.evidence} evidenceState={d.evidenceState} heading={`${d.title} — 근거`} onOpenEvidence={onOpenEvidence} /></dd>
                 <dt className="text-xs font-medium text-slate-500">뒤집을 수 있는 것</dt>
                 <dd className="text-slate-800">{d.whatCouldInvalidate}</dd>
                 <dt className="text-xs font-medium text-slate-500">검증</dt>
@@ -189,7 +192,7 @@ function BreakerList({ breakers, refFor, onOpenEvidence }: { breakers: VCThesisB
                 {b.trigger !== "CONTRADICTION" && (
                   <>
                     <dt className="text-xs font-medium text-slate-500">근거</dt>
-                    <dd><EvidenceQuotes evidence={b.evidence} limit={3} heading={`${b.title} — 근거`} onOpenEvidence={onOpenEvidence} /></dd>
+                    <dd><EvidenceQuotes evidence={b.evidence} evidenceState={b.evidenceState} limit={3} heading={`${b.title} — 근거`} onOpenEvidence={onOpenEvidence} /></dd>
                   </>
                 )}
                 {/* 확률은 추정 근거가 없으므로 숫자로 지어내지 않고 항상 "평가되지 않음" — 엔진 계약 그대로 */}
@@ -333,7 +336,7 @@ function QuestionList({ links, source }: { links: DecisionQuestionLink[]; source
           </Callout>
         )}
         <ol className="mt-3 space-y-2.5">
-          {links.slice(0, 8).map(({ question, linkedTo }) => (
+          {links.map(({ question, linkedTo }) => (
             <li key={question.id} className="rounded-md border border-slate-200 bg-white p-3.5" data-testid="vc-question">
               <div className="flex flex-wrap items-center gap-2">
                 <StatusBadge tone={question.priority === "HIGH" ? "critical" : question.priority === "MEDIUM" ? "caution" : "neutral"} icon={false}>

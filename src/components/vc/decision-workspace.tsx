@@ -11,6 +11,7 @@ import { DecisionHeader } from "./decision-header";
 import { ContradictionPanel } from "./contradiction-panel";
 import { EvidencePanel, type EvidenceTarget } from "./evidence-panel";
 import { BreakerList, DecisionMap, DriverList, MissingInformationList, QuestionList, ValuationBlock } from "./decision-sections";
+import styles from "./decision-workspace.module.css";
 
 /**
  * VC 결정 워크스페이스 — 보고서 본문 위에서 "무엇을 알고, 무엇을 모르고, 무엇이
@@ -18,7 +19,8 @@ import { BreakerList, DecisionMap, DriverList, MissingInformationList, QuestionL
  *
  * 이 컴포넌트는 판단하지 않는다. 서버가 canonical 엔진(vc-decision.ts)으로 계산한
  * 결과(GET /api/reports/[id]/decision)를 받아 표시만 한다 — 화면과 export가 같은
- * 조립 함수를 쓰므로 서로 다른 결론을 낼 수 없다.
+ * 조립 함수를 쓴다. 요청 시점이 다르면 입력도 달라질 수 있으므로 동일 snapshot은
+ * 별도 검증해야 한다.
  */
 export function DecisionWorkspace({
   reportId,
@@ -48,24 +50,29 @@ export function DecisionWorkspace({
     setEvidenceTarget(target);
   }, []);
 
-  const load = useCallback(async () => {
-    setStatus((s) => (s === "ready" ? s : "loading"));
-    try {
-      const res = await fetch(`/api/reports/${reportId}/decision`);
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json.error ?? `결정 요약을 불러오지 못했습니다 (${res.status})`);
-      setData(json.data as DecisionApiData);
-      setErrorMessage(null);
-      setStatus("ready");
-    } catch (e) {
-      setErrorMessage(e instanceof Error ? e.message : "결정 요약을 불러오지 못했습니다");
-      setStatus("error");
-    }
-  }, [reportId]);
-
   useEffect(() => {
+    const controller = new AbortController();
+    setStatus("loading");
+    setData(null);
+    setEvidenceTarget(null);
+    const load = async () => {
+      try {
+        const res = await fetch(`/api/reports/${reportId}/decision`, { signal: controller.signal });
+        const json = await res.json().catch(() => ({}));
+        if (controller.signal.aborted) return;
+        if (!res.ok) throw new Error(json.error ?? `결정 요약을 불러오지 못했습니다 (${res.status})`);
+        setData(json.data as DecisionApiData);
+        setErrorMessage(null);
+        setStatus("ready");
+      } catch (e) {
+        if (controller.signal.aborted) return;
+        setErrorMessage(e instanceof Error ? e.message : "결정 요약을 불러오지 못했습니다");
+        setStatus("error");
+      }
+    };
     load();
-  }, [load, refreshKey, localKey]);
+    return () => controller.abort();
+  }, [reportId, refreshKey, localKey]);
 
   const refFor = useMemo(() => {
     const refs = data?.sectionRefs ?? [];
@@ -143,21 +150,36 @@ export function DecisionWorkspace({
 
   const { decision } = data;
   return (
-    <div className="space-y-8" data-testid="vc-decision-workspace" data-state="ready">
+    <div className={styles.workspace} data-testid="vc-decision-workspace" data-state="ready">
       <DecisionHeader data={data} />
       {data.assessmentBasis === "no_report" && (
         <Callout tone="caution" title="보고서 없이 채점된 점수입니다">
           근거 대조(evidence tracing)를 수행할 수 없어 아래 강점·리스크는 검증되지 않았습니다. 보고서 생성 후 점수를 다시 계산하십시오.
         </Callout>
       )}
-      <DecisionMap data={data} refFor={refFor} />
-      <ContradictionPanel contradictions={decision.contradictions} onOpenEvidence={openEvidence} />
-      <DriverList drivers={decision.drivers} refFor={refFor} onOpenEvidence={openEvidence} />
-      <BreakerList breakers={decision.thesisBreakers} refFor={refFor} onOpenEvidence={openEvidence} />
-      <ValuationBlock data={data} />
-      <MissingInformationList items={decision.missingInformation} refFor={refFor} />
-      <QuestionList links={data.questionLinks} source={data.questionsSource} />
-      {scoreDetail}
+      <nav aria-label="투자 검토 구획" className={styles.navigation}>
+        {decision.contradictions.length > 0 && <a href="#vc-contradictions-title"><span>01</span>상충 확인</a>}
+        <a href="#vc-valuation-title">가격·회수</a>
+        <a href="#vc-drivers-title">투자 근거</a>
+        <a href="#vc-breakers-title">논지 훼손 요인</a>
+        <a href="#vc-missing-title">미확인 정보</a>
+        <a href="#vc-questions-title">IC 질문</a>
+        <a href="#report-detail">보고서 본문 ↗</a>
+      </nav>
+      <div className={styles.priority}>
+        {decision.contradictions.length > 0 ? <ContradictionPanel contradictions={decision.contradictions} onOpenEvidence={openEvidence} /> : <DecisionMap data={data} refFor={refFor} />}
+        <ValuationBlock data={data} />
+      </div>
+      {decision.contradictions.length > 0 && <div className={styles.map}><DecisionMap data={data} refFor={refFor} /></div>}
+      <div className={styles.pair}>
+        <DriverList drivers={decision.drivers} refFor={refFor} onOpenEvidence={openEvidence} />
+        <BreakerList breakers={decision.thesisBreakers} refFor={refFor} onOpenEvidence={openEvidence} />
+      </div>
+      <div className={styles.pair}>
+        <MissingInformationList items={decision.missingInformation} refFor={refFor} />
+        <QuestionList links={data.questionLinks} source={data.questionsSource} />
+      </div>
+      <div className={styles.footer}>{scoreDetail}</div>
       <EvidencePanel target={evidenceTarget} onClose={() => setEvidenceTarget(null)} returnFocusRef={evidenceOpenerRef} />
     </div>
   );

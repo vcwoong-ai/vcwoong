@@ -3,6 +3,79 @@
 5축 차별화 기준으로 현재 무엇이 동작하고 무엇이 남았는지 정리한 문서입니다.
 다른 환경(예: Claude)에서 작업한 내용과 병합할 때 기준점으로 사용하세요.
 
+## 2026-10-01 — 회사·집 공용 Codespaces 이전 준비
+
+- 사용자가 클라우드 개발환경 1개를 회사·집에서 이어 쓰는 방식을 선택하고, **별도 브랜치 commit/push를 명시적으로 승인**했다.
+  이전 디자인 기록의 commit/push 미승인은 이 후속 작업에 한해 갱신됐다. main 병합·PR 변경·운영 배포는 여전히 미승인.
+- 대상 브랜치: `codex/vc-design-review`. `.devcontainer/devcontainer.json`은 Node 24 공식 이미지와 3000 포트 전달,
+  `.devcontainer/setup.mjs`는 기존 npm scripts를 사용해 개발용 SQLite·예시 계정·VC 대표 화면을 준비한다.
+  기존 DB는 재시드하지 않으며 기존 사용자 env는 덮어쓰지 않는다. 임의 운영 키/DB를 가져오지 않는다.
+- 회사·집에서 [내 Codespaces](https://github.com/codespaces)의 **같은 Codespace**를 다시 연다. 3000 포트는 Private 유지.
+  처음 준비가 끝나면 터미널에서 `npm run dev:local -- --hostname 0.0.0.0` 실행 후 Ports의 3000 링크로 앱에 접속한다.
+  대표 route는 `/reports/codex-design-review-report`, 로그인은 기존 seed의 `demo@dealmind.kr` / `Demo1234!` (예시 계정 전용).
+  Codespace 중지는 파일을 이어 쓸 수 있지만 삭제는 별개다. 중요한 코드는 commit/push하고 DB 파일은 Git에 넣지 않는다.
+- 실제 Before/After 핵심 6개 이미지를 `docs/design-review-2026-10-01/`로 복사하여 클라우드에서도 검토할 수 있게 준비했다.
+  원본 스크린샷·로그·로컬 DB는 그대로 보존했다. `test-vc-design-review.ts seed`는 기존 fixture를 보존하며 없는 경우만 생성한다.
+- 검증: devcontainer JSON 파싱, `node --check .devcontainer/setup.mjs`, fixture seed 보존 실행, `npx tsc --noEmit`, `git diff --check` PASS.
+  Codespaces 실제 생성/설치/로그인/실행은 아직 NOT VERIFIED. GitHub 인증 대기 중이며 원격 push 완료를 아직 확인하지 않았다.
+
+## 2026-10-01 — Codex 로컬 VC 대표 화면 디자인 검토
+
+이번 인수의 실행 기록이다. 아래 과거 섹션의 테스트·운영 상태를 현재 결과로 간주하지 않는다.
+
+- **인수**: 시작 시 `D:\Dealmind`는 빈 폴더였다. 기존 `https://github.com/vcwoong-ai/vcwoong.git`를 clone했다(새 원격 저장소 생성 아님).
+  원격 main `a60f465f45aa54bc22ef48361308a54169cd6cc4`, PR #114~#117 병합 확인.
+  열린 디자인 PR #118의 `99885fcfcec258c183bb721af11ac06ec1662f5e`를 이어받아 로컬 브랜치 `codex/vc-design-review` 생성, upstream 미설정.
+  HEAD는 이 인수 기준점 그대로다. 다른 환경의 미커밋 작업은 새 clone에 포함되지 않으며 외부 Claude 세션의 현재 실행 상태는 미확인이다.
+  로컬 앱 목록에서 같은 저장소를 수정 중인 다른 Codex 채팅은 발견되지 않았다. PR #118 원격 브랜치는 수정하지 않았다.
+- **자료**: 저장소 `CLAUDE.md`, 본 현황 문서의 최신 작업 기록, 첨부 ZIP의 `01_HANDOVER.md`·`02_DESIGN_BRIEF.md` 확인.
+  저장소 내 `AGENTS.md`/`AGENTS.override.md` 없음. 인수인계 문서는 복사하지 않았고 기존 지침도 덮어쓰지 않았다.
+- **대표 화면**: 실제 `/reports/[id]` → 로컬 `/reports/codex-design-review-report` (비전AI, **예시 데이터**).
+  논지·검토 의견 분리, 상단 상충/필요 자료 바로가기, 상충 값과 가격·회수의 2열 배치,
+  투자 근거/논지 훼손 요인 및 미확인 정보/IC 질문을 비교하는 구획으로 개편했다.
+  390px에서도 95억원/110억원과 각 출처가 나란히 보인다. 원문 뷰어를 새로 만든 것은 아니다.
+  기존 근거 패널에 canonical 근거 상태·검증 한계·키보드 방향키/Home/End 전환을 추가하고 긴 출처명 잘림을 줄였다.
+  미확인 정보의 이유·필요 근거·P0 우선순위, 가격/수익의 산출 불가 사유를 유지했다. IC 질문은 8개 제한 없이 모두 표시한다.
+  조회 취소와 보고서별 컴포넌트 key로 이전 응답/열린 근거 패널의 잔류를 방어한다.
+- **canonical 연결**: `reportReadWhere` → `/api/reports/[id]/decision` + `REPORT_FOR_DECISION_INCLUDE`
+  → `computeReportDecision` → `traceReportEvidence` / `buildInvestmentDecision` / `checkVCDecisionGate`
+  → `DecisionWorkspace`·기존 근거 패널. Export는 `loadReportForExport` → 같은 `computeReportDecision` → memo.
+  React에는 새 계산/판정 엔진 없음. 엔진·API·auth·결제·운영 schema 변경 없음.
+  API와 export는 독립 조회이며 원자적인 동일 snapshot을 보장하지 않는다. 이번 고정 fixture에서는 두 loader의 decision을 비교하고
+  Before/After 입력 hash와 decision hash가 동일함을 확인했다. 이 검증을 운영 동시성 보장으로 확대하지 않는다.
+  입력 SHA256 `5d8232fc95e6d7f4350ca8fa09d135f1e6804b81c170591389c16b66d0d6e336`,
+  decision SHA256 `f529bbb89340045126a60720de29c1b03ae6922585868c985709bd065cd0192c`.
+- **변경 범위**: `src/app/reports/[id]/report-page-client.tsx`, `src/components/vc/`의
+  `decision-workspace.tsx`, `decision-workspace.module.css`(신규), `decision-header.tsx`,
+  `decision-sections.tsx`, `contradiction-panel.tsx`, `evidence-panel.tsx`.
+  `tools/test-vc-design-review.ts` 신규. 기존 VC decision/parity 및 PE frontend E2E에는 Windows 실행용
+  `PLAYWRIGHT_EXECUTABLE_PATH` override만 추가(기존 assertion 삭제/약화 없음). 전역/PE 스타일 변경 없음.
+- **격리 실행**: Node 24.15.0 / npm 11.12.1. `npm ci --ignore-scripts --no-audit --no-fund` 후
+  `npm_config_script_shell=C:\Program Files\Git\bin\bash.exe`로 기존 `npm run db:setup:local`, `npm run dev:local -- --hostname 127.0.0.1` 실행.
+  DB는 `DATABASE_URL=file:./dev.db` → `D:\Dealmind\prisma\dev.db` SQLite뿐이다. 별도 운영 env 파일/API 키 없음.
+  최초 DB setup은 Windows Prisma schema engine 오류로 실패했으며, 존재하지 않던 로컬 DB 파일을 빈 파일로 만든 후 동일 스크립트 성공.
+  `npm run setup:fonts`는 기존 패키지의 Pretendard 자산을 생성했다(ignored, 폰트 커밋 없음).
+- **검증**:
+  - 최초 baseline 시도는 Prisma client 생성 전 실행하여 `MODULE_NOT_FOUND`로 실패. 생성 후 VC decision layer(40), contradiction(15), memo(16) PASS.
+  - 변경 전 `npm run test:vc-decision-e2e` PASS, 변경 후 동일 targeted 3종 PASS.
+  - `npm run test:all` PASS (공유 VC/PE 오프라인 회귀).
+  - `npm run test:vc-decision-e2e`, `npm run test:vc-parity-e2e`, `npm run test:pe-frontend-productization-e2e` PASS.
+    parity는 상충/다중 값/음수/장문 출처/가격 누락/점수 없음/API 오류/로딩/gate 실패와 API·화면·DOCX의 정합성을 검증했다.
+  - `DATABASE_URL=file:./dev.db`, `PLAYWRIGHT_EXECUTABLE_PATH=C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe` 설정 후
+    `npx tsx tools/test-vc-design-review.ts before` 및 `after` PASS.
+    1440/390 Before, 1440/390/430/768/1024 After: 동일 입력, canonical 논지, 가로 넘침, 양쪽 출처, 키보드 값 전환/포커스 가둠/Escape/복귀 확인.
+  - 최종 `npx tsc --noEmit`, `npm run lint`(경고/오류 없음), `npm run build`, `git diff --check` PASS.
+    build 전 dev 서버를 종료했다. 이후 `npm run start -- --hostname 127.0.0.1`은 자동 승인 검토가
+    `blocked by policy`로 차단(상세 이유 미제공). 따라서 현재 로컬 서버는 중지 상태이며 저장된 실제 화면으로 검토한다.
+- **실제 화면/로그**: `screenshots/vc-design-review/` (Git ignored, 로컬 보존).
+  `before-1440.png` / `after-1440.png`, `before-390.png` / `after-390.png`,
+  `*-workspace.png`, `*-evidence.png`, `after-390-comparison.png`, `snapshot.json` 및 검증 로그.
+- **권한/남은 범위**: commit/stage/push/PR 생성·수정/merge/production 배포 없음. 운영 DB/env/schema/결제 변경·유료 AI 호출 없음.
+  인증된 Production 앱, PostgreSQL 동시성, 스크린리더 실제 청취·실사용자 디자인 평가는 NOT VERIFIED.
+  사용자 디자인 승인 전이며, 다음 단계는 대표 화면 디자인 확인이다. 승인 전 전체 사이트 확장/운영 변경은 하지 않는다.
+  최종 상태: **READY FOR DESIGN REVIEW**. tracked 수정 10개, 신규 untracked 코드/테스트 2개, staged 없음.
+  스크린샷·로그·로컬 DB·의존성은 ignored 로컬 실행 산출물이며, 인수인계 복사본으로 생긴 untracked는 없다.
+
 ## -4. 유료 제품 프론트엔드 개편 — 검토 대기열 · 근거 패널 · 랜딩/요금 (2026-09-30)
 
 엔진(VC 결정 · PE readiness · QoE · LBO · DD · fingerprint · 권한)은 바꾸지 않고 화면의 정보 구조를 바꿨다.
