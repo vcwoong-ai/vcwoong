@@ -90,7 +90,7 @@ export function computeReportDecision(report: ReportForDecision): ReportDecision
     report.sections.map((s) => ({ sectionKey: s.sectionKey, content: s.content })),
     report.deal.documents,
     { investAmount: report.deal.investAmount, valuation: report.deal.valuation },
-    verdictsToMap(report.evidenceCheck?.verdicts as never)
+    verdictsToMap(report.evidenceCheck?.verdicts)
   );
   const score = report.deal.score;
   const assessment = (score?.evidenceAssessment ?? null) as ScoreEvidenceAssessment | null;

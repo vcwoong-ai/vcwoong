@@ -95,7 +95,7 @@ export async function POST(
     report.sections.map((s) => ({ sectionKey: s.sectionKey, content: s.content })),
     report.deal.documents,
     { investAmount: report.deal.investAmount, valuation: report.deal.valuation },
-    verdictsToMap(report.evidenceCheck?.verdicts as never)
+    verdictsToMap(report.evidenceCheck?.verdicts)
   ).claims;
 
   const deterministic = buildDeterministicIcQuestions(

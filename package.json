@@ -96,6 +96,7 @@
     "test:mobile": "tsx tools/test-mobile.ts",
     "test:pe-ic-audit-e2e": "tsx tools/test-pe-ic-audit-e2e.ts",
     "test:pe-production-readiness-e2e": "tsx tools/test-pe-production-readiness-e2e.ts",
+    "test:vc-parity-e2e": "tsx tools/test-vc-parity-e2e.ts",
     "test:vc-decision-e2e": "tsx tools/test-vc-decision-e2e.ts",
     "test:pe-frontend-productization-e2e": "tsx tools/test-pe-frontend-productization-e2e.ts",
     "smoke": "tsx tools/smoke.ts",
