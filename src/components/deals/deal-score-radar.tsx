@@ -194,8 +194,8 @@ export function DealScoreRadar({
             <ResponsiveContainer width="100%" height="100%">
               <RadarChart data={toRadarData(score)} outerRadius="75%">
                 <PolarGrid />
-                <PolarAngleAxis dataKey="dimension" tick={{ fontSize: 11 }} />
-                <PolarRadiusAxis domain={[0, 100]} tick={{ fontSize: 9 }} />
+                <PolarAngleAxis dataKey="dimension" tick={{ fontSize: 12, fill: "#475569" }} />
+                <PolarRadiusAxis domain={[0, 100]} tick={{ fontSize: 12, fill: "#64748b" }} />
                 <Radar
                   name="점수"
                   dataKey="value"
