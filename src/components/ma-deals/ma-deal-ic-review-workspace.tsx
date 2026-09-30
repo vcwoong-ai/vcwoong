@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
 import { buildPEICDecision } from "@/lib/pe/pe-ic-decision";
 import { buildPEICReviewWorkspace } from "@/lib/pe/pe-ic-review";
 import type { PEICReviewItem } from "@/lib/pe/pe-ic-review-types";
@@ -27,20 +28,20 @@ interface MaDeal {
   status: MaDealStatus;
 }
 
-const STATE_VARIANT: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
-  READY_FOR_IC: "default",
-  PARTIALLY_READY: "secondary",
-  NOT_READY: "outline",
-  BLOCKED: "destructive",
+const STATE_VARIANT: Record<string, StatusTone> = {
+  READY_FOR_IC: "positive",
+  PARTIALLY_READY: "info",
+  NOT_READY: "neutral",
+  BLOCKED: "critical",
 };
 
-const ITEM_STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
-  OPEN: "outline",
-  IN_REVIEW: "secondary",
-  WAITING_FOR_EVIDENCE: "secondary",
-  EVIDENCE_RECEIVED: "secondary",
-  RESOLVED: "default",
-  REJECTED: "destructive",
+const ITEM_STATUS_VARIANT: Record<string, StatusTone> = {
+  OPEN: "neutral",
+  IN_REVIEW: "info",
+  WAITING_FOR_EVIDENCE: "info",
+  EVIDENCE_RECEIVED: "info",
+  RESOLVED: "positive",
+  REJECTED: "critical",
 };
 
 const REQUEST_STATUS_ORDER: PEEvidenceRequestStatus[] = ["REQUESTED", "RECEIVED", "UNDER_REVIEW", "ACCEPTED", "REJECTED"];
@@ -53,9 +54,9 @@ function ReviewItemCard({ item, onSelect }: { item: PEICReviewItem; onSelect: ()
       className="w-full text-left border rounded-md px-3 py-2 hover:bg-gray-50 space-y-1"
     >
       <div className="flex items-center gap-1.5 flex-wrap">
-        <Badge variant={ITEM_STATUS_VARIANT[item.status] ?? "outline"} className="text-xs">
+        <StatusBadge tone={ITEM_STATUS_VARIANT[item.status] ?? "neutral"}>
           {PE_IC_REVIEW_ITEM_STATUS_LABEL[item.status]}
-        </Badge>
+        </StatusBadge>
         <Badge variant="outline" className="text-xs">
           {PE_IC_REVIEW_ITEM_TYPE_LABEL[item.type]}
         </Badge>
@@ -143,9 +144,9 @@ export function MaDealIcReviewWorkspace({
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0">
           <CardTitle className="text-base">검토 진행 상태</CardTitle>
-          <Badge variant={STATE_VARIANT[workspace.overallState] ?? "outline"}>
+          <StatusBadge tone={STATE_VARIANT[workspace.overallState] ?? "neutral"}>
             {PE_IC_REVIEW_STATE_LABEL[workspace.overallState]}
-          </Badge>
+          </StatusBadge>
         </CardHeader>
         <CardContent className="flex items-center gap-6 text-sm">
           <div>

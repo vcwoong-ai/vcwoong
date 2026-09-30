@@ -1,13 +1,14 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
 import { PE_THESIS_STATUS_LABEL } from "@/lib/pe/ma-deal-labels";
 import type { PEThesisItem, PEThesisStatus } from "@/lib/pe/pe-ic-decision-types";
 
-const STATUS_VARIANT: Record<PEThesisStatus, "default" | "secondary" | "destructive" | "outline"> = {
-  SUPPORTED: "default",
-  PARTIALLY_SUPPORTED: "secondary",
-  UNSUPPORTED: "outline",
-  CONTRADICTED: "destructive",
+const STATUS_VARIANT: Record<PEThesisStatus, StatusTone> = {
+  SUPPORTED: "positive",
+  PARTIALLY_SUPPORTED: "info",
+  UNSUPPORTED: "neutral",
+  CONTRADICTED: "critical",
 };
 
 /**
@@ -30,9 +31,9 @@ export function MaDealThesis({ items }: { items: PEThesisItem[] }) {
             {items.map((t) => (
               <li key={t.id} className="border rounded-md px-3 py-2 text-sm space-y-1">
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <Badge variant={STATUS_VARIANT[t.status]} className="text-xs">
+                  <StatusBadge tone={STATUS_VARIANT[t.status]}>
                     {PE_THESIS_STATUS_LABEL[t.status]}
-                  </Badge>
+                  </StatusBadge>
                   {t.materiality === "MATERIAL" && (
                     <Badge variant="outline" className="text-xs">
                       Material

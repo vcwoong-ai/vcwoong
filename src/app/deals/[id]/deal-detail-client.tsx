@@ -415,7 +415,7 @@ export function DealDetailClient({
 
       {/* Deal header — 모바일에서는 제목과 액션 버튼을 세로로 쌓는다.
           가로로 두면 좁은 화면에서 제목 영역이 눌려 글자가 세로로 깨진다. */}
-      <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+      <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-4">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2 mb-2">
             <Badge variant="outline">{SECTOR_LABEL[deal.sector]}</Badge>
@@ -439,7 +439,7 @@ export function DealDetailClient({
             <p className="text-sm text-gray-600 mt-2 max-w-2xl">{deal.description}</p>
           )}
         </div>
-        <div className="flex flex-wrap gap-2 items-center lg:flex-shrink-0">
+        <div className="flex flex-wrap gap-2 items-center xl:flex-shrink-0">
           <TeamShareToggle
             type="deal"
             resourceId={deal.id}

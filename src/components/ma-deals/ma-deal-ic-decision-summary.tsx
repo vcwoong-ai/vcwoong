@@ -1,13 +1,13 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
 import { PE_IC_PROCESS_STATE_LABEL } from "@/lib/pe/ma-deal-labels";
 import type { PEICProcessState } from "@/lib/pe/pe-ic-decision-types";
 
-const STATE_VARIANT: Record<PEICProcessState, "default" | "secondary" | "destructive" | "outline"> = {
-  READY_FOR_IC: "default",
-  PARTIALLY_READY: "secondary",
-  NOT_READY: "outline",
-  BLOCKED: "destructive",
+const STATE_VARIANT: Record<PEICProcessState, StatusTone> = {
+  READY_FOR_IC: "positive",
+  PARTIALLY_READY: "info",
+  NOT_READY: "neutral",
+  BLOCKED: "critical",
 };
 
 /**
@@ -30,7 +30,7 @@ export function MaDealIcDecisionSummary({
       <CardHeader>
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <CardTitle className="text-base">IC 의사결정 요약</CardTitle>
-          <Badge variant={STATE_VARIANT[processState]}>{PE_IC_PROCESS_STATE_LABEL[processState]}</Badge>
+          <StatusBadge tone={STATE_VARIANT[processState]}>{PE_IC_PROCESS_STATE_LABEL[processState]}</StatusBadge>
         </div>
       </CardHeader>
       <CardContent>
