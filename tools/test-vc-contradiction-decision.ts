@@ -14,8 +14,10 @@
 import { buildInvestmentDecision, buildContradictions, buildMissingInformation } from "../src/lib/vc-decision";
 import { checkVCDecisionGate } from "../src/lib/vc-decision-gate";
 import { traceReportEvidence } from "../src/lib/evidence";
+import { buildScoreEvidenceAssessment } from "../src/lib/deal-scoring-evidence";
 import { detectContradictions } from "../src/lib/vc-decision";
 import { buildDeterministicIcQuestions } from "../src/lib/ic-questions";
+import { computeReportDecision, type ReportForDecision } from "../src/lib/vc-decision-loader";
 import type {
   ScoreEvidenceAssessment,
   DimensionEvidenceAssessment,
@@ -357,6 +359,66 @@ function test13_icQuestionGeneratorCoversContradictions() {
   console.log("✅ Test 13 — 상충이 결정적 IC 질문(값·출처 포함, HIGH)이 되고 상위 10개 제한에 밀리지 않음");
 }
 
+// ── 14. 음수 부호: 표시 보존 + 부호만 다른 상충 탐지 + 범위/식별자 오탐 없음 ─
+function test14_negativeSignHandling() {
+  const trace = (content: string, doc: string) =>
+    traceReportEvidence([{ sectionKey: "FINANCIAL_STATUS", content }] as never, [{ name: "IR.pdf", parsedText: doc }] as never, { investAmount: null, valuation: null }, undefined).claims;
+
+  // (a) 부호만 다른 값은 서로 다른 값 -> 상충으로 탐지, 표시에 부호 유지
+  const signOnly = trace("영업이익 -12억원을 기록했다. 영업이익 12억원으로도 표기됐다.", "영업이익 12억원");
+  const c1 = buildContradictions(signOnly);
+  assert(c1.length === 1, `-12 vs 12는 상충이어야 함, 실제 ${c1.length}건`);
+  assert(c1[0].values.map((v) => v.raw).sort().join(",") === "-12억원,12억원", `부호가 표시에 남아야 함: ${c1[0].values.map((v) => v.raw)}`);
+  assert(c1[0].values.some((v) => v.value === "-12") && c1[0].values.some((v) => v.value === "12"), "비교용 값에도 부호 포함");
+
+  // (b) 둘 다 음수: 표시가 부호를 잃지 않음(손실이 이익처럼 읽히지 않음)
+  const bothNeg = buildContradictions(trace("영업이익 -12억원을 기록했다. 영업이익 -8억원으로도 표기됐다.", "영업이익 12억원 8억원"));
+  assert(bothNeg.length === 1 && bothNeg[0].values.every((v) => v.raw.startsWith("-")), `-12 vs -8은 부호를 유지한 채 표시: ${bothNeg[0]?.values.map((v) => v.raw)}`);
+
+  // (c) 자료 대조는 절댓값 — 음수 claim이 '영업손실 12억원' 자료로 확인됨(근거 없음으로 떨어지지 않음)
+  const matched = trace("영업이익 -12억원을 기록했다.", "영업손실 12억원");
+  assert(matched[0].negative === true && matched[0].confidence !== "UNSUPPORTED", `음수 claim도 자료의 절댓값과 대조돼야 함: ${matched[0].confidence}`);
+
+  // (d) 범위·식별자의 하이픈은 음수가 아님
+  const range = trace("매출은 12-15억원 수준이다. 특허 KR10-2020-1234 보유.", "");
+  assert(range.every((c) => !c.negative), `범위/식별자의 하이픈은 음수가 아님: ${JSON.stringify(range.map((c) => [c.raw, c.negative]))}`);
+  const tilde = trace("성장률은 -5%다.", "");
+  assert(tilde[0].negative === true && tilde[0].raw === "-5%", "-5%는 음수");
+  const delta = trace("영업이익 △12억원, 순이익 ▲8억원을 기록했다.", "");
+  assert(delta.length === 2 && delta.every((c) => c.negative && c.raw.startsWith("-")), "△/▲ 표기는 음수로 표준화");
+
+  // (e) 부호 없는 기존 동작은 그대로(claimKey 포함)
+  const plain = trace("매출 95억원이다.", "매출 95억원");
+  assert(plain[0].negative === undefined && plain[0].claimKey === "FINANCIAL_STATUS:numeric:95|억원" && plain[0].raw === "95억원", "부호 없는 claim의 raw/claimKey는 기존과 동일");
+  console.log("✅ Test 14 — 음수 부호: 표시 보존, 부호만 다른 값 상충 탐지, 자료 대조는 절댓값, 범위·식별자 오탐 없음");
+}
+
+// ── 15. 저장된 질문이 없어도 결정 레이어에 결정적 미리보기가 연결된다 ─────
+function test15_previewQuestionsWithoutStoredOnes() {
+  const sections = [{ sectionKey: "FINANCIAL_STATUS", title: "재무", content: "2024년 매출 95억원. 2024년 매출 110억원." }];
+  const docs = [{ name: "IR.pdf", parsedText: "2024년 매출 95억원" }, { name: "감사.pdf", parsedText: "2024년 매출액 110억원" }];
+  const claims = traceReportEvidence(sections as never, docs as never, { investAmount: 50, valuation: 400 }, undefined).claims;
+  const scores = { marketSize: 70, team: 70, product: 70, businessModel: 70, financials: 70, moat: 70 } as Record<ScoreDimensionKey, number>;
+  const assessmentReal = buildScoreEvidenceAssessment(scores, {}, claims, "report_evidence");
+  const base: ReportForDecision = {
+    sections: sections as never,
+    deal: { investAmount: 50, valuation: 400, documents: docs as never, score: { overall: 70, rationale: {}, evidenceAssessment: assessmentReal } },
+    evidenceCheck: null,
+    icQuestions: null,
+  };
+  const pre = computeReportDecision(base);
+  assert(pre.questionsSource === "deterministic_preview" && pre.questionsGenerated === false, "저장 전에는 결정적 미리보기");
+  assert(pre.questionLinks.some((l) => l.question.trigger === "CONTRADICTION" && l.linkedTo.some((x) => x.kind === "contradiction")), "미리보기에도 상충 질문이 상충 이슈에 연결");
+  assert(pre.decision.contradictions[0].icQuestion?.trigger === "CONTRADICTION", "상충 객체에 질문이 연결");
+  const stored = computeReportDecision({ ...base, icQuestions: { questions: [{ id: "stored-1", category: "Market", question: "저장된 질문", whyItMatters: "x", trigger: "UNSUPPORTED_CLAIM", priority: "LOW", suggestedAnswerType: "EXPLANATION", source: "deterministic" }] } });
+  assert(stored.questionsSource === "stored" && stored.questionsGenerated === true, "저장된 질문이 있으면 저장본이 우선(미리보기가 덮어쓰지 않음)");
+  assert(stored.questionLinks.some((l) => l.question.id === "stored-1"), "저장된 질문이 그대로 노출");
+  const noScore = computeReportDecision({ ...base, deal: { ...base.deal, score: null } });
+  assert(noScore.questionsSource === "none" && noScore.questionLinks.length === 0, "점수(평가)가 없으면 질문을 지어내지 않음");
+  assert(JSON.stringify(computeReportDecision(base)) === JSON.stringify(pre), "미리보기도 결정적(같은 입력 -> 같은 출력)");
+  console.log("✅ Test 15 — 저장된 질문이 없어도 결정적 미리보기가 결정 이슈에 연결되고, 저장본이 있으면 저장본이 우선");
+}
+
 function main() {
   console.log("\n=== VC 수치 상충 결정 레이어 테스트 ===\n");
   test1_contradictedDriverIsNotVerified();
@@ -372,7 +434,9 @@ function main() {
   test11_labelDoesNotLeakAcrossSentences();
   test12_icQuestionLinked();
   test13_icQuestionGeneratorCoversContradictions();
-  console.log("\n✅ VC 수치 상충 결정 레이어 테스트 통과(13/13)\n");
+  test14_negativeSignHandling();
+  test15_previewQuestionsWithoutStoredOnes();
+  console.log("\n✅ VC 수치 상충 결정 레이어 테스트 통과(15/15)\n");
 }
 
 main();

@@ -21,6 +21,7 @@ export interface DecisionApiData {
   scoreOverall: number | null;
   assessmentBasis: "report_evidence" | "no_report" | null;
   questionsGenerated: boolean;
+  questionsSource: "stored" | "deterministic_preview" | "none";
   questionLinks: DecisionQuestionLink[];
   documentCount: number;
 }

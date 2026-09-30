@@ -69,6 +69,7 @@ export async function GET(
       scoreOverall: result.scoreOverall,
       assessmentBasis: result.assessmentBasis,
       questionsGenerated: result.questionsGenerated,
+      questionsSource: result.questionsSource,
       questionLinks: result.questionLinks,
       documentCount: report.deal.documents.length,
       evidenceTotals: result.evidence.totals,

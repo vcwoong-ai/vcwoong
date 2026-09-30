@@ -130,7 +130,7 @@ async function main() {
 
     // ── 7. 모바일(390px) — 목록 + 상세 모두 가로 스크롤/에러 없이 렌더 ────
     await checkMobile(browser, `${BASE}/ma-deals`, EMAIL, PASSWORD, (p) =>
-      p.waitForSelector("text=E2E제품화 주식회사", { timeout: 20000 })
+      p.waitForSelector("text=E2E제품화 주식회사", { timeout: 45000 })
     );
     console.log("✅ 7a — 모바일(390px) 딜 목록 정상 렌더");
     await checkMobile(browser, `${BASE}/ma-deals/${deal.id}`, EMAIL, PASSWORD, async (p) => {

@@ -287,16 +287,22 @@ function MissingInformationList({ items, refFor }: { items: VCMissingInformation
 
 const LINK_KIND_LABEL = { contradiction: "수치 상충", thesis_breaker: "Thesis Breaker", missing_information: "미확인 정보" } as const;
 
-function QuestionList({ links, generated }: { links: DecisionQuestionLink[]; generated: boolean }) {
+function QuestionList({ links, source }: { links: DecisionQuestionLink[]; source: DecisionApiData["questionsSource"] }) {
   return (
     <section aria-labelledby="vc-questions-title" data-testid="vc-questions">
       <SectionHeader as="h3" id="vc-questions-title" eyebrow="What should I review next" title="IC 질문" description="각 질문이 어떤 결정 이슈를 풀기 위한 것인지 함께 표시합니다" />
-      {!generated || links.length === 0 ? (
+      {links.length === 0 ? (
         <Callout tone="info" className="mt-3">
-          아직 IC 질문이 생성되지 않았습니다. 아래 <a href="#ic-questions" className="font-medium underline">IC Questions</a> 패널에서 생성하면
-          수치 상충·근거 공백과 연결된 질문이 이곳에 나타납니다.
+          현재 결정 이슈와 연결된 IC 질문이 없습니다. 아래 <a href="#ic-questions" className="font-medium underline">IC Questions</a> 패널에서 질문을 생성할 수 있습니다.
         </Callout>
       ) : (
+        <>
+        {source === "deterministic_preview" && (
+          <Callout tone="info" className="mt-3" data-testid="vc-questions-preview">
+            아직 저장되지 않은 <span className="font-medium">미리보기</span>입니다 — 수치 상충·근거 공백에서 결정적으로 계산한 질문이며 AI 문장 다듬기 전입니다.
+            아래 <a href="#ic-questions" className="font-medium underline">IC Questions</a> 패널에서 생성하면 저장됩니다.
+          </Callout>
+        )}
         <ol className="mt-3 space-y-2.5">
           {links.slice(0, 8).map(({ question, linkedTo }) => (
             <li key={question.id} className="rounded-md border border-slate-200 bg-white p-3.5" data-testid="vc-question">
@@ -326,6 +332,7 @@ function QuestionList({ links, generated }: { links: DecisionQuestionLink[]; gen
             </li>
           ))}
         </ol>
+        </>
       )}
     </section>
   );

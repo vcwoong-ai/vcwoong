@@ -1,8 +1,8 @@
 "use client";
+import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
 
 import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { AlertTriangle } from "lucide-react";
 import { buildPECommitteePackContent } from "@/lib/pe/pe-committee-pack";
 import { MaDealThesis } from "./ma-deal-thesis";
@@ -30,11 +30,11 @@ interface MaDeal {
   status: MaDealStatus;
 }
 
-const REVIEW_STATE_VARIANT: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
-  READY_FOR_IC: "default",
-  PARTIALLY_READY: "secondary",
-  NOT_READY: "outline",
-  BLOCKED: "destructive",
+const REVIEW_STATE_VARIANT: Record<string, StatusTone> = {
+  READY_FOR_IC: "positive",
+  PARTIALLY_READY: "info",
+  NOT_READY: "neutral",
+  BLOCKED: "critical",
 };
 
 /**
@@ -115,9 +115,9 @@ export function MaDealCommitteePack({
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0">
           <CardTitle className="text-base">Decision Readiness</CardTitle>
-          <Badge variant={REVIEW_STATE_VARIANT[decision.processState] ?? "outline"}>
+          <StatusBadge tone={REVIEW_STATE_VARIANT[decision.processState] ?? "neutral"}>
             {PE_IC_REVIEW_STATE_LABEL[decision.processState]}
-          </Badge>
+          </StatusBadge>
         </CardHeader>
         <CardContent className="space-y-2">
           <p className="text-sm text-gray-700">{pack.currentReviewStateLabel}</p>

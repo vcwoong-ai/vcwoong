@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -23,17 +24,17 @@ import type { PEICReviewItem, PEEvidenceRequestStatus } from "@/lib/pe/pe-ic-rev
 import type { DataRoomDocumentRow } from "@/lib/pe/pe-data-room-view-model";
 import { CreatePEEvidenceRequestDialog } from "./create-pe-evidence-request-dialog";
 
-const STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
-  OPEN: "outline",
-  IN_REVIEW: "secondary",
-  WAITING_FOR_EVIDENCE: "secondary",
-  EVIDENCE_RECEIVED: "secondary",
-  RESOLVED: "default",
-  REJECTED: "destructive",
-  REQUESTED: "outline",
-  RECEIVED: "secondary",
-  UNDER_REVIEW: "secondary",
-  ACCEPTED: "default",
+const STATUS_VARIANT: Record<string, StatusTone> = {
+  OPEN: "neutral",
+  IN_REVIEW: "info",
+  WAITING_FOR_EVIDENCE: "info",
+  EVIDENCE_RECEIVED: "info",
+  RESOLVED: "positive",
+  REJECTED: "critical",
+  REQUESTED: "neutral",
+  RECEIVED: "info",
+  UNDER_REVIEW: "info",
+  ACCEPTED: "positive",
 };
 
 /**
@@ -117,9 +118,9 @@ export function MaDealIcReviewItemDetail({
             </DialogHeader>
             <div className="space-y-4 text-sm">
               <div className="flex items-center gap-1.5 flex-wrap">
-                <Badge variant={STATUS_VARIANT[item.status] ?? "outline"} className="text-xs">
+                <StatusBadge tone={STATUS_VARIANT[item.status] ?? "neutral"}>
                   {PE_IC_REVIEW_ITEM_STATUS_LABEL[item.status]}
-                </Badge>
+                </StatusBadge>
                 <Badge variant="outline" className="text-xs">
                   {PE_IC_REVIEW_ITEM_TYPE_LABEL[item.type]}
                 </Badge>
@@ -173,9 +174,9 @@ export function MaDealIcReviewItemDetail({
                           <li key={req.id} className="border rounded-md px-3 py-2 space-y-1.5">
                             <div className="flex items-center justify-between gap-2">
                               <span className="font-medium truncate">{req.title}</span>
-                              <Badge variant={STATUS_VARIANT[req.status] ?? "outline"} className="text-xs shrink-0">
+                              <StatusBadge tone={STATUS_VARIANT[req.status] ?? "neutral"} className="shrink-0">
                                 {PE_EVIDENCE_REQUEST_STATUS_LABEL[req.status]}
-                              </Badge>
+                              </StatusBadge>
                             </div>
                             {req.requestedDocument && (
                               <p className="text-xs text-gray-500">요청 자료: {req.requestedDocument}</p>

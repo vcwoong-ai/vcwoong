@@ -2,6 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
 import { PE_IC_QUESTION_PRIORITY_LABEL } from "@/lib/pe/ma-deal-labels";
 import { CreatePEEvidenceRequestDialog } from "./create-pe-evidence-request-dialog";
 import type { ICQuestion, ICQuestionSourceType, PEICQuestionPriority } from "@/lib/pe/pe-ic-decision-types";
@@ -14,18 +15,18 @@ const SOURCE_LABEL: Record<ICQuestionSourceType, string> = {
   UNSUPPORTED_THESIS: "근거 없는 주장",
 };
 
-const SOURCE_VARIANT: Record<ICQuestionSourceType, "default" | "secondary" | "destructive" | "outline"> = {
-  BLOCKER: "destructive",
-  FACT_CONFLICT: "destructive",
-  MISSING_INFO: "secondary",
-  DD_FINDING: "outline",
-  UNSUPPORTED_THESIS: "outline",
+const SOURCE_VARIANT: Record<ICQuestionSourceType, StatusTone> = {
+  BLOCKER: "critical",
+  FACT_CONFLICT: "critical",
+  MISSING_INFO: "info",
+  DD_FINDING: "neutral",
+  UNSUPPORTED_THESIS: "neutral",
 };
 
-const PRIORITY_VARIANT: Record<PEICQuestionPriority, "default" | "secondary" | "destructive" | "outline"> = {
-  P0: "destructive",
-  P1: "secondary",
-  P2: "outline",
+const PRIORITY_VARIANT: Record<PEICQuestionPriority, StatusTone> = {
+  P0: "critical",
+  P1: "info",
+  P2: "neutral",
 };
 
 /**
@@ -63,12 +64,12 @@ export function MaDealIcQuestions({
               <li key={q.code} className="border rounded-md px-3 py-2 space-y-1">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    <Badge variant={PRIORITY_VARIANT[q.priority]} className="text-xs">
+                    <StatusBadge tone={PRIORITY_VARIANT[q.priority]}>
                       {PE_IC_QUESTION_PRIORITY_LABEL[q.priority]}
-                    </Badge>
-                    <Badge variant={SOURCE_VARIANT[q.sourceType]} className="text-xs">
+                    </StatusBadge>
+                    <StatusBadge tone={SOURCE_VARIANT[q.sourceType]}>
                       {SOURCE_LABEL[q.sourceType]}
-                    </Badge>
+                    </StatusBadge>
                     <Badge variant="outline" className="text-xs">
                       {q.domainLabel}
                     </Badge>

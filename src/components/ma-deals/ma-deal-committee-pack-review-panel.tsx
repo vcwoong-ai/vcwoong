@@ -1,8 +1,8 @@
 "use client";
+import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
 
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { AlertTriangle } from "lucide-react";
@@ -12,12 +12,12 @@ import {
 } from "@/lib/pe/ma-deal-labels";
 import type { PEICReviewView, PEICReviewCommentView } from "@/lib/pe/pe-ic-review-signoff-types";
 
-const DISPLAY_STATE_VARIANT: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
-  NOT_REVIEWED: "outline",
-  IN_REVIEW: "secondary",
-  CHANGES_REQUESTED: "destructive",
-  REVIEWED: "default",
-  RE_REVIEW_REQUIRED: "destructive",
+const DISPLAY_STATE_VARIANT: Record<string, StatusTone> = {
+  NOT_REVIEWED: "neutral",
+  IN_REVIEW: "info",
+  CHANGES_REQUESTED: "critical",
+  REVIEWED: "positive",
+  RE_REVIEW_REQUIRED: "critical",
 };
 
 /**
@@ -158,9 +158,9 @@ export function MaDealCommitteePackReviewPanel({
         <CardContent className="space-y-3">
           <div className="flex items-center gap-1.5">
             <span className="text-xs text-gray-400">현재 상태:</span>
-            <Badge variant={DISPLAY_STATE_VARIANT[ownReview?.displayState ?? "NOT_REVIEWED"]} className="text-xs">
+            <StatusBadge tone={DISPLAY_STATE_VARIANT[ownReview?.displayState ?? "NOT_REVIEWED"]}>
               {PE_IC_REVIEW_DISPLAY_STATE_LABEL[ownReview?.displayState ?? "NOT_REVIEWED"]}
-            </Badge>
+            </StatusBadge>
           </div>
           <Textarea
             rows={3}
@@ -202,9 +202,9 @@ export function MaDealCommitteePackReviewPanel({
                     <p className="font-medium">{r.reviewerName ?? r.reviewerEmail ?? "리뷰어"}</p>
                     {r.comment && <p className="text-xs text-gray-500 mt-0.5">{r.comment}</p>}
                   </div>
-                  <Badge variant={DISPLAY_STATE_VARIANT[r.displayState]} className="text-xs shrink-0">
+                  <StatusBadge tone={DISPLAY_STATE_VARIANT[r.displayState]} className="shrink-0">
                     {PE_IC_REVIEW_DISPLAY_STATE_LABEL[r.displayState]}
-                  </Badge>
+                  </StatusBadge>
                 </li>
               ))}
             </ul>

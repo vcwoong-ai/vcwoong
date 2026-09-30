@@ -12,7 +12,8 @@ import { verdictsToMap } from "./evidence-ai";
 import type { ScoreEvidenceAssessment } from "./deal-scoring-evidence";
 import type { ScoreDimensionKey } from "./deal-scoring-shared";
 import type { IcQuestion } from "./ic-questions";
-import { buildInvestmentDecision } from "./vc-decision";
+import { buildContradictions, buildInvestmentDecision } from "./vc-decision";
+import { buildDeterministicIcQuestions } from "./ic-questions";
 import { checkVCDecisionGate, type VCDecisionGateResult } from "./vc-decision-gate";
 import { buildDecisionMemoSectionRefs, type VCDecisionMemoSectionRef } from "./vc-decision-memo";
 import type { VCInvestmentDecision } from "./vc-decision-types";
@@ -80,8 +81,11 @@ export interface ReportDecisionResult {
   scoreOverall: number | null;
   /** 근거 평가가 어떤 기준으로 산출됐는지("no_report"면 보고서 없이 채점됨) */
   assessmentBasis: ScoreEvidenceAssessment["basis"] | null;
+  /** 사용자가 생성해 저장한 IC 질문이 있는가 */
   questionsGenerated: boolean;
-  /** IC 질문 ↔ 결정 이슈 연결(질문이 아직 없으면 빈 배열) */
+  /** 결정에 연결된 질문의 출처 — 저장 전에는 같은 결정적 함수로 계산한 미리보기(AI 문장 다듬기 전) */
+  questionsSource: "stored" | "deterministic_preview" | "none";
+  /** IC 질문 ↔ 결정 이슈 연결 */
   questionLinks: DecisionQuestionLink[];
 }
 
@@ -95,7 +99,14 @@ export function computeReportDecision(report: ReportForDecision): ReportDecision
   const score = report.deal.score;
   const assessment = (score?.evidenceAssessment ?? null) as ScoreEvidenceAssessment | null;
   const rationale = (score?.rationale ?? {}) as Partial<Record<ScoreDimensionKey, string>>;
-  const questions = (report.icQuestions?.questions ?? null) as IcQuestion[] | null;
+  const storedQuestions = (report.icQuestions?.questions ?? null) as IcQuestion[] | null;
+  // 저장된 질문이 없으면 생성 API가 쓰는 것과 같은 결정적 함수로 미리보기를 계산한다(AI·DB 쓰기 없음).
+  // 그래야 "질문을 눌러 생성하기 전에는 결정 화면의 질문이 비어 있는" 상태가 되지 않고,
+  // 화면·API·DOCX가 같은 로더를 쓰므로 세 곳의 질문이 항상 일치한다.
+  const previewQuestions = assessment
+    ? buildDeterministicIcQuestions(rationale, assessment, { investAmount: report.deal.investAmount, valuation: report.deal.valuation }, buildContradictions(evidence.claims))
+    : null;
+  const questions = storedQuestions ?? previewQuestions;
 
   const decision = buildInvestmentDecision(
     score?.overall ?? 0,
@@ -117,7 +128,8 @@ export function computeReportDecision(report: ReportForDecision): ReportDecision
     hasScore: score != null,
     scoreOverall: score?.overall ?? null,
     assessmentBasis: assessment?.basis ?? null,
-    questionsGenerated: questions != null,
+    questionsGenerated: storedQuestions != null,
+    questionsSource: storedQuestions ? "stored" : previewQuestions && previewQuestions.length > 0 ? "deterministic_preview" : "none",
     questionLinks: buildDecisionQuestionLinks(decision, questions),
   };
 }

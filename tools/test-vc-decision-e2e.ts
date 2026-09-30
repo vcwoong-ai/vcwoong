@@ -147,13 +147,16 @@ async function main() {
     assert(!/MOIC[^\n]*\d+(\.\d+)?x/i.test(valText), "MOIC 수치를 지어내면 안 됨");
     console.log("✅ 8 — 밸류에이션은 입력값·결정적 지분율만, MOIC/IRR은 산출 불가+필요 입력");
 
-    // 9. IC 질문: 생성 전 안내 -> 생성 -> 상충 질문이 결정 이슈와 연결되어 표시
-    assert((await page.getByTestId("vc-questions").innerText()).includes("아직 IC 질문이 생성되지 않았습니다"), "생성 전에는 안내가 보여야 함");
+    // 9. IC 질문: 생성 전에도 결정적 미리보기로 상충 질문이 결정 이슈와 연결되어 보임 -> 생성하면 저장본으로 전환
+    assert(api.questionsSource === "deterministic_preview", `저장 전 질문 출처는 미리보기여야 함: ${api.questionsSource}`);
+    await page.waitForSelector('[data-testid="vc-questions-preview"]', { timeout: 10000 });
+    const preText = await page.getByTestId("vc-questions").innerText();
+    assert(preText.includes("95억원") && preText.includes("110억원") && preText.includes("풀어야 할 이슈") && preText.includes("수치 상충"), `생성 전에도 상충 IC 질문이 값·출처와 함께 결정 이슈에 연결돼 보여야 함: ${preText.slice(0, 300)}`);
     await page.getByRole("button", { name: "IC 질문 생성" }).click();
-    await page.waitForSelector('[data-testid="vc-question"]', { timeout: 30000 });
+    await page.waitForSelector('[data-testid="vc-questions-preview"]', { state: "detached", timeout: 30000 });
     const qText = await page.getByTestId("vc-questions").innerText();
-    assert(qText.includes("95억원") && qText.includes("110억원") && qText.includes("풀어야 할 이슈") && qText.includes("수치 상충"), `상충 IC 질문이 값·출처와 함께 결정 이슈에 연결돼 보여야 함: ${qText.slice(0, 400)}`);
-    console.log("✅ 9 — IC 질문 생성 후 상충 질문이 '풀어야 할 이슈: 수치 상충'과 연결되어 표시");
+    assert(qText.includes("95억원") && qText.includes("110억원") && qText.includes("수치 상충"), `생성 후에도 상충 질문 유지: ${qText.slice(0, 300)}`);
+    console.log("✅ 9 — 생성 전에도 상충 질문이 '미리보기'로 결정 이슈와 연결되어 보이고, 생성하면 저장본으로 전환");
 
     // 10. 상세 분석은 결정 아래(근거로서)
     const wsBottom = (await ws.boundingBox())!.y + (await ws.boundingBox())!.height;

@@ -1,14 +1,15 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
 import { PE_DD_CATEGORY_LABEL, PE_DD_SEVERITY_LABEL, PE_DD_FINDING_STATUS_LABEL } from "@/lib/pe/ma-deal-labels";
 import type { PEDDFinding, PEDDSeverity } from "@/lib/pe/dd-types";
 
-const SEVERITY_VARIANT: Record<PEDDSeverity, "default" | "secondary" | "destructive" | "outline"> = {
-  CRITICAL: "destructive",
-  HIGH: "destructive",
-  MEDIUM: "secondary",
-  LOW: "outline",
-  INFO: "outline",
+const SEVERITY_VARIANT: Record<PEDDSeverity, StatusTone> = {
+  CRITICAL: "critical",
+  HIGH: "critical",
+  MEDIUM: "info",
+  LOW: "neutral",
+  INFO: "neutral",
 };
 
 /**
@@ -35,9 +36,9 @@ export function MaDealDdFindings({ findings }: { findings: PEDDFinding[] }) {
                     <Badge variant="outline" className="text-xs">
                       {PE_DD_CATEGORY_LABEL[f.category]}
                     </Badge>
-                    <Badge variant={SEVERITY_VARIANT[f.severity]} className="text-xs">
+                    <StatusBadge tone={SEVERITY_VARIANT[f.severity]}>
                       {PE_DD_SEVERITY_LABEL[f.severity]}
-                    </Badge>
+                    </StatusBadge>
                     <Badge variant="secondary" className="text-xs">
                       {PE_DD_FINDING_STATUS_LABEL[f.status]}
                     </Badge>

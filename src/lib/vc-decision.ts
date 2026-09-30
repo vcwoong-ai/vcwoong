@@ -85,6 +85,11 @@ export function mapDecisionImpactToVC(
 // 묶어, 실제로 매칭된(=UNSUPPORTED가 아닌) claim들 사이에 서로 다른 값이
 // 2개 이상 있으면 상충으로 본다. 하나를 조용히 고르지 않는다.
 
+/** 부호를 포함한 비교용 값 — 영업이익 -12억원과 12억원은 서로 다른 값이다. */
+export function signedValue(c: NumericClaim): string {
+  return `${c.negative ? "-" : ""}${c.value}`;
+}
+
 export interface ContradictionGroup {
   label: string;
   unit: string;
@@ -227,7 +232,7 @@ function detectCanonicalContradictions(claims: NumericClaim[]): ContradictionGro
 
   const contradictions: ContradictionGroup[] = [];
   Array.from(groups.entries()).forEach(([key, group]) => {
-    const distinctValues = new Set(group.map((c) => c.value));
+    const distinctValues = new Set(group.map((c) => signedValue(c)));
     if (distinctValues.size < 2) return;
     const distinctLabels = new Set(group.map((c) => normalizeLabel(c.label)));
     if (distinctLabels.size < 2) return; // exact-label 그룹이 이미 완전히 커버함
@@ -250,7 +255,7 @@ export function detectContradictions(claims: NumericClaim[]): ContradictionGroup
   }
   const contradictions: ContradictionGroup[] = [];
   Array.from(groups.entries()).forEach(([key, group]) => {
-    const distinctValues = new Set(group.map((c) => c.value));
+    const distinctValues = new Set(group.map((c) => signedValue(c)));
     if (distinctValues.size >= 2) {
       const [label, unit] = key.split("|");
       contradictions.push({ label, unit, claims: group });
@@ -329,7 +334,7 @@ export function buildContradictions(
     const metricLabel = canonicalLabel ?? g.claims[0].label ?? g.label;
     const values = g.claims.map((c) => ({
       raw: c.raw,
-      value: c.value,
+      value: signedValue(c),
       unit: c.unit,
       period: canonicalPeriodKey(c.label),
       scenario: canonicalScenarioKey(c.label),

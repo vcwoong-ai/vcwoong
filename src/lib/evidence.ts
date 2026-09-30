@@ -76,8 +76,11 @@ export interface NumericClaim {
   raw: string;
   /** 숫자 claim의 문맥 라벨(예: "ARR") 또는 질적 claim의 카테고리(예: "시장 성장성") */
   label: string;
-  /** 숫자 claim만: 콤마·꼬리 0을 정리한 비교용 값. 질적 claim은 빈 문자열 */
+  /** 숫자 claim만: 콤마·꼬리 0을 정리한 비교용 값(부호 제외 — 자료 대조는 절댓값으로 한다). 질적 claim은 빈 문자열 */
   value: string;
+  /** 숫자 claim만: 원문에서 값 앞에 음수 표시(-, −, △, ▲)가 붙어 있었는지. raw에는 부호가 그대로 남고,
+   * 상충 탐지는 부호를 포함해 비교한다(영업이익 -12억원 vs 12억원은 서로 다른 값). */
+  negative?: boolean;
   /** 숫자 claim만: 단위. 질적 claim은 빈 문자열 */
   unit: string;
   status: EvidenceStatus;
@@ -304,7 +307,14 @@ function extractNumericClaims(sectionKey: string, content: string): NumericClaim
     // 0, 100%는 주장이라기보다 관용 표현인 경우가 많다
     if (value === "0") continue;
 
-    const dedupeKey = `${value}|${unit}`;
+    // 음수 표시: 값 바로 앞의 -/−/△/▲. 그 앞이 숫자·영문이면 범위("12-15억원")나 식별자
+    // ("KR10-2020")의 하이픈이므로 음수가 아니다.
+    const signChar = body[m.index - 1] ?? "";
+    const beforeSign = body[m.index - 2] ?? "";
+    const negative = /[-−△▲]/.test(signChar) && !/[0-9A-Za-z]/.test(beforeSign);
+    const signedKey = `${negative ? "-" : ""}${value}`;
+
+    const dedupeKey = `${signedKey}|${unit}`;
     if (seen.has(dedupeKey)) continue;
     seen.add(dedupeKey);
 
@@ -312,15 +322,16 @@ function extractNumericClaims(sectionKey: string, content: string): NumericClaim
 
     claims.push({
       sectionKey,
-      raw: raw.trim(),
+      raw: `${negative ? "-" : ""}${raw.trim()}`,
       label,
       value,
+      ...(negative ? { negative: true } : {}),
       unit,
       status: "unverified",
       claimType: "numeric",
       confidence: "UNSUPPORTED",
       matchMethod: "none",
-      claimKey: `${sectionKey}:numeric:${value}|${unit}`.slice(0, 300),
+      claimKey: `${sectionKey}:numeric:${signedKey}|${unit}`.slice(0, 300),
     });
   }
 

@@ -1,14 +1,14 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
 import { AlertTriangle } from "lucide-react";
 import { PE_THESIS_BREAKER_STATE_LABEL } from "@/lib/pe/ma-deal-labels";
 import type { PEThesisBreaker, PEThesisBreakerState } from "@/lib/pe/pe-ic-decision-types";
 
-const STATE_VARIANT: Record<PEThesisBreakerState, "default" | "secondary" | "destructive" | "outline"> = {
-  OPEN: "destructive",
-  MITIGATED: "secondary",
-  ACCEPTED: "outline",
-  CANNOT_BE_ESTABLISHED: "outline",
+const STATE_VARIANT: Record<PEThesisBreakerState, StatusTone> = {
+  OPEN: "critical",
+  MITIGATED: "info",
+  ACCEPTED: "neutral",
+  CANNOT_BE_ESTABLISHED: "neutral",
 };
 
 /**
@@ -35,9 +35,9 @@ export function MaDealThesisBreakers({ breakers }: { breakers: PEThesisBreaker[]
                     <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
                     {b.condition}
                   </p>
-                  <Badge variant={STATE_VARIANT[b.currentState]} className="text-xs shrink-0">
+                  <StatusBadge tone={STATE_VARIANT[b.currentState]} className="shrink-0">
                     {PE_THESIS_BREAKER_STATE_LABEL[b.currentState]}
-                  </Badge>
+                  </StatusBadge>
                 </div>
                 <p className="text-xs text-gray-500">{b.whyItMatters}</p>
                 <p className="text-xs text-gray-400">검증 필요: {b.verificationRequired}</p>

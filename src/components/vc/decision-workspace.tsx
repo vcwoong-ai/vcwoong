@@ -146,7 +146,7 @@ export function DecisionWorkspace({
       <BreakerList breakers={decision.thesisBreakers} refFor={refFor} />
       <ValuationBlock data={data} />
       <MissingInformationList items={decision.missingInformation} refFor={refFor} />
-      <QuestionList links={data.questionLinks} generated={data.questionsGenerated} />
+      <QuestionList links={data.questionLinks} source={data.questionsSource} />
       {scoreDetail}
     </div>
   );
