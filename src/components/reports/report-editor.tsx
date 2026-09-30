@@ -482,7 +482,8 @@ export function ReportEditor({
               )}
             >
               <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
+                {/* 좁은 화면에서는 제목 줄과 버튼 줄이 세로로 쌓인다(버튼 4개가 한 줄에 못 들어가 페이지가 가로로 넘치던 문제) */}
+                <div className="flex flex-wrap items-center justify-between gap-y-2">
                   <div className="flex items-center gap-3">
                     <span className="text-xs font-mono text-gray-400 bg-gray-100 px-2 py-0.5 rounded">
                       {meta?.order}
@@ -492,7 +493,7 @@ export function ReportEditor({
                       <CheckCircle className="w-4 h-4 text-green-500" />
                     )}
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="text-xs text-gray-400">
                       {charWidth.toLocaleString()}자
                     </span>
