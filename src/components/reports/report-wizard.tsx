@@ -303,7 +303,7 @@ export function ReportWizard({ deal, open, onClose }: WizardProps) {
       <DialogContent className="sm:max-w-[560px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Zap className="w-5 h-5 text-blue-500" />
+            <Zap className="w-5 h-5 text-primary" />
             AI 보고서 생성
           </DialogTitle>
         </DialogHeader>
@@ -314,7 +314,7 @@ export function ReportWizard({ deal, open, onClose }: WizardProps) {
             <div key={s} className="flex items-center gap-1.5">
               <div className={cn(
                 "w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors",
-                step === s ? "bg-blue-600 text-white" :
+                step === s ? "bg-primary text-white" :
                 step > s ? "bg-green-500 text-white" :
                 "bg-gray-100 text-gray-400"
               )}>
@@ -342,7 +342,7 @@ export function ReportWizard({ deal, open, onClose }: WizardProps) {
             </div>
 
             {detectedSector && (
-              <div className="text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+              <div className="text-xs text-primary bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
                 <span className="font-medium">감지된 섹터: {detectedSector.label}</span>
               </div>
             )}
@@ -355,7 +355,7 @@ export function ReportWizard({ deal, open, onClose }: WizardProps) {
                   className={cn(
                     "p-3 rounded-lg border-2 text-left transition-colors",
                     selectedAgent === agent.id
-                      ? "border-blue-500 bg-blue-50"
+                      ? "border-primary bg-blue-50"
                       : "border-gray-200 hover:border-gray-300"
                   )}
                 >
@@ -387,7 +387,7 @@ export function ReportWizard({ deal, open, onClose }: WizardProps) {
                 onClick={() => setSelectedTemplateId("")}
                 className={cn(
                   "w-full p-3 rounded-lg border-2 text-left transition-colors",
-                  !selectedTemplateId ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:border-gray-300"
+                  !selectedTemplateId ? "border-primary bg-blue-50" : "border-gray-200 hover:border-gray-300"
                 )}
               >
                 <div className="flex items-center gap-2">
@@ -406,11 +406,11 @@ export function ReportWizard({ deal, open, onClose }: WizardProps) {
                   onClick={() => setSelectedTemplateId(t.id)}
                   className={cn(
                     "w-full p-3 rounded-lg border-2 text-left transition-colors",
-                    selectedTemplateId === t.id ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:border-gray-300"
+                    selectedTemplateId === t.id ? "border-primary bg-blue-50" : "border-gray-200 hover:border-gray-300"
                   )}
                 >
                   <div className="flex items-center gap-2">
-                    <LayoutTemplate className="w-4 h-4 text-blue-500" />
+                    <LayoutTemplate className="w-4 h-4 text-primary" />
                     <div>
                       <p className="text-sm font-medium">{t.name}</p>
                       <p className="text-xs text-gray-500">{t.fileType} 양식</p>
@@ -422,7 +422,7 @@ export function ReportWizard({ deal, open, onClose }: WizardProps) {
 
               {templates.length === 0 && (
                 <div className="text-center py-4 text-xs text-gray-400 border border-dashed rounded-lg">
-                  등록된 양식 없음 — <a href="/templates" className="text-blue-500 underline">양식 관리</a>에서 추가
+                  등록된 양식 없음 — <a href="/templates" className="text-primary underline">양식 관리</a>에서 추가
                 </div>
               )}
             </div>
@@ -448,7 +448,7 @@ export function ReportWizard({ deal, open, onClose }: WizardProps) {
               <Button
                 onClick={startGeneration}
                 disabled={generating}
-                className="flex-1 bg-blue-600 hover:bg-blue-700"
+                className="flex-1 bg-primary hover:bg-primary/90"
               >
                 {generating ? (
                   <Loader2 className="w-4 h-4 mr-1 animate-spin" />
@@ -493,7 +493,7 @@ export function ReportWizard({ deal, open, onClose }: WizardProps) {
               <>
                 <div className="text-center">
                   <div className="w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center mx-auto mb-4">
-                    <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+                    <Loader2 className="w-8 h-8 text-primary animate-spin" />
                   </div>
                   <h3 className="font-semibold text-gray-900">{selectedAgentMeta?.name} 에이전트 작업 중</h3>
                   <p className="text-sm text-gray-500 mt-1">

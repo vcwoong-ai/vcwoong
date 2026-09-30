@@ -152,7 +152,7 @@ export function PromoteDealDialog({
                     className={cn(
                       "text-left text-sm rounded-lg border px-3 py-2 transition-colors",
                       dealId === d.id
-                        ? "border-blue-500 bg-blue-50"
+                        ? "border-primary bg-blue-50"
                         : "border-gray-200 hover:border-gray-300"
                     )}
                   >
@@ -263,7 +263,7 @@ export function PromoteDealDialog({
             <Button
               onClick={submit}
               disabled={saving}
-              className="bg-blue-600 hover:bg-blue-700"
+              className="bg-primary hover:bg-primary/90"
             >
               {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               등록

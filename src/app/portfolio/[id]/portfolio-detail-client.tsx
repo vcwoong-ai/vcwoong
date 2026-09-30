@@ -306,7 +306,7 @@ export function PortfolioDetailClient({
         {company.deal && (
           <Link
             href={`/deals/${company.deal.id}`}
-            className="text-xs text-blue-600 hover:underline"
+            className="text-xs text-primary hover:underline"
           >
             원본 딜 보기
           </Link>
@@ -600,7 +600,7 @@ export function PortfolioDetailClient({
               <Button
                 onClick={generateUpdate}
                 disabled={generating}
-                className="bg-blue-600 hover:bg-blue-700 shrink-0"
+                className="bg-primary hover:bg-primary/90 shrink-0"
               >
                 {generating ? (
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -709,7 +709,7 @@ export function PortfolioDetailClient({
               <Button
                 onClick={saveBasics}
                 disabled={saving}
-                className="bg-blue-600 hover:bg-blue-700"
+                className="bg-primary hover:bg-primary/90"
               >
                 {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                 저장

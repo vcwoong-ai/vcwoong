@@ -162,7 +162,7 @@ export function ReportDeepDivePanel({
                             href={s.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-xs text-blue-600 hover:underline truncate max-w-[220px] inline-block align-bottom"
+                            className="text-xs text-primary hover:underline truncate max-w-[220px] inline-block align-bottom"
                           >
                             {s.source === "news" ? "📰" : "🔗"} {s.title}
                           </a>

@@ -115,7 +115,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
       {/* Logo */}
       <div className="p-6 border-b border-white/10 flex items-start justify-between gap-2">
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-9 h-9 rounded-md flex items-center justify-center flex-shrink-0 bg-blue-600">
+          <div className="w-9 h-9 rounded-md flex items-center justify-center flex-shrink-0 bg-primary">
             <Zap className="w-5 h-5 text-white" />
           </div>
           <div className="min-w-0">

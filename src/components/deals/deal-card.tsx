@@ -32,7 +32,7 @@ interface DealCardProps {
 
 const SECTOR_CONFIG: Record<DealSector, { color: string; bg: string }> = {
   BIO:           { color: "text-purple-700",  bg: "bg-purple-50 border-purple-200" },
-  IT:            { color: "text-blue-700",    bg: "bg-blue-50 border-blue-200" },
+  IT:            { color: "text-primary",    bg: "bg-blue-50 border-blue-200" },
   DEEPTECH:      { color: "text-cyan-700",    bg: "bg-cyan-50 border-cyan-200" },
   MANUFACTURING: { color: "text-orange-700",  bg: "bg-orange-50 border-orange-200" },
   CONTENT:       { color: "text-pink-700",    bg: "bg-pink-50 border-pink-200" },

@@ -77,7 +77,7 @@ export default async function UsageCostPage({
               href={`/admin/usage-cost?days=${r}`}
               className={`px-3 py-1.5 rounded-md text-sm border ${
                 r === days
-                  ? "bg-blue-600 text-white border-blue-600"
+                  ? "bg-primary text-white border-primary"
                   : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50 dark:bg-gray-900 dark:text-gray-300 dark:border-gray-700"
               }`}
             >

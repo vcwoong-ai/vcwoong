@@ -25,7 +25,7 @@ interface DealForKanban {
 
 const STAGE_COLUMNS: Array<{ key: DealStage; color: string; bg: string }> = [
   { key: DealStage.SCREENING,  color: "text-gray-600",   bg: "bg-gray-50 border-gray-200" },
-  { key: DealStage.DEEP_DIVE,  color: "text-blue-600",   bg: "bg-blue-50 border-blue-200" },
+  { key: DealStage.DEEP_DIVE,  color: "text-primary",   bg: "bg-blue-50 border-blue-200" },
   { key: DealStage.IC_PREP,    color: "text-amber-600",  bg: "bg-amber-50 border-amber-200" },
   { key: DealStage.IC_REVIEW,  color: "text-purple-600", bg: "bg-purple-50 border-purple-200" },
   { key: DealStage.CLOSED,     color: "text-green-600",  bg: "bg-green-50 border-green-200" },
@@ -34,7 +34,7 @@ const STAGE_COLUMNS: Array<{ key: DealStage; color: string; bg: string }> = [
 
 const SECTOR_COLOR: Record<DealSector, string> = {
   BIO:           "bg-purple-100 text-purple-700",
-  IT:            "bg-blue-100 text-blue-700",
+  IT:            "bg-blue-100 text-primary",
   DEEPTECH:      "bg-cyan-100 text-cyan-700",
   MANUFACTURING: "bg-orange-100 text-orange-700",
   CONTENT:       "bg-pink-100 text-pink-700",
@@ -93,7 +93,7 @@ function DealMiniCard({ deal, onDragStart, canDrag }: {
               </span>
             )}
           </div>
-          <Link href={`/deals/${deal.id}`} className="block hover:text-blue-600 transition-colors">
+          <Link href={`/deals/${deal.id}`} className="block hover:text-primary transition-colors">
             <p className="font-semibold text-gray-900 text-sm truncate">{deal.companyName}</p>
             <p className="text-xs text-gray-500 truncate">{deal.name}</p>
           </Link>

@@ -172,7 +172,7 @@ export function IcQuestionsPanel({
             <button
               type="button"
               onClick={() => setExpanded(true)}
-              className="mt-3 flex items-center gap-1 text-xs text-blue-600 hover:underline"
+              className="mt-3 flex items-center gap-1 text-xs text-primary hover:underline"
             >
               <ChevronDown className="w-3 h-3" />
               전체 {data.questions.length}개 보기
@@ -182,7 +182,7 @@ export function IcQuestionsPanel({
             <button
               type="button"
               onClick={() => setExpanded(false)}
-              className="mt-3 flex items-center gap-1 text-xs text-blue-600 hover:underline"
+              className="mt-3 flex items-center gap-1 text-xs text-primary hover:underline"
             >
               <ChevronUp className="w-3 h-3" />
               Top 5만 보기

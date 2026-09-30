@@ -65,7 +65,7 @@ interface GenerationProgress {
 const STATUS_DISPLAY: Record<string, { label: string; className: string }> = {
   PENDING: { label: "대기", className: "bg-gray-100 text-gray-600" },
   GENERATING: { label: "AI 생성 중...", className: "bg-amber-100 text-amber-700" },
-  DRAFT: { label: "초안", className: "bg-blue-100 text-blue-700" },
+  DRAFT: { label: "초안", className: "bg-blue-100 text-primary" },
   REVIEW: { label: "검토 중", className: "bg-purple-100 text-purple-700" },
   FINAL: { label: "최종", className: "bg-green-100 text-green-700" },
   EXPORTED: { label: "보내기 완료", className: "bg-green-100 text-green-700" },
@@ -188,7 +188,7 @@ function GeneratingView({
           {stuck ? (
             <Sparkles className="w-10 h-10 text-red-400" />
           ) : (
-            <Loader2 className="w-10 h-10 text-blue-500 animate-spin" />
+            <Loader2 className="w-10 h-10 text-primary animate-spin" />
           )}
         </div>
         <div className="text-center w-full">

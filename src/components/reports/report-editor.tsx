@@ -432,7 +432,7 @@ export function ReportEditor({
           <Button
             onClick={onExport}
             disabled={isExporting}
-            className="bg-blue-600 hover:bg-blue-700"
+            className="bg-primary hover:bg-primary/90"
           >
             {isExporting ? (
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />

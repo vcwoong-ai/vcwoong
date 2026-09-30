@@ -73,7 +73,7 @@ export function Header({ title, onMenuClick }: HeaderProps) {
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="flex items-center gap-2 h-9">
               <Avatar className="h-7 w-7">
-                <AvatarFallback className="bg-blue-600 text-white text-xs font-bold">
+                <AvatarFallback className="bg-primary text-white text-xs font-bold">
                   {initials}
                 </AvatarFallback>
               </Avatar>

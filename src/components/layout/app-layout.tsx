@@ -21,7 +21,7 @@ export function AppLayout({ children, title }: AppLayoutProps) {
   }, [pathname]);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       {/* 사이드바는 lg 이상에서만 자리를 차지한다. 모바일에서도 pl-64를 주면
           좁은 화면에서 본문 폭이 100px대로 줄어 글자가 세로로 깨진다. */}

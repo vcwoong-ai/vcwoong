@@ -190,7 +190,7 @@ export function FileUploader({ dealId, onUploadComplete }: FileUploaderProps) {
         className={cn(
           "border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors",
           isDragActive
-            ? "border-blue-500 bg-blue-50"
+            ? "border-primary bg-blue-50"
             : "border-gray-300 hover:border-gray-400 hover:bg-gray-50"
         )}
       >
@@ -198,7 +198,7 @@ export function FileUploader({ dealId, onUploadComplete }: FileUploaderProps) {
         <Upload
           className={cn(
             "w-10 h-10 mx-auto mb-3",
-            isDragActive ? "text-blue-500" : "text-gray-400"
+            isDragActive ? "text-primary" : "text-gray-400"
           )}
         />
         <p className="text-sm font-medium text-gray-700">
@@ -224,7 +224,7 @@ export function FileUploader({ dealId, onUploadComplete }: FileUploaderProps) {
                 ) : uf.status === "error" ? (
                   <AlertCircle className="w-5 h-5 text-red-500" />
                 ) : uf.status === "uploading" ? (
-                  <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
+                  <Loader2 className="w-5 h-5 text-primary animate-spin" />
                 ) : (
                   <File className="w-5 h-5 text-gray-400" />
                 )}

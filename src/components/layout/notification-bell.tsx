@@ -135,7 +135,7 @@ export function NotificationBell() {
             <DropdownMenuSeparator className="m-0" />
             <Link
               href="/portfolio"
-              className="block px-4 py-2.5 text-center text-xs font-medium text-blue-600 hover:bg-gray-50 transition-colors"
+              className="block px-4 py-2.5 text-center text-xs font-medium text-primary hover:bg-gray-50 transition-colors"
             >
               포트폴리오 전체 보기
             </Link>

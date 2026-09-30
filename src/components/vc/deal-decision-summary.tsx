@@ -87,7 +87,7 @@ export function DealDecisionSummary({ reportId }: { reportId: string | null }) {
             : "투자 매력도 점수가 아직 없어 결정 요약을 만들 수 없습니다."}
           {contradictions.length > 0 && ` 다만 수치 상충 ${contradictions.length}건이 있습니다.`}
         </p>
-        <Link href={`/reports/${reportId}`} className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-blue-700 hover:underline">
+        <Link href={`/reports/${reportId}`} className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline">
           보고서에서 확인 <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
         </Link>
       </Card>
@@ -114,7 +114,7 @@ export function DealDecisionSummary({ reportId }: { reportId: string | null }) {
         </div>
         <Link
           href={`/reports/${reportId}`}
-          className="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-blue-700 hover:underline"
+          className="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-primary hover:underline"
         >
           결정 요약 전체 보기 <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
         </Link>

@@ -282,7 +282,7 @@ export function ReportEvidencePanel({
         <button
           type="button"
           onClick={() => setExpanded(true)}
-          className="mt-2 text-xs text-blue-600 hover:underline"
+          className="mt-2 text-xs text-primary hover:underline"
         >
           {filteredCount - visible.length}건 더 보기
         </button>

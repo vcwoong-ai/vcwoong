@@ -63,7 +63,7 @@ export function TeamShareToggle({
       size="sm"
       onClick={toggle}
       disabled={busy}
-      className={isShared ? "bg-blue-600 hover:bg-blue-700" : ""}
+      className={isShared ? "bg-primary hover:bg-primary/90" : ""}
     >
       {busy ? (
         <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />

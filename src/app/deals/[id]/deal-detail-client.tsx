@@ -100,7 +100,7 @@ const AGENT_INFO: Record<AgentType, { name: string; desc: string; color: string 
   [AgentType.IT]: {
     name: "Code",
     desc: "IT/SaaS 특화 — ARR, LTV/CAC 분석 포함",
-    color: "text-blue-700 bg-blue-50 border-blue-200",
+    color: "text-primary bg-blue-50 border-blue-200",
   },
   [AgentType.DEEPTECH]: {
     name: "Neuron",
@@ -501,7 +501,7 @@ export function DealDetailClient({
               </Button>
               <Button
                 onClick={() => setWizardOpen(true)}
-                className="bg-blue-600 hover:bg-blue-700"
+                className="bg-primary hover:bg-primary/90"
               >
                 <Zap className="w-4 h-4 mr-2" />
                 AI 보고서 생성
@@ -532,7 +532,7 @@ export function DealDetailClient({
         <div className="rounded-lg border bg-white p-4 space-y-2">
           <div className="flex items-center justify-between text-sm">
             <span className="text-gray-600 font-medium">
-              AI 보고서 생성 중: <span className="text-blue-600">{progress.currentSection}</span>
+              AI 보고서 생성 중: <span className="text-primary">{progress.currentSection}</span>
             </span>
             <span className="text-gray-400">
               {progress.completed} / {progress.total}
@@ -742,7 +742,7 @@ export function DealDetailClient({
                 </p>
                 {deal.documents.length > 0 && (
                   <Button
-                    className="mt-4 bg-blue-600 hover:bg-blue-700"
+                    className="mt-4 bg-primary hover:bg-primary/90"
                     onClick={generateReport}
                     disabled={generating}
                   >

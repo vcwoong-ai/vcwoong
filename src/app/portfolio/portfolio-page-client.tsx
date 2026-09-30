@@ -125,7 +125,7 @@ export function PortfolioPageClient({
         {canEdit ? (
         <Button
           onClick={() => setPromoteOpen(true)}
-          className="bg-blue-600 hover:bg-blue-700"
+          className="bg-primary hover:bg-primary/90"
           disabled={refreshing}
         >
           {refreshing ? (
@@ -260,7 +260,7 @@ export function PortfolioPageClient({
                       <div className="flex items-center gap-2 flex-wrap">
                         <Link
                           href={`/portfolio/${c.id}`}
-                          className="font-semibold text-gray-900 hover:text-blue-600"
+                          className="font-semibold text-gray-900 hover:text-primary"
                         >
                           {c.companyName}
                         </Link>

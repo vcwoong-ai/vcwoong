@@ -78,14 +78,14 @@ export default async function NewReportPage() {
                       <div className="flex gap-2 flex-shrink-0">
                         {!hasDocs && (
                           <Link href={`/deals/${deal.id}`}>
-                            <span className="inline-flex items-center gap-1 text-xs text-blue-600 border border-blue-200 rounded-lg px-3 py-2 hover:bg-blue-50">
+                            <span className="inline-flex items-center gap-1 text-xs text-primary border border-blue-200 rounded-lg px-3 py-2 hover:bg-blue-50">
                               <Upload className="w-3.5 h-3.5" />
                               자료 업로드
                             </span>
                           </Link>
                         )}
                         <Link href={`/deals/${deal.id}?wizard=1`}>
-                          <span className="inline-flex items-center gap-1 text-sm font-medium text-white bg-blue-600 rounded-lg px-4 py-2 hover:bg-blue-700">
+                          <span className="inline-flex items-center gap-1 text-sm font-medium text-white bg-primary rounded-lg px-4 py-2 hover:bg-primary/90">
                             {hasDocs ? "보고서 생성" : "딜 열기"}
                             <ArrowRight className="w-4 h-4" />
                           </span>

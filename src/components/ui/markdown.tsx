@@ -85,7 +85,7 @@ export function Markdown({ content, className = "" }: MarkdownProps) {
               {children}
             </code>
           ) : (
-            <code className="bg-gray-100 rounded px-1 py-0.5 text-xs font-mono text-blue-700">
+            <code className="bg-gray-100 rounded px-1 py-0.5 text-xs font-mono text-primary">
               {children}
             </code>
           );
