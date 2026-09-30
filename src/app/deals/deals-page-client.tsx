@@ -7,7 +7,8 @@ import { DealKanban } from "@/components/deals/deal-kanban";
 import { CreateDealDialog } from "@/components/deals/create-deal-dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, LayoutGrid, Kanban, Gauge, Trash2, X } from "lucide-react";
+import { Search, LayoutGrid, Kanban, Gauge, Trash2, X, ListChecks } from "lucide-react";
+import { VcDealQueue, type QueueSort } from "@/components/vc/deal-queue";
 import { DealStage, DealSector } from "@prisma/client";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -66,7 +67,8 @@ export function DealsPageClient({
   role: string;
 }) {
   const router = useRouter();
-  const [view, setView] = useState<"grid" | "kanban">("grid");
+  const [view, setView] = useState<"queue" | "grid" | "kanban">("queue");
+  const [queueSort, setQueueSort] = useState<QueueSort>("urgency");
   const [search, setSearch] = useState("");
   // 서버는 첫 페이지만 내려준다. 나머지는 여기서 이어 받아 누적한다.
   const [loadedDeals, setLoadedDeals] = useState<Deal[]>(initialDeals);
@@ -233,8 +235,8 @@ export function DealsPageClient({
   return (
     <div className="space-y-6">
       {/* 툴바 */}
-      <div className="flex items-center justify-between gap-4">
-        <div className="relative max-w-sm flex-1">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="relative w-full sm:max-w-sm sm:flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <Input
             placeholder="딜 또는 기업명 검색..."
@@ -244,21 +246,38 @@ export function DealsPageClient({
           />
         </div>
         <div className="flex items-center gap-2">
-          {/* 뷰 전환 */}
-          <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+          {/* 뷰 전환 — 기본은 "검토 대기열"(무엇부터 봐야 하는지), 카드·칸반은 보조 */}
+          <div className="flex rounded-lg border border-border bg-card overflow-hidden" role="group" aria-label="목록 보기 방식">
             <Button
               variant="ghost"
               size="sm"
-              className={cn("rounded-none h-9 px-3", view === "grid" && "bg-gray-100")}
+              className={cn("rounded-none h-9 px-3", view === "queue" && "bg-muted")}
+              onClick={() => setView("queue")}
+              aria-label="검토 대기열"
+              aria-pressed={view === "queue"}
+              title="검토 대기열"
+            >
+              <ListChecks className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn("rounded-none h-9 px-3", view === "grid" && "bg-muted")}
               onClick={() => setView("grid")}
+              aria-label="카드"
+              aria-pressed={view === "grid"}
+              title="카드"
             >
               <LayoutGrid className="w-4 h-4" />
             </Button>
             <Button
               variant="ghost"
               size="sm"
-              className={cn("rounded-none h-9 px-3", view === "kanban" && "bg-gray-100")}
+              className={cn("rounded-none h-9 px-3", view === "kanban" && "bg-muted")}
               onClick={() => setView("kanban")}
+              aria-label="단계별 칸반"
+              aria-pressed={view === "kanban"}
+              title="단계별 칸반"
             >
               <Kanban className="w-4 h-4" />
             </Button>
@@ -292,6 +311,35 @@ export function DealsPageClient({
           <p className="text-sm mt-1">
             새 딜을 등록하여 투자심의 보고서를 자동으로 생성해보세요.
           </p>
+        </div>
+      ) : view === "queue" ? (
+        /* 검토 대기열 — 딜마다 canonical 투자 판단·확인 필요 항목·다음 행동을 한 줄로 */
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-muted-foreground">
+              보고서가 있는 딜은 최신 보고서의 투자 판단을 요약합니다. 판단은 보고서 결정 화면과 같은 계산 결과입니다.
+            </p>
+            <div className="flex rounded-lg border border-border bg-card overflow-hidden text-xs" role="group" aria-label="정렬">
+              {([
+                ["urgency", "검토 필요 순"],
+                ["recent", "최근 수정 순"],
+              ] as const).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setQueueSort(key)}
+                  aria-pressed={queueSort === key}
+                  className={cn(
+                    "px-3 py-1.5 font-medium transition-colors",
+                    queueSort === key ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <VcDealQueue deals={filtered} sort={queueSort} />
         </div>
       ) : view === "grid" ? (
         /* 카드 그리드 뷰 */
@@ -421,7 +469,7 @@ export function DealsPageClient({
           <span className="text-sm">{compareIds.length}개 선택됨</span>
           <Button
             size="sm"
-            className="h-7 bg-blue-600 hover:bg-blue-500"
+            className="h-7 bg-primary hover:bg-primary"
             disabled={compareIds.length < 2}
             onClick={() => router.push(`/deals/compare?ids=${compareIds.join(",")}`)}
           >

@@ -32,6 +32,30 @@ export interface ReportForDecision {
   icQuestions: { questions: unknown } | null;
 }
 
+/**
+ * 결정 계산에 필요한 보고서 조회 범위 — GET /api/reports/[id]/decision과
+ * 목록 배치 조회(GET /api/deals/decision-summaries)가 같은 범위를 쓴다.
+ * parsedText는 근거 대조에 필요하므로 포함하되, 화면 응답에는 싣지 않는다.
+ */
+export const REPORT_FOR_DECISION_INCLUDE = {
+  sections: { orderBy: { order: "asc" as const }, select: { sectionKey: true, title: true, content: true } },
+  deal: {
+    select: {
+      id: true,
+      companyName: true,
+      sector: true,
+      stage: true,
+      investRound: true,
+      investAmount: true,
+      valuation: true,
+      documents: { select: { id: true, name: true, parsedText: true } },
+      score: { select: { overall: true, rationale: true, evidenceAssessment: true } },
+    },
+  },
+  evidenceCheck: { select: { verdicts: true } },
+  icQuestions: { select: { questions: true } },
+} as const;
+
 export type DecisionQuestionLinkKind = "contradiction" | "thesis_breaker" | "missing_information";
 
 export interface DecisionQuestionLink {
