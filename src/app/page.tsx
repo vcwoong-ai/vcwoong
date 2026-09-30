@@ -578,7 +578,7 @@ export default function LandingPage() {
                 결론과 함께 그 근거를 원문까지 되짚을 수 있게 남깁니다.
               </p>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-10 text-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-10 text-sm">
               <div>
                 <p className="text-white font-medium mb-3">제품</p>
                 <div className="space-y-2">
@@ -607,10 +607,21 @@ export default function LandingPage() {
                   <a href="#faq" className="block hover:text-white transition-colors">FAQ</a>
                 </div>
               </div>
+              <div>
+                <p className="text-white font-medium mb-3">약관</p>
+                <div className="space-y-2">
+                  <Link href="/privacy" className="block hover:text-white transition-colors">개인정보처리방침</Link>
+                  <Link href="/terms" className="block hover:text-white transition-colors">이용약관</Link>
+                </div>
+              </div>
             </div>
           </div>
-          <div className="border-t border-white/10 mt-10 pt-8 text-xs text-center">
-            © 2026 {BRAND.name}. All rights reserved.
+          <div className="border-t border-white/10 mt-10 pt-8 text-xs text-center space-y-1.5">
+            <p>
+              {BRAND.legal.businessName} · 대표 {BRAND.legal.ceoName} · 사업자등록번호{" "}
+              {BRAND.legal.businessRegNo} · {BRAND.legal.address}
+            </p>
+            <p>© 2026 {BRAND.name}. All rights reserved.</p>
           </div>
         </div>
       </footer>
