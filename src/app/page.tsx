@@ -40,8 +40,8 @@ const TRACKS = [
     name: "PE · M&A",
     nameKr: "인수·실사 자문사",
     desc: "같은 근거추적·양식재현 엔진을 인수 실사(Due Diligence) 보고서에 적용합니다.",
-    points: ["재무·법무·영업·시너지 등 실사 프레임워크", "타겟기업 DART 공시 자동 연동", "자문사 고유 실사보고서 양식 그대로 재현"],
-    soon: true,
+    points: ["재무제표·QoE·LBO 시뮬레이터로 인수 재무 검토", "타겟기업 DART 공시 연동 · 데이터룸 근거 추적", "IC 의사결정·Committee Pack 내보내기"],
+    soon: false,
   },
 ] as const;
 
@@ -513,7 +513,7 @@ export default function LandingPage() {
               },
               {
                 q: "PE · M&A 트랙은 언제 쓸 수 있나요?",
-                a: "현재 준비 중입니다. VC 트랙과 같은 근거추적·양식재현 엔진을 실사(Due Diligence) 프레임워크에 맞춰 제공할 예정입니다. 관심 있으시면 무료 가입 후 문의해 주세요.",
+                a: "지금 바로 쓸 수 있습니다. 무료 가입 후 사이드바의 PE/M&A 워크스페이스에서 딜을 만들면 재무제표·QoE·LBO 시뮬레이션, DART 공시 연동, 데이터룸 근거 추적, IC 의사결정과 Committee Pack 내보내기를 이용할 수 있습니다. 자문사 고유 양식 재현은 VC 트랙 기능이며 PE 트랙에는 아직 적용되지 않습니다.",
               },
               {
                 q: "BIO 섹터 보고서는 어떻게 다른가요?",
