@@ -3,6 +3,11 @@
 사용자의 “굿 그대로 진행하자”는 #125에 제시한 메인페이지 시각 구성 방향 승인으로 기록한다.
 이번 문장은 main 병합/운영 배포의 명시적 지시로 확대하지 않는다.
 
+후속: 사용자가 npm.cmd로 로컬 서버를 실행해 차단 상태를 해소했다.
+HTTP 200/새 디자인 표시 및 최종 local build의 1440/390 E2E PASS.
+Vercel 전용 Speed Insights asset의 로컬 404는 명시적 test stub만 추가했으며 실제 계측은 NOT VERIFIED.
+아래 차단 기록은 복구 이전의 기록이다. 병합/운영 검증은 아직 남아 있다.
+
 ## 실제 확인
 
 main은 `b919e5db52e1474dd245fdbb6fc9ddddf8587a8e`다. 아래 PR들은 모두 OPEN/Draft, MERGEABLE이며,

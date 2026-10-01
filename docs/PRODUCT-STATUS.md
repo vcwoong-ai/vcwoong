@@ -3,6 +3,17 @@
 5축 차별화 기준으로 현재 무엇이 동작하고 무엇이 남았는지 정리한 문서입니다.
 다른 환경(예: Claude)에서 작업한 내용과 병합할 때 기준점으로 사용하세요.
 
+## 2026-10-01 — 로컬 서버 복구·최종 메인페이지 E2E
+
+- 사용자 터미널에서 npm.cmd로 loopback 로컬 서버 실행. PowerShell npm.ps1 execution policy 오류였으며
+  정책 변경 없이 실행했다. 127.0.0.1:3000 HTTP 200/새 디자인과 Codex 브라우저 화면을 확인했다.
+- 최종 local production build에서 landing visual E2E 1440/390 PASS(exit 0), 최종 tsc/lint PASS.
+  처음에는 Vercel 전용 Speed Insights script의 로컬 404로 FAIL. 명시적 계측 stub과 실패 URL 진단을 추가 후 재실행 PASS.
+  앱 404/console/hydration assertion 삭제·약화 없음. 실제 계측은 NOT VERIFIED.
+- 사용자 서버/브라우저 검토 탭을 유지한다. 이전 서버 차단은 해소됐으며 npm.cmd를 사용한다.
+  앱/엔진/권한/결제/DB/env/schema 수정 및 운영 배포 없음. 로그인/운영 검증을 이 결과로 대체하지 않는다.
+  tools/docs/캡처만 수정해 앱 build/test:all/전체 제품 E2E를 재실행하지 않았다.
+
 ## 2026-10-01 — 디자인 방향 승인·통합 준비
 
 - 사용자 “굿 그대로 진행하자”를 메인페이지 시각 구성 방향 승인으로 기록했다. main 병합/운영 배포 승인으로 확대하지 않았다.

@@ -16,10 +16,21 @@ async function main() {
   try {
     for (const width of [1440, 390]) {
       const context = await browser.newContext({ viewport: { width, height: 960 }, reducedMotion: "reduce" });
-      await context.route("**/*", route => new URL(route.request().url()).hostname === "localhost"
-        ? route.continue() : route.fulfill({ status: 204, body: "" }));
+      await context.route("**/*", route => {
+        const url = new URL(route.request().url());
+        // This Vercel-hosted telemetry asset does not exist in next start locally.
+        // Explicit test stub only; keep application 404/console/hydration checks intact.
+        if (url.hostname === "localhost" && url.pathname === "/_vercel/speed-insights/script.js") {
+          return route.fulfill({ status: 200, contentType: "application/javascript", body: "" });
+        }
+        return url.hostname === "localhost" ? route.continue() : route.fulfill({ status: 204, body: "" });
+      });
       const page = await context.newPage();
       const errors: string[] = [];
+      const failedResponses: string[] = [];
+      page.on("response", response => {
+        if (response.status() >= 400) failedResponses.push(`${response.status()} ${response.url()}`);
+      });
       page.on("pageerror", e => errors.push(e.message));
       page.on("console", m => { if (m.type() === "error") errors.push(m.text()); });
       const response = await page.goto(base, { waitUntil: "domcontentloaded" });
@@ -59,7 +70,7 @@ async function main() {
         await page.locator('a[href="/register?track=pe"]').first().click();
         await expect(page).toHaveURL(`${base}/register?track=pe`);
       }
-      expect(errors, "no hydration, page or console errors").toEqual([]);
+      expect(errors, `no hydration, page or console errors; responses: ${failedResponses.join(", ")}`).toEqual([]);
       await context.close();
       console.log(`PASS ${before ? "before" : "after"} ${width}px`);
     }

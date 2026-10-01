@@ -46,3 +46,22 @@ Draft PR까지만 진행. 운영 배포/병합하지 않는다. READY FOR DESIGN
 현재 head `ed654e2`의 CI/Vercel 체크 성공을 확인했다. 운영 인증 검증을 뜻하지 않는다.
 로컬 서버 재실행은 loopback 한정 실행까지 자동 승인 검토에서 차단됐다. 최종 build 브라우저 확인은 여전히 NOT VERIFIED.
 통합 순서/Claude #121 중복은 [통합 준비 기록](../INTEGRATION-READINESS.md)에 정리했다. 병합/배포 지시로 확대하지 않는다.
+
+## 로컬 실행 복구·최종 빌드 확인
+
+같은 날 사용자 터미널에서 `npm.cmd run start -- --hostname 127.0.0.1` 실행.
+Windows PowerShell은 `npm.ps1`을 execution policy로 거절했지만 npm.cmd 실행 후 서버가 정상 응답했다.
+실행 정책/운영 env 변경 없음. 사용자가 실행한 서버는 종료하지 않고 유지한다.
+`Ready` 출력 확인 대신 127.0.0.1:3000 HTTP 200과 새 시각 구성 표시를 실제로 확인했다.
+
+`BASE_URL=http://localhost:3000 npm.cmd run test:landing-visual-e2e`: 최종 build에서 1440/390 PASS, exit 0.
+최초 production build 검사는 `/_vercel/speed-insights/script.js` 로컬 404로 FAIL했다.
+이 Vercel 전용 계측 asset만 빈 JavaScript 200으로 대체하는 명시적 test stub을 추가했다.
+앱 404/hydration/console assertion은 유지했고 failed response URL 진단도 추가했다.
+계측 실제 작동은 NOT VERIFIED이며 일반 로컬 브라우저에서는 해당 asset 404가 남을 수 있다.
+최종 tsc/lint PASS. 도구/캡처/기록만 바뀌었으므로 앱 build 재실행은 하지 않았다.
+
+[최종 hero desktop](hero-1440.png), [mobile](hero-390.png),
+[근거 시각 구성 desktop](evidence-1440.png), [mobile](evidence-390.png).
+Codex 브라우저에서도 실제 공개 메인페이지를 열고 검토 탭을 유지했다. 운영 배포·로그인 검증을 뜻하지 않는다.
+앞선 로컬 서버 차단 상태는 해소됐다. 병합/운영 배포는 여전히 대기한다.
