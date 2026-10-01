@@ -3,6 +3,20 @@
 5축 차별화 기준으로 현재 무엇이 동작하고 무엇이 남았는지 정리한 문서입니다.
 다른 환경(예: Claude)에서 작업한 내용과 병합할 때 기준점으로 사용하세요.
 
+## 2026-10-01 — Claude 10월 계획 인수
+
+- 사용자 제공 1개월 계획을 읽고 현재 구현과 대조했다. 시작 branch `codex/vc-design-review`, HEAD `79e8bec`, 로컬 clean.
+  GitHub main `a60f465`, PR #118 OPEN/Draft・head `99885fc`・mergeStateStatus CLEAN 확인.
+  첨부의 CI 횟수・운영 READY・Neon 한도 소진은 과거 보고이며 이번 검증으로 재사용하지 않는다.
+- 1주차 첫 구현: VC 근거 현황・투자 근거・논지 훼손 요인・미확인 정보・IC 질문의 화면 표시를 한국어화.
+  엔진・필드 ID・memo/export・PE fingerprint・권한・청구를 변경하지 않았다.
+- 실행 순서, 운영 읽기 전용 스모크, CRON_SECRET Sensitive 안내, AI 간 파일 담당 경계를 `docs/OCTOBER-EXECUTION.md`에 기록.
+  기존 별도 branch commit/push 승인은 유지. PR 생성/수정・main 병합・운영 설정/배포는 미승인.
+- typecheck・lint・`npm run test:all`・`test:vc-decision-e2e`・build・diff check PASS.
+  VC E2E는 canonical/API/DOCX 연결과 390/430/768/1024/1440px를 검증했다.
+  결과는 로컬 SQLite 실행이며 이번 변경의 Codespace pull/실화면 확인은 아직 미실행이다.
+- 운영 DB/env・Neon 초기화 날짜・실사용자 검증・자동 일정 실행은 NOT VERIFIED/미설정.
+
 ## 2026-10-01 — 프리미엄 투자 데스크 비주얼 고도화
 
 - 랜딩, 로그인 후 대시보드, PE 개요를 딥 네이비·아이보리·브론즈 기반의 하나의 시각 체계로 정리했다.

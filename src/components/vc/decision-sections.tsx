@@ -89,7 +89,7 @@ function DecisionMap({ data, refFor }: { data: DecisionApiData; refFor: SectionR
   const { decision } = data;
   return (
     <section aria-labelledby="vc-map-title" data-testid="vc-decision-map">
-      <SectionHeader as="h3" id="vc-map-title" title="근거 현황 · Decision Map" description="차원별로 지금 무엇을 알고 무엇을 모르는지" />
+      <SectionHeader as="h3" id="vc-map-title" title="검토 항목별 근거 현황" description="차원별로 지금 무엇을 알고 무엇을 모르는지" />
       <ul className="mt-3 grid grid-cols-1 gap-px overflow-hidden rounded-md border border-slate-200 bg-slate-200 sm:grid-cols-2 lg:grid-cols-4">
         {decision.decisionDimensions.map((d) => {
           const ref = refFor(d.dimension as ScoreDimensionKey);
@@ -121,7 +121,7 @@ function DecisionMap({ data, refFor }: { data: DecisionApiData; refFor: SectionR
 function DriverList({ drivers, refFor, onOpenEvidence }: { drivers: VCInvestmentDriver[]; refFor: SectionRefFor; onOpenEvidence?: (target: EvidenceTarget) => void }) {
   return (
     <section aria-labelledby="vc-drivers-title" data-testid="vc-drivers">
-      <SectionHeader as="h3" id="vc-drivers-title" eyebrow="Why invest" title="투자 근거 (Investment Drivers)" />
+      <SectionHeader as="h3" id="vc-drivers-title" eyebrow="왜 검토할 만한가" title="투자 근거" />
       {drivers.length === 0 ? (
         <p className="mt-3 text-sm text-slate-500">현재 근거로 뒷받침되는 투자 논지 축을 찾지 못했습니다 — 추가 자료가 필요합니다.</p>
       ) : (
@@ -158,9 +158,9 @@ function DriverList({ drivers, refFor, onOpenEvidence }: { drivers: VCInvestment
 function BreakerList({ breakers, refFor, onOpenEvidence }: { breakers: VCThesisBreaker[]; refFor: SectionRefFor; onOpenEvidence?: (target: EvidenceTarget) => void }) {
   return (
     <section aria-labelledby="vc-breakers-title" data-testid="vc-breakers">
-      <SectionHeader as="h3" id="vc-breakers-title" eyebrow="What could break the thesis" title="논지 훼손 요인 (Thesis Breakers)" />
+      <SectionHeader as="h3" id="vc-breakers-title" eyebrow="무엇이 투자 논지를 깨뜨리는가" title="논지 훼손 요인" />
       {breakers.length === 0 ? (
-        <p className="mt-3 text-sm text-slate-500">현재 식별된 Thesis Breaker가 없습니다.</p>
+        <p className="mt-3 text-sm text-slate-500">현재 식별된 논지 훼손 요인이 없습니다.</p>
       ) : (
         <ol className="mt-3 space-y-3">
           {breakers.map((b) => (
@@ -267,7 +267,7 @@ function MissingInformationList({ items, refFor }: { items: VCMissingInformation
   const groups: VCPriority[] = ["P0", "P1", "P2"];
   return (
     <section aria-labelledby="vc-missing-title" data-testid="vc-missing">
-      <SectionHeader as="h3" id="vc-missing-title" eyebrow="What we do not know" title="미확인 정보 (Missing Information)" description="우선순위 순 — P0는 해소 전 최종 판단이 불가능합니다" />
+      <SectionHeader as="h3" id="vc-missing-title" eyebrow="아직 확인하지 못한 것" title="미확인 정보" description="우선순위 순 — P0는 해소 전 최종 판단이 불가능합니다" />
       {items.length === 0 ? (
         <p className="mt-3 text-sm text-slate-500">현재 식별된 투자-핵심 정보 공백이 없습니다.</p>
       ) : (
@@ -317,7 +317,7 @@ function MissingInformationList({ items, refFor }: { items: VCMissingInformation
   );
 }
 
-const LINK_KIND_LABEL = { contradiction: "수치 상충", thesis_breaker: "Thesis Breaker", missing_information: "미확인 정보" } as const;
+const LINK_KIND_LABEL = { contradiction: "수치 상충", thesis_breaker: "논지 훼손 요인", missing_information: "미확인 정보" } as const;
 
 function QuestionList({ links, source }: { links: DecisionQuestionLink[]; source: DecisionApiData["questionsSource"] }) {
   return (
@@ -325,14 +325,14 @@ function QuestionList({ links, source }: { links: DecisionQuestionLink[]; source
       <SectionHeader as="h3" id="vc-questions-title" eyebrow="What should I review next" title="IC 질문" description="각 질문이 어떤 결정 이슈를 풀기 위한 것인지 함께 표시합니다" />
       {links.length === 0 ? (
         <Callout tone="info" className="mt-3">
-          현재 결정 이슈와 연결된 IC 질문이 없습니다. 아래 <a href="#ic-questions" className="font-medium underline">IC Questions</a> 패널에서 질문을 생성할 수 있습니다.
+          현재 결정 이슈와 연결된 IC 질문이 없습니다. 아래 <a href="#ic-questions" className="font-medium underline">IC 질문</a> 패널에서 질문을 생성할 수 있습니다.
         </Callout>
       ) : (
         <>
         {source === "deterministic_preview" && (
           <Callout tone="info" className="mt-3" data-testid="vc-questions-preview">
             아직 저장되지 않은 <span className="font-medium">미리보기</span>입니다 — 수치 상충·근거 공백에서 결정적으로 계산한 질문이며 AI 문장 다듬기 전입니다.
-            아래 <a href="#ic-questions" className="font-medium underline">IC Questions</a> 패널에서 생성하면 저장됩니다.
+            아래 <a href="#ic-questions" className="font-medium underline">IC 질문</a> 패널에서 생성하면 저장됩니다.
           </Callout>
         )}
         <ol className="mt-3 space-y-2.5">
