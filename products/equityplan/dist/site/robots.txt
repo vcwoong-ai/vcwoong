@@ -1,3 +1,0 @@
-User-agent: *
-Allow: /
-Sitemap: https://equityplan.example.com/sitemap.xml
