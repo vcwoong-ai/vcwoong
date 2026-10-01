@@ -18,14 +18,19 @@
   연결 앱의 프로젝트 목록은 0개, 해당 배포의 ID/URL 조회는 404. 브라우저 로그인 후 UI 읽기로 확인했다.
 - 런타임: 해당 deploymentId 필터, 2026-10-01 11:25 KST의 Last 30 minutes에서
   Warning/Error/Fatal 각 0, 표시된 10개 GET 요청 모두 200, Error 필터 결과 없음.
-  짧은 배포 직후 관찰이며 인증된 운영 VC/PE 흐름이나 이후 cron 성공을 의미하지 않는다.
-  확인 증거는 로컬 `screenshots/post-118-vercel-{ready,errors}.png`.
+  11:31 KST 재확인에서도 각 0, 표시된 11개 요청 모두 200.
+  기존 cron의 `2026-10-01T02:30:14.413Z` `/api/cron/resume-generations`는 200,
+  `tick_end candidates=5 processed=0 elapsed=2.4s`. 이 cron을 직접 실행한 것은 아니다.
+  짧은 배포 직후 관찰이며 인증된 운영 VC/PE 흐름 검증을 의미하지 않는다.
+  확인 증거는 로컬 `screenshots/post-118-vercel-{ready,errors,runtime}.png`.
 - rebase 후 실제 재실행 PASS: `npm run test:all`, `npx tsc --noEmit`, `npm run lint`,
   `test:vc-decision-e2e`, `test:pe-frontend-productization-e2e`, `test:pe-document-text-e2e`,
   `npx tsx tools/test-home-pe-design.ts after` (6 화면, 1440/390, PE 입력 해시 동일).
   fixture SQLite `file:./dev.db`/Edge이며, AI·운영 DB 호출 없음.
   `npm run build`와 build 후 `npx tsc --noEmit`도 PASS. 작업의 dev 서버는 build 전에 종료했다.
-- 후속 변경은 Codex 브랜치 push와 Draft PR까지만 진행한다. 후속 PR 병합은 미승인.
+- Codex 브랜치를 예상 원격 HEAD `9bd98a5`의 명시적 force-with-lease로 push했다.
+  후속 Draft PR #119 (`https://github.com/vcwoong-ai/vcwoong/pull/119`) 생성·연결 완료. 후속 PR은 병합하지 않았다.
+  최초 생성 후 check와 Vercel preview는 PENDING이었으며 로컬 PASS와 구분한다.
   운영 DB/env/결제 설정은 변경하지 않았다. main 갱신으로 기존 Git 연동 운영 배포가 발생했다.
 
 ## 2026-10-01 — 10월 2주차 첫 구현: PE 파싱 텍스트 조회
