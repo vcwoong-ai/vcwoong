@@ -1,5 +1,14 @@
 # 2026년 10월 실행 기록
 
+## 2026-10-01 추가 요청 — 사이트 검토와 배포
+
+전체 사이트 검토/수정과 기존 Vercel 프로젝트 배포를 사용자가 명시적으로 요청했다.
+새 branch `codex/site-review-release`, 누적 #119/#120/#122–#125 통합 방식을 선택했다.
+기존 작업/Claude #121 보존. 운영 DB/env/schema/결제 설정 변경 없음.
+1440/390 공개·인증 화면과 PE 탭 75항목 PASS, 모바일 LP/메뉴와 PE 인쇄 hydration 수정.
+이번 test:all/tsc/lint/build PASS. production build 브라우저 검증과 원격 통합/배포 확인은 진행 중이다.
+상세: `docs/site-review-release/README.md`. 아래의 이전 승인 범위는 당시 기록이다.
+
 ## 인수 기준
 
 2026-10-01 후속 승인: PR #118은 `b919e5d`로 squash 병합 완료.

@@ -383,20 +383,20 @@ export function LPReportClient({
         <div className="space-y-4">
           {fund.reports.map((r) => (
             <Card key={r.id}>
-              <CardHeader className="pb-3 flex flex-row items-center justify-between gap-3 space-y-0">
-                <div className="flex items-center gap-2">
-                  <CardTitle className="text-base">{r.title}</CardTitle>
+              <CardHeader className="pb-3 flex flex-col items-start justify-between gap-3 space-y-0 sm:flex-row sm:items-center">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <CardTitle className="text-base break-words">{r.title}</CardTitle>
                   <Badge variant="outline" className="text-xs">
                     {r.period}
                   </Badge>
                 </div>
-                <div className="flex items-center gap-2">
-                  <a href={`/lp-report/${r.id}/print`} target="_blank" rel="noreferrer">
-                    <Button variant="outline" size="sm">
+                <div className="flex flex-wrap items-center gap-2">
+                    <Button variant="outline" size="sm" asChild>
+                    <a href={`/lp-report/${r.id}/print`} target="_blank" rel="noreferrer">
                       <Printer className="w-3.5 h-3.5 mr-1.5" />
                       PDF
-                    </Button>
                   </a>
+                    </Button>
                   <Button
                     variant="outline"
                     size="sm"

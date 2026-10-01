@@ -9,12 +9,14 @@ export function PrintCommitteePackClient({
   companyName,
   dealName,
   generatedAt,
+  generatedAtLabel,
   markdown,
   maDealId,
 }: {
   companyName: string;
   dealName: string;
   generatedAt: string;
+  generatedAtLabel: string;
   markdown: string;
   maDealId: string;
 }) {
@@ -33,11 +35,11 @@ export function PrintCommitteePackClient({
         }
       `}</style>
 
-      <div className="no-print sticky top-0 z-10 bg-white border-b px-6 py-3 flex items-center justify-between">
+      <div className="no-print sticky top-0 z-10 bg-white border-b px-5 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="text-sm text-gray-600">
           인쇄 대화상자에서 <strong>대상: PDF로 저장</strong>을 선택하세요.
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={() => window.print()}
@@ -51,12 +53,12 @@ export function PrintCommitteePackClient({
         </div>
       </div>
 
-      <div className="print-page max-w-[210mm] mx-auto bg-white shadow-sm my-6 p-12">
+      <div className="print-page max-w-[210mm] mx-auto bg-white shadow-sm my-6 p-5 sm:p-12 print:p-12">
         <div className="text-center py-16 border-b mb-10">
           <p className="text-xs tracking-widest text-gray-400 uppercase">{BRAND.name} · PE IC Committee Pack</p>
           <h1 className="text-2xl font-bold text-gray-900 mt-4">{companyName}</h1>
           <p className="text-sm text-gray-600 mt-2">{dealName}</p>
-          <p className="text-xs text-gray-400 mt-4">생성 시각: {new Date(generatedAt).toLocaleString("ko-KR")}</p>
+          <p className="text-xs text-gray-400 mt-4">생성 시각: <time dateTime={generatedAt}>{generatedAtLabel}</time></p>
         </div>
 
         <div className="prose prose-sm max-w-none">

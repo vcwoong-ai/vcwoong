@@ -7,7 +7,7 @@ import { chromium } from "playwright";
 import { gotoAppReady } from "./helpers/app-ready";
 
 const db = new PrismaClient();
-const base = "http://localhost:3000";
+const base = process.env.BASE_URL ?? "http://localhost:3000";
 const before = process.argv[2] === "before";
 const dir = "screenshots/pe-document-text";
 const password = "SourceFixture1234!";
@@ -37,6 +37,8 @@ async function login(email: string): Promise<string> {
 
 async function main() {
   assert.equal(process.env.DATABASE_URL, "file:./dev.db", "local DB only");
+  const target = new URL(base);
+  assert.ok(target.protocol === "http:" && target.hostname === "localhost" && ["3000", "3001"].includes(target.port), "local review server only");
   mkdirSync(dir, { recursive: true });
   const stamp = Date.now();
   const team = await db.team.create({ data: { name: `Source fixture ${stamp}` } });

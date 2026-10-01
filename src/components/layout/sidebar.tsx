@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { cn } from "@/lib/utils";
 import { BRAND } from "@/lib/brand";
 import {
@@ -89,29 +90,8 @@ interface SidebarProps {
 export function Sidebar({ open = false, onClose }: SidebarProps) {
   const pathname = usePathname();
 
-  return (
+  const content = (
     <>
-      {/* 모바일 드로어가 열렸을 때의 배경 (탭하면 닫힘) */}
-      {open && (
-        <div
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
-          onClick={onClose}
-          aria-hidden="true"
-        />
-      )}
-
-      <aside
-        className={cn(
-          "fixed left-0 top-0 h-screen w-64 z-50 flex flex-col text-white",
-          "bg-slate-900",
-          "border-r border-white/5",
-          "overflow-y-auto transition-transform duration-200 lg:transition-none",
-          // 모바일에서는 기본으로 화면 밖에 두고, 열었을 때만 밀어 넣는다.
-          // 항상 보이게 두면 좁은 화면에서 본문이 100px대로 찌그러진다.
-          open ? "translate-x-0" : "-translate-x-full",
-          "lg:translate-x-0"
-        )}
-      >
       {/* Logo */}
       <div className="p-6 border-b border-white/10 flex items-start justify-between gap-2">
         <div className="flex items-center gap-2.5 min-w-0">
@@ -119,7 +99,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
             <Zap className="w-5 h-5 text-white" />
           </div>
           <div className="min-w-0">
-            <h1 className="text-lg font-bold tracking-tight">{BRAND.name}</h1>
+            <p className="text-lg font-bold tracking-tight">{BRAND.name}</p>
             <p className="text-xs text-slate-400 truncate">{BRAND.nameKr} · {BRAND.tagline}</p>
           </div>
         </div>
@@ -198,7 +178,31 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
           ))}
         </div>
       </div>
+    </>
+  );
+
+  return (
+    <>
+      <aside className="fixed left-0 top-0 z-50 hidden h-screen w-64 flex-col overflow-y-auto border-r border-white/5 bg-slate-900 text-white lg:flex">
+        {content}
       </aside>
+      <DialogPrimitive.Root open={open} onOpenChange={(next) => { if (!next) onClose?.(); }}>
+        <DialogPrimitive.Portal>
+          <DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-black/50 lg:hidden" />
+          <DialogPrimitive.Content
+            id="workspace-mobile-menu"
+            className="fixed inset-y-0 left-0 z-50 flex w-64 max-w-[calc(100%-2rem)] flex-col overflow-y-auto border-r border-white/5 bg-slate-900 text-white lg:hidden"
+            onCloseAutoFocus={(event) => {
+              event.preventDefault();
+              document.getElementById("workspace-menu-trigger")?.focus();
+            }}
+          >
+            <DialogPrimitive.Title className="sr-only">워크스페이스 메뉴</DialogPrimitive.Title>
+            <DialogPrimitive.Description className="sr-only">VC, PE/M&A와 플랫폼 화면으로 이동합니다.</DialogPrimitive.Description>
+            {content}
+          </DialogPrimitive.Content>
+        </DialogPrimitive.Portal>
+      </DialogPrimitive.Root>
     </>
   );
 }

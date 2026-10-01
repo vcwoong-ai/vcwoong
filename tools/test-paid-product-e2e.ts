@@ -47,7 +47,7 @@ async function noHorizontalOverflow(page: Page): Promise<boolean> {
 
 async function main() {
   const target = new URL(BASE);
-  if (process.env.DATABASE_URL !== "file:./dev.db" || target.hostname !== "localhost" || target.port !== "3000" || target.protocol !== "http:") {
+  if (process.env.DATABASE_URL !== "file:./dev.db" || target.hostname !== "localhost" || !["3000", "3001"].includes(target.port) || target.protocol !== "http:") {
     console.error("중단: 로컬 SQLite가 아닌 DB에는 실행하지 않습니다.");
     process.exit(1);
   }
