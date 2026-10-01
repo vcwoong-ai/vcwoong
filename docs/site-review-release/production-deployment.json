@@ -1,0 +1,16 @@
+{
+  "id": "dpl_Gj7zY1Z88V1czynHdFkvxEA2tLmC",
+  "url": "dealsync-rm6h6jgym-vcwoong.vercel.app",
+  "readyState": "READY",
+  "target": "production",
+  "alias": [
+    "www.dealmind.space",
+    "dealsync-jade.vercel.app",
+    "dealmind.space",
+    "dealsync-vcwoong.vercel.app",
+    "dealsync-git-main-vcwoong.vercel.app"
+  ],
+  "aliasAssigned": true,
+  "aliasError": null,
+  "gitCommitSha": "a5796bbff127e0398e042baff04aa3acb75d429c"
+}

@@ -1,0 +1,29 @@
+{
+  "deploymentId": "dpl_Gj7zY1Z88V1czynHdFkvxEA2tLmC",
+  "queriedAtUtc": "2026-10-01T15:51:44.0482596Z",
+  "since": "20m",
+  "limit": 100,
+  "errorRecords": 4,
+  "errors": [
+    {
+      "path": "/ma-deals",
+      "missingObject": "The table `public.MADeal` does not exist in the current database.",
+      "prismaCode": "P2021"
+    },
+    {
+      "path": "/dashboard",
+      "missingObject": "The table `public.MADeal` does not exist in the current database.",
+      "prismaCode": "P2021"
+    },
+    {
+      "path": "/dashboard",
+      "missingObject": "The table `public.MADeal` does not exist in the current database.",
+      "prismaCode": "P2021"
+    },
+    {
+      "path": "/dashboard",
+      "missingObject": "The table `public.MADeal` does not exist in the current database.",
+      "prismaCode": "P2021"
+    }
+  ]
+}

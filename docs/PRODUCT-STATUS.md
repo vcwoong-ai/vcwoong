@@ -1,5 +1,18 @@
 # DealMind 제품 현황
 
+## 2026-10-02 — 운영 배포 완료, PE 스키마 차단 확인
+
+- PR #126 squash MERGED, main/production `a5796bbff127e0398e042baff04aa3acb75d429c`.
+  deployment `dpl_Gj7zY1Z88V1czynHdFkvxEA2tLmC` production READY, aliasAssigned true, aliasError null.
+  dealmind.space/www.dealmind.space 등 기존 alias 확인. PR head CI와 병합 후 main CI SUCCESS.
+- 실제 공개 메인페이지의 새 디자인/PE 미리보기 전환 확인. 공개 데모 로그인 후 VC 목록·예시 보고서 본문은 열렸다.
+  인증 dashboard/PE 목록은 FAIL: 운영 DB의 public.MADeal 누락(P2021).
+- 최근 20분 error 필터에서 새 배포 오류 4건 확인. 이전 운영 b919e5d 로그에도 같은 오류 3건 확인.
+  READY/200 로그/로컬 SQLite PASS를 운영 전체 PASS로 부르지 않는다.
+- 운영 DB/env/schema/결제 변경 없이 해당 DB 수정 작업을 중단했다.
+  재현/영향/기존 SQL 출처/최소 수정안: [운영 차단 기록](site-review-release/PRODUCTION-BLOCKER.md).
+- 아래 이전 검증은 해당 시점의 기록이다. 최종 상태: DEPLOYED / 운영 dashboard·PE BLOCKED.
+
 ## 2026-10-02 — 통합 배포 전 검증 완료
 
 - 사용자 실행으로 3001 수정 production build HTTP 200 확인. 서버 시작 차단은 해소되었다.

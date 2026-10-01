@@ -1,5 +1,13 @@
 # 2026년 10월 실행 기록
 
+## 2026-10-02 — 실제 운영 배포 및 기존 스키마 누락
+
+PR #126 최신 head CI 통과 후 squash 병합. main/운영 a5796bb, READY/aliasAssigned true/aliasError null,
+기존 도메인 연결과 병합 후 main CI SUCCESS 확인. 실제 공개 디자인·데모 로그인·VC 목록/seed 본문 열림.
+인증 dashboard/PE 목록은 FAIL: public.MADeal 누락(P2021). 이전 b919e5d 운영 로그에도 같은 오류 3건 확인.
+운영 DB/env/schema/결제 변경 없이 중단. 재현/영향/최소 수정안은 site-review-release/PRODUCTION-BLOCKER.md.
+작업 branch의 사후 문서 커밋은 production 앱 SHA와 구분하며 새 production 배포를 만들지 않는다.
+
 ## 2026-10-02 — 배포 전 실제 production build E2E
 
 사용자가 3001 서버를 실행해 차단을 해소했다. 수정 production build에서 사이트 75항목,

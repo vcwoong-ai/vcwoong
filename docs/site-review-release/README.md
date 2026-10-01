@@ -1,5 +1,15 @@
 # 전체 사이트 검토 및 통합 배포 — 2026-10-01
 
+## 최종 운영 확인 — 2026-10-02
+
+PR #126 MERGED, main SHA `a5796bbff127e0398e042baff04aa3acb75d429c`, production READY,
+기존 alias 연결/aliasAssigned true/aliasError null과 병합 후 main CI SUCCESS 확인.
+실제 운영 공개 디자인·PE 미리보기, 데모 로그인 및 VC 목록/seed 보고서 본문 표시를 확인했다.
+그러나 인증 dashboard/PE 목록은 운영 public.MADeal 테이블 누락으로 FAIL.
+새 배포 error 4건, 이전 배포 동일 오류 3건 확인. 운영 DB 수정 없이 중단했다.
+상세·최소 수정안: [PRODUCTION-BLOCKER.md](PRODUCTION-BLOCKER.md).
+이 사후 기록은 작업 branch에만 추가하며 앱을 다시 배포하지 않는다.
+
 ## 2026-10-02 — 수정 production build 검증 완료
 
 사용자가 3001 서버를 실행했고 HTTP 200을 확인했다. 기존 3000 서버는 보존했다.

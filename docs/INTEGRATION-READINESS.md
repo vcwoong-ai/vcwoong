@@ -1,5 +1,11 @@
 # 통합 준비 상태 — 2026-10-01
 
+2026-10-02 최종: PR #126 squash MERGED(main a5796bb), 실제 production READY/aliasError null,
+기존 도메인 연결 및 main CI SUCCESS 확인. 기존 #119/#120/#122–#125를 다시 병합하지 않는다.
+Claude #121 보존, auth 중복 별도 재적용 안 함. 기존 브랜치 reset/rebase/force-push/삭제 없음.
+운영 dashboard/PE는 이전부터 존재한 public.MADeal 누락으로 FAIL. DB 수정은 실행하지 않았다.
+운영 스키마 대조/최소 DDL/복구 계획 검토 및 별도 적용 승인 필요. PRODUCTION-BLOCKER.md 참조.
+
 2026-10-02 후속: 3001 수정 production build의 site 75 / paid product 134 / login email /
 PE source text E2E 모두 PASS. tsc/lint 재실행 PASS. 서버 시작 차단은 사용자 실행으로 해소되었다.
 PR #126 code head `01b7f74` CI SUCCESS, preview READY/aliasError null 확인.
