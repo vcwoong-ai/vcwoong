@@ -3,6 +3,22 @@
 5축 차별화 기준으로 현재 무엇이 동작하고 무엇이 남았는지 정리한 문서입니다.
 다른 환경(예: Claude)에서 작업한 내용과 병합할 때 기준점으로 사용하세요.
 
+## 2026-10-01 — 프리미엄 투자 데스크 비주얼 고도화
+
+- 랜딩, 로그인 후 대시보드, PE 개요를 딥 네이비·아이보리·브론즈 기반의 하나의 시각 체계로 정리했다.
+  랜딩은 제품 미리보기를 어두운 투자 인텔리전스 프레임에 배치하고, CTA·타이포·검토 흐름의 대비를 강화했다.
+  대시보드는 투자 데스크 masthead, 떠 있는 지표 카드, VC/PE별 구분선을 적용했다.
+  PE 개요는 canonical 검토 요약을 어두운 결정 헤더로, 다음 행동을 별도 아이보리 패널로 강조했다.
+- 판정·계산·gate·API·DB 입력은 변경하지 않았다. 수정 범위는 랜딩 TSX와 scoped CSS이며,
+  로그인 정규화/복구 커밋 이후의 인증·권한 의미도 그대로다.
+- 검증 PASS: `test-home-pe-design.ts after` 1440/390 랜딩·대시보드·PE 6개 경로, 가로 넘침 없음,
+  동일 PE 입력 SHA256 `2fc9f9d8f7720403c8bad5d62fe74b5ebe4c8f5eded8f60c83afcc24cd9d4e85`.
+  `test:pe-overview-readiness` 9개, `test:deal-queue` 27개,
+  `test:pe-frontend-productization-e2e`, `test:vc-decision-e2e`, typecheck, lint, production build PASS.
+- 최신 After 캡처는 `docs/design-review-home-pe/after-*` 6개로 갱신했다.
+  Claude Code를 병행할 때는 동일 브랜치·동일 파일 동시 편집을 피하고 별도 worktree/branch와 파일 소유 구역을 사용한다.
+- **READY FOR DESIGN REVIEW**.
+
 ## 2026-10-01 — 메인·PE 디자인 확장 (사용자 후속 요청)
 
 - 인수: `codex/vc-design-review`, 시작 HEAD `c7ebb89c8d3ae7536602663d20fd8f078433b7f7`.
