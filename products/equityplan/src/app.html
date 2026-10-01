@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{{NAME}} · 투자유치 지분 시뮬레이터</title>
+<meta name="description" content="RCPS·SAFE·옵션풀·리픽싱·청산우선권까지 한국 투자계약 구조 그대로 계산하는 오프라인 지분 시뮬레이터">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+KR:wght@400;600;700&display=swap">
+<style>
+/*__STYLE__*/
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><b data-brand></b><span class="ed"></span></div>
+  <div class="actions">
+    <button class="btn ghost" data-act="example">예시</button>
+    <button class="btn ghost" data-act="reset">새로 만들기</button>
+    <button class="btn ghost lock" data-act="open">불러오기</button>
+    <button class="btn ghost lock" data-act="save">저장</button>
+    <button class="btn ghost lock" data-act="csv">엑셀(CSV)</button>
+    <button class="btn ghost lock" data-act="print">PDF 보고서</button>
+    <button class="btn demo-only" data-act="buy">정식판 <span data-price></span></button>
+  </div>
+</header>
+<input type="file" id="file-input" accept=".json,application/json" hidden>
+
+<main class="layout">
+  <div id="inputs"></div>
+  <div id="results">
+    <div class="report-head">
+      <h1 id="company-title"></h1>
+      <span class="meta"><span data-brand></span> 지분 시뮬레이션 · <span id="print-date"></span></span>
+    </div>
+    <div id="warnings"></div>
+    <div id="kpis"></div>
+    <section class="card"><h2>라운드별 지분 변화 (완전희석 기준)</h2><div id="evolution"></div></section>
+    <section class="card"><h2>캡테이블</h2><div id="captable"></div></section>
+    <section class="card"><h2>엑싯 시뮬레이션 (청산 분배)</h2><div id="exit"></div></section>
+    <section class="card upgrade demo-only">
+      <p><b>체험판입니다.</b> 저장·불러오기, 엑셀/PDF 내보내기, 4개 이상 라운드는 정식판에서 열립니다. 1회 결제 <span data-price></span>.</p>
+      <button class="btn" data-act="buy">정식판 보기</button>
+    </section>
+    <p class="disclaimer">계산 결과는 의사결정 참고용이며 법률·세무 자문이 아닙니다. 실제 계약서 조항(전환가격 조정 산식, 청산 순위, 상환권, 동반매도권 등)에 따라 결과가 달라질 수 있습니다. 스톡옵션은 행사가 차감 전 금액으로 표시됩니다.</p>
+  </div>
+</main>
+<div id="modal" hidden></div>
+<script>
+window.EQUITYPLAN_EDITION = '{{EDITION}}';
+window.EQUITYPLAN_CONFIG = {{CONFIG}};
+</script>
+<script>
+/*__ENGINE__*/
+</script>
+<script>
+/*__APP__*/
+</script>
+</body>
+</html>
