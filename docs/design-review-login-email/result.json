@@ -1,0 +1,13 @@
+{
+  "passed": true,
+  "tests": [
+    "legacy case variants",
+    "wrong/missing/ambiguous rejected",
+    "legacy duplicate",
+    "new normalized signup",
+    "concurrent 201/409",
+    "same id/role/data",
+    "desktop/mobile browser login",
+    "PE signup auto-login"
+  ]
+}

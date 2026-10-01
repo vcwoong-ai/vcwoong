@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { UserRole } from "@prisma/client";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { findLoginEmailCandidates } from "@/lib/login-email";
 
 /** NextAuth가 authorize에 넘겨주는 요청에서 클라이언트 IP를 추정한다 */
 function ipFromAuthRequest(headers?: Record<string, unknown>): string {
@@ -31,8 +32,6 @@ export const authOptions: NextAuthOptions = {
           throw new Error("이메일과 비밀번호를 입력해주세요.");
         }
 
-        const normalizedEmail = credentials.email.trim().toLowerCase();
-
         // 비밀번호 대입 공격 차단. 모든 시도를 세되 성공하면 아래에서
         // 카운터를 비우므로, 결과적으로 실패만 누적된다.
         const ip = ipFromAuthRequest(
@@ -50,9 +49,12 @@ export const authOptions: NextAuthOptions = {
           );
         }
 
-        const user = await prisma.user.findUnique({
-          where: { email: normalizedEmail },
-        });
+        const candidates = await findLoginEmailCandidates(credentials.email);
+        // Existing case-colliding identities need manual review, never automatic account selection.
+        if (candidates.length !== 1) {
+          throw new Error("이메일 또는 비밀번호가 올바르지 않습니다.");
+        }
+        const user = await prisma.user.findUnique({ where: { id: candidates[0].id } });
 
         if (!user || !user.passwordHash) {
           throw new Error("이메일 또는 비밀번호가 올바르지 않습니다.");

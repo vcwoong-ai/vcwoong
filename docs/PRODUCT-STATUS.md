@@ -3,6 +3,25 @@
 5축 차별화 기준으로 현재 무엇이 동작하고 무엇이 남았는지 정리한 문서입니다.
 다른 환경(예: Claude)에서 작업한 내용과 병합할 때 기준점으로 사용하세요.
 
+## 2026-10-01 — 로그인 이메일 충돌 보강
+
+- 사용자 로그인 이메일 수정·테스트 화면 요청에 따라 `codex/login-email-resolution` 생성, base `bb315ea` (#122).
+  Claude #121의 head `dbe553b`/OPEN을 재확인하고 해당 브랜치는 보존했다.
+- 로그인/가입이 하나의 parameterized case-insensitive lookup을 사용한다. 기존 mixed-case 계정 하나면
+  같은 ID/password/role로 로그인. 후보가 여러 개이면 동일 일반 오류로 session을 발급하지 않는다.
+  새 가입은 lowercase 저장, 기존 legacy duplicate는 409, concurrent unique race도 409.
+  bcrypt/rate limit/JWT/권한/결제/VC/PE 엔진/schema/운영 데이터 변경 없음. 자동 계정 병합·삭제 없음.
+- PASS: 새 `test:login-email-e2e` (실제 NextAuth/register HTTP + 1440/390 브라우저), test:all, tsc, lint, diff check.
+  기존 계정 데이터 불변, 잘못된 비밀번호/없는 사용자/충돌 사용자 session 없음, concurrent signup 201/409,
+  신규 소문자 저장/Free, PE 가입 후 자동 로그인 확인. 로그와 코드 경계는 `LOGIN-EMAIL-REVIEW.md`.
+- 초기 build는 기존 Google Fonts 요청의 네트워크 EACCES로 FAIL. 네트워크 허용 실행에서 최종 build PASS(exit 0).
+  `npm run start`로 같은 로컬 SQLite/localhost 환경의 테스트 화면을 연다. 운영 배포가 아니다.
+  Codex in-app browser에서 실제 소문자 이메일 로그인 후 합성 계정 대시보드 표시를 확인하고 검토 탭을 유지했다.
+- 로컬 검토용 합성 ANALYST/Free 계정 하나만 남겼다. 자동 회귀 fixture와 그 IP의 rate limit 기록은 제거했다.
+  `seed-login-review-local.ts`는 SQLite만 허용하고 기존 다른 계정을 덮어쓰지 않는다.
+- #121과 같은 auth 파일을 수정하는 보강이다. 이 변경 통합 시 #121을 독립적으로 함께 병합하면 안 된다.
+  기존 case-colliding 계정의 실제 운영 유무/수동 정리, PostgreSQL 실행/조회 성능, 운영 로그인은 NOT VERIFIED.
+
 ## 2026-10-01 — 4주차 검증·접근성·성능
 
 - 새 브랜치 `codex/week4-verification`, 기준 `1de40c4`/PR #120. 기존 working tree clean에서 시작.
