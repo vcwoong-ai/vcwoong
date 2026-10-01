@@ -3,10 +3,12 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit, clientIp, RATE_LIMITS } from "@/lib/rate-limit";
+import { findLoginEmailCandidates, normalizeLoginEmail } from "@/lib/login-email";
+import { Prisma } from "@prisma/client";
 
 const registerSchema = z.object({
   name: z.string().min(2, "이름은 2자 이상이어야 합니다"),
-  email: z.string().email("유효한 이메일을 입력해주세요"),
+  email: z.string().trim().email("유효한 이메일을 입력해주세요"),
   password: z
     .string()
     .min(8, "비밀번호는 8자 이상이어야 합니다")
@@ -35,11 +37,10 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validated = registerSchema.parse(body);
 
-    const existing = await prisma.user.findUnique({
-      where: { email: validated.email },
-    });
+    const email = normalizeLoginEmail(validated.email);
+    const existing = await findLoginEmailCandidates(email);
 
-    if (existing) {
+    if (existing.length > 0) {
       return NextResponse.json(
         { error: "이미 사용 중인 이메일입니다" },
         { status: 409 }
@@ -51,7 +52,7 @@ export async function POST(request: NextRequest) {
     const user = await prisma.user.create({
       data: {
         name: validated.name,
-        email: validated.email,
+        email,
         passwordHash,
       },
       select: {
@@ -65,6 +66,10 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ data: user }, { status: 201 });
   } catch (error) {
+    // Concurrent normalized signups can race past the lookup; email's existing unique key wins.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      return NextResponse.json({ error: "이미 사용 중인 이메일입니다" }, { status: 409 });
+    }
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         { error: "입력 데이터가 올바르지 않습니다", details: error.issues },
