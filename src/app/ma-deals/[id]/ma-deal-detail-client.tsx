@@ -429,6 +429,7 @@ export function MaDealDetailClient({
 
         <TabsContent value="data-room" className="space-y-4">
           <MaDealDataRoom
+            dealId={maDeal.id}
             documents={documents}
             evidence={evidence}
             findings={findings}

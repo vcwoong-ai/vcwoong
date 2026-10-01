@@ -3,6 +3,32 @@
 5축 차별화 기준으로 현재 무엇이 동작하고 무엇이 남았는지 정리한 문서입니다.
 다른 환경(예: Claude)에서 작업한 내용과 병합할 때 기준점으로 사용하세요.
 
+## 2026-10-01 — 10월 2주차 첫 구현: PE 파싱 텍스트 조회
+
+- 시작 branch `codex/vc-design-review`, HEAD `bffbecee5f26b61d98d8e5902d227d60e42c5f6e`, clean.
+  remote main `a60f465`, 개발 원격 `bffbece`를 확인. PR #118 OPEN/Draft, head `99885fc`, CLEAN;
+  #114–117 MERGED 재확인. 타 checkout의 미커밋 변경은 포함하지 않는다. 기존 작업 reset/clean/rebase 없음.
+- 실제 PE 데이터룸 Before 1440/390px 확보 후 문서 상세에 명시적 파싱 텍스트 조회를 구현.
+  `MaDealDataRoom` → 문서 Dialog → `DocumentSourceText` →
+  `GET /api/ma-deals/[id]/documents/[documentId]/text` → 기존 `maDealReadWhere`로 문서/딜/읽기 권한 동시 확인.
+  최대 3000자, no-store, URL 미노출, 기존 목록에 parsedText 없음. AI/외부 저장소 호출 없음.
+- 근거 발췌·신뢰도·연결된 finding/요청의 값을 보존. 열람과 검증 완료를 구분하고, 미파싱/실패/재시도/다음·이전을 표시.
+  문서를 버튼으로 열고 Escape 후 복귀 포커스 지원. 모바일 긴 문자열 내부 넘침을 발견해 줄바꿈 수정.
+  원본 PDF/Excel 배치나 보고서 snapshot과 조회 텍스트의 원자적 일치를 보장하지 않는다.
+  VC는 documentId 전달 경계를 설계했으며 아직 원문 연결 미구현. 상세 계약 `SOURCE-TEXT-DESIGN.md`.
+- 검증 PASS: `test:pe-data-room-view-model`, `test:all`, `test:pe-document-text-e2e`,
+  `test:vc-decision-e2e`, `test:pe-frontend-productization-e2e`, typecheck, lint, build, diff check.
+  원문 E2E는 소유자/공유 ANALYST/비공개/외부인/다른 딜/동일 404, 응답 상한·입력,
+  목록 본문 미포함, XSS 문자열, 재시도, 미파싱, 포커스 trap/복귀, 1440/390 및 DB 문서 불변 검증.
+  초기 fixture enum/cleanup 오류와 첫 포커스 복귀 실패를 수정 후 재실행 PASS. 테스트 삭제/약화 없음.
+- Before/After는 `docs/design-review-source-text/{before,after}-{1440,390}.png`.
+  실행: `npm run dev:local`, 위 repo test scripts, `npx tsc --noEmit`, `npm run lint`, `npm run build`, `git diff --check`.
+  환경 SQLite `file:./dev.db`, Edge, 로컬 dev 서버. build 전에 이 작업의 dev 서버를 종료했다.
+  새 테스트 fixture는 제거했다. 운영 DB/env/schema/결제/배포 변경 없음.
+- Codespace pull/실화면, 운영 인증 스모크, 원본 저장소 접근 정책은 NOT VERIFIED.
+  PR 생성/수정・main 병합・production 변경은 미승인. 별도 브랜치 commit/push는 앞선 승인 범위.
+- **READY FOR DESIGN REVIEW** — PE 파싱 텍스트 조회 범위.
+
 ## 2026-10-01 — Claude 10월 계획 인수
 
 - 사용자 제공 1개월 계획을 읽고 현재 구현과 대조했다. 시작 branch `codex/vc-design-review`, HEAD `79e8bec`, 로컬 clean.
