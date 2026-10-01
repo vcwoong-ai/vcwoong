@@ -1,0 +1,10 @@
+{
+  "name": "Dealmind development",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:24-bookworm",
+  "remoteUser": "node",
+  "forwardPorts": [3000],
+  "portsAttributes": {
+    "3000": { "label": "Dealmind fixture app", "onAutoForward": "notify" }
+  },
+  "postCreateCommand": "node .devcontainer/setup.mjs"
+}

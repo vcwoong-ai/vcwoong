@@ -1,5 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Keep a local review server from overwriting the running production build.
+  distDir: process.env.DEALMIND_LOCAL_REVIEW === "1" ? ".next-local-review" : ".next",
   // Disable static optimization for pages using server session
   experimental: {
     serverActions: {

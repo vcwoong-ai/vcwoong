@@ -1,3 +1,4 @@
+import { FirstDealGuide } from "@/components/onboarding/first-deal-guide";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
@@ -15,6 +16,7 @@ import {
   Plus,
 } from "lucide-react";
 import Link from "next/link";
+import styles from "@/components/ui/investment-workspace.module.css";
 import { DealStage, ReportStatus, DealSector } from "@prisma/client";
 import { STAGE_LABEL } from "@/lib/deal-labels";
 import { DashboardCharts } from "./dashboard-charts";
@@ -214,19 +216,28 @@ export default async function DashboardPage() {
 
   return (
     <AppLayout title="대시보드">
-      <div className="space-y-8">
-        <header className="flex flex-wrap items-end justify-between gap-4">
+      <div className={`${styles.workspace} space-y-8`}>
+        <header className={styles.masthead}>
           <div>
+            <div className={styles.eyebrow}>INVESTMENT DESK / 검토 현황</div>
             <h1 className="text-xl font-semibold tracking-tight text-foreground">
-              {session.user.name ?? "사용자"}님, 오늘 검토할 딜입니다
+              {session.user.name ?? "사용자"}님, {isEmptyWorkspace ? "첫 딜부터 시작하세요" : "오늘 검토할 딜입니다"}
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
               {teamId ? "팀 공유 딜을 포함한 현황입니다. " : ""}
-              막힌 것과 다음 행동이 위에 옵니다.
+              {isEmptyWorkspace ? "VC 투자 검토 또는 PE/M&A 인수 검토를 선택해 시작하세요." : "막힌 것과 다음 행동이 위에 옵니다."}
             </p>
           </div>
           <DashboardQuickActions />
         </header>
+
+        {!isEmptyWorkspace && <dl className={styles.stats} data-testid="dashboard-stats">
+          {stats.map((stat) => <div key={stat.label}><dt>{stat.label}</dt><dd>{stat.value}</dd></div>)}
+        </dl>}
+        {!isEmptyWorkspace && <div className={styles.sectionHeading}>
+          <h2>지금 확인할 투자 기회</h2>
+          <p>최근 수정한 딜 중 검토 우선순위 순 · VC 판단과 PE 준비 상태는 별개입니다</p>
+        </div>}
 
         {isEmptyWorkspace ? (
           <section aria-labelledby="onboarding-title" data-testid="dashboard-onboarding">
@@ -237,36 +248,12 @@ export default async function DashboardPage() {
               아직 딜이 없습니다. 어떤 검토를 하시나요? 딜을 만들면 이 자리에 검토 대기열이 생깁니다.
             </p>
             <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-              <Card className="p-5">
-                <h3 className="text-sm font-semibold text-foreground">VC — 투자 논지 검토</h3>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  IR 자료를 올리면 투자 근거, 논지를 깨는 요인, 수치 상충, 확인해야 할 정보가 정리됩니다.
-                </p>
-                <div className="mt-4">
-                  <CreateDealDialog
-                    trigger={
-                      <Button size="sm">
-                        <Plus /> 첫 VC 딜 만들기
-                      </Button>
-                    }
-                  />
-                </div>
-              </Card>
-              <Card className="p-5">
-                <h3 className="text-sm font-semibold text-foreground">PE/M&A — 인수 검토</h3>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  재무 기간을 입력하면 출처별 수치 충돌, QoE·LBO 입력 상태, 남은 실사 이슈가 정리됩니다.
-                </p>
-                <div className="mt-4">
-                  <CreateMaDealDialog
-                    trigger={
-                      <Button size="sm" variant="outline">
-                        <Plus /> 첫 PE/M&A 딜 만들기
-                      </Button>
-                    }
-                  />
-                </div>
-              </Card>
+              <FirstDealGuide track="vc" headingLevel={3} action={
+                <CreateDealDialog trigger={<Button size="sm"><Plus /> 첫 VC 딜 만들기</Button>} />
+              } />
+              <FirstDealGuide track="pe" headingLevel={3} action={
+                <CreateMaDealDialog trigger={<Button size="sm" variant="outline"><Plus /> 첫 PE/M&A 딜 만들기</Button>} />
+              } />
             </div>
           </section>
         ) : (
@@ -304,16 +291,6 @@ export default async function DashboardPage() {
             </ul>
           </Card>
         )}
-
-        {/* 현황 숫자 — 아이콘 타일이 아니라 한 줄 요약 */}
-        <dl className="grid grid-cols-2 gap-x-6 gap-y-4 rounded-lg border border-border bg-card p-5 sm:grid-cols-4" data-testid="dashboard-stats">
-          {stats.map((stat) => (
-            <div key={stat.label}>
-              <dt className="text-xs font-medium text-muted-foreground">{stat.label}</dt>
-              <dd className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{stat.value}</dd>
-            </div>
-          ))}
-        </dl>
 
         {/* 차트 영역 (Client Component) */}
         <DashboardCharts

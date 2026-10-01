@@ -133,7 +133,7 @@ export function IcQuestionsPanel({
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2 font-medium text-gray-900">
           <ListChecks className="w-4 h-4" />
-          IC Questions
+          IC 질문
         </div>
         {data && <Badge variant="secondary">{data.questions.length}개</Badge>}
       </div>

@@ -2,16 +2,18 @@
  * 유료 제품 프론트엔드 E2E — 랜딩·요금·가입·대시보드·VC 목록/근거 패널·PE 목록/개요/재무/위원회 자료·반응형.
  *
  * 로컬 SQLite + 실행 중인 dev 서버(npm run dev:local) 전용. 운영 DB에는 실행하지 않는다.
- * 예시 PE 딜(tools/seed-showcase-local.ts)과 demo 계정의 시드 VC 딜을 사용하고, 임시 사용자는 끝나면 지운다.
+ * 실행마다 합성 소유자/VC/PE 데이터를 만들고 끝나면 자기 fixture만 지운다. 기존 demo 데이터는 쓰지 않는다.
  * 실제 결제·AI 호출은 하지 않는다(가입 후 결제 화면으로 "이동"만 확인).
  *
  * Usage: DATABASE_URL='file:./dev.db' npx tsx tools/test-paid-product-e2e.ts
  */
-import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
+import { chromium, type Browser, type BrowserContext, type BrowserContextOptions, type Page } from "playwright";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { PUBLIC_PLANS, hasFeature } from "../src/lib/plans";
 import { PLAN_LIMITS } from "../src/lib/quotas";
+import { createPaidProductFixture } from "./helpers/paid-product-fixture";
+import { mkdirSync, writeFileSync } from "node:fs";
 
 const BASE = process.env.BASE_URL ?? "http://localhost:3000";
 const prisma = new PrismaClient();
@@ -21,8 +23,6 @@ function assert(cond: unknown, msg: string) {
   pass++;
   console.log(`✅ ${msg}`);
 }
-
-const DEMO = { email: "demo@dealmind.kr", password: "Demo1234!" };
 
 async function login(page: Page, email: string, password: string) {
   await page.goto(`${BASE}/login`, { waitUntil: "networkidle" });
@@ -46,46 +46,54 @@ async function noHorizontalOverflow(page: Page): Promise<boolean> {
 }
 
 async function main() {
-  if (!(process.env.DATABASE_URL ?? "").startsWith("file:")) {
+  const target = new URL(BASE);
+  if (process.env.DATABASE_URL !== "file:./dev.db" || target.hostname !== "localhost" || !["3000", "3001"].includes(target.port) || target.protocol !== "http:") {
     console.error("중단: 로컬 SQLite가 아닌 DB에는 실행하지 않습니다.");
     process.exit(1);
   }
   console.log(`\n=== 유료 제품 프론트엔드 E2E — 대상: ${BASE} ===\n`);
 
-  const demoUser = await prisma.user.findUnique({ where: { email: DEMO.email }, select: { id: true } });
-  const peDeal = await prisma.mADeal.findFirst({ where: { name: "예시 · 한빛정밀 인수 검토", userId: demoUser!.id }, select: { id: true } });
-  if (!peDeal) throw new Error("예시 PE 딜이 없습니다 — DATABASE_URL='file:./dev.db' npx tsx tools/seed-showcase-local.ts");
-  const vcDeal = await prisma.deal.findFirst({ where: { companyName: "네오비전 주식회사", userId: demoUser!.id }, select: { id: true, reports: { select: { id: true }, take: 1, orderBy: { createdAt: "desc" } } } });
-  const vcReportId = vcDeal?.reports[0]?.id;
-  if (!vcDeal || !vcReportId) throw new Error("네오비전 시드 딜/보고서가 없습니다");
-
-  // 가입/로그인 속도 제한(RateLimit)은 같은 IP의 반복 실행에서 429를 낸다 — 로컬 SQLite의 제한 기록만 비운다(위에서 로컬 DB임을 확인함)
-  await prisma.rateLimit.deleteMany({});
-
   const stamp = Date.now();
-  const emptyUser = await prisma.user.create({
-    data: { email: `paid-e2e-empty-${stamp}@example.com`, name: "신규 사용자", passwordHash: await bcrypt.hash("Paid1234!Test", 4) },
-    select: { id: true, email: true },
-  });
+  const testIp = `2001:db8:3::${stamp.toString(16).slice(-4)}`;
+  let fixture: Awaited<ReturnType<typeof createPaidProductFixture>> | undefined;
+  let emptyUser: { id: string; email: string } | undefined;
+  let browser: Browser | undefined;
   const registeredEmails: string[] = [];
-
-  const browser: Browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
-  const consoleErrors: string[] = [];
-  const track = (page: Page) => {
-    page.on("console", (m) => {
-      if (m.type() === "error") consoleErrors.push(m.text().slice(0, 200));
-    });
-    page.on("pageerror", (e) => consoleErrors.push(`PAGEERROR: ${e.message.slice(0, 200)}`));
-  };
-
   try {
+    fixture = await createPaidProductFixture(prisma);
+    const { peDeal, vcDeal } = fixture;
+    const vcReportId = fixture.report.id;
+    const DEMO = { email: fixture.owner.email, password: fixture.password };
+
+    emptyUser = await prisma.user.create({
+      data: { email: `paid-e2e-empty-${stamp}@example.com`, name: "신규 사용자", passwordHash: await bcrypt.hash("Paid1234!Test", 4) },
+      select: { id: true, email: true },
+    });
+
+    browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH ?? "/opt/pw-browsers/chromium" });
+    const newLocalContext = async (options: BrowserContextOptions = {}) => {
+      const context = await browser!.newContext({ ...options, extraHTTPHeaders: { "x-forwarded-for": testIp } });
+      // Local test stubs only: no telemetry/paid SDK requests can leave the browser.
+      await context.route("**/*", route => new URL(route.request().url()).hostname === "localhost"
+        ? route.continue() : route.fulfill({ status: 204, body: "" }));
+      return context;
+    };
+    mkdirSync("screenshots/product-e2e", { recursive: true });
+    const consoleErrors: string[] = [];
+    const track = (page: Page) => {
+      page.on("console", (m) => {
+        if (m.type() === "error") consoleErrors.push(m.text().slice(0, 200));
+      });
+      page.on("pageerror", (e) => consoleErrors.push(`PAGEERROR: ${e.message.slice(0, 200)}`));
+    };
+
     // ── 1. 랜딩 (비로그인) ─────────────────────────────────────────
-    const anonCtx: BrowserContext = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const anonCtx: BrowserContext = await newLocalContext({ viewport: { width: 1440, height: 900 } });
     const anon = await anonCtx.newPage();
     track(anon);
     await anon.goto(`${BASE}/`, { waitUntil: "networkidle" });
     const landingText = await anon.innerText("body");
-    assert(landingText.includes("투자판단에 필요한 것부터 보세요."), "랜딩 헤드라인이 구매자가 얻는 것을 말한다");
+    assert((await anon.locator("#hero-title").innerText()).replace(/\s/g, "") === "투자의논지부터,판단의근거까지.", "랜딩 헤드라인이 논지와 근거의 연결을 명시한다");
     assert(!landingText.includes("Coming soon"), "'Coming soon' 표기가 없다");
     for (const banned of ["10분", "80%", "가장 많이 선택", "VCNote", "Skywork", "SOC 2 인증 완료"]) {
       assert(!landingText.includes(banned), `랜딩에 검증되지 않은 주장/경쟁사 지목이 없다: ${banned}`);
@@ -134,7 +142,7 @@ async function main() {
     await anonCtx.close();
 
     // ── 4. 신규(빈) 계정 — 온보딩 + 다른 사용자 데이터가 보이지 않는다 ──
-    const emptyCtx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const emptyCtx = await newLocalContext({ viewport: { width: 1440, height: 900 } });
     const empty = await emptyCtx.newPage();
     track(empty);
     await login(empty, emptyUser.email, "Paid1234!Test");
@@ -158,7 +166,7 @@ async function main() {
     await emptyCtx.close();
 
     // ── 5. demo 계정 ────────────────────────────────────────────────
-    const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const ctx = await newLocalContext({ viewport: { width: 1440, height: 900 } });
     const page = await ctx.newPage();
     track(page);
     await login(page, DEMO.email, DEMO.password);
@@ -226,8 +234,8 @@ async function main() {
     assert(exampleText.includes("차단 요인") && exampleText.includes("매출액 값 불일치"), "차단된 예시 딜이 목록에서 차단 요인과 다음 행동을 바로 보여준다");
     assert(!exampleText.includes("REVENUE"), "계정 코드가 한국어로 표시된다");
     const firstBlockedIdx = await peRows.evaluateAll((els) => els.findIndex((e) => e.textContent?.includes("차단 요인")));
-    const firstReadyIdx = await peRows.evaluateAll((els) => els.findIndex((e) => !e.textContent?.includes("차단 요인")));
-    assert(firstBlockedIdx === 0 && firstReadyIdx > firstBlockedIdx, "'검토 필요 순'에서 차단된 딜이 앞에 온다");
+    const firstWithoutBlockerIdx = await peRows.evaluateAll((els) => els.findIndex((e) => !e.textContent?.includes("차단 요인")));
+    assert(firstBlockedIdx === 0 && firstWithoutBlockerIdx > firstBlockedIdx, "'검토 필요 순'에서 차단된 딜이 앞에 온다");
     await exampleRow.getByRole("link", { name: /해당 탭 열기/ }).click();
     await page.waitForURL(new RegExp(`/ma-deals/${peDeal.id}\\?tab=financials`), { timeout: 60000 });
     await page.waitForSelector('[role="tab"]', { timeout: 60000 });
@@ -292,7 +300,7 @@ async function main() {
       ["PE 위원회 자료", `/ma-deals/${peDeal.id}?tab=committee-pack`, "auth"],
     ];
     for (const w of widths) {
-      const c = await browser.newContext({ viewport: { width: w, height: 900 } });
+      const c = await newLocalContext({ viewport: { width: w, height: 900 } });
       const p = await c.newPage();
       track(p);
       let loggedIn = false;
@@ -304,11 +312,12 @@ async function main() {
         await gotoApp(p, `${BASE}${path}`);
         await p.waitForTimeout(1500);
         assert(await noHorizontalOverflow(p), `${w}px · ${name}: 페이지 자체 가로 스크롤 없음`);
+        if (w === 390 || w === 1440) await p.screenshot({ path: `screenshots/product-e2e/${screens.findIndex(s => s[0] === name)}-${w}.png`, fullPage: true });
       }
       await c.close();
     }
     // 접근성 기본: 랜딩·요금의 이미지 대체텍스트/제목 위계
-    const a11yCtx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const a11yCtx = await newLocalContext({ viewport: { width: 1440, height: 900 } });
     const a11y = await a11yCtx.newPage();
     for (const path of ["/", "/pricing"]) {
       await gotoApp(a11y, `${BASE}${path}`);
@@ -319,13 +328,16 @@ async function main() {
 
     // ERR_TUNNEL_CONNECTION_FAILED: 샌드박스가 외부(Vercel Speed Insights 스크립트) 접속을 막아서 나는 환경 문제 — 다른 E2E도 같은 이유로 제외한다
     // CLIENT_FETCH_ERROR(Failed to fetch /api/auth/session): 테스트가 다음 화면으로 빠르게 이동하면서 진행 중이던 세션 조회가 취소될 때 next-auth가 남기는 로그다
-    const unexpected = consoleErrors.filter((e) => !/hydrat|favicon|ERR_TUNNEL_CONNECTION_FAILED|CLIENT_FETCH_ERROR|Failed to load resource.*(401|404)/i.test(e));
+    const unexpected = consoleErrors.filter((e) => !/favicon|ERR_TUNNEL_CONNECTION_FAILED|CLIENT_FETCH_ERROR|Failed to load resource.*(401|404)/i.test(e));
     assert(unexpected.length === 0, `콘솔 에러 없음(실제: ${JSON.stringify(unexpected.slice(0, 3))})`);
+    writeFileSync("screenshots/product-e2e/result.json", JSON.stringify({ assertions: pass, widths: [390, 430, 768, 1024, 1440], screens: 11, production: false }, null, 2));
     console.log(`\n${pass}개 통과`);
   } finally {
-    await browser.close();
-    await prisma.user.deleteMany({ where: { id: emptyUser.id } });
+    await browser?.close();
+    if (emptyUser) await prisma.user.deleteMany({ where: { id: emptyUser.id } });
     if (registeredEmails.length) await prisma.user.deleteMany({ where: { email: { in: registeredEmails } } });
+    await fixture?.cleanup();
+    await prisma.rateLimit.deleteMany({ where: { key: { in: [`login:${testIp}`, `register:${testIp}`] } } });
     await prisma.$disconnect();
   }
 }

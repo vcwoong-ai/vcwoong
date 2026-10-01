@@ -1,9 +1,11 @@
 import Link from "next/link";
+import styles from "./landing.module.css";
 import { BRAND } from "@/lib/brand";
 import { PLAN_LIMITS } from "@/lib/quotas";
 import { LandingAuthRedirect } from "@/components/landing-auth-redirect";
 import { LandingPricing } from "@/components/landing/landing-pricing";
 import { ProductPreview } from "@/components/landing/product-preview";
+import { EvidenceStoryboard, TrackVisual } from "@/components/landing/evidence-storyboard";
 import { ArrowRight, Briefcase, Building2, KeyRound, Lock, ShieldCheck, Users2 } from "lucide-react";
 
 /**
@@ -133,19 +135,19 @@ const FAQ = [
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen bg-background text-foreground selection:bg-primary selection:text-primary-foreground">
+    <div className={`${styles.landing} min-h-screen selection:bg-primary selection:text-primary-foreground`}>
       <LandingAuthRedirect />
 
       {/* Navigation */}
-      <nav className="fixed inset-x-0 top-0 z-50 border-b border-border bg-card/90 backdrop-blur" aria-label="주 메뉴">
+      <nav className={`${styles.nav} fixed inset-x-0 top-0 z-50`} aria-label="주 메뉴">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
           <Link href="/" className="flex items-center gap-2.5">
-            <span className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-xs font-bold text-primary-foreground">
+            <span className={styles.brandMark}>
               {BRAND.name.slice(0, 1)}
             </span>
-            <span className="text-base font-semibold tracking-tight">{BRAND.name}</span>
+            <span className="text-base font-semibold tracking-tight text-white">{BRAND.name}</span>
           </Link>
-          <div className="hidden items-center gap-8 text-sm text-muted-foreground md:flex">
+          <div className={styles.navLinks}>
             <a href="#evidence" className="transition-colors hover:text-foreground">근거 연결</a>
             <a href="#tracks" className="transition-colors hover:text-foreground">VC · PE/M&A</a>
             <a href="#pricing" className="transition-colors hover:text-foreground">가격</a>
@@ -153,12 +155,12 @@ export default function LandingPage() {
             <a href="#faq" className="transition-colors hover:text-foreground">FAQ</a>
           </div>
           <div className="flex items-center gap-3">
-            <Link href="/login" className="text-sm text-muted-foreground transition-colors hover:text-foreground">
+            <Link href="/login" className={styles.loginLink}>
               로그인
             </Link>
             <Link
               href="/register"
-              className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+              className={styles.navCta}
             >
               무료 시작
             </Link>
@@ -167,40 +169,45 @@ export default function LandingPage() {
       </nav>
 
       {/* Hero */}
-      <section className="px-6 pb-20 pt-32 md:pt-36" aria-labelledby="hero-title">
-        <div className="mx-auto grid max-w-6xl items-center gap-12 lg:grid-cols-[1fr_1.05fr]">
+      <section className={styles.hero} aria-labelledby="hero-title">
+        <div className={styles.heroGrid}>
           <div>
-            <p className="text-sm font-medium text-primary">VC · PE/M&A 투자검토 업무 공간</p>
+            <p className={styles.label}>INVESTMENT INTELLIGENCE / VC · PE</p>
             <h1
               id="hero-title"
               className="mt-4 text-4xl font-semibold leading-[1.15] tracking-tight md:text-5xl"
             >
-              투자판단에 필요한 것부터 보세요.
+              투자의 논지부터,<br /><span>판단의 근거까지.</span>
             </h1>
-            <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">
+            <p className={styles.heroCopy}>
               VC의 투자 논지부터 PE/M&A의 실사·재무·검토 이력까지, 근거와 미확인 사항을 하나의 업무 흐름으로 연결합니다.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
               <Link
                 href="/register"
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-6 py-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+                className={styles.primaryCta}
               >
                 무료로 시작하기
                 <ArrowRight className="h-4 w-4" aria-hidden="true" />
               </Link>
               <Link
                 href="/login"
-                className="inline-flex items-center justify-center rounded-lg border border-input bg-card px-6 py-3 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+                className={styles.secondaryCta}
               >
                 데모 계정으로 체험
               </Link>
             </div>
-            <p className="mt-4 text-sm text-muted-foreground">
+            <p className={styles.heroNote}>
               신용카드 없이 가입 · Free 플랜은 월 {PLAN_LIMITS.free.reports}건 VC 보고서 · PE/M&A 워크스페이스 이용 가능
             </p>
           </div>
           <ProductPreview />
         </div>
+        <ol className={styles.path} aria-label="투자 검토 흐름">
+          <li><span>01 /</span><div><strong>근거를 연결하고</strong><small>보고서의 숫자에서 출처와 원문까지</small></div></li>
+          <li><span>02 /</span><div><strong>판단의 빈틈을 확인하고</strong><small>상충하는 값과 미확인 정보를 구분</small></div></li>
+          <li><span>03 /</span><div><strong>다음 검토로 이어갑니다</strong><small>IC 질문, 위원회 자료와 검토 이력</small></div></li>
+        </ol>
       </section>
 
       {/* 근거 연결 */}
@@ -212,16 +219,21 @@ export default function LandingPage() {
           <p className="mt-3 max-w-2xl text-muted-foreground">
             보고서를 요약하는 데서 끝나지 않고, 각 판단이 무엇에 기대고 있는지 화면에서 바로 따라갈 수 있게 연결합니다.
           </p>
-          <ul className="mt-10 grid gap-x-10 gap-y-8 md:grid-cols-2 lg:grid-cols-3">
+          <EvidenceStoryboard />
+          <ul className={`${styles.evidenceDetails} mt-8 grid gap-x-10 md:grid-cols-2 lg:grid-cols-3`}>
             {CHAIN.map((item) => (
-              <li key={item.from} className="border-t border-border pt-4">
-                <p className="text-xs font-medium text-muted-foreground">{item.tracks}</p>
-                <p className="mt-1 text-base font-semibold text-foreground">
+              <li key={item.from}>
+                <details>
+                <summary>
+                  <span className="block text-[10px] font-medium text-muted-foreground">{item.tracks}</span>
+                  <span className="mt-1 block text-sm font-semibold text-foreground">
                   {item.from}
                   <span className="mx-2 text-primary" aria-label="에서 이어지는">→</span>
                   {item.to}
-                </p>
+                  </span>
+                </summary>
                 <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{item.body}</p>
+                </details>
               </li>
             ))}
           </ul>
@@ -239,6 +251,7 @@ export default function LandingPage() {
           </p>
           <div className="mt-10 grid gap-6 lg:grid-cols-2">
             <TrackCard
+              track="vc"
               icon={<Building2 className="h-5 w-5" aria-hidden="true" />}
               name="VC 심사역"
               href="/register?track=vc"
@@ -248,6 +261,7 @@ export default function LandingPage() {
               note={`섹터 전문 AI 6명(${AGENTS.map(([n]) => n).join(" · ")})이 섹터에 맞는 프레임워크로 초안을 씁니다. 회사 양식 재현은 Sector Pro 이상.`}
             />
             <TrackCard
+              track="pe"
               icon={<Briefcase className="h-5 w-5" aria-hidden="true" />}
               name="PE · M&A"
               href="/register?track=pe"
@@ -379,6 +393,7 @@ export default function LandingPage() {
 }
 
 function TrackCard({
+  track,
   icon,
   name,
   href,
@@ -387,6 +402,7 @@ function TrackCard({
   output,
   note,
 }: {
+  track: "vc" | "pe";
   icon: React.ReactNode;
   name: string;
   href: string;
@@ -401,6 +417,7 @@ function TrackCard({
         {icon}
         <h3 className="text-lg font-semibold text-foreground">{name}</h3>
       </div>
+      <TrackVisual track={track} />
       <p className="mt-5 text-xs font-medium text-muted-foreground">이런 질문에 답할 수 있게 정리합니다</p>
       <ul className="mt-2 space-y-1.5">
         {questions.map((q) => (

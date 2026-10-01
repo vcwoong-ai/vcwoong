@@ -316,7 +316,7 @@ export function MaDealDetailClient({
             </Badge>
             {maDeal.teamId && <Badge variant="secondary">팀 공유</Badge>}
           </div>
-          <h1 className="text-xl font-semibold text-gray-900">{maDeal.companyName}</h1>
+          <h1 className="mt-2 text-2xl sm:text-3xl font-semibold tracking-tight leading-snug text-foreground">{maDeal.companyName}</h1>
           <p className="text-sm text-gray-500">{maDeal.name}</p>
         </div>
         {canEdit && (
@@ -333,40 +333,40 @@ export function MaDealDetailClient({
          * 기존 문제"로 남겨뒀던 바로 그 오버플로). w-full을 모든 화면
          * 폭에서 유지해 탭 바 자기 자신만 가로 스크롤되게 고정한다 —
          * 페이지 자체는 넘치지 않는다. */}
-        <TabsList className="w-full overflow-x-auto justify-start">
-          <TabsTrigger value="overview" className="flex items-center gap-1.5">
+        <TabsList className="w-full overflow-x-auto justify-start rounded-none border-b border-border bg-transparent p-0 h-auto gap-1 pb-2">
+          <TabsTrigger value="overview" className="flex items-center gap-1.5 px-4 py-3 min-h-11">
             <Building2 className="w-3.5 h-3.5" />
             개요
           </TabsTrigger>
-          <TabsTrigger value="ic-review" className="flex items-center gap-1.5">
+          <TabsTrigger value="ic-review" className="flex items-center gap-1.5 px-4 py-3 min-h-11">
             <ClipboardList className="w-3.5 h-3.5" />
             IC 검토
           </TabsTrigger>
-          <TabsTrigger value="ic-decision" className="flex items-center gap-1.5">
+          <TabsTrigger value="ic-decision" className="flex items-center gap-1.5 px-4 py-3 min-h-11">
             <Gavel className="w-3.5 h-3.5" />
             IC 의사결정
           </TabsTrigger>
-          <TabsTrigger value="ic-review-workflow" className="flex items-center gap-1.5">
+          <TabsTrigger value="ic-review-workflow" className="flex items-center gap-1.5 px-4 py-3 min-h-11">
             <ListChecks className="w-3.5 h-3.5" />
             검토 Workflow
           </TabsTrigger>
-          <TabsTrigger value="committee-pack" className="flex items-center gap-1.5">
+          <TabsTrigger value="committee-pack" className="flex items-center gap-1.5 px-4 py-3 min-h-11">
             <Presentation className="w-3.5 h-3.5" />
             위원회 자료
           </TabsTrigger>
-          <TabsTrigger value="data-room" className="flex items-center gap-1.5">
+          <TabsTrigger value="data-room" className="flex items-center gap-1.5 px-4 py-3 min-h-11">
             <FolderOpen className="w-3.5 h-3.5" />
             데이터룸
           </TabsTrigger>
-          <TabsTrigger value="financials" className="flex items-center gap-1.5">
+          <TabsTrigger value="financials" className="flex items-center gap-1.5 px-4 py-3 min-h-11">
             <Calculator className="w-3.5 h-3.5" />
             재무 · QoE
           </TabsTrigger>
-          <TabsTrigger value="dart" className="flex items-center gap-1.5">
+          <TabsTrigger value="dart" className="flex items-center gap-1.5 px-4 py-3 min-h-11">
             <Landmark className="w-3.5 h-3.5" />
             DART
           </TabsTrigger>
-          <TabsTrigger value="lbo" className="flex items-center gap-1.5">
+          <TabsTrigger value="lbo" className="flex items-center gap-1.5 px-4 py-3 min-h-11">
             <TrendingUp className="w-3.5 h-3.5" />
             LBO 시뮬레이션
           </TabsTrigger>
@@ -429,6 +429,7 @@ export function MaDealDetailClient({
 
         <TabsContent value="data-room" className="space-y-4">
           <MaDealDataRoom
+            dealId={maDeal.id}
             documents={documents}
             evidence={evidence}
             findings={findings}

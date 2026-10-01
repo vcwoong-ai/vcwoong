@@ -29,6 +29,7 @@ export default async function CommitteePackPrintPage({ params }: { params: { id:
       companyName={maDeal.companyName}
       dealName={maDeal.name}
       generatedAt={pack.generatedAt}
+      generatedAtLabel={new Date(pack.generatedAt).toLocaleString("ko-KR")}
       markdown={markdown}
       maDealId={maDeal.id}
     />

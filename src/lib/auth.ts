@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { UserRole } from "@prisma/client";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { findLoginEmailCandidates } from "@/lib/login-email";
 
 /** NextAuth가 authorize에 넘겨주는 요청에서 클라이언트 IP를 추정한다 */
 function ipFromAuthRequest(headers?: Record<string, unknown>): string {
@@ -48,9 +49,12 @@ export const authOptions: NextAuthOptions = {
           );
         }
 
-        const user = await prisma.user.findUnique({
-          where: { email: credentials.email },
-        });
+        const candidates = await findLoginEmailCandidates(credentials.email);
+        // Existing case-colliding identities need manual review, never automatic account selection.
+        if (candidates.length !== 1) {
+          throw new Error("이메일 또는 비밀번호가 올바르지 않습니다.");
+        }
+        const user = await prisma.user.findUnique({ where: { id: candidates[0].id } });
 
         if (!user || !user.passwordHash) {
           throw new Error("이메일 또는 비밀번호가 올바르지 않습니다.");

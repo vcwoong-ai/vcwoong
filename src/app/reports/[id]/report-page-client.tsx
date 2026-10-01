@@ -565,8 +565,9 @@ export function ReportPageClient({
       </div>
 
       {report.sections.length > 0 && (
-        <Card className="p-5 sm:p-6">
+        <Card className="p-4 sm:p-7">
           <DecisionWorkspace
+            key={report.id}
             reportId={report.id}
             dealId={report.deal.id}
             canEdit={canEdit}

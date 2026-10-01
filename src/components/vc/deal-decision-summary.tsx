@@ -125,7 +125,7 @@ export function DealDecisionSummary({ reportId }: { reportId: string | null }) {
       <dl className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-sm">
         <div className="flex gap-1.5"><dt className="text-slate-500">결정 차단(P0)</dt><dd className="font-semibold tabular-nums text-slate-900">{p0}건</dd></div>
         <div className="flex gap-1.5"><dt className="text-slate-500">수치 상충</dt><dd className="font-semibold tabular-nums text-slate-900">{decision.contradictions.length}건</dd></div>
-        <div className="flex gap-1.5"><dt className="text-slate-500">Thesis Breaker</dt><dd className="font-semibold tabular-nums text-slate-900">{decision.thesisBreakers.length}건</dd></div>
+        <div className="flex gap-1.5"><dt className="text-slate-500">논지 훼손 요인</dt><dd className="font-semibold tabular-nums text-slate-900">{decision.thesisBreakers.length}건</dd></div>
       </dl>
 
       {topContradictions.length > 0 && (

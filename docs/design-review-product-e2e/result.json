@@ -1,0 +1,12 @@
+{
+  "assertions": 134,
+  "widths": [
+    390,
+    430,
+    768,
+    1024,
+    1440
+  ],
+  "screens": 11,
+  "production": false
+}

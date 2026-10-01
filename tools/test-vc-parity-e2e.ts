@@ -175,7 +175,7 @@ async function main() {
   const emptyDeal = await prisma.deal.create({ data: { name: `PARITY empty ${tag}`, companyName: "PARITY-empty", sector: "IT", stage: "SCREENING", userId: demo!.id, teamId: demo!.teamId } });
   const emptyReport = await prisma.report.create({ data: { dealId: emptyDeal.id, title: "빈 보고서", agentType: "IT", status: "PENDING" } });
 
-  const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
+  const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH ?? "/opt/pw-browsers/chromium" });
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   const page = await ctx.newPage();
   const req: APIRequestContext = ctx.request;

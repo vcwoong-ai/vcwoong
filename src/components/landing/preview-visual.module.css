@@ -1,0 +1,20 @@
+.company { display:flex; gap:12px; align-items:center; }
+.companyIcon { display:flex; align-items:center; justify-content:center; width:44px; height:44px; flex-shrink:0; border:1px solid #c5d7eb; border-radius:12px; background:linear-gradient(145deg,#e7f0fa,#cfdeef); color:#285983; font-family:Georgia,serif; font-size:25px; }
+.peIcon { border-color:#ceded1; background:linear-gradient(145deg,#edf4ef,#d9e8de); color:#476c57; }
+.sourcePair { position:relative; display:grid; grid-template-columns:1fr 1fr; gap:30px; padding:20px 16px; background:linear-gradient(110deg,#f2f6fa,#fff8f5); }
+.sourcePair > div { min-width:0; }
+.sourcePair dt { display:flex; align-items:center; gap:6px; color:#52667b; font-size:10px; line-height:1.5; }
+.sourcePair dt svg { flex-shrink:0; color:#6b8daf; }
+.sourcePair dt span { overflow-wrap:anywhere; }
+.sourcePair dd { margin-top:10px; }
+.sourcePeriod { display:block; color:#68798a; font-size:9px; letter-spacing:.04em; }
+.sourcePair strong { display:block; margin-top:3px; color:#213d5a; font-size:34px; font-weight:650; letter-spacing:-.04em; line-height:1.25; font-variant-numeric:tabular-nums; }
+.sourcePair strong span { margin-left:4px; font-size:12px; font-weight:500; letter-spacing:0; }
+.sourcePair > div:last-child strong { color:#9d503f; }
+.compareIcon { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); color:#a6b3c1; }
+.sourceBar { height:5px; background:#e3eaf2; margin-top:12px; border-radius:3px; }
+.sourceBar i { display:block; width:86.36%; height:100%; background:#4879a4; border-radius:3px; }
+.auditBar { background:#f0e4df; }
+.auditBar i { width:100%; background:#bc7963; }
+.peSources { border:1px solid #dce4eb; border-radius:10px; }
+@media(max-width:420px) { .sourcePair { padding:16px 12px; gap:24px; } .sourcePair strong { font-size:29px; } .peSources strong { font-size:24px; } .sourcePair dt { font-size:9px; } }

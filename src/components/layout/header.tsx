@@ -19,9 +19,10 @@ interface HeaderProps {
   title?: string;
   /** 모바일 햄버거 버튼 (lg 미만에서만 노출) */
   onMenuClick?: () => void;
+  menuOpen?: boolean;
 }
 
-export function Header({ title, onMenuClick }: HeaderProps) {
+export function Header({ title, onMenuClick, menuOpen = false }: HeaderProps) {
   const { data: session } = useSession();
 
   const initials = session?.user?.name
@@ -55,6 +56,9 @@ export function Header({ title, onMenuClick }: HeaderProps) {
           size="icon"
           className="lg:hidden flex-shrink-0"
           onClick={onMenuClick}
+          id="workspace-menu-trigger"
+          aria-expanded={menuOpen}
+          aria-controls={menuOpen ? "workspace-mobile-menu" : undefined}
           aria-label="메뉴 열기"
         >
           <Menu className="w-5 h-5" />
