@@ -6,7 +6,7 @@ import { checkRateLimit, clientIp, RATE_LIMITS } from "@/lib/rate-limit";
 
 const registerSchema = z.object({
   name: z.string().min(2, "이름은 2자 이상이어야 합니다"),
-  email: z.string().email("유효한 이메일을 입력해주세요"),
+  email: z.string().trim().email("유효한 이메일을 입력해주세요"),
   password: z
     .string()
     .min(8, "비밀번호는 8자 이상이어야 합니다")
@@ -35,8 +35,11 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validated = registerSchema.parse(body);
 
-    const existing = await prisma.user.findUnique({
-      where: { email: validated.email },
+    // 새 계정은 소문자로 저장한다. 중복 검사는 기존(대소문자 혼합) 계정도 함께 본다.
+    const email = validated.email.toLowerCase();
+    const existing = await prisma.user.findFirst({
+      where: { OR: [{ email }, { email: validated.email }] },
+      select: { id: true },
     });
 
     if (existing) {
@@ -51,7 +54,7 @@ export async function POST(request: NextRequest) {
     const user = await prisma.user.create({
       data: {
         name: validated.name,
-        email: validated.email,
+        email,
         passwordHash,
       },
       select: {

@@ -50,9 +50,11 @@ export const authOptions: NextAuthOptions = {
           );
         }
 
-        const user = await prisma.user.findUnique({
-          where: { email: normalizedEmail },
-        });
+        // 가입 시 소문자 정규화가 없던 시절의 계정(대소문자 혼합 이메일)도 로그인되어야 한다.
+        // 정규화한 값을 먼저 찾고, 없으면 입력 그대로(공백만 제거)로 한 번 더 찾는다.
+        const user =
+          (await prisma.user.findUnique({ where: { email: normalizedEmail } })) ??
+          (await prisma.user.findUnique({ where: { email: credentials.email.trim() } }));
 
         if (!user || !user.passwordHash) {
           throw new Error("이메일 또는 비밀번호가 올바르지 않습니다.");
