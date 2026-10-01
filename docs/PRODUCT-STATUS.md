@@ -3,6 +3,50 @@
 5축 차별화 기준으로 현재 무엇이 동작하고 무엇이 남았는지 정리한 문서입니다.
 다른 환경(예: Claude)에서 작업한 내용과 병합할 때 기준점으로 사용하세요.
 
+## 2026-10-01 — 로컬 서버 복구·최종 메인페이지 E2E
+
+- 사용자 터미널에서 npm.cmd로 loopback 로컬 서버 실행. PowerShell npm.ps1 execution policy 오류였으며
+  정책 변경 없이 실행했다. 127.0.0.1:3000 HTTP 200/새 디자인과 Codex 브라우저 화면을 확인했다.
+- 최종 local production build에서 landing visual E2E 1440/390 PASS(exit 0), 최종 tsc/lint PASS.
+  처음에는 Vercel 전용 Speed Insights script의 로컬 404로 FAIL. 명시적 계측 stub과 실패 URL 진단을 추가 후 재실행 PASS.
+  앱 404/console/hydration assertion 삭제·약화 없음. 실제 계측은 NOT VERIFIED.
+- 사용자 서버/브라우저 검토 탭을 유지한다. 이전 서버 차단은 해소됐으며 npm.cmd를 사용한다.
+  앱/엔진/권한/결제/DB/env/schema 수정 및 운영 배포 없음. 로그인/운영 검증을 이 결과로 대체하지 않는다.
+  tools/docs/캡처만 수정해 앱 build/test:all/전체 제품 E2E를 재실행하지 않았다.
+
+## 2026-10-01 — 디자인 방향 승인·통합 준비
+
+- 사용자 “굿 그대로 진행하자”를 메인페이지 시각 구성 방향 승인으로 기록했다. main 병합/운영 배포 승인으로 확대하지 않았다.
+- main `b919e5d` 유지, #119–#125 OPEN/Draft/MERGEABLE. 실제 각 head의 CI check/Vercel 체크 SUCCESS 확인.
+  #125 확인 기준은 `ed654e2`; 이후 문서 head의 CI PASS로 복사하지 않는다.
+- 실제 #121 diff와 #123 변경 파일을 대조했다. auth/register 두 파일 중복이며 #123을 통합할 때 #121 독립 적용을 피해야 한다.
+  Claude branch/PR 닫기·수정 없음. 순서와 필요한 새 main 검증은 `INTEGRATION-READINESS.md`.
+- 로컬 SQLite/localhost 및 loopback 한정 npm start 모두 자동 승인 검토에서 차단(구체적 이유 미제공).
+  현재 서버 종료 상태, 최종 build 브라우저 재검증 NOT VERIFIED. 새 실행 경로로 우회하지 않았다.
+- 이번 턴 앱 코드/엔진/권한/결제/DB/env/schema 변경 및 test 재실행 없음. 문서 기록만 수정한다.
+  로컬 서버 실행 승인/차단 해소 및 명시적 병합 지시는 남아 있다.
+
+## 2026-10-01 — 메인페이지 시각 구성
+
+- 새 branch `codex/landing-visual-story`, 기준 HEAD `5917ac7` (#124), clean working tree에서 시작.
+  main `b919e5d`와 기존 #119–#124 OPEN/Draft를 확인·보존했다. Claude #121/auth 파일 수정 없음.
+- Hero의 VC/PE 수치 상충을 큰 수치/비교 막대로, 근거 연결을 문서 → 상충 대조 → IC 질문으로 표시.
+  기존 여섯 설명은 키보드로 펼치며 VC/PE 트랙에는 업무 흐름을 추가했다. 합성 예시 표시 유지.
+  `page.tsx`/landing 전용 CSS/preview/새 시각 component만 UI 수정. 공통 앱 스타일이나 canonical/API 변경 없음.
+  요금·정책·권한·인증·결제·DB/schema/운영 env 변경 없음.
+- PASS: `npm run test:landing-visual-e2e` (localhost:3001 dev, 1440/390),
+  VC contradiction decision 15개, PE blocker display 14개, PE overview readiness,
+  `npx tsc --noEmit`, `npm run lint`, `npm run build` exit 0, `git diff --check`.
+  새 도구의 초기 Before는 공개 랜딩에 없는 app-ready marker를 기다려 timeout(도구 오류).
+  실제 탭 전환으로 hydration을 확인하도록 수정했고 After 재실행 PASS.
+  Before는 직전 전체 제품 E2E 캡처에서 보존했다. `design-review-landing-visual/README.md` 참조.
+- build 전 로컬 서버를 정상 종료했다. build 후 `npm run start`가 실행 정책에서 차단되어
+  최종 production build 브라우저 E2E/로컬 재시작은 NOT VERIFIED. 현재 localhost 서버 종료 상태.
+  다른 실행 경로로 우회하지 않았다. dev에서 실제 화면을 캡처했고 운영 배포는 하지 않았다.
+- 이번 test:all/전체 제품 E2E 재실행 및 운영/클라우드 최신 반영/운영 인증은 NOT VERIFIED.
+  스타일은 랜딩 전용, VC/PE canonical shared regression PASS. 새 AI/유료 외부 호출 없음.
+  후속 Draft PR까지만 진행한다. READY FOR DESIGN REVIEW (저장된 캡처 기준).
+
 ## 2026-10-01 — 전체 제품 E2E fixture 보강
 
 - 새 브랜치 `codex/product-e2e-fixtures`, 기준 HEAD `3ad2c3b30825094976463600c21f20ef96697ba8` (#123).

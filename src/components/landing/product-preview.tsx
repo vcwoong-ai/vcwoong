@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, ArrowRight } from "lucide-react";
+import { AlertTriangle, ArrowRight, FileText, GitCompareArrows } from "lucide-react";
+import styles from "./preview-visual.module.css";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { cn } from "@/lib/utils";
 
@@ -66,11 +67,14 @@ export function ProductPreview() {
 function VcExample() {
   return (
     <div className="space-y-4 p-5" data-testid="landing-preview-vc">
-      <div>
+      <div className={styles.company}>
+        <span className={styles.companyIcon} aria-hidden="true">B</span>
+        <div>
         <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Investment Decision</p>
         <p className="mt-1 text-base font-semibold text-foreground">
           예시바이오 <span className="text-sm font-normal text-muted-foreground">바이오 · Series B</span>
         </p>
+        </div>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xl font-semibold text-state-caution">CAUTION</span>
@@ -87,28 +91,19 @@ function VcExample() {
           <AlertTriangle className="h-3.5 w-3.5 text-state-critical" aria-hidden="true" />
           <p className="text-sm font-semibold text-foreground">2024년 매출 — 2개 값 상충</p>
         </div>
-        <table className="w-full text-sm">
-          <caption className="sr-only">예시: 2024년 매출 상충 값 비교</caption>
-          <thead>
-            <tr className="border-b border-border text-left text-xs text-muted-foreground">
-              <th scope="col" className="px-3 py-1.5 font-medium">출처</th>
-              <th scope="col" className="px-3 py-1.5 text-right font-medium">값</th>
-              <th scope="col" className="px-3 py-1.5 font-medium">기간</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr className="border-b border-border">
-              <th scope="row" className="px-3 py-2 text-left font-medium text-foreground">IR_Deck_예시.pdf</th>
-              <td className="px-3 py-2 text-right font-semibold tabular-nums text-foreground">95억원</td>
-              <td className="px-3 py-2 text-muted-foreground">FY2024</td>
-            </tr>
-            <tr>
-              <th scope="row" className="px-3 py-2 text-left font-medium text-foreground">재무제표_예시.pdf</th>
-              <td className="px-3 py-2 text-right font-semibold tabular-nums text-foreground">110억원</td>
-              <td className="px-3 py-2 text-muted-foreground">FY2024</td>
-            </tr>
-          </tbody>
-        </table>
+        <dl className={styles.sourcePair} aria-label="예시: 2024년 매출 상충 값 비교">
+          <div>
+            <dt><FileText size={16} aria-hidden="true" /><span>IR_Deck_예시.pdf</span></dt>
+            <dd><span className={styles.sourcePeriod}>FY2024 · KRW</span><strong>95<span>억원</span></strong></dd>
+            <div className={styles.sourceBar} aria-hidden="true"><i /></div>
+          </div>
+          <GitCompareArrows className={styles.compareIcon} size={22} aria-hidden="true" />
+          <div>
+            <dt><FileText size={16} aria-hidden="true" /><span>재무제표_예시.pdf</span></dt>
+            <dd><span className={styles.sourcePeriod}>FY2024 · KRW</span><strong>110<span>억원</span></strong></dd>
+            <div className={`${styles.sourceBar} ${styles.auditBar}`} aria-hidden="true"><i /></div>
+          </div>
+        </dl>
         <p className="flex items-center gap-1 border-t border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
           어느 값이 맞는지는 시스템이 고르지 않습니다 — 원문 발췌를 열어 대조합니다.
           <ArrowRight className="h-3 w-3 shrink-0" aria-hidden="true" />
@@ -129,15 +124,24 @@ function PeExample() {
   return (
     <div className="space-y-4 p-5" data-testid="landing-preview-pe">
       <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
+        <div className={styles.company}>
+          <span className={`${styles.companyIcon} ${styles.peIcon}`} aria-hidden="true">P</span>
+          <div>
           <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">검토 상황</p>
           <p className="mt-1 text-base font-semibold text-foreground">
             예시정밀 <span className="text-sm font-normal text-muted-foreground">바이아웃 · 재무 기준 FY2024</span>
           </p>
+          </div>
         </div>
         <StatusBadge tone="critical">차단됨(모순 확인 필요)</StatusBadge>
       </div>
       <p className="text-sm leading-relaxed text-foreground">3건의 데이터 모순으로 분석 신뢰도가 확보되지 않았습니다.</p>
+
+      <dl className={`${styles.sourcePair} ${styles.peSources}`} aria-label="예시: 같은 기간의 PE 매출 상충">
+        <div><dt>경영진 제공</dt><dd><span className={styles.sourcePeriod}>FY2024 · KRW</span><strong>1,200<span>억원</span></strong></dd></div>
+        <GitCompareArrows className={styles.compareIcon} size={22} aria-hidden="true" />
+        <div><dt>DART</dt><dd><span className={styles.sourcePeriod}>FY2024 · KRW</span><strong>1,180<span>억원</span></strong></dd></div>
+      </dl>
 
       <div className="rounded-md border border-border">
         <p className="border-b border-border px-3 py-2 text-sm font-semibold text-state-critical">차단 요인 — 값을 임의로 선택하지 않았습니다</p>

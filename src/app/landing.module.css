@@ -31,6 +31,11 @@
 .path strong { color:#edf3fa; font-size:14px; font-weight:650; }
 .path small { display:block; color:#8fa1b5; font-size:12px; line-height:1.7; margin-top:5px; }
 .landing section[id] { scroll-margin-top:90px; }
+.evidenceDetails details { border-top:1px solid #dce2e8; padding:18px 0; }
+.evidenceDetails summary { position:relative; padding-right:20px; cursor:pointer; list-style:none; }
+.evidenceDetails summary::-webkit-details-marker { display:none; }
+.evidenceDetails summary::after { content:"+"; position:absolute; right:0; top:14px; color:#52667b; font-size:18px; }
+.evidenceDetails details[open] summary::after { content:"−"; }
 .landing :is(a,button,summary):focus-visible { outline:2px solid #e5b05f; outline-offset:4px; }
 @media(min-width:768px) { .navLinks { display:flex; } }
 @media(max-width:1023px) { .heroGrid { grid-template-columns:1fr; gap:46px; max-width:760px; } .hero { padding-top:120px; } .hero h1 { max-width:680px; } }
