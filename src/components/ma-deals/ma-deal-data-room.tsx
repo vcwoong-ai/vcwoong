@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -35,12 +35,14 @@ function formatBytes(size: number): string {
  * 생성/finding 생성 UI는 이번 PR 범위 밖이다.
  */
 export function MaDealDataRoom({
+  dealId,
   documents,
   evidence,
   findings,
   evidenceRequests,
   loading,
 }: {
+  dealId: string;
   documents: DataRoomDocumentRow[];
   evidence: DataRoomEvidenceRow[];
   findings: DataRoomFindingRow[];
@@ -49,6 +51,7 @@ export function MaDealDataRoom({
 }) {
   const [typeFilter, setTypeFilter] = useState<string>("ALL");
   const [selected, setSelected] = useState<DataRoomDocumentView | null>(null);
+  const opener = useRef<HTMLButtonElement | null>(null);
 
   const viewModel = useMemo(() => buildPEDataRoomViewModel(documents, evidence, findings), [documents, evidence, findings]);
 
@@ -126,13 +129,12 @@ export function MaDealDataRoom({
                   {filteredDocuments.map((doc) => (
                     <tr
                       key={doc.id}
-                      className="border-b last:border-0 hover:bg-gray-50 cursor-pointer"
-                      onClick={() => setSelected(doc)}
+                      className="border-b last:border-0 hover:bg-gray-50"
                     >
                       <td className="px-4 py-2.5">
                         <div className="flex items-center gap-2 min-w-0">
                           <FileText className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                          <span className="truncate">{doc.name}</span>
+                          <button type="button" onClick={(event) => { opener.current = event.currentTarget; setSelected(doc); }} className="text-left font-medium text-primary underline-offset-2 hover:underline focus-visible:underline">{doc.name}</button>
                         </div>
                       </td>
                       <td className="px-4 py-2.5">
@@ -163,6 +165,8 @@ export function MaDealDataRoom({
       )}
 
       <MaDealDocumentDetailDialog
+        dealId={dealId}
+        returnFocusRef={opener}
         document={selected}
         linkedEvidenceRequests={selected ? evidenceRequests.filter((r) => r.linkedDocumentId === selected.id) : []}
         onOpenChange={(open) => !open && setSelected(null)}

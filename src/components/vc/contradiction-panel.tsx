@@ -62,9 +62,9 @@ export function ContradictionPanel({
                       {v.documentName ?? <span className="font-normal text-slate-500">출처 미표기</span>}
                     </th>
                     <td className="px-3.5 py-2 text-right font-semibold tabular-nums text-slate-900">{v.raw}</td>
-                    <td className="px-3.5 py-2 text-slate-700">{v.period === "UNSPECIFIED" ? "명시 없음" : v.period}</td>
-                    <td className="px-3.5 py-2 text-slate-700">{SCENARIO_LABEL[v.scenario]}</td>
-                    <td className="px-3.5 py-2 text-slate-600">{v.location ?? "-"}</td>
+                    <td data-label="기간" className="px-3.5 py-2 text-slate-700">{v.period === "UNSPECIFIED" ? "명시 없음" : v.period}</td>
+                    <td data-label="구분" className="px-3.5 py-2 text-slate-700">{SCENARIO_LABEL[v.scenario]}</td>
+                    <td data-label="위치" className="px-3.5 py-2 text-slate-600">{v.location ?? "위치 정보 없음"}</td>
                     {onOpenEvidence && (
                       <td className="px-3.5 py-2 text-right">
                         <button
@@ -75,6 +75,7 @@ export function ContradictionPanel({
                           onClick={() =>
                             onOpenEvidence({
                               heading: `${c.metricLabel} — 수치 상충`,
+                              evidenceState: "CONTRADICTED",
                               activeIndex: i,
                               entries: c.values.map((x) => ({
                                 raw: x.raw,

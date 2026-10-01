@@ -2,8 +2,10 @@
 
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { FileText, X } from "lucide-react";
-import { useEffect, useState, type MutableRefObject } from "react";
+import { useEffect, useId, useState, type MutableRefObject } from "react";
 import { cn } from "@/lib/utils";
+import type { VCEvidenceState } from "@/lib/vc-decision-types";
+import { EvidenceStateBadge } from "./evidence-state";
 
 const SCENARIO_LABEL = { ACTUAL: "실적", FORECAST: "추정", UNSPECIFIED: "명시 없음" } as const;
 
@@ -21,6 +23,7 @@ export interface EvidenceEntry {
 }
 
 export interface EvidenceTarget {
+  evidenceState?: VCEvidenceState;
   /** 무엇에 대한 근거인가(예: "2024년 매출 — 수치 상충") */
   heading: string;
   /** 처음 열 값의 위치 */
@@ -48,6 +51,7 @@ export function EvidencePanel({
   returnFocusRef?: MutableRefObject<HTMLElement | null>;
 }) {
   const [index, setIndex] = useState(0);
+  const panelId = useId();
   useEffect(() => {
     if (target) setIndex(target.activeIndex);
   }, [target]);
@@ -72,7 +76,7 @@ export function EvidencePanel({
             // 모바일: 아래 드로어
             "inset-x-0 bottom-0 max-h-[85dvh] rounded-t-xl border-t border-border",
             // 데스크톱: 오른쪽 패널
-            "md:inset-y-0 md:right-0 md:left-auto md:bottom-auto md:max-h-none md:w-[440px] md:rounded-none md:border-l md:border-t-0"
+            "md:inset-y-0 md:right-0 md:left-auto md:bottom-auto md:max-h-none md:w-[520px] md:rounded-none md:border-l md:border-t-0"
           )}
         >
           <header className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">
@@ -90,7 +94,11 @@ export function EvidencePanel({
             </DialogPrimitive.Close>
           </header>
 
-          <div className="flex-1 space-y-5 overflow-y-auto px-5 py-4">
+          <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4 [overflow-wrap:anywhere]">
+            <div className="space-y-2 border-b border-border pb-4">
+              {target?.evidenceState && <EvidenceStateBadge state={target.evidenceState} />}
+              <p className="text-sm leading-relaxed text-muted-foreground">문서에 같은 값이 있다는 사실과 투자 논지의 검증 완료는 다릅니다. 저장된 발췌와 위치를 확인하십시오.</p>
+            </div>
             {target && target.entries.length > 1 && (
               <div role="tablist" aria-label="상충하는 값" className="flex flex-wrap gap-2">
                 {target.entries.map((e, i) => (
@@ -98,8 +106,19 @@ export function EvidencePanel({
                     key={`${e.raw}-${i}`}
                     role="tab"
                     type="button"
+                    id={`${panelId}-tab-${i}`}
+                    aria-controls={`${panelId}-entry`}
                     aria-selected={i === index}
+                    tabIndex={i === index ? 0 : -1}
                     onClick={() => setIndex(i)}
+                    onKeyDown={(event) => {
+                      const count = target.entries.length;
+                      const next = event.key === "ArrowRight" ? (i + 1) % count : event.key === "ArrowLeft" ? (i + count - 1) % count : event.key === "Home" ? 0 : event.key === "End" ? count - 1 : null;
+                      if (next === null) return;
+                      event.preventDefault();
+                      setIndex(next);
+                      document.getElementById(`${panelId}-tab-${next}`)?.focus();
+                    }}
                     className={cn(
                       "rounded-md border px-2.5 py-1.5 text-left text-xs transition-colors",
                       i === index
@@ -108,16 +127,16 @@ export function EvidencePanel({
                     )}
                   >
                     <span className="block font-semibold tabular-nums">{e.raw}</span>
-                    <span className="block max-w-[10rem] truncate">{e.documentName ?? "출처 미표기"}</span>
+                    <span className="block max-w-[13rem] break-words">{e.documentName ?? "출처 미표기"}</span>
                   </button>
                 ))}
               </div>
             )}
 
             {entry && (
-              <section aria-label="선택한 값" data-testid="vc-evidence-entry">
+              <section id={`${panelId}-entry`} role={target && target.entries.length > 1 ? "tabpanel" : undefined} aria-labelledby={target && target.entries.length > 1 ? `${panelId}-tab-${index}` : undefined} aria-label="선택한 값" data-testid="vc-evidence-entry">
                 <p className="text-2xl font-semibold tabular-nums text-foreground">{entry.raw}</p>
-                <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
+                <dl className="mt-3 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1.5 text-sm">
                   <dt className="text-muted-foreground">문서</dt>
                   <dd className="text-foreground">{entry.documentName ?? "출처 미표기"}</dd>
                   <dt className="text-muted-foreground">위치</dt>
@@ -163,9 +182,9 @@ export function EvidencePanel({
                 <h3 className="text-xs font-semibold text-muted-foreground">모든 값 나란히 보기</h3>
                 <ul className="mt-1.5 divide-y divide-border rounded-md border border-border text-sm">
                   {target.entries.map((e, i) => (
-                    <li key={`${e.raw}-${i}`} className="flex items-baseline justify-between gap-3 px-3 py-2">
-                      <span className="min-w-0 truncate text-muted-foreground">{e.documentName ?? "출처 미표기"}</span>
-                      <span className="shrink-0 font-semibold tabular-nums text-foreground">
+                    <li key={`${e.raw}-${i}`} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-baseline gap-3 px-3 py-3">
+                      <span className="min-w-0 break-words text-muted-foreground">{e.documentName ?? "출처 미표기"}</span>
+                      <span className="font-semibold tabular-nums text-foreground">
                         {e.raw}
                         <span className="ml-1.5 text-xs font-normal text-muted-foreground">
                           {e.period && e.period !== "UNSPECIFIED" ? e.period : ""}

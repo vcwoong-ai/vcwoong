@@ -26,6 +26,16 @@ export function ProductPreview() {
             role="tab"
             type="button"
             aria-selected={track === key}
+            tabIndex={track === key ? 0 : -1}
+            id={`preview-tab-${key}`}
+            aria-controls="preview-panel"
+            onKeyDown={(event) => {
+              if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+              event.preventDefault();
+              const next = event.key === "Home" ? "vc" : event.key === "End" ? "pe" : track === "vc" ? "pe" : "vc";
+              setTrack(next);
+              document.getElementById(`preview-tab-${next}`)?.focus();
+            }}
             onClick={() => setTrack(key)}
             className={cn(
               "rounded-md px-3.5 py-1.5 font-medium transition-colors",
@@ -37,7 +47,7 @@ export function ProductPreview() {
         ))}
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-border bg-card shadow-[0_1px_2px_rgba(23,33,47,0.06),0_12px_32px_-12px_rgba(23,33,47,0.18)]">
+      <div id="preview-panel" role="tabpanel" aria-labelledby={`preview-tab-${track}`} className="rounded-xl border border-border bg-card shadow-[0_1px_2px_rgba(23,33,47,0.06),0_12px_32px_-12px_rgba(23,33,47,0.18)]">
         <div className="flex items-center justify-between gap-3 border-b border-border bg-muted/60 px-4 py-2 text-xs text-muted-foreground">
           <span>{track === "vc" ? "보고서 · 결정 화면" : "PE/M&A 딜 · 개요"}</span>
           <span className="rounded border border-state-caution-line bg-state-caution-bg px-1.5 py-0.5 font-medium text-state-caution">
@@ -47,7 +57,7 @@ export function ProductPreview() {
         {track === "vc" ? <VcExample /> : <PeExample />}
       </div>
       <figcaption className="mt-3 text-xs text-muted-foreground">
-        실제 화면과 같은 구성입니다. 회사·수치·문서명은 설명을 위해 만든 예시이며, 실제 고객 데이터가 아닙니다.
+        검토 흐름을 축약한 미리보기입니다. 회사·수치·문서명은 설명용 예시이며 실제 고객 데이터가 아닙니다.
       </figcaption>
     </figure>
   );

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import styles from "@/components/ui/investment-workspace.module.css";
 import { ArrowRight, FileQuestion } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -148,15 +149,15 @@ function QueueCard({
   children: React.ReactNode[];
 }) {
   return (
-    <Card className="p-5" data-testid={testId}>
-      <div className="flex items-baseline justify-between gap-3">
+    <Card className={styles.queue} data-testid={testId}>
+      <div className={styles.queueHeading}>
         <h2 className="text-base font-semibold text-foreground">{title}</h2>
         <Link href={href} className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
           전체 {total}건 <ArrowRight className="h-3 w-3" aria-hidden="true" />
         </Link>
       </div>
       {children.length === 0 ? (
-        <p className="mt-4 text-sm text-muted-foreground">{emptyText}</p>
+        <div className={styles.empty}><p className="text-sm text-muted-foreground">{emptyText}</p><Link href={href} className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-primary">첫 검토 준비하기 <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link></div>
       ) : (
         <ul className="mt-2 divide-y divide-border">{children}</ul>
       )}

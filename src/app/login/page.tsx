@@ -15,7 +15,7 @@ import Link from "next/link";
 import { BRAND } from "@/lib/brand";
 
 const loginSchema = z.object({
-  email: z.string().email("유효한 이메일을 입력해주세요"),
+  email: z.string().trim().email("유효한 이메일을 입력해주세요"),
   password: z.string().min(1, "비밀번호를 입력해주세요"),
 });
 
@@ -32,23 +32,33 @@ export default function LoginPage() {
     formState: { errors },
   } = useForm<LoginForm>({ resolver: zodResolver(loginSchema) });
 
-  const onSubmit = async (data: LoginForm) => {
+  const performSignIn = async (email: string, password: string) => {
     setLoading(true);
     setError(null);
 
-    const result = await signIn("credentials", {
-      email: data.email,
-      password: data.password,
-      redirect: false,
-    });
+    try {
+      const result = await signIn("credentials", {
+        email: email.trim(),
+        password,
+        redirect: false,
+      });
 
-    if (result?.error) {
-      setError("이메일 또는 비밀번호가 올바르지 않습니다.");
-      setLoading(false);
-    } else {
+      if (result?.error) {
+        setError("로그인에 실패했습니다. 계정 정보를 확인하고 잠시 후 다시 시도해 주세요.");
+        return;
+      }
+
       router.push("/dashboard");
       router.refresh();
+    } catch {
+      setError("서버 연결이 잠시 불안정합니다. 잠시 후 다시 시도해 주세요.");
+    } finally {
+      setLoading(false);
     }
+  };
+
+  const onSubmit = async (data: LoginForm) => {
+    await performSignIn(data.email, data.password);
   };
 
   return (
@@ -154,16 +164,7 @@ export default function LoginPage() {
               <p className="text-xs text-amber-700 font-medium mb-2">데모 계정으로 체험</p>
               <button
                 type="button"
-                onClick={async () => {
-                  setLoading(true);
-                  const result = await signIn("credentials", {
-                    email: BRAND.demoEmail,
-                    password: BRAND.demoPassword,
-                    redirect: false,
-                  });
-                  if (!result?.error) { router.push("/dashboard"); router.refresh(); }
-                  else setLoading(false);
-                }}
+                onClick={() => performSignIn(BRAND.demoEmail, BRAND.demoPassword)}
                 className="w-full text-xs text-amber-800 bg-amber-100 hover:bg-amber-200 rounded px-3 py-2 transition-colors"
                 disabled={loading}
               >

@@ -66,7 +66,7 @@ async function main() {
   });
   console.log(`딜 생성: ${deal.id} / 보고서: ${report.id}\n`);
 
-  const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
+  const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH ?? "/opt/pw-browsers/chromium" });
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   const page = await ctx.newPage();
   const consoleErrors: string[] = [];

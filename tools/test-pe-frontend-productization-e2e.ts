@@ -67,7 +67,7 @@ async function main() {
   const ddCase = await prisma.pEDDCase.create({ data: { maDealId: deal.id } });
   console.log(`딜 생성: ${deal.id}(매출액 REVENUE 모순 100억/95억, DD Case 포함)\n`);
 
-  const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
+  const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH ?? "/opt/pw-browsers/chromium" });
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   const page = await context.newPage();
 

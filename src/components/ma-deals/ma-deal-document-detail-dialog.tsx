@@ -1,6 +1,8 @@
 "use client";
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import type { RefObject } from "react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DocumentSourceText } from "./document-source-text";
 import { Badge } from "@/components/ui/badge";
 import { MA_DOCUMENT_TYPE_LABEL, PE_EVIDENCE_REQUEST_STATUS_LABEL } from "@/lib/pe/ma-deal-labels";
 import type { DataRoomDocumentView } from "@/lib/pe/pe-data-room-view-model";
@@ -9,8 +11,7 @@ import type { MaDocumentType } from "@prisma/client";
 
 /**
  * PE Data Room 문서 상세(PR #106, PR #109에서 근거 요청 연결 표시 추가) —
- * READ-ONLY. content viewer/AI 요약/evidence·finding 편집 UI는 여전히
- * 이번 PR 범위 밖이다(§8).
+ * READ-ONLY. 기존 파싱 텍스트를 별도 인가 API로 읽는다. AI 요약/근거 편집 없음.
  *
  * "이 자료로 해결 가능한 이슈" 절은 파일명 추론을 하지 않는다(§Step12
  * 명시 요구) — `linkedDocumentId === document.id`로 **실제로 연결된**
@@ -18,23 +19,28 @@ import type { MaDocumentType } from "@prisma/client";
  * 빈 목록을 그대로 보여준다(추측해서 채우지 않음).
  */
 export function MaDealDocumentDetailDialog({
+  dealId,
+  returnFocusRef,
   document,
   linkedEvidenceRequests,
   onOpenChange,
 }: {
+  dealId: string;
+  returnFocusRef: RefObject<HTMLButtonElement>;
   document: DataRoomDocumentView | null;
   linkedEvidenceRequests: PEEvidenceRequestView[];
   onOpenChange: (open: boolean) => void;
 }) {
   return (
     <Dialog open={document !== null} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[560px]">
+      <DialogContent className="sm:max-w-[560px]" onCloseAutoFocus={(event) => { event.preventDefault(); returnFocusRef.current?.focus(); }}>
         {document && (
           <>
             <DialogHeader>
-              <DialogTitle className="break-words">{document.name}</DialogTitle>
+              <DialogTitle className="break-words pr-5">{document.name}</DialogTitle>
+              <DialogDescription>문서 내용과 실제로 연결된 근거·요청을 확인합니다.</DialogDescription>
             </DialogHeader>
-            <div className="space-y-4 text-sm">
+            <div className="min-w-0 space-y-4 text-sm">
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <p className="text-xs text-gray-400">유형</p>
@@ -42,13 +48,15 @@ export function MaDealDocumentDetailDialog({
                 </div>
                 <div>
                   <p className="text-xs text-gray-400">파일 형식</p>
-                  <p className="font-medium">{document.mimeType}</p>
+                  <p className="break-words font-medium">{document.mimeType}</p>
                 </div>
                 <div>
                   <p className="text-xs text-gray-400">업로드일</p>
                   <p className="font-medium">{new Date(document.createdAt).toLocaleDateString()}</p>
                 </div>
               </div>
+
+              <DocumentSourceText key={`${dealId}-${document.id}`} dealId={dealId} documentId={document.id} />
 
               <div>
                 <p className="text-xs text-gray-400 mb-2">연결된 근거(Evidence)</p>

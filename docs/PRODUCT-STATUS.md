@@ -3,6 +3,216 @@
 5축 차별화 기준으로 현재 무엇이 동작하고 무엇이 남았는지 정리한 문서입니다.
 다른 환경(예: Claude)에서 작업한 내용과 병합할 때 기준점으로 사용하세요.
 
+## 2026-10-01 — PR #118 승인 병합 및 후속 브랜치 rebase
+
+- 사용자가 PR #118 squash 병합과 후속 rebase/push/Draft PR 생성을 명시적으로 승인했다.
+  #118을 ready로 전환하고 승인 대상 head `99885fc` 일치를 확인해 squash 병합했다.
+  merge/main SHA `b919e5db52e1474dd245fdbb6fc9ddddf8587a8e`, mergedAt `2026-10-01T02:20:24Z`.
+- 기존 `9bd98a5`를 로컬 보존 브랜치 `codex/vc-design-review-pre-rebase-20261001`에 남겼다.
+  `git rebase --onto origin/main 99885fc codex/vc-design-review`로 #118 이후 Codex 9개 커밋만 재적용.
+  충돌 없음, 결과 `07bd6acddfa30754cc6c6f3911a4f112603a4bde`. rebase 전후 전체 파일 diff 0, 미커밋 작업 없음.
+- 운영 배포: `dpl_BEWsmYYbp6Jgzt2Nzrdb1WHjganX`, URL `dealsync-j8tmsqh71-vcwoong.vercel.app`.
+  Vercel UI에서 Production/READY, source `b919e5d`, ready 시각 11:23:20 KST, duration 2m52s 확인.
+  alias는 `dealmind.space`, `www.dealmind.space`, `dealsync-jade.vercel.app`, `dealsync-git-main-vcwoong.vercel.app`.
+  Custom Domains 할당 오류는 화면에 없음. **aliasError API 필드 값은 NOT VERIFIED**:
+  연결 앱의 프로젝트 목록은 0개, 해당 배포의 ID/URL 조회는 404. 브라우저 로그인 후 UI 읽기로 확인했다.
+- 런타임: 해당 deploymentId 필터, 2026-10-01 11:25 KST의 Last 30 minutes에서
+  Warning/Error/Fatal 각 0, 표시된 10개 GET 요청 모두 200, Error 필터 결과 없음.
+  11:31 KST 재확인에서도 각 0, 표시된 11개 요청 모두 200.
+  기존 cron의 `2026-10-01T02:30:14.413Z` `/api/cron/resume-generations`는 200,
+  `tick_end candidates=5 processed=0 elapsed=2.4s`. 이 cron을 직접 실행한 것은 아니다.
+  짧은 배포 직후 관찰이며 인증된 운영 VC/PE 흐름 검증을 의미하지 않는다.
+  확인 증거는 로컬 `screenshots/post-118-vercel-{ready,errors,runtime}.png`.
+- rebase 후 실제 재실행 PASS: `npm run test:all`, `npx tsc --noEmit`, `npm run lint`,
+  `test:vc-decision-e2e`, `test:pe-frontend-productization-e2e`, `test:pe-document-text-e2e`,
+  `npx tsx tools/test-home-pe-design.ts after` (6 화면, 1440/390, PE 입력 해시 동일).
+  fixture SQLite `file:./dev.db`/Edge이며, AI·운영 DB 호출 없음.
+  `npm run build`와 build 후 `npx tsc --noEmit`도 PASS. 작업의 dev 서버는 build 전에 종료했다.
+- Codex 브랜치를 예상 원격 HEAD `9bd98a5`의 명시적 force-with-lease로 push했다.
+  후속 Draft PR #119 (`https://github.com/vcwoong-ai/vcwoong/pull/119`) 생성·연결 완료. 후속 PR은 병합하지 않았다.
+  최초 생성 후 check와 Vercel preview는 PENDING이었으며 로컬 PASS와 구분한다.
+  운영 DB/env/결제 설정은 변경하지 않았다. main 갱신으로 기존 Git 연동 운영 배포가 발생했다.
+
+## 2026-10-01 — 10월 2주차 첫 구현: PE 파싱 텍스트 조회
+
+- 시작 branch `codex/vc-design-review`, HEAD `bffbecee5f26b61d98d8e5902d227d60e42c5f6e`, clean.
+  remote main `a60f465`, 개발 원격 `bffbece`를 확인. PR #118 OPEN/Draft, head `99885fc`, CLEAN;
+  #114–117 MERGED 재확인. 타 checkout의 미커밋 변경은 포함하지 않는다. 기존 작업 reset/clean/rebase 없음.
+- 실제 PE 데이터룸 Before 1440/390px 확보 후 문서 상세에 명시적 파싱 텍스트 조회를 구현.
+  `MaDealDataRoom` → 문서 Dialog → `DocumentSourceText` →
+  `GET /api/ma-deals/[id]/documents/[documentId]/text` → 기존 `maDealReadWhere`로 문서/딜/읽기 권한 동시 확인.
+  최대 3000자, no-store, URL 미노출, 기존 목록에 parsedText 없음. AI/외부 저장소 호출 없음.
+- 근거 발췌·신뢰도·연결된 finding/요청의 값을 보존. 열람과 검증 완료를 구분하고, 미파싱/실패/재시도/다음·이전을 표시.
+  문서를 버튼으로 열고 Escape 후 복귀 포커스 지원. 모바일 긴 문자열 내부 넘침을 발견해 줄바꿈 수정.
+  원본 PDF/Excel 배치나 보고서 snapshot과 조회 텍스트의 원자적 일치를 보장하지 않는다.
+  VC는 documentId 전달 경계를 설계했으며 아직 원문 연결 미구현. 상세 계약 `SOURCE-TEXT-DESIGN.md`.
+- 검증 PASS: `test:pe-data-room-view-model`, `test:all`, `test:pe-document-text-e2e`,
+  `test:vc-decision-e2e`, `test:pe-frontend-productization-e2e`, typecheck, lint, build, diff check.
+  원문 E2E는 소유자/공유 ANALYST/비공개/외부인/다른 딜/동일 404, 응답 상한·입력,
+  목록 본문 미포함, XSS 문자열, 재시도, 미파싱, 포커스 trap/복귀, 1440/390 및 DB 문서 불변 검증.
+  초기 fixture enum/cleanup 오류와 첫 포커스 복귀 실패를 수정 후 재실행 PASS. 테스트 삭제/약화 없음.
+- Before/After는 `docs/design-review-source-text/{before,after}-{1440,390}.png`.
+  실행: `npm run dev:local`, 위 repo test scripts, `npx tsc --noEmit`, `npm run lint`, `npm run build`, `git diff --check`.
+  환경 SQLite `file:./dev.db`, Edge, 로컬 dev 서버. build 전에 이 작업의 dev 서버를 종료했다.
+  새 테스트 fixture는 제거했다. 운영 DB/env/schema/결제/배포 변경 없음.
+- Codespace pull/실화면, 운영 인증 스모크, 원본 저장소 접근 정책은 NOT VERIFIED.
+  PR 생성/수정・main 병합・production 변경은 미승인. 별도 브랜치 commit/push는 앞선 승인 범위.
+- **READY FOR DESIGN REVIEW** — PE 파싱 텍스트 조회 범위.
+
+## 2026-10-01 — Claude 10월 계획 인수
+
+- 사용자 제공 1개월 계획을 읽고 현재 구현과 대조했다. 시작 branch `codex/vc-design-review`, HEAD `79e8bec`, 로컬 clean.
+  GitHub main `a60f465`, PR #118 OPEN/Draft・head `99885fc`・mergeStateStatus CLEAN 확인.
+  첨부의 CI 횟수・운영 READY・Neon 한도 소진은 과거 보고이며 이번 검증으로 재사용하지 않는다.
+- 1주차 첫 구현: VC 근거 현황・투자 근거・논지 훼손 요인・미확인 정보・IC 질문의 화면 표시를 한국어화.
+  엔진・필드 ID・memo/export・PE fingerprint・권한・청구를 변경하지 않았다.
+- 실행 순서, 운영 읽기 전용 스모크, CRON_SECRET Sensitive 안내, AI 간 파일 담당 경계를 `docs/OCTOBER-EXECUTION.md`에 기록.
+  기존 별도 branch commit/push 승인은 유지. PR 생성/수정・main 병합・운영 설정/배포는 미승인.
+- typecheck・lint・`npm run test:all`・`test:vc-decision-e2e`・build・diff check PASS.
+  VC E2E는 canonical/API/DOCX 연결과 390/430/768/1024/1440px를 검증했다.
+  결과는 로컬 SQLite 실행이며 이번 변경의 Codespace pull/실화면 확인은 아직 미실행이다.
+- 운영 DB/env・Neon 초기화 날짜・실사용자 검증・자동 일정 실행은 NOT VERIFIED/미설정.
+
+## 2026-10-01 — 프리미엄 투자 데스크 비주얼 고도화
+
+- 랜딩, 로그인 후 대시보드, PE 개요를 딥 네이비·아이보리·브론즈 기반의 하나의 시각 체계로 정리했다.
+  랜딩은 제품 미리보기를 어두운 투자 인텔리전스 프레임에 배치하고, CTA·타이포·검토 흐름의 대비를 강화했다.
+  대시보드는 투자 데스크 masthead, 떠 있는 지표 카드, VC/PE별 구분선을 적용했다.
+  PE 개요는 canonical 검토 요약을 어두운 결정 헤더로, 다음 행동을 별도 아이보리 패널로 강조했다.
+- 판정·계산·gate·API·DB 입력은 변경하지 않았다. 수정 범위는 랜딩 TSX와 scoped CSS이며,
+  로그인 정규화/복구 커밋 이후의 인증·권한 의미도 그대로다.
+- 검증 PASS: `test-home-pe-design.ts after` 1440/390 랜딩·대시보드·PE 6개 경로, 가로 넘침 없음,
+  동일 PE 입력 SHA256 `2fc9f9d8f7720403c8bad5d62fe74b5ebe4c8f5eded8f60c83afcc24cd9d4e85`.
+  `test:pe-overview-readiness` 9개, `test:deal-queue` 27개,
+  `test:pe-frontend-productization-e2e`, `test:vc-decision-e2e`, typecheck, lint, production build PASS.
+- 최신 After 캡처는 `docs/design-review-home-pe/after-*` 6개로 갱신했다.
+  Claude Code를 병행할 때는 동일 브랜치·동일 파일 동시 편집을 피하고 별도 worktree/branch와 파일 소유 구역을 사용한다.
+- **READY FOR DESIGN REVIEW**.
+
+## 2026-10-01 — 메인·PE 디자인 확장 (사용자 후속 요청)
+
+- 인수: `codex/vc-design-review`, 시작 HEAD `c7ebb89c8d3ae7536602663d20fd8f078433b7f7`.
+  로컬과 Codespace 모두 clean 확인. 원격 main은 `a60f465f45aa54bc22ef48361308a54169cd6cc4`.
+  앞서 승인된 별도 브랜치 commit/push 범위로 이어간다. main·PR·운영 배포는 변경하지 않는다.
+- 범위: 첫 화면을 비로그인 `/`와 로그인 `/dashboard` 둘 다 포함해 개선했다.
+  랜딩은 큰 논지/근거 헤드라인과 제품 미리보기, 3단계 검토 흐름을 배치했다.
+  대시보드는 현황 숫자를 상단에 두고 VC/PE 대기열 제목·회사·다음 행동의 위계를 조정했다.
+  PE `/ma-deals/[id]` 개요는 현재 준비 상태와 다음 행동을 분리하고, 차단 요인을 독립 행으로 표시한다.
+  재무·실사·위원회 자료 이동 버튼, 재무 근거/검토 준비의 두 구획, 모바일 설명 아래 이동 버튼을 적용했다.
+  기존 9개 탭과 모든 기능을 보존했다. 나머지 탭 전체를 새로 디자인한 것은 아니다.
+- canonical: 대시보드는 기존 `computeReportDecision` / `loadMaDealListReadinessSummaries` 유지.
+  PE는 `loadMaDealIcContext` → 기존 상세 client의 dashboard/readiness builder →
+  `MaDealOverview` / `MaDealStatusPanel` 그대로이며 값·gate·financial/QoE/LBO/DD·review/fingerprint/audit 의미 변경 없음.
+  같은 fixture의 입력 SHA256 `2fc9f9d8f7720403c8bad5d62fe74b5ebe4c8f5eded8f60c83afcc24cd9d4e85` Before/After 동일.
+  독립 API 조회의 원자적 snapshot 보장을 새로 추가한 것은 아니다.
+- 수정: 랜딩/대시보드 page, product-preview, dashboard-review-queue, PE detail/overview/status-panel,
+  새 scoped CSS 2개, fixture/반응형 검사 `tools/test-home-pe-design.ts`, 기존 유료제품 E2E 헤드라인 기대값과 브라우저 경로 override.
+  devcontainer는 기존 데이터 보존 방식으로 PE 예시 딜 seed도 준비한다.
+- 검증 PASS: baseline 및 targeted `test:pe-overview-readiness`(9), `test:deal-queue`(27),
+  `npm run test:all`, `test:pe-frontend-productization-e2e`, `test:vc-decision-e2e`.
+  `test-home-pe-design.ts before/after`: 랜딩/대시보드/PE의 1440·390px 실제 캡처, 가로 넘침 없음,
+  PE 다음 행동→재무 탭 및 출처 표시, 랜딩 탭 ArrowRight/Home 조작 확인. 모바일 문장 폭 문제 수정 후 재검사 PASS.
+  `npx tsc --noEmit`, `npm run lint`(경고 없음), `node --check .devcontainer/setup.mjs`, `git diff --check` PASS.
+- `test:paid-product-e2e`는 전용 시드 `예시 · 한빛정밀 인수 검토`가 없어 setup 단계 FAIL.
+  전체 가입/요금/인가 시나리오의 이번 실행은 NOT VERIFIED. 기존 데이터를 재시드하거나 테스트를 약화하지 않았다.
+- Before/After: `docs/design-review-home-pe/`의 랜딩·대시보드·PE 1440/390 PNG 12개.
+  로그와 첫 화면 캡처는 ignored `screenshots/home-pe-design/`. 로컬 SQLite·예시 데이터만 사용, 유료 AI/운영 DB 접근 없음.
+- 최종 `npm run build` PASS (개발 서버 종료 후 실행).
+- 클라우드: 구현 커밋 `553fb7b`를 승인된 브랜치에 push하고 기존 Codespace에서 fast-forward했다.
+  PE fixture 보존 seed 및 clean 상태 확인. 인증된 대시보드·PE 개요 실화면 확인,
+  다음 행동 → 재무·QoE 탭 → 매출 1,000억원/950억원과 각 출처 표시 PASS.
+  같은 Private 3000 개발 포트를 사용한다. 전체 테스트·typecheck/lint/build 결과는 로컬 실행 결과이며
+  클라우드에서 전체 재실행한 것은 아니다. 운영 배포는 하지 않았다.
+- 승인: 사용자 디자인 확인 대기. **READY FOR DESIGN REVIEW**.
+
+## 2026-10-01 — 회사·집 공용 Codespaces 이전 준비
+
+- 사용자가 클라우드 개발환경 1개를 회사·집에서 이어 쓰는 방식을 선택하고, **별도 브랜치 commit/push를 명시적으로 승인**했다.
+  이전 디자인 기록의 commit/push 미승인은 이 후속 작업에 한해 갱신됐다. main 병합·PR 변경·운영 배포는 여전히 미승인.
+- 대상 브랜치: `codex/vc-design-review`. `.devcontainer/devcontainer.json`은 Node 24 공식 이미지와 3000 포트 전달,
+  `.devcontainer/setup.mjs`는 기존 npm scripts를 사용해 개발용 SQLite·예시 계정·VC 대표 화면을 준비한다.
+  기존 DB는 재시드하지 않으며 기존 사용자 env는 덮어쓰지 않는다. 임의 운영 키/DB를 가져오지 않는다.
+- 회사·집에서 [내 Codespaces](https://github.com/codespaces)의 **같은 Codespace**를 다시 연다. 3000 포트는 Private 유지.
+  처음 준비가 끝나면 터미널에서 `npm run dev:local -- --hostname 0.0.0.0` 실행 후 Ports의 3000 링크로 앱에 접속한다.
+  대표 route는 `/reports/codex-design-review-report`, 로그인은 기존 seed의 `demo@dealmind.kr` / `Demo1234!` (예시 계정 전용).
+  Codespace 중지는 파일을 이어 쓸 수 있지만 삭제는 별개다. 중요한 코드는 commit/push하고 DB 파일은 Git에 넣지 않는다.
+- 실제 Before/After 핵심 6개 이미지를 `docs/design-review-2026-10-01/`로 복사하여 클라우드에서도 검토할 수 있게 준비했다.
+  원본 스크린샷·로그·로컬 DB는 그대로 보존했다. `test-vc-design-review.ts seed`는 기존 fixture를 보존하며 없는 경우만 생성한다.
+- 검증: devcontainer JSON 파싱, `node --check .devcontainer/setup.mjs`, fixture seed 보존 실행, `npx tsc --noEmit`, `git diff --check` PASS.
+  아래 후속 실행 기록을 제외한 실제 클라우드 앱 검증은 NOT VERIFIED.
+- 후속 실행: GitHub CLI 기기 인증 완료. 커밋 `64634f9dda22f1a0ae3904d30e211f892db4a4ad`를
+  `origin/codex/vc-design-review`로 push하고 원격 SHA 일치를 확인했다. main과 PR #118은 변경하지 않았다.
+  GitHub 웹에서 기존 Codespaces 0개 및 이번 달 Codespaces 사용 기록 없음을 확인한 후,
+  Southeast Asia / 2-core / 위 devcontainer 설정으로 작업 공간 1개를 생성했다.
+  공용 개발 작업 공간: https://animated-engine-qv6q9qx597gh6666.github.dev/
+  생성 직후 컨테이너 빌드 및 연결 진행을 확인했다. 로컬 SQLite DB와 미커밋 파일을 전송한 것은 아니다.
+- 클라우드 검증: `/workspaces/vcwoong`, Node v24.21.0, branch/HEAD 일치 및 clean 상태 확인.
+  setup 후 `DATABASE_URL=file:./dev.db npx tsx tools/test-vc-design-review.ts seed`는 기존 fixture 보존 성공.
+  `npm run dev:local -- --hostname 0.0.0.0` 실행 성공(Next.js Ready), Ports에서 3000 **Private** 확인.
+  예시 계정 로그인 → VC 대표 화면 → 상충 근거 95억/110억 출처 전환 → 새로고침 후 인증/결정 화면 유지 PASS.
+  첫 로그인 직후 결정 API 401이 한 번 나타났으며 UI 재시도 후 성공, 이후 새로고침에서는 재현되지 않았다. 원인은 미확정.
+  전체 회귀/typecheck/lint/build의 클라우드 재실행은 NOT VERIFIED(앞 절의 로컬 결과와 구분).
+  개발 앱: https://animated-engine-qv6q9qx597gh6666-3000.app.github.dev/reports/codex-design-review-report
+  회사·집에서 동일 GitHub 계정으로 같은 Codespace를 열고, 서버가 중지됐다면 위 dev 명령을 다시 실행한다.
+  운영 DB/env/schema/결제·PR·main·운영 배포 변경 없음. 디자인 승인은 여전히 대기 중이다.
+
+## 2026-10-01 — Codex 로컬 VC 대표 화면 디자인 검토
+
+이번 인수의 실행 기록이다. 아래 과거 섹션의 테스트·운영 상태를 현재 결과로 간주하지 않는다.
+
+- **인수**: 시작 시 `D:\Dealmind`는 빈 폴더였다. 기존 `https://github.com/vcwoong-ai/vcwoong.git`를 clone했다(새 원격 저장소 생성 아님).
+  원격 main `a60f465f45aa54bc22ef48361308a54169cd6cc4`, PR #114~#117 병합 확인.
+  열린 디자인 PR #118의 `99885fcfcec258c183bb721af11ac06ec1662f5e`를 이어받아 로컬 브랜치 `codex/vc-design-review` 생성, upstream 미설정.
+  HEAD는 이 인수 기준점 그대로다. 다른 환경의 미커밋 작업은 새 clone에 포함되지 않으며 외부 Claude 세션의 현재 실행 상태는 미확인이다.
+  로컬 앱 목록에서 같은 저장소를 수정 중인 다른 Codex 채팅은 발견되지 않았다. PR #118 원격 브랜치는 수정하지 않았다.
+- **자료**: 저장소 `CLAUDE.md`, 본 현황 문서의 최신 작업 기록, 첨부 ZIP의 `01_HANDOVER.md`·`02_DESIGN_BRIEF.md` 확인.
+  저장소 내 `AGENTS.md`/`AGENTS.override.md` 없음. 인수인계 문서는 복사하지 않았고 기존 지침도 덮어쓰지 않았다.
+- **대표 화면**: 실제 `/reports/[id]` → 로컬 `/reports/codex-design-review-report` (비전AI, **예시 데이터**).
+  논지·검토 의견 분리, 상단 상충/필요 자료 바로가기, 상충 값과 가격·회수의 2열 배치,
+  투자 근거/논지 훼손 요인 및 미확인 정보/IC 질문을 비교하는 구획으로 개편했다.
+  390px에서도 95억원/110억원과 각 출처가 나란히 보인다. 원문 뷰어를 새로 만든 것은 아니다.
+  기존 근거 패널에 canonical 근거 상태·검증 한계·키보드 방향키/Home/End 전환을 추가하고 긴 출처명 잘림을 줄였다.
+  미확인 정보의 이유·필요 근거·P0 우선순위, 가격/수익의 산출 불가 사유를 유지했다. IC 질문은 8개 제한 없이 모두 표시한다.
+  조회 취소와 보고서별 컴포넌트 key로 이전 응답/열린 근거 패널의 잔류를 방어한다.
+- **canonical 연결**: `reportReadWhere` → `/api/reports/[id]/decision` + `REPORT_FOR_DECISION_INCLUDE`
+  → `computeReportDecision` → `traceReportEvidence` / `buildInvestmentDecision` / `checkVCDecisionGate`
+  → `DecisionWorkspace`·기존 근거 패널. Export는 `loadReportForExport` → 같은 `computeReportDecision` → memo.
+  React에는 새 계산/판정 엔진 없음. 엔진·API·auth·결제·운영 schema 변경 없음.
+  API와 export는 독립 조회이며 원자적인 동일 snapshot을 보장하지 않는다. 이번 고정 fixture에서는 두 loader의 decision을 비교하고
+  Before/After 입력 hash와 decision hash가 동일함을 확인했다. 이 검증을 운영 동시성 보장으로 확대하지 않는다.
+  입력 SHA256 `5d8232fc95e6d7f4350ca8fa09d135f1e6804b81c170591389c16b66d0d6e336`,
+  decision SHA256 `f529bbb89340045126a60720de29c1b03ae6922585868c985709bd065cd0192c`.
+- **변경 범위**: `src/app/reports/[id]/report-page-client.tsx`, `src/components/vc/`의
+  `decision-workspace.tsx`, `decision-workspace.module.css`(신규), `decision-header.tsx`,
+  `decision-sections.tsx`, `contradiction-panel.tsx`, `evidence-panel.tsx`.
+  `tools/test-vc-design-review.ts` 신규. 기존 VC decision/parity 및 PE frontend E2E에는 Windows 실행용
+  `PLAYWRIGHT_EXECUTABLE_PATH` override만 추가(기존 assertion 삭제/약화 없음). 전역/PE 스타일 변경 없음.
+- **격리 실행**: Node 24.15.0 / npm 11.12.1. `npm ci --ignore-scripts --no-audit --no-fund` 후
+  `npm_config_script_shell=C:\Program Files\Git\bin\bash.exe`로 기존 `npm run db:setup:local`, `npm run dev:local -- --hostname 127.0.0.1` 실행.
+  DB는 `DATABASE_URL=file:./dev.db` → `D:\Dealmind\prisma\dev.db` SQLite뿐이다. 별도 운영 env 파일/API 키 없음.
+  최초 DB setup은 Windows Prisma schema engine 오류로 실패했으며, 존재하지 않던 로컬 DB 파일을 빈 파일로 만든 후 동일 스크립트 성공.
+  `npm run setup:fonts`는 기존 패키지의 Pretendard 자산을 생성했다(ignored, 폰트 커밋 없음).
+- **검증**:
+  - 최초 baseline 시도는 Prisma client 생성 전 실행하여 `MODULE_NOT_FOUND`로 실패. 생성 후 VC decision layer(40), contradiction(15), memo(16) PASS.
+  - 변경 전 `npm run test:vc-decision-e2e` PASS, 변경 후 동일 targeted 3종 PASS.
+  - `npm run test:all` PASS (공유 VC/PE 오프라인 회귀).
+  - `npm run test:vc-decision-e2e`, `npm run test:vc-parity-e2e`, `npm run test:pe-frontend-productization-e2e` PASS.
+    parity는 상충/다중 값/음수/장문 출처/가격 누락/점수 없음/API 오류/로딩/gate 실패와 API·화면·DOCX의 정합성을 검증했다.
+  - `DATABASE_URL=file:./dev.db`, `PLAYWRIGHT_EXECUTABLE_PATH=C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe` 설정 후
+    `npx tsx tools/test-vc-design-review.ts before` 및 `after` PASS.
+    1440/390 Before, 1440/390/430/768/1024 After: 동일 입력, canonical 논지, 가로 넘침, 양쪽 출처, 키보드 값 전환/포커스 가둠/Escape/복귀 확인.
+  - 최종 `npx tsc --noEmit`, `npm run lint`(경고/오류 없음), `npm run build`, `git diff --check` PASS.
+    build 전 dev 서버를 종료했다. 이후 `npm run start -- --hostname 127.0.0.1`은 자동 승인 검토가
+    `blocked by policy`로 차단(상세 이유 미제공). 따라서 현재 로컬 서버는 중지 상태이며 저장된 실제 화면으로 검토한다.
+- **실제 화면/로그**: `screenshots/vc-design-review/` (Git ignored, 로컬 보존).
+  `before-1440.png` / `after-1440.png`, `before-390.png` / `after-390.png`,
+  `*-workspace.png`, `*-evidence.png`, `after-390-comparison.png`, `snapshot.json` 및 검증 로그.
+- **권한/남은 범위**: commit/stage/push/PR 생성·수정/merge/production 배포 없음. 운영 DB/env/schema/결제 변경·유료 AI 호출 없음.
+  인증된 Production 앱, PostgreSQL 동시성, 스크린리더 실제 청취·실사용자 디자인 평가는 NOT VERIFIED.
+  사용자 디자인 승인 전이며, 다음 단계는 대표 화면 디자인 확인이다. 승인 전 전체 사이트 확장/운영 변경은 하지 않는다.
+  최종 상태: **READY FOR DESIGN REVIEW**. tracked 수정 10개, 신규 untracked 코드/테스트 2개, staged 없음.
+  스크린샷·로그·로컬 DB·의존성은 ignored 로컬 실행 산출물이며, 인수인계 복사본으로 생긴 untracked는 없다.
+
 ## -4. 유료 제품 프론트엔드 개편 — 검토 대기열 · 근거 패널 · 랜딩/요금 (2026-09-30)
 
 엔진(VC 결정 · PE readiness · QoE · LBO · DD · fingerprint · 권한)은 바꾸지 않고 화면의 정보 구조를 바꿨다.
