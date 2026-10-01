@@ -55,7 +55,7 @@ export function DashboardReviewQueue({
         title="VC — 투자 판단 검토"
         href="/deals"
         total={vcTotal}
-        emptyText="아직 VC 딜이 없습니다. 딜을 등록하고 문서를 올리면 투자 근거·상충·미확인 정보가 여기에 요약됩니다."
+        emptyText="아직 VC 딜이 없습니다. 딜 상세에서 문서를 올리고 보고서를 생성하세요. 생성된 보고서의 투자 근거·상충·미확인 정보가 여기에 요약됩니다."
         testId="dashboard-vc-queue"
       >
         {vcItems.map((item) => (
@@ -102,7 +102,7 @@ export function DashboardReviewQueue({
         title="PE/M&A — 검증 준비 상태"
         href="/ma-deals"
         total={peTotal}
-        emptyText="아직 PE/M&A 딜이 없습니다. 딜을 등록하고 재무 기간을 입력하면 차단 요인과 다음 행동이 여기에 요약됩니다."
+        emptyText="아직 PE/M&A 딜이 없습니다. 딜을 만들고 재무 · QoE 탭에서 재무 기간과 계정을 입력하세요. 차단 요인과 다음 행동을 검토 대기열에서 확인할 수 있습니다."
         testId="dashboard-pe-queue"
       >
         {peItems.map((item) => (

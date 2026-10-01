@@ -3,6 +3,39 @@
 5축 차별화 기준으로 현재 무엇이 동작하고 무엇이 남았는지 정리한 문서입니다.
 다른 환경(예: Claude)에서 작업한 내용과 병합할 때 기준점으로 사용하세요.
 
+## 2026-10-01 — 3주차 첫 행동·조사 설계
+
+- 새 브랜치 `codex/week3-onboarding-research`, 시작 HEAD `133a33821b131cb057124d658e02521a60a5711c`, 시작 working tree clean.
+  main `b919e5d`, PR #119 OPEN/Draft인 기존 `codex/vc-design-review`를 보존했다. 후속 Draft PR의 base는 그 브랜치다.
+  다른 환경의 미커밋 파일을 이 checkout에 가져온 것은 아니다. main 직접 수정/병합, reset/clean/rebase 없음.
+- 대시보드 빈 상태에서 첫 행동을 0건 통계보다 앞에 배치. VC/PE 목록의 첫 딜 CTA와 3단계 안내를 추가했다.
+  가입 화면의 근거 없는 5분 약속을 제거하고 가입 후 실제 행동을 안내한다. 가입/auth handler와 이동 경로는 그대로다.
+  `FirstDealGuide`는 표시 전용이며 판단·한도 계산을 하지 않는다. 기존 create dialog/API를 사용한다.
+- 연결: VC 안내 → `/deals` 생성 dialog → `POST /api/deals` → 딜 상세 → 기존 자료 업로드/보고서 생성 → 결정 화면.
+  PE 안내 → `/ma-deals` 생성 dialog → `POST /api/ma-deals` → 딜 상세의 재무 · QoE/DART/IC 의사결정.
+  API/엔진/권한/결제 파일과 canonical builder/snapshot 입력은 수정하지 않았다. 업로드·준비 상태를 승인/검증 완료로 해석하지 않는다.
+- 문서: `week3/PRICING-POLICY-MISMATCHES.md`는 월 생성 vs 저장 한도, 연간 선택 전달, Solo 표시명 차이와 운영 확인 간극을 기록한다.
+  요금·설정·청구·취소 문구나 코드 변경 없음. 목록에 대한 사람 승인 대기.
+  `week3/MEASUREMENT-DESIGN.md`는 최소 이벤트/14일 raw/90일 집계 등의 제안만 작성. 수집·쿠키·삭제 job 없음.
+  `week3/INTERVIEW-GUIDE.md`는 내부 3–5명 관찰형 질문과 기록 양식. 실제 인터뷰는 미실행.
+- 실행 환경: `DATABASE_URL=file:./dev.db`, `NEXTAUTH_URL=http://localhost:3000`, 로컬 개발 secret, STORAGE_MODE=local,
+  `npm run dev:local`. SQLite만 사용했으며 운영 DB/env/schema/결제 설정에 접근·변경하지 않았다.
+  Edge를 `PLAYWRIGHT_EXECUTABLE_PATH`로 지정. 신규 E2E 브라우저의 외부 요청은 차단한다.
+- PASS: `npx tsc --noEmit`, `npm run lint`, `npm run test:deal-queue`, `test:pe-overview-readiness`, `test:permissions`, `test:security`.
+  `npx tsx tools/test-week3-onboarding-e2e.ts before`와 `npx tsx tools/test-week3-onboarding-e2e.ts` 실행 PASS.
+  같은 실행을 위한 `npm run test:week3-onboarding-e2e` script를 추가했다.
+  실제 VC/PE 가입 → 안내 이동, Free/청구 키 없음, 두 종류 첫 딜 실제 생성, 자동 보고서 없음,
+  1440/390 대시보드·VC/PE 목록의 넘침 없음, Enter/Escape/포커스 복귀, pageerror 없음 확인.
+  초기 fixture 정리 FK 오류는 VC deal을 사용자보다 먼저 지우도록 수정 후 전체 재실행 PASS. 남은 해당 테스트 fixture도 제거했다.
+- 추가 기존 `npm run test:paid-product-e2e`는 FAIL(전제 fixture 미충족): 처음 PE 예시 없음으로 중단,
+  로컬 전용 `npx tsx tools/seed-showcase-local.ts`로 합성 PE 예시 생성 후 네오비전 VC 딜/보고서 없음으로 중단.
+  이 suite의 실제 흐름은 **NOT VERIFIED**. 기존 시드를 재설정하거나 테스트를 약화하지 않았다.
+  전체 `test:all`, 유료 AI 생성, DART 외부 가져오기, Toss 결제, 인증된 운영 화면, cloud checkout 최신 상태는 이번 작업에서 NOT VERIFIED.
+- Before/After 실제 캡처 12개는 `design-review-week3/README.md`에 연결. 디자인/정책 승인 전이다.
+  사용자는 이번 작업의 새 브랜치 commit/push와 Draft PR 생성만 승인했고 병합은 금지했다.
+- 최종 `npm run build` PASS(55개 static page 생성 완료, exit 0), `git diff --check` PASS.
+  READY FOR DESIGN REVIEW. 전체 제품 E2E의 fixture 전제 및 운영 검증은 위와 같이 남아 있다.
+
 ## 2026-10-01 — PR #118 승인 병합 및 후속 브랜치 rebase
 
 - 사용자가 PR #118 squash 병합과 후속 rebase/push/Draft PR 생성을 명시적으로 승인했다.
