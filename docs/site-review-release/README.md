@@ -1,5 +1,30 @@
 # 전체 사이트 검토 및 통합 배포 — 2026-10-01
 
+## 2026-10-02 — 수정 production build 검증 완료
+
+사용자가 3001 서버를 실행했고 HTTP 200을 확인했다. 기존 3000 서버는 보존했다.
+아래의 서버 시작 차단/대기 기록은 해소되었다. 정확한 SQLite와 설치 Edge 경로를 명시한 실행:
+
+`DATABASE_URL=file:./dev.db`, `BASE_URL=http://localhost:3001`,
+`PLAYWRIGHT_EXECUTABLE_PATH=C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe`.
+
+| 수정된 production build의 실제 명령 | 결과 |
+|---|---|
+| npm.cmd run test:site-review-e2e | PASS exit 0, 75항목, 1440/390 |
+| npm.cmd run test:login-email-e2e | PASS exit 0, legacy/new/collision/concurrency/password/identity/로그인·PE 가입 |
+| npx.cmd tsx tools/test-pe-document-text-e2e.ts | PASS exit 0, 인가/404/상한/XSS/재시도/포커스/조회 후 불변 |
+| npm.cmd run test:paid-product-e2e | PASS exit 0, 134항목, 390/430/768/1024/1440 |
+| npx.cmd tsc --noEmit | PASS exit 0 |
+| npm.cmd run lint | PASS exit 0 |
+
+이전 단계의 test:all/build PASS와 함께 검증했다. 테스트 삭제/약화 없음.
+결과: `optimized-result.json`. 캡처는 수정 production build에서 갱신했다.
+PR #126 code head `01b7f74692b3499e7ee0ae5d152a5c71fe8ebd35`의 CI SUCCESS,
+preview `dpl_9Vrmt5iL2V4J63konCuvPvDWy125` READY, aliasAssigned true, aliasError null을 확인했다.
+이 문서 커밋의 CI는 별도로 확인한다. 신규 운영 배포/운영 인증 VC·PE는 아직 NOT VERIFIED.
+
+![After LP desktop](after-lp-1440.png)
+
 ## 실제 인수 상태
 
 main `b919e5db52e1474dd245fdbb6fc9ddddf8587a8e`, 시작 HEAD `176cbbf2718583c3a88392bce206f2842680276e`.

@@ -1,5 +1,12 @@
 # 2026년 10월 실행 기록
 
+## 2026-10-02 — 배포 전 실제 production build E2E
+
+사용자가 3001 서버를 실행해 차단을 해소했다. 수정 production build에서 사이트 75항목,
+유료 제품 134항목, 로그인 이메일, PE 근거 원문 E2E PASS. tsc/lint 재실행 PASS.
+PR #126 code head `01b7f74`의 CI SUCCESS, preview READY/aliasError null 확인.
+이번 문서 head의 CI와 신규 운영 배포 확인이 남았다. 운영 DB/env/schema/결제 변경 없음.
+
 ## 2026-10-01 추가 요청 — 사이트 검토와 배포
 
 전체 사이트 검토/수정과 기존 Vercel 프로젝트 배포를 사용자가 명시적으로 요청했다.

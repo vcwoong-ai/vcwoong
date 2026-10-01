@@ -1,5 +1,11 @@
 # 통합 준비 상태 — 2026-10-01
 
+2026-10-02 후속: 3001 수정 production build의 site 75 / paid product 134 / login email /
+PE source text E2E 모두 PASS. tsc/lint 재실행 PASS. 서버 시작 차단은 사용자 실행으로 해소되었다.
+PR #126 code head `01b7f74` CI SUCCESS, preview READY/aliasError null 확인.
+이번 문서 head의 CI 확인 뒤 하나의 누적 통합 PR #126을 squash merge해 기존 Vercel Git 배포를 검증한다.
+운영 DB/env/schema/결제 설정은 변경하지 않는다. 기존 개별 누적 PR을 다시 병합하지 않는다.
+
 ## 후속 승인 및 현재 통합 방식
 
 사용자가 전체 사이트 검토·수정·배포를 명시적으로 요청했다. 이전 “디자인 방향만 승인” 범위는

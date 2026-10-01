@@ -1,5 +1,15 @@
 # DealMind 제품 현황
 
+## 2026-10-02 — 통합 배포 전 검증 완료
+
+- 사용자 실행으로 3001 수정 production build HTTP 200 확인. 서버 시작 차단은 해소되었다.
+- 실제 수정 build에서 site review 75, paid product 134, login email, PE document text E2E 모두 PASS(exit 0).
+  1440/390 화면 및 390/430/768/1024/1440 반응형과 근거 조회 인가/XSS/불변을 확인했다.
+- tsc/lint 재실행 PASS. 앞 단계 test:all/build PASS. 결과는 `site-review-release/optimized-result.json`.
+- PR #126 code head `01b7f74`의 CI SUCCESS와 preview READY/aliasError null을 직접 확인했다.
+  이번 문서 head CI/신규 운영 배포는 별도로 확인한다. 운영 인증 VC·PE는 아직 NOT VERIFIED.
+- main은 확인 시점 `b919e5d`. 기존 누적 branch와 Claude #121 보존. 운영 DB/env/schema/결제 설정 변경 없음.
+
 ## 2026-10-01 — 전체 사이트 검토·통합 배포 요청
 
 - 사용자 “전반적으로 배포 진행해주고, 전체 사이트를 돌아다니며 리뷰진행하고 수정해줘”로
