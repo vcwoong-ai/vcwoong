@@ -17,7 +17,22 @@
 - 실제 Before/After 핵심 6개 이미지를 `docs/design-review-2026-10-01/`로 복사하여 클라우드에서도 검토할 수 있게 준비했다.
   원본 스크린샷·로그·로컬 DB는 그대로 보존했다. `test-vc-design-review.ts seed`는 기존 fixture를 보존하며 없는 경우만 생성한다.
 - 검증: devcontainer JSON 파싱, `node --check .devcontainer/setup.mjs`, fixture seed 보존 실행, `npx tsc --noEmit`, `git diff --check` PASS.
-  Codespaces 실제 생성/설치/로그인/실행은 아직 NOT VERIFIED. GitHub 인증 대기 중이며 원격 push 완료를 아직 확인하지 않았다.
+  아래 후속 실행 기록을 제외한 실제 클라우드 앱 검증은 NOT VERIFIED.
+- 후속 실행: GitHub CLI 기기 인증 완료. 커밋 `64634f9dda22f1a0ae3904d30e211f892db4a4ad`를
+  `origin/codex/vc-design-review`로 push하고 원격 SHA 일치를 확인했다. main과 PR #118은 변경하지 않았다.
+  GitHub 웹에서 기존 Codespaces 0개 및 이번 달 Codespaces 사용 기록 없음을 확인한 후,
+  Southeast Asia / 2-core / 위 devcontainer 설정으로 작업 공간 1개를 생성했다.
+  공용 개발 작업 공간: https://animated-engine-qv6q9qx597gh6666.github.dev/
+  생성 직후 컨테이너 빌드 및 연결 진행을 확인했다. 로컬 SQLite DB와 미커밋 파일을 전송한 것은 아니다.
+- 클라우드 검증: `/workspaces/vcwoong`, Node v24.21.0, branch/HEAD 일치 및 clean 상태 확인.
+  setup 후 `DATABASE_URL=file:./dev.db npx tsx tools/test-vc-design-review.ts seed`는 기존 fixture 보존 성공.
+  `npm run dev:local -- --hostname 0.0.0.0` 실행 성공(Next.js Ready), Ports에서 3000 **Private** 확인.
+  예시 계정 로그인 → VC 대표 화면 → 상충 근거 95억/110억 출처 전환 → 새로고침 후 인증/결정 화면 유지 PASS.
+  첫 로그인 직후 결정 API 401이 한 번 나타났으며 UI 재시도 후 성공, 이후 새로고침에서는 재현되지 않았다. 원인은 미확정.
+  전체 회귀/typecheck/lint/build의 클라우드 재실행은 NOT VERIFIED(앞 절의 로컬 결과와 구분).
+  개발 앱: https://animated-engine-qv6q9qx597gh6666-3000.app.github.dev/reports/codex-design-review-report
+  회사·집에서 동일 GitHub 계정으로 같은 Codespace를 열고, 서버가 중지됐다면 위 dev 명령을 다시 실행한다.
+  운영 DB/env/schema/결제·PR·main·운영 배포 변경 없음. 디자인 승인은 여전히 대기 중이다.
 
 ## 2026-10-01 — Codex 로컬 VC 대표 화면 디자인 검토
 
