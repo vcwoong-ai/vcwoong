@@ -3,6 +3,18 @@
 5축 차별화 기준으로 현재 무엇이 동작하고 무엇이 남았는지 정리한 문서입니다.
 다른 환경(예: Claude)에서 작업한 내용과 병합할 때 기준점으로 사용하세요.
 
+## 2026-10-01 — 디자인 방향 승인·통합 준비
+
+- 사용자 “굿 그대로 진행하자”를 메인페이지 시각 구성 방향 승인으로 기록했다. main 병합/운영 배포 승인으로 확대하지 않았다.
+- main `b919e5d` 유지, #119–#125 OPEN/Draft/MERGEABLE. 실제 각 head의 CI check/Vercel 체크 SUCCESS 확인.
+  #125 확인 기준은 `ed654e2`; 이후 문서 head의 CI PASS로 복사하지 않는다.
+- 실제 #121 diff와 #123 변경 파일을 대조했다. auth/register 두 파일 중복이며 #123을 통합할 때 #121 독립 적용을 피해야 한다.
+  Claude branch/PR 닫기·수정 없음. 순서와 필요한 새 main 검증은 `INTEGRATION-READINESS.md`.
+- 로컬 SQLite/localhost 및 loopback 한정 npm start 모두 자동 승인 검토에서 차단(구체적 이유 미제공).
+  현재 서버 종료 상태, 최종 build 브라우저 재검증 NOT VERIFIED. 새 실행 경로로 우회하지 않았다.
+- 이번 턴 앱 코드/엔진/권한/결제/DB/env/schema 변경 및 test 재실행 없음. 문서 기록만 수정한다.
+  로컬 서버 실행 승인/차단 해소 및 명시적 병합 지시는 남아 있다.
+
 ## 2026-10-01 — 메인페이지 시각 구성
 
 - 새 branch `codex/landing-visual-story`, 기준 HEAD `5917ac7` (#124), clean working tree에서 시작.
