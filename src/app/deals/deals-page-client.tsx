@@ -1,5 +1,7 @@
 "use client";
 
+import { FirstDealGuide } from "@/components/onboarding/first-deal-guide";
+
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { DealCard } from "@/components/deals/deal-card";
@@ -300,18 +302,9 @@ export function DealsPageClient({
 
       {/* 빈 상태 */}
       {loadedDeals.length === 0 ? (
-        <div className="text-center py-16 text-gray-400">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/illustrations/empty-deals.svg"
-            alt=""
-            className="w-56 mx-auto mb-6 opacity-90"
-          />
-          <p className="text-lg font-medium text-gray-600">등록된 딜이 없습니다</p>
-          <p className="text-sm mt-1">
-            새 딜을 등록하여 투자심의 보고서를 자동으로 생성해보세요.
-          </p>
-        </div>
+        <FirstDealGuide track="vc" action={
+          <CreateDealDialog trigger={<Button>첫 VC 딜 만들기</Button>} />
+        } />
       ) : view === "queue" ? (
         /* 검토 대기열 — 딜마다 canonical 투자 판단·확인 필요 항목·다음 행동을 한 줄로 */
         <div className="space-y-3">

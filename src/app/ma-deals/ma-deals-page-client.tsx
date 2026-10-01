@@ -1,5 +1,7 @@
 "use client";
 
+import { FirstDealGuide } from "@/components/onboarding/first-deal-guide";
+
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { PeDealQueue, type PeQueueSort } from "@/components/ma-deals/ma-deal-queue";
@@ -127,12 +129,9 @@ export function MaDealsPageClient({
       </div>
 
       {loadedDeals.length === 0 ? (
-        <div className="text-center py-16 text-muted-foreground">
-          <p className="text-lg font-medium text-foreground">등록된 PE/M&A 딜이 없습니다</p>
-          <p className="text-sm mt-1">
-            새 딜을 등록하고 재무 정규화·QoE 조정·DART 연동을 시작해보세요.
-          </p>
-        </div>
+        <FirstDealGuide track="pe" action={
+          <CreateMaDealDialog trigger={<Button>첫 PE/M&A 딜 만들기</Button>} />
+        } />
       ) : (
         <div className="space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">

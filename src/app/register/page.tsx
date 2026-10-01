@@ -43,19 +43,19 @@ const TRACK_COPY: Record<string, { eyebrow: string; heading: string; sub: string
   vc: {
     eyebrow: "TRACK · VC 심사역",
     heading: "VC 트랙으로 시작합니다",
-    sub: "섹터 전문 AI 6명이 투자심의보고서 초안을 씁니다. 신용카드 없이 무료로 시작하세요.",
+    sub: "가입 후 첫 VC 딜을 만들고 IR 자료를 올리세요. 보고서를 생성한 뒤 투자 논지와 수치 근거를 검토할 수 있습니다.",
   },
   pe: {
     eyebrow: "TRACK · PE · M&A",
     heading: "PE · M&A 트랙으로 시작합니다",
-    sub: "재무제표·QoE·LBO 검토와 IC 의사결정 자료를 한 곳에서. 신용카드 없이 무료로 시작하세요.",
+    sub: "가입 후 첫 PE/M&A 딜을 만드세요. 재무 기간과 계정을 입력하고 IC 의사결정에서 검토에 부족한 정보를 확인할 수 있습니다.",
   },
 };
 
 const DEFAULT_COPY = {
   eyebrow: "GET STARTED",
-  heading: "5분 안에 첫 보고서를 시작하세요",
-  sub: "신용카드 없이 무료로 시작 — 6개 섹터 전문 AI 에이전트를 지금 바로 사용할 수 있습니다.",
+  heading: "첫 딜부터 검토를 시작하세요",
+  sub: "가입 후 대시보드에서 VC 또는 PE/M&A 딜을 만들 수 있습니다. 자료 입력부터 근거 확인까지, 첫 행동을 안내합니다.",
 };
 
 function RegisterForm() {
