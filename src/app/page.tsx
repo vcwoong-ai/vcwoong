@@ -1,4 +1,5 @@
 import Link from "next/link";
+import styles from "./landing.module.css";
 import { BRAND } from "@/lib/brand";
 import { PLAN_LIMITS } from "@/lib/quotas";
 import { LandingAuthRedirect } from "@/components/landing-auth-redirect";
@@ -133,7 +134,7 @@ const FAQ = [
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen bg-background text-foreground selection:bg-primary selection:text-primary-foreground">
+    <div className={`${styles.landing} min-h-screen selection:bg-primary selection:text-primary-foreground`}>
       <LandingAuthRedirect />
 
       {/* Navigation */}
@@ -167,15 +168,15 @@ export default function LandingPage() {
       </nav>
 
       {/* Hero */}
-      <section className="px-6 pb-20 pt-32 md:pt-36" aria-labelledby="hero-title">
-        <div className="mx-auto grid max-w-6xl items-center gap-12 lg:grid-cols-[1fr_1.05fr]">
+      <section className={styles.hero} aria-labelledby="hero-title">
+        <div className={styles.heroGrid}>
           <div>
-            <p className="text-sm font-medium text-primary">VC · PE/M&A 투자검토 업무 공간</p>
+            <p className={styles.label}>INVESTMENT INTELLIGENCE / VC · PE</p>
             <h1
               id="hero-title"
               className="mt-4 text-4xl font-semibold leading-[1.15] tracking-tight md:text-5xl"
             >
-              투자판단에 필요한 것부터 보세요.
+              투자의 논지부터,<br /><span>판단의 근거까지.</span>
             </h1>
             <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">
               VC의 투자 논지부터 PE/M&A의 실사·재무·검토 이력까지, 근거와 미확인 사항을 하나의 업무 흐름으로 연결합니다.
@@ -201,6 +202,11 @@ export default function LandingPage() {
           </div>
           <ProductPreview />
         </div>
+        <ol className={styles.path} aria-label="투자 검토 흐름">
+          <li><span>01 /</span><div><strong>근거를 연결하고</strong><small>보고서의 숫자에서 출처와 원문까지</small></div></li>
+          <li><span>02 /</span><div><strong>판단의 빈틈을 확인하고</strong><small>상충하는 값과 미확인 정보를 구분</small></div></li>
+          <li><span>03 /</span><div><strong>다음 검토로 이어갑니다</strong><small>IC 질문, 위원회 자료와 검토 이력</small></div></li>
+        </ol>
       </section>
 
       {/* 근거 연결 */}

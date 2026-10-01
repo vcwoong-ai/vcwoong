@@ -3,6 +3,37 @@
 5축 차별화 기준으로 현재 무엇이 동작하고 무엇이 남았는지 정리한 문서입니다.
 다른 환경(예: Claude)에서 작업한 내용과 병합할 때 기준점으로 사용하세요.
 
+## 2026-10-01 — 메인·PE 디자인 확장 (사용자 후속 요청)
+
+- 인수: `codex/vc-design-review`, 시작 HEAD `c7ebb89c8d3ae7536602663d20fd8f078433b7f7`.
+  로컬과 Codespace 모두 clean 확인. 원격 main은 `a60f465f45aa54bc22ef48361308a54169cd6cc4`.
+  앞서 승인된 별도 브랜치 commit/push 범위로 이어간다. main·PR·운영 배포는 변경하지 않는다.
+- 범위: 첫 화면을 비로그인 `/`와 로그인 `/dashboard` 둘 다 포함해 개선했다.
+  랜딩은 큰 논지/근거 헤드라인과 제품 미리보기, 3단계 검토 흐름을 배치했다.
+  대시보드는 현황 숫자를 상단에 두고 VC/PE 대기열 제목·회사·다음 행동의 위계를 조정했다.
+  PE `/ma-deals/[id]` 개요는 현재 준비 상태와 다음 행동을 분리하고, 차단 요인을 독립 행으로 표시한다.
+  재무·실사·위원회 자료 이동 버튼, 재무 근거/검토 준비의 두 구획, 모바일 설명 아래 이동 버튼을 적용했다.
+  기존 9개 탭과 모든 기능을 보존했다. 나머지 탭 전체를 새로 디자인한 것은 아니다.
+- canonical: 대시보드는 기존 `computeReportDecision` / `loadMaDealListReadinessSummaries` 유지.
+  PE는 `loadMaDealIcContext` → 기존 상세 client의 dashboard/readiness builder →
+  `MaDealOverview` / `MaDealStatusPanel` 그대로이며 값·gate·financial/QoE/LBO/DD·review/fingerprint/audit 의미 변경 없음.
+  같은 fixture의 입력 SHA256 `2fc9f9d8f7720403c8bad5d62fe74b5ebe4c8f5eded8f60c83afcc24cd9d4e85` Before/After 동일.
+  독립 API 조회의 원자적 snapshot 보장을 새로 추가한 것은 아니다.
+- 수정: 랜딩/대시보드 page, product-preview, dashboard-review-queue, PE detail/overview/status-panel,
+  새 scoped CSS 2개, fixture/반응형 검사 `tools/test-home-pe-design.ts`, 기존 유료제품 E2E 헤드라인 기대값과 브라우저 경로 override.
+  devcontainer는 기존 데이터 보존 방식으로 PE 예시 딜 seed도 준비한다.
+- 검증 PASS: baseline 및 targeted `test:pe-overview-readiness`(9), `test:deal-queue`(27),
+  `npm run test:all`, `test:pe-frontend-productization-e2e`, `test:vc-decision-e2e`.
+  `test-home-pe-design.ts before/after`: 랜딩/대시보드/PE의 1440·390px 실제 캡처, 가로 넘침 없음,
+  PE 다음 행동→재무 탭 및 출처 표시, 랜딩 탭 ArrowRight/Home 조작 확인. 모바일 문장 폭 문제 수정 후 재검사 PASS.
+  `npx tsc --noEmit`, `npm run lint`(경고 없음), `node --check .devcontainer/setup.mjs`, `git diff --check` PASS.
+- `test:paid-product-e2e`는 전용 시드 `예시 · 한빛정밀 인수 검토`가 없어 setup 단계 FAIL.
+  전체 가입/요금/인가 시나리오의 이번 실행은 NOT VERIFIED. 기존 데이터를 재시드하거나 테스트를 약화하지 않았다.
+- Before/After: `docs/design-review-home-pe/`의 랜딩·대시보드·PE 1440/390 PNG 12개.
+  로그와 첫 화면 캡처는 ignored `screenshots/home-pe-design/`. 로컬 SQLite·예시 데이터만 사용, 유료 AI/운영 DB 접근 없음.
+- 최종 `npm run build` PASS (개발 서버 종료 후 실행). 클라우드 반영 전까지 로컬 검증 결과로 구분한다.
+- 승인: 사용자 디자인 확인 대기. **READY FOR DESIGN REVIEW**.
+
 ## 2026-10-01 — 회사·집 공용 Codespaces 이전 준비
 
 - 사용자가 클라우드 개발환경 1개를 회사·집에서 이어 쓰는 방식을 선택하고, **별도 브랜치 commit/push를 명시적으로 승인**했다.

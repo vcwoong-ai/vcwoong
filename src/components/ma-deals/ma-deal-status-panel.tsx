@@ -1,5 +1,6 @@
 "use client";
 
+import styles from "@/components/ui/investment-workspace.module.css";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -37,23 +38,37 @@ export function MaDealStatusPanel({
 }) {
   const next = pickPeNextAction(readinessToNextActionInput(readiness));
   return (
-    <Card className="p-5" data-testid="pe-status-panel" data-overall={readiness.overall}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    <Card className={styles.status} data-testid="pe-status-panel" data-overall={readiness.overall}>
+      <div className={styles.statusTop}>
+      <div className={styles.statusIntro}>
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">검토 상황</p>
-          <p className="mt-1 max-w-3xl text-[15px] leading-relaxed text-foreground" data-testid="pe-status-summary">
+          <p className={styles.eyebrow}>PE / 검토 상황</p>
+          <p className="mt-3 text-xl leading-relaxed font-medium text-foreground" data-testid="pe-status-summary">
             {readiness.summary}
           </p>
         </div>
         <ReadinessBadge state={readiness.overall} />
       </div>
+      <div className={styles.nextAction}>
+        <StatusBadge tone="info" icon={false}>
+          다음 행동
+        </StatusBadge>
+        <p className="text-sm text-foreground" data-testid="pe-status-next">
+          {presentBlockerLabel(next.label)}
+        </p>
+        <Button variant="outline" size="sm" onClick={() => onNavigateTab(next.tab)} data-testid="pe-status-next-open">
+          {TAB_LABEL[next.tab] ?? "열기"} 열기
+        </Button>
+      </div>
+
+      </div>
 
       {readiness.blockers.length > 0 && (
-        <div className="mt-4 border-t border-border pt-4" data-testid="pe-status-blockers">
+        <div className={styles.blockers} data-testid="pe-status-blockers">
           <p className="text-sm font-semibold text-state-critical">
             차단 요인 {readiness.blockers.length}건 — 값을 임의로 선택하지 않았습니다
           </p>
-          <ul className="mt-2 divide-y divide-border">
+          <ul className="mt-2">
             {readiness.blockers.map((b) => (
               <li key={b.code} className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1 py-2.5">
                 <div className="min-w-0 flex-1">
@@ -80,19 +95,8 @@ export function MaDealStatusPanel({
         </div>
       )}
 
-      <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-border pt-4">
-        <StatusBadge tone="info" icon={false}>
-          다음 행동
-        </StatusBadge>
-        <p className="text-sm text-foreground" data-testid="pe-status-next">
-          {presentBlockerLabel(next.label)}
-        </p>
-        <Button variant="outline" size="sm" onClick={() => onNavigateTab(next.tab)} data-testid="pe-status-next-open">
-          {TAB_LABEL[next.tab] ?? "열기"} 열기
-        </Button>
-      </div>
 
-      <p className="mt-4 text-xs text-muted-foreground">{meta.join(" · ")}</p>
+      <p className={styles.meta}>{meta.join(" · ")}</p>
     </Card>
   );
 }

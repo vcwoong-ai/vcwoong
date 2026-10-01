@@ -15,6 +15,7 @@ import {
   Plus,
 } from "lucide-react";
 import Link from "next/link";
+import styles from "@/components/ui/investment-workspace.module.css";
 import { DealStage, ReportStatus, DealSector } from "@prisma/client";
 import { STAGE_LABEL } from "@/lib/deal-labels";
 import { DashboardCharts } from "./dashboard-charts";
@@ -214,9 +215,10 @@ export default async function DashboardPage() {
 
   return (
     <AppLayout title="대시보드">
-      <div className="space-y-8">
-        <header className="flex flex-wrap items-end justify-between gap-4">
+      <div className={`${styles.workspace} space-y-8`}>
+        <header className={styles.masthead}>
           <div>
+            <div className={styles.eyebrow}>INVESTMENT DESK / 검토 현황</div>
             <h1 className="text-xl font-semibold tracking-tight text-foreground">
               {session.user.name ?? "사용자"}님, 오늘 검토할 딜입니다
             </h1>
@@ -227,6 +229,14 @@ export default async function DashboardPage() {
           </div>
           <DashboardQuickActions />
         </header>
+
+        <dl className={styles.stats} data-testid="dashboard-stats">
+          {stats.map((stat) => <div key={stat.label}><dt>{stat.label}</dt><dd>{stat.value}</dd></div>)}
+        </dl>
+        <div className={styles.sectionHeading}>
+          <h2>지금 확인할 투자 기회</h2>
+          <p>최근 수정한 딜 중 검토 우선순위 순 · VC 판단과 PE 준비 상태는 별개입니다</p>
+        </div>
 
         {isEmptyWorkspace ? (
           <section aria-labelledby="onboarding-title" data-testid="dashboard-onboarding">
@@ -304,16 +314,6 @@ export default async function DashboardPage() {
             </ul>
           </Card>
         )}
-
-        {/* 현황 숫자 — 아이콘 타일이 아니라 한 줄 요약 */}
-        <dl className="grid grid-cols-2 gap-x-6 gap-y-4 rounded-lg border border-border bg-card p-5 sm:grid-cols-4" data-testid="dashboard-stats">
-          {stats.map((stat) => (
-            <div key={stat.label}>
-              <dt className="text-xs font-medium text-muted-foreground">{stat.label}</dt>
-              <dd className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{stat.value}</dd>
-            </div>
-          ))}
-        </dl>
 
         {/* 차트 영역 (Client Component) */}
         <DashboardCharts

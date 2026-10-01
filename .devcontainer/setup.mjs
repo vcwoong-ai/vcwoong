@@ -42,5 +42,6 @@ if (!existsSync("prisma/dev.db") || statSync("prisma/dev.db").size === 0) {
 }
 run(["run", "setup:fonts"]);
 run(["exec", "--", "tsx", "tools/test-vc-design-review.ts", "seed"]);
+run(["exec", "--", "tsx", "tools/test-home-pe-design.ts", "seed"]);
 console.log("Ready: npm run dev:local -- --hostname 0.0.0.0");
 console.log("Keep forwarded port 3000 PRIVATE. Use the same Codespace from both computers.");

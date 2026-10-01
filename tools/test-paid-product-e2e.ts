@@ -69,7 +69,7 @@ async function main() {
   });
   const registeredEmails: string[] = [];
 
-  const browser: Browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
+  const browser: Browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH ?? "/opt/pw-browsers/chromium" });
   const consoleErrors: string[] = [];
   const track = (page: Page) => {
     page.on("console", (m) => {
@@ -85,7 +85,7 @@ async function main() {
     track(anon);
     await anon.goto(`${BASE}/`, { waitUntil: "networkidle" });
     const landingText = await anon.innerText("body");
-    assert(landingText.includes("투자판단에 필요한 것부터 보세요."), "랜딩 헤드라인이 구매자가 얻는 것을 말한다");
+    assert((await anon.locator("#hero-title").innerText()).replace(/\s/g, "") === "투자의논지부터,판단의근거까지.", "랜딩 헤드라인이 논지와 근거의 연결을 명시한다");
     assert(!landingText.includes("Coming soon"), "'Coming soon' 표기가 없다");
     for (const banned of ["10분", "80%", "가장 많이 선택", "VCNote", "Skywork", "SOC 2 인증 완료"]) {
       assert(!landingText.includes(banned), `랜딩에 검증되지 않은 주장/경쟁사 지목이 없다: ${banned}`);

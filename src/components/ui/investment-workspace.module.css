@@ -1,0 +1,53 @@
+.workspace { --ink:#172a42; --line:#dbe2eb; color:var(--ink); }
+.masthead { display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:24px; padding:12px 0 28px; border-bottom:1px solid var(--line); }
+.eyebrow { color:#526a88; font-size:11px; font-weight:700; letter-spacing:.16em; text-transform:uppercase; margin-bottom:12px; }
+.masthead h1 { font-size:clamp(25px,2.5vw,36px); line-height:1.35; letter-spacing:-.055em; font-weight:650; }
+.masthead p { max-width:640px; line-height:1.7; }
+.stats { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); border-bottom:1px solid var(--line); padding:0 0 24px; gap:24px; }
+.stats > div { border-left:2px solid #dbe2eb; padding-left:18px; }
+.stats dt { font-size:12px; color:#617188; }
+.stats dd { font-size:32px; font-weight:600; font-variant-numeric:tabular-nums; letter-spacing:-.045em; margin-top:6px; }
+.sectionHeading { display:flex; align-items:baseline; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:18px; }
+.sectionHeading h2 { font-size:19px; font-weight:650; letter-spacing:-.035em; }
+.sectionHeading p { font-size:12px; color:#617188; }
+.queue { padding:0; gap:0; border:1px solid var(--line); border-radius:12px; box-shadow:0 3px 14px #172a4205; min-width:0; }
+.queueHeading { padding:22px 24px; background:#eef2f7; border-bottom:1px solid var(--line); border-radius:12px 12px 0 0; display:flex; align-items:baseline; flex-wrap:wrap; justify-content:space-between; gap:10px; }
+.queueHeading h2 { font-size:17px; letter-spacing:-.025em; }
+.queueHeading a { white-space:nowrap; }
+.queue ul { margin:0; }
+.queue li { padding:22px 24px; }
+.queue li:hover { background:#f8fafc; }
+.queue li > div:first-child a { font-size:17px; line-height:1.5; }
+.queue li > a { margin-top:12px; min-height:28px; font-size:12px; }
+.empty { margin:24px; padding:24px; border:1px dashed #c5d0dd; border-radius:8px; line-height:1.8; }
+.peOverview { display:grid; gap:28px; }
+.peGrid { display:grid; grid-template-columns:minmax(0,1.65fr) minmax(280px,1fr); gap:24px; align-items:start; }
+.peGrid > * { min-width:0; }
+.status { display:block; padding:0; border:1px solid var(--line); border-radius:12px; box-shadow:0 3px 14px #172a4205; }
+.statusTop { display:grid; grid-template-columns:minmax(0,1.7fr) minmax(240px,1fr); }
+.statusIntro { padding:28px; }
+.statusIntro > p[data-testid] { font-size:23px; line-height:1.6; letter-spacing:-.035em; margin:14px 0; }
+.nextAction { padding:28px; border-left:1px solid var(--line); background:#edf2f8; border-radius:0 12px 0 0; display:flex; flex-direction:column; align-items:flex-start; justify-content:center; gap:16px; }
+.nextAction p { font-size:16px; font-weight:600; line-height:1.7; }
+.nextAction button { background:#244c85; color:white; border-color:#244c85; min-height:40px; }
+.nextAction button:hover { background:#193a6c; color:white; }
+.blockers { padding:24px 28px; border-top:1px solid var(--line); }
+.blockers ul { margin-top:16px; display:grid; gap:12px; }
+.blockers li { border:1px solid #e6d7d5; border-left:3px solid #9d443a; border-radius:6px; background:#fffaf8; padding:16px 18px; }
+.meta { padding:14px 28px; border-top:1px solid var(--line); color:#617188; font-size:11px; line-height:1.9; }
+.workflow { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
+.workflow button { text-align:left; display:flex; flex-direction:column; gap:8px; padding:20px; border:1px solid var(--line); border-radius:8px; background:#fff; }
+.workflow button:hover { border-color:#244c85; background:#f3f6fb; }
+.workflow span { color:#526a88; font-size:11px; letter-spacing:.08em; }
+.workflow strong { font-size:15px; }
+.workflow small { color:#617188; line-height:1.7; }
+.workspace :is(a,button):focus-visible { outline:2px solid #244c85; outline-offset:4px; }
+@media(max-width:900px) { .peGrid { grid-template-columns:1fr; } }
+@media(max-width:600px) {
+ .masthead { padding-top:4px; gap:20px; } .stats { grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px; }
+ .queueHeading,.queue li { padding:20px; } .statusTop { grid-template-columns:1fr; }
+ .statusIntro,.nextAction,.blockers { padding:22px; } .statusIntro > p[data-testid] { font-size:20px; }
+ .nextAction { border-left:0; border-top:1px solid var(--line); border-radius:0; }
+ .blockers li { flex-direction:column; gap:12px; } .blockers li button { align-self:flex-start; }
+ .workflow { grid-template-columns:1fr; } .workflow button { padding:18px; }
+}
