@@ -1,0 +1,36 @@
+{
+  "mode": "local dev warm SSR HTTP",
+  "samples": 5,
+  "metrics": [
+    {
+      "path": "dashboard",
+      "milliseconds": [
+        84.83,
+        79.72,
+        44.51,
+        65.98,
+        77.15
+      ]
+    },
+    {
+      "path": "deals",
+      "milliseconds": [
+        62.27,
+        46.66,
+        61.37,
+        65.79,
+        60.52
+      ]
+    },
+    {
+      "path": "ma-deals",
+      "milliseconds": [
+        47.98,
+        47.52,
+        46.01,
+        49.78,
+        55.6
+      ]
+    }
+  ]
+}

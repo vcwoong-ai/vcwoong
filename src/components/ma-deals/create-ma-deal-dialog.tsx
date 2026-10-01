@@ -10,6 +10,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -97,6 +98,7 @@ export function CreateMaDealDialog({ trigger }: { trigger?: React.ReactNode }) {
       <DialogContent className="sm:max-w-[480px]">
         <DialogHeader>
           <DialogTitle>새 PE/M&A 딜 등록</DialogTitle>
+          <DialogDescription>회사명, 딜 이름, 거래 유형을 입력하세요. 재무 정보는 딜을 만든 뒤 입력할 수 있습니다.</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 mt-2">
           <div className="space-y-1.5">

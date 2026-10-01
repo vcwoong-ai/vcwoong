@@ -3,6 +3,20 @@
 5축 차별화 기준으로 현재 무엇이 동작하고 무엇이 남았는지 정리한 문서입니다.
 다른 환경(예: Claude)에서 작업한 내용과 병합할 때 기준점으로 사용하세요.
 
+## 2026-10-01 — 4주차 검증·접근성·성능
+
+- 새 브랜치 `codex/week4-verification`, 기준 `1de40c4`/PR #120. 기존 working tree clean에서 시작.
+  PR #119/#120/#121은 OPEN/Draft임을 GitHub에서 확인했다. Claude auth 파일은 수정하지 않았다.
+- 본문 skip link, VC/PE 생성창 설명, 어두운 대시보드 링크 가독성을 개선했다.
+  실제 hydration/route content 대기 헬퍼를 만들고 첫 딜·PE 원문 E2E에 적용했다. 검증 삭제/약화 없음.
+- PASS: test:all, tsc, lint, build, PE 문서 E2E, 첫 딜 E2E, 신규 접근성 E2E, PE batch 성능 도구, diff check.
+  실제 1440/390 키보드/포커스/dialog/넘침 확인. 상세 명령·값·제한은 `design-review-week4/README.md`.
+- PE canonical batch loader는 1/10/30건 모두 7쿼리. 빈 입력 0쿼리. 각 딜에 period/line item/DD case를 넣은 합성 데이터다.
+  빈 작업공간 SSR HTML 응답 중앙값: dashboard 77.15ms, VC 61.37ms, PE 47.98ms(로컬 dev warm 5회).
+  운영 성능·개선율·p95를 뜻하지 않는다. 엔진/DB/권한/결제/수집 구현은 그대로다.
+- #121 가입 중복/로그인 충돌 재현을 후속 차단 항목으로 기록했다. 자동 계정 병합이나 운영 데이터 변경 없음.
+  사람 디자인/요금·측정 승인, 실제 인터뷰, 운영 인증 검증, 전체 제품 E2E fixture 범위는 여전히 남아 있다.
+
 ## 2026-10-01 — 3주차 첫 행동·조사 설계
 
 - 새 브랜치 `codex/week3-onboarding-research`, 시작 HEAD `133a33821b131cb057124d658e02521a60a5711c`, 시작 working tree clean.

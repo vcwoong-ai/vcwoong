@@ -27,12 +27,12 @@ export function DashboardQuickActions() {
           </Button>
         }
       />
-      <Button size="sm" variant="ghost" asChild>
+      <Button size="sm" variant="ghost" className="text-slate-100 hover:bg-white/10 hover:text-white" asChild>
         <Link href="/reports/new">
           <FileText /> 보고서 생성
         </Link>
       </Button>
-      <Button size="sm" variant="ghost" asChild>
+      <Button size="sm" variant="ghost" className="text-slate-100 hover:bg-white/10 hover:text-white" asChild>
         <Link href="/templates">
           <LayoutTemplate /> 양식 관리
         </Link>
