@@ -7,6 +7,7 @@ import { VC_PRIORITY_LABEL, type VCInvestmentDriver, type VCMissingInformation, 
 import type { DecisionQuestionLink } from "@/lib/vc-decision-loader";
 import type { VCDecisionMemoSectionRef } from "@/lib/vc-decision-memo";
 import { QUESTION_CATEGORY_LABEL } from "@/lib/ic-questions";
+import type { EvidenceTarget } from "./evidence-panel";
 import { EvidenceStateBadge, VC_EVIDENCE_TONE, VC_IMPACT_LABEL, VC_IMPACT_TONE, VC_PRIORITY_TONE } from "./evidence-state";
 import type { DecisionApiData } from "./decision-types";
 
@@ -26,14 +27,25 @@ function SectionLink({ refFor, dimension }: { refFor: SectionRefFor; dimension: 
   return (
     <a
       href={`#section-${ref.sectionKey}`}
-      className="mt-2 inline-block text-sm font-medium text-blue-700 underline-offset-2 hover:underline"
+      className="mt-2 inline-block text-sm font-medium text-primary underline-offset-2 hover:underline"
     >
       상세 분석 · {ref.sectionOrder}. {ref.sectionTitle} →
     </a>
   );
 }
 
-function EvidenceQuotes({ evidence, limit = 2 }: { evidence: Array<{ raw: string; documentName?: string; location?: string }>; limit?: number }) {
+function EvidenceQuotes({
+  evidence,
+  limit = 2,
+  heading,
+  onOpenEvidence,
+}: {
+  evidence: Array<{ raw: string; documentName?: string; location?: string }>;
+  limit?: number;
+  /** 근거 패널 제목(무엇에 대한 근거인가) */
+  heading: string;
+  onOpenEvidence?: (target: EvidenceTarget) => void;
+}) {
   if (evidence.length === 0) return <span className="text-slate-500">확인된 근거 발췌 없음</span>;
   return (
     <ul className="space-y-1">
@@ -46,6 +58,23 @@ function EvidenceQuotes({ evidence, limit = 2 }: { evidence: Array<{ raw: string
               — {e.documentName}
               {e.location ? ` · ${e.location}` : ""}
             </span>
+          )}
+          {onOpenEvidence && (
+            <button
+              type="button"
+              className="ml-2 text-xs font-medium text-primary underline-offset-2 hover:underline focus-visible:underline"
+              onClick={() =>
+                onOpenEvidence({
+                  heading,
+                  activeIndex: i,
+                  entries: evidence.map((x) => ({ raw: x.raw, documentName: x.documentName, location: x.location })),
+                })
+              }
+              aria-label={`${heading}: ${e.raw} 근거 확인`}
+              data-testid="vc-open-evidence"
+            >
+              근거 확인
+            </button>
           )}
         </li>
       ))}
@@ -86,7 +115,7 @@ function DecisionMap({ data, refFor }: { data: DecisionApiData; refFor: SectionR
   );
 }
 
-function DriverList({ drivers, refFor }: { drivers: VCInvestmentDriver[]; refFor: SectionRefFor }) {
+function DriverList({ drivers, refFor, onOpenEvidence }: { drivers: VCInvestmentDriver[]; refFor: SectionRefFor; onOpenEvidence?: (target: EvidenceTarget) => void }) {
   return (
     <section aria-labelledby="vc-drivers-title" data-testid="vc-drivers">
       <SectionHeader as="h3" id="vc-drivers-title" eyebrow="Why invest" title="투자 근거 (Investment Drivers)" />
@@ -108,7 +137,7 @@ function DriverList({ drivers, refFor }: { drivers: VCInvestmentDriver[]; refFor
               <p className="mt-1.5 text-sm text-slate-700">{d.whyItMatters}</p>
               <dl className="mt-2.5 grid gap-x-4 gap-y-1.5 text-sm sm:grid-cols-[7rem_1fr]">
                 <dt className="text-xs font-medium text-slate-500">근거</dt>
-                <dd><EvidenceQuotes evidence={d.evidence} /></dd>
+                <dd><EvidenceQuotes evidence={d.evidence} heading={`${d.title} — 근거`} onOpenEvidence={onOpenEvidence} /></dd>
                 <dt className="text-xs font-medium text-slate-500">뒤집을 수 있는 것</dt>
                 <dd className="text-slate-800">{d.whatCouldInvalidate}</dd>
                 <dt className="text-xs font-medium text-slate-500">검증</dt>
@@ -123,7 +152,7 @@ function DriverList({ drivers, refFor }: { drivers: VCInvestmentDriver[]; refFor
   );
 }
 
-function BreakerList({ breakers, refFor }: { breakers: VCThesisBreaker[]; refFor: SectionRefFor }) {
+function BreakerList({ breakers, refFor, onOpenEvidence }: { breakers: VCThesisBreaker[]; refFor: SectionRefFor; onOpenEvidence?: (target: EvidenceTarget) => void }) {
   return (
     <section aria-labelledby="vc-breakers-title" data-testid="vc-breakers">
       <SectionHeader as="h3" id="vc-breakers-title" eyebrow="What could break the thesis" title="논지 훼손 요인 (Thesis Breakers)" />
@@ -148,7 +177,7 @@ function BreakerList({ breakers, refFor }: { breakers: VCThesisBreaker[]; refFor
               {b.trigger === "CONTRADICTION" ? (
                 <p className="mt-1.5 text-sm text-slate-700">
                   출처별 값·기간·위치 대조는 위{" "}
-                  <a href="#vc-contradictions-title" className="font-medium text-blue-700 underline underline-offset-2">
+                  <a href="#vc-contradictions-title" className="font-medium text-primary underline underline-offset-2">
                     수치 상충
                   </a>{" "}
                   표를 보십시오. 정본이 확인되기 전에는 이 지표에 근거한 논지를 신뢰할 수 없습니다.
@@ -160,7 +189,7 @@ function BreakerList({ breakers, refFor }: { breakers: VCThesisBreaker[]; refFor
                 {b.trigger !== "CONTRADICTION" && (
                   <>
                     <dt className="text-xs font-medium text-slate-500">근거</dt>
-                    <dd><EvidenceQuotes evidence={b.evidence} limit={3} /></dd>
+                    <dd><EvidenceQuotes evidence={b.evidence} limit={3} heading={`${b.title} — 근거`} onOpenEvidence={onOpenEvidence} /></dd>
                   </>
                 )}
                 {/* 확률은 추정 근거가 없으므로 숫자로 지어내지 않고 항상 "평가되지 않음" — 엔진 계약 그대로 */}

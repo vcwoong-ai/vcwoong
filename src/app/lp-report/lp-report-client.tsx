@@ -223,7 +223,7 @@ export function LPReportClient({
               <Button
                 onClick={createFund}
                 disabled={creatingFund}
-                className="bg-blue-600 hover:bg-blue-700 flex-1"
+                className="bg-primary hover:bg-primary/90 flex-1"
               >
                 {creatingFund && (
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -292,7 +292,7 @@ export function LPReportClient({
           <Button
             onClick={generate}
             disabled={generating || fund.companyCount === 0}
-            className="bg-blue-600 hover:bg-blue-700"
+            className="bg-primary hover:bg-primary/90"
           >
             {generating ? (
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -358,7 +358,7 @@ export function LPReportClient({
                 </span>
                 <div className="flex-1 h-2.5 bg-gray-100 rounded overflow-hidden">
                   <div
-                    className="h-full bg-blue-500 rounded"
+                    className="h-full bg-primary rounded"
                     style={{ width: `${Math.max(3, s.sharePercent)}%` }}
                   />
                 </div>

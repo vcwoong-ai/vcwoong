@@ -32,7 +32,7 @@ export function MaDealIcSnapshot({
       <CardContent>
         {lboEntryEbitda.status === "ok" ? (
           <div className="space-y-1">
-            <p className="text-2xl font-semibold text-blue-600">
+            <p className="text-2xl font-semibold text-primary">
               {lboEntryEbitda.lbo.entryEbitdaInEok.toLocaleString(undefined, { maximumFractionDigits: 1 })}
               억원
             </p>

@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getUserTeamContext, reportReadWhere } from "@/lib/team-access";
-import { computeReportDecision } from "@/lib/vc-decision-loader";
+import { computeReportDecision, REPORT_FOR_DECISION_INCLUDE } from "@/lib/vc-decision-loader";
 
 /**
  * VC Investment Decision — canonical 엔진(buildInvestmentDecision)의 결과를 그대로
@@ -25,24 +25,7 @@ export async function GET(
   const { teamId } = await getUserTeamContext(session.user.id);
   const report = await prisma.report.findFirst({
     where: { id: params.id, ...reportReadWhere(session.user.id, teamId) },
-    include: {
-      sections: { orderBy: { order: "asc" }, select: { sectionKey: true, title: true, content: true } },
-      deal: {
-        select: {
-          id: true,
-          companyName: true,
-          sector: true,
-          stage: true,
-          investRound: true,
-          investAmount: true,
-          valuation: true,
-          documents: { select: { id: true, name: true, parsedText: true } },
-          score: { select: { overall: true, rationale: true, evidenceAssessment: true } },
-        },
-      },
-      evidenceCheck: { select: { verdicts: true } },
-      icQuestions: { select: { questions: true } },
-    },
+    include: REPORT_FOR_DECISION_INCLUDE,
   });
 
   if (!report) {

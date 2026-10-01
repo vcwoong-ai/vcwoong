@@ -74,7 +74,7 @@ export function UsageStats() {
           <p className="font-medium text-blue-900">
             이번 달 사용 한도 ({data.quota.plan} 플랜)
           </p>
-          <p className="text-blue-700 text-xs">
+          <p className="text-primary text-xs">
             보고서 {data.quota.reports.used}/{data.quota.reports.limit}건 ·
             양식 {data.quota.templates.used}/{data.quota.templates.limit}건
           </p>

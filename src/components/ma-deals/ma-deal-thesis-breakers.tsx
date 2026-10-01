@@ -21,11 +21,11 @@ export function MaDealThesisBreakers({ breakers }: { breakers: PEThesisBreaker[]
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Thesis Breakers / Key Risks</CardTitle>
+        <CardTitle className="text-base">논지 훼손 요인 · 주요 리스크</CardTitle>
       </CardHeader>
       <CardContent>
         {breakers.length === 0 ? (
-          <p className="text-sm text-gray-400">현재 등록된 thesis breaker가 없습니다.</p>
+          <p className="text-sm text-muted-foreground">현재 등록된 논지 훼손 요인이 없습니다.</p>
         ) : (
           <ul className="space-y-2">
             {breakers.map((b) => (

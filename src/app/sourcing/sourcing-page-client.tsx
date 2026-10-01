@@ -315,7 +315,7 @@ export function SourcingPageClient({
           </Button>
           <Button
             onClick={() => setShowForm((v) => !v)}
-            className="bg-blue-600 hover:bg-blue-700"
+            className="bg-primary hover:bg-primary/90"
           >
             <Plus className="w-4 h-4 mr-2" />
             딜 추가
@@ -380,7 +380,7 @@ export function SourcingPageClient({
                 <Button
                   onClick={importEmail}
                   disabled={saving}
-                  className="bg-blue-600 hover:bg-blue-700"
+                  className="bg-primary hover:bg-primary/90"
                 >
                   {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                   메일에서 딜 등록
@@ -443,7 +443,7 @@ export function SourcingPageClient({
               <Button
                 onClick={addLead}
                 disabled={saving}
-                className="bg-blue-600 hover:bg-blue-700"
+                className="bg-primary hover:bg-primary/90"
               >
                 {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                 등록
@@ -552,7 +552,7 @@ export function SourcingPageClient({
                             size="sm"
                             onClick={() => promote(l.id)}
                             disabled={busyId === l.id}
-                            className="bg-blue-600 hover:bg-blue-700"
+                            className="bg-primary hover:bg-primary/90"
                           >
                             딜로 전환
                             <ArrowUpRight className="w-3 h-3 ml-1" />
@@ -618,7 +618,7 @@ export function SourcingPageClient({
           </p>
           <Link
             href={`/sourcing?limit=${nextLimit ?? leads.length + 30}`}
-            className="text-sm text-blue-600 hover:text-blue-800 font-medium border border-gray-200 rounded-lg px-4 py-2"
+            className="text-sm text-primary hover:text-blue-800 font-medium border border-gray-200 rounded-lg px-4 py-2"
           >
             더 보기 ({total - leads.length}건 남음)
           </Link>

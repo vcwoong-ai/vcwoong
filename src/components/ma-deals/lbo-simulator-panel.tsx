@@ -129,11 +129,11 @@ export function LboSimulatorPanel({
                 </div>
                 <div>
                   <p className="text-xs text-gray-400">MOIC</p>
-                  <p className="font-semibold text-blue-600">{result.moic.toFixed(2)}x</p>
+                  <p className="font-semibold text-primary">{result.moic.toFixed(2)}x</p>
                 </div>
                 <div>
                   <p className="text-xs text-gray-400">IRR</p>
-                  <p className="font-semibold text-blue-600">
+                  <p className="font-semibold text-primary">
                     {result.irr !== null ? `${(result.irr * 100).toFixed(1)}%` : "—"}
                   </p>
                 </div>

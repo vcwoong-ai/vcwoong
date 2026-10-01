@@ -88,7 +88,7 @@ export function UploadPageClient({ deals }: { deals: Deal[] }) {
           <Card>
             <CardContent className="pt-4">
               <div className="flex items-start gap-3">
-                <Info className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
+                <Info className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
                 <div className="text-sm text-gray-600 space-y-1">
                   <p className="font-medium">지원 형식</p>
                   <ul className="text-gray-500 space-y-0.5 text-xs">

@@ -48,7 +48,8 @@ async function main() {
 
   try {
     // ── 1. 로그인 ─────────────────────────────────────────────────────
-    await page.goto(`${BASE}/login`);
+    await page.goto(`${BASE}/login`, { waitUntil: "networkidle" });
+    await page.waitForTimeout(1500); // 로그인 폼 하이드레이션 대기 — 그 전에 제출하면 세션이 잡히기 전에 다음 화면으로 넘어간다
     await page.fill("#email", EMAIL);
     await page.fill("#password", PASSWORD);
     await page.click('button[type="submit"]');
@@ -61,7 +62,7 @@ async function main() {
     await page.waitForSelector('[role="tab"]', { timeout: 45000 });
     await page.getByRole("tab", { name: "위원회 자료" }).click({ timeout: 45000 });
     await page.waitForTimeout(600);
-    await page.waitForSelector("text=PE IC Committee Pack", { timeout: 15000 });
+    await page.waitForSelector('[data-testid="pe-pack-header"]', { timeout: 15000 }); // 위원회 자료 문서 머리(투자심의위원회 자료)
     console.log("✅ 2 — 위원회 자료 탭 진입 성공");
 
     // ── 3. 초기 상태: 미검토 ─────────────────────────────────────────────
@@ -81,8 +82,8 @@ async function main() {
     await page.waitForTimeout(600);
     await page.waitForSelector("text=Review #1", { timeout: 15000 });
     await page.waitForSelector("text=현재 기준과 일치", { timeout: 15000 });
-    const auditTimelineText1 = await page.locator("text=감사 타임라인").locator("xpath=..").innerText();
-    assert(auditTimelineText1.includes("검토 완료"), "감사 타임라인에 '검토 완료'(REVIEW_COMPLETED) 이벤트가 보여야 함");
+    const auditTimelineText1 = await readAuditTimeline(page, "검토 완료");
+    assert(auditTimelineText1.includes("검토 완료"), `감사 타임라인에 '검토 완료'(REVIEW_COMPLETED) 이벤트가 보여야 함, 실제: ${JSON.stringify(auditTimelineText1)}`);
     console.log("✅ 5 — 검토 이력에 Review #1(현재 기준과 일치) + 감사 타임라인에 '검토 완료' 이벤트 표시됨");
 
     // ── 6. canonical 데이터 변경(DD finding 추가) → fingerprint가 바뀐다 ──
@@ -136,7 +137,7 @@ async function main() {
     await page.getByRole("button", { name: "등록" }).click();
     await page.waitForTimeout(1000);
     await page.waitForSelector("text=재무팀 확인 요청드립니다", { timeout: 15000 });
-    const auditTimelineText2 = await page.locator("text=감사 타임라인").locator("xpath=..").innerText();
+    const auditTimelineText2 = await readAuditTimeline(page, "코멘트 작성");
     assert(auditTimelineText2.includes("코멘트 작성"), "감사 타임라인에 '코멘트 작성'(COMMENT_ADDED) 이벤트가 추가돼야 함");
     console.log("✅ 11 — 코멘트 작성이 코멘트 목록과 감사 타임라인에 함께 반영됨");
 
@@ -213,7 +214,27 @@ async function main() {
   }
 }
 
+
+/** 감사 타임라인은 서명 직후 비동기로 다시 조회된다 — 기대한 문구가 나타날 때까지 최대 10초 기다린 뒤 텍스트를 읽는다 */
+async function readAuditTimeline(page: import("playwright").Page, mustInclude?: string): Promise<string> {
+  const timeline = () => page.locator("text=감사 타임라인").locator("xpath=..").innerText();
+  let text = await timeline();
+  for (let i = 0; mustInclude && !text.includes(mustInclude) && i < 24; i++) {
+    await page.waitForTimeout(500);
+    text = await timeline();
+  }
+  return text;
+}
+
 async function assertBadgeText(page: import("playwright").Page, expected: string) {
+  // 제출(PATCH) → 재조회 → 배지 갱신은 비동기다 — 고정 대기 대신 기대한 문구가 나타날 때까지 기다린다(최대 10초)
+  await page
+    .waitForFunction(
+      (want) => Array.from(document.querySelectorAll("span")).some((el) => el.textContent?.includes("현재 상태:") && el.parentElement?.textContent?.includes(want)),
+      expected,
+      { timeout: 10000 }
+    )
+    .catch(() => undefined);
   const text = await page.locator("span", { hasText: "현재 상태:" }).locator("xpath=..").innerText();
   assert(text.includes(expected), `상태 배지가 '${expected}'를 포함해야 함, 실제: ${text}`);
 }
@@ -223,7 +244,8 @@ async function checkMobileWidth(browser: import("playwright").Browser, url: stri
   const page = await context.newPage();
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  await page.goto(`${new URL(url).origin}/login`);
+  await page.goto(`${new URL(url).origin}/login`, { waitUntil: "networkidle" });
+    await page.waitForTimeout(1500); // 로그인 폼 하이드레이션 대기 — 그 전에 제출하면 세션이 잡히기 전에 다음 화면으로 넘어간다
   await page.fill("#email", email);
   await page.fill("#password", password);
   await page.click('button[type="submit"]');

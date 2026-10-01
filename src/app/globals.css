@@ -4,30 +4,33 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222 47% 11%;
+    /* Institutional Editorial Workspace — 앱 배경은 차가운 밝은 중립색,
+       본문 패널은 흰색, 주요 액션은 절제된 딥 네이비.
+       출발 값: background #F6F7F9 · text #17212F · muted #5D6878 · border #DEE3EB
+       · primary #244C85 · critical #B42318 (대비는 아래 주석의 비율로 확인). */
+    --background: 220 20% 97%;          /* #F6F7F9 */
+    --foreground: 214 33% 14%;          /* #17212F — 흰 패널 위 대비 약 16:1 */
     --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
+    --card-foreground: 214 33% 14%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
-    /* 브랜드 색. 기존에는 shadcn 기본값(거의 검정)이라 토큰과 실제 UI가
-       따로 놀았다 — 화면은 전부 bg-blue-600을 하드코딩하고 있었음.
-       토큰을 실제 브랜드 블루로 맞춰 두 갈래를 하나로 합친다. */
-    --primary: 221 83% 53%;
+    --popover-foreground: 214 33% 14%;
+    /* 브랜드 색 = 딥 네이비. 화면에서 bg-blue-600을 하드코딩하던 것을
+       전부 이 토큰(bg-primary, text-primary)으로 모았다. 흰 글씨 대비 약 8.7:1 */
+    --primary: 216 57% 33%;             /* #244C85 */
     --primary-foreground: 0 0% 100%;
-    --secondary: 210 40% 96%;
-    --secondary-foreground: 222 47% 11%;
-    --muted: 210 40% 96%;
-    --muted-foreground: 215 16% 47%;
-    --accent: 210 40% 96%;
-    --accent-foreground: 222 47% 11%;
-    --destructive: 0 72% 51%;
+    --secondary: 216 24% 94%;
+    --secondary-foreground: 214 33% 14%;
+    --muted: 216 24% 94%;
+    --muted-foreground: 216 13% 41%;    /* #5D6878 — 흰 패널 위 약 5.9:1, 앱 배경 위 약 5.4:1 */
+    --accent: 216 24% 94%;
+    --accent-foreground: 214 33% 14%;
+    --destructive: 5 78% 40%;           /* #B42318 */
     --destructive-foreground: 0 0% 100%;
     --success: 142 71% 45%;
     --warning: 38 92% 50%;
-    --border: 214 32% 91%;
-    --input: 214 32% 91%;
-    --ring: 221 83% 53%;
+    --border: 216 24% 90%;              /* #DEE3EB */
+    --input: 216 24% 88%;
+    --ring: 216 57% 33%;
     /* 라운드는 낮게 — 분석 화면은 카드가 둥글수록 장난감처럼 읽힌다 */
     --radius: 0.5rem;
 

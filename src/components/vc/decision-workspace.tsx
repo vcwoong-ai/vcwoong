@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Callout } from "@/components/ui/callout";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import type { ScoreDimensionKey } from "@/lib/deal-scoring-shared";
 import type { DecisionApiData } from "./decision-types";
 import { DecisionHeader } from "./decision-header";
 import { ContradictionPanel } from "./contradiction-panel";
+import { EvidencePanel, type EvidenceTarget } from "./evidence-panel";
 import { BreakerList, DecisionMap, DriverList, MissingInformationList, QuestionList, ValuationBlock } from "./decision-sections";
 
 /**
@@ -39,6 +40,13 @@ export function DecisionWorkspace({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [localKey, setLocalKey] = useState(0);
   const [radarOpen, setRadarOpen] = useState(false);
+  // 근거 패널 — 상충 값·투자 근거의 문서/위치/발췌를 옆에서 확인한다(새 조회 없음)
+  const [evidenceTarget, setEvidenceTarget] = useState<EvidenceTarget | null>(null);
+  const evidenceOpenerRef = useRef<HTMLElement | null>(null);
+  const openEvidence = useCallback((target: EvidenceTarget) => {
+    evidenceOpenerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setEvidenceTarget(target);
+  }, []);
 
   const load = useCallback(async () => {
     setStatus((s) => (s === "ready" ? s : "loading"));
@@ -114,8 +122,9 @@ export function DecisionWorkspace({
         <Callout tone="caution" title="투자 매력도 점수가 아직 없어 결정 요약을 만들 수 없습니다">
           점수를 계산하면 투자 근거·논지 훼손 요인·미확인 정보가 이 자리에 채워집니다.
         </Callout>
-        <ContradictionPanel contradictions={data.decision.contradictions} />
+        <ContradictionPanel contradictions={data.decision.contradictions} onOpenEvidence={openEvidence} />
         <DealScoreRadar dealId={dealId} canEdit={canEdit} onComputed={refreshAfterScore} />
+        <EvidencePanel target={evidenceTarget} onClose={() => setEvidenceTarget(null)} returnFocusRef={evidenceOpenerRef} />
       </div>
     );
   }
@@ -126,7 +135,8 @@ export function DecisionWorkspace({
         <Callout tone="critical" title="Investment Decision 계산 결과가 자체 일관성 검증을 통과하지 못했습니다">
           ({data.gate.reason}) — 검증되지 않은 결정 요약은 표시하지 않습니다. 엔지니어링 확인이 필요합니다.
         </Callout>
-        <ContradictionPanel contradictions={data.decision.contradictions} />
+        <ContradictionPanel contradictions={data.decision.contradictions} onOpenEvidence={openEvidence} />
+        <EvidencePanel target={evidenceTarget} onClose={() => setEvidenceTarget(null)} returnFocusRef={evidenceOpenerRef} />
       </div>
     );
   }
@@ -141,13 +151,14 @@ export function DecisionWorkspace({
         </Callout>
       )}
       <DecisionMap data={data} refFor={refFor} />
-      <ContradictionPanel contradictions={decision.contradictions} />
-      <DriverList drivers={decision.drivers} refFor={refFor} />
-      <BreakerList breakers={decision.thesisBreakers} refFor={refFor} />
+      <ContradictionPanel contradictions={decision.contradictions} onOpenEvidence={openEvidence} />
+      <DriverList drivers={decision.drivers} refFor={refFor} onOpenEvidence={openEvidence} />
+      <BreakerList breakers={decision.thesisBreakers} refFor={refFor} onOpenEvidence={openEvidence} />
       <ValuationBlock data={data} />
       <MissingInformationList items={decision.missingInformation} refFor={refFor} />
       <QuestionList links={data.questionLinks} source={data.questionsSource} />
       {scoreDetail}
+      <EvidencePanel target={evidenceTarget} onClose={() => setEvidenceTarget(null)} returnFocusRef={evidenceOpenerRef} />
     </div>
   );
 }

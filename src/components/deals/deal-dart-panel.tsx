@@ -152,7 +152,7 @@ export function DealDartPanel({ dealId }: { dealId: string }) {
                         href={d.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-blue-600 hover:underline inline-flex items-center gap-1"
+                        className="text-primary hover:underline inline-flex items-center gap-1"
                       >
                         {d.title}
                         <ExternalLink className="w-3 h-3" />

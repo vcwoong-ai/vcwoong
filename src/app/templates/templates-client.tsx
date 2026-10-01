@@ -167,7 +167,7 @@ function ReproductionPreview({ templateId }: { templateId: string }) {
               >
                 <span
                   className={`mt-1 w-1.5 h-1.5 rounded-full shrink-0 ${
-                    b.willReplace ? "bg-blue-500" : "bg-gray-300"
+                    b.willReplace ? "bg-primary" : "bg-gray-300"
                   }`}
                 />
                 <span
@@ -180,7 +180,7 @@ function ReproductionPreview({ templateId }: { templateId: string }) {
                   {b.text || "(빈 단락)"}
                 </span>
                 {b.sectionKey && (
-                  <span className="ml-auto text-[10px] text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded shrink-0">
+                  <span className="ml-auto text-[10px] text-primary bg-blue-100 px-1.5 py-0.5 rounded shrink-0">
                     {b.sectionKey}
                   </span>
                 )}
@@ -192,7 +192,7 @@ function ReproductionPreview({ templateId }: { templateId: string }) {
               <span className="w-1.5 h-1.5 rounded-full bg-gray-300" /> 원본 유지
             </span>
             <span className="flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-blue-500" /> AI 본문으로 교체
+              <span className="w-1.5 h-1.5 rounded-full bg-primary" /> AI 본문으로 교체
             </span>
             {data.supported && (
               <Button
@@ -283,7 +283,7 @@ function TemplateCard({
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3 flex-1 min-w-0">
             <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
-              <FileText className="w-5 h-5 text-blue-500" />
+              <FileText className="w-5 h-5 text-primary" />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
@@ -373,7 +373,7 @@ function TemplateCard({
                   <div className="flex items-center gap-2 ml-3 flex-shrink-0">
                     {m.sectionKey ? (
                       <>
-                        <span className="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded">{m.sectionKey}</span>
+                        <span className="text-xs text-primary bg-blue-50 px-2 py-0.5 rounded">{m.sectionKey}</span>
                         <span className="text-xs text-gray-400">{Math.round(m.confidence * 100)}%</span>
                       </>
                     ) : (
@@ -527,10 +527,10 @@ export function TemplatesClient({
 
       {/* 안내 배너 */}
       <div className="flex items-start gap-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-        <Sparkles className="w-5 h-5 text-blue-500 mt-0.5 flex-shrink-0" />
+        <Sparkles className="w-5 h-5 text-primary mt-0.5 flex-shrink-0" />
         <div className="text-sm text-blue-800">
           <p className="font-medium">양식 재현 엔진 사용법</p>
-          <ol className="mt-1 space-y-1 text-blue-700 list-decimal list-inside">
+          <ol className="mt-1 space-y-1 text-primary list-decimal list-inside">
             <li>기존 투자심의위원회 보고서 DOCX 또는 PPTX를 업로드</li>
             <li>AI가 섹션 구조를 자동 분석 및 매핑 (30초~1분)</li>
             <li>딜 상세 페이지에서 보고서 생성 시 이 양식 선택</li>
@@ -589,7 +589,7 @@ export function TemplatesClient({
           <Button
             onClick={handleUpload}
             disabled={!dragFile || uploading}
-            className="w-full bg-blue-600 hover:bg-blue-700"
+            className="w-full bg-primary hover:bg-primary/90"
           >
             {uploading ? (
               <><Loader2 className="w-4 h-4 mr-2 animate-spin" />분석 중...</>
@@ -638,7 +638,7 @@ export function TemplatesClient({
             </p>
             <Link
               href={`/templates?limit=${nextLimit ?? templates.length + 24}`}
-              className="text-sm text-blue-600 hover:text-blue-800 font-medium border border-gray-200 rounded-lg px-4 py-2"
+              className="text-sm text-primary hover:text-blue-800 font-medium border border-gray-200 rounded-lg px-4 py-2"
             >
               더 보기 ({total - templates.length}개 남음)
             </Link>

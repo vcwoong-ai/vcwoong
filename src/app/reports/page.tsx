@@ -17,7 +17,7 @@ const STATUS_DISPLAY: Record<
 > = {
   PENDING:    { label: "대기",          className: "bg-gray-100 text-gray-600" },
   GENERATING: { label: "생성 중",       className: "bg-amber-100 text-amber-700" },
-  DRAFT:      { label: "초안",          className: "bg-blue-100 text-blue-700" },
+  DRAFT:      { label: "초안",          className: "bg-blue-100 text-primary" },
   REVIEW:     { label: "검토 중",       className: "bg-purple-100 text-purple-700" },
   FINAL:      { label: "최종",          className: "bg-green-100 text-green-700" },
   EXPORTED:   { label: "내보내기 완료", className: "bg-green-100 text-green-700" },
@@ -119,7 +119,7 @@ export default async function ReportsPage({
                     <div className="flex items-center justify-between gap-4">
                       <div className="flex items-center gap-4 flex-1 min-w-0">
                         <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
-                          <FileText className="w-4 h-4 text-blue-500" />
+                          <FileText className="w-4 h-4 text-primary" />
                         </div>
                         <div className="min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
@@ -156,7 +156,7 @@ export default async function ReportsPage({
                       </div>
                       <Link
                         href={`/reports/${report.id}`}
-                        className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-800 font-medium flex-shrink-0"
+                        className="flex items-center gap-1.5 text-sm text-primary hover:text-blue-800 font-medium flex-shrink-0"
                       >
                         열기
                         <ExternalLink className="w-3.5 h-3.5" />
@@ -177,7 +177,7 @@ export default async function ReportsPage({
             </p>
             <Link
               href={`/reports?limit=${reports.length + REPORTS_PAGE_SIZE}`}
-              className="text-sm text-blue-600 hover:text-blue-800 font-medium border border-gray-200 rounded-lg px-4 py-2"
+              className="text-sm text-primary hover:text-blue-800 font-medium border border-gray-200 rounded-lg px-4 py-2"
             >
               더 보기 ({total - reports.length}개 남음)
             </Link>
