@@ -31,6 +31,8 @@ export const authOptions: NextAuthOptions = {
           throw new Error("이메일과 비밀번호를 입력해주세요.");
         }
 
+        const normalizedEmail = credentials.email.trim().toLowerCase();
+
         // 비밀번호 대입 공격 차단. 모든 시도를 세되 성공하면 아래에서
         // 카운터를 비우므로, 결과적으로 실패만 누적된다.
         const ip = ipFromAuthRequest(
@@ -49,7 +51,7 @@ export const authOptions: NextAuthOptions = {
         }
 
         const user = await prisma.user.findUnique({
-          where: { email: credentials.email },
+          where: { email: normalizedEmail },
         });
 
         if (!user || !user.passwordHash) {
