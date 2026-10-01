@@ -3,6 +3,31 @@
 5축 차별화 기준으로 현재 무엇이 동작하고 무엇이 남았는지 정리한 문서입니다.
 다른 환경(예: Claude)에서 작업한 내용과 병합할 때 기준점으로 사용하세요.
 
+## 2026-10-01 — PR #118 승인 병합 및 후속 브랜치 rebase
+
+- 사용자가 PR #118 squash 병합과 후속 rebase/push/Draft PR 생성을 명시적으로 승인했다.
+  #118을 ready로 전환하고 승인 대상 head `99885fc` 일치를 확인해 squash 병합했다.
+  merge/main SHA `b919e5db52e1474dd245fdbb6fc9ddddf8587a8e`, mergedAt `2026-10-01T02:20:24Z`.
+- 기존 `9bd98a5`를 로컬 보존 브랜치 `codex/vc-design-review-pre-rebase-20261001`에 남겼다.
+  `git rebase --onto origin/main 99885fc codex/vc-design-review`로 #118 이후 Codex 9개 커밋만 재적용.
+  충돌 없음, 결과 `07bd6acddfa30754cc6c6f3911a4f112603a4bde`. rebase 전후 전체 파일 diff 0, 미커밋 작업 없음.
+- 운영 배포: `dpl_BEWsmYYbp6Jgzt2Nzrdb1WHjganX`, URL `dealsync-j8tmsqh71-vcwoong.vercel.app`.
+  Vercel UI에서 Production/READY, source `b919e5d`, ready 시각 11:23:20 KST, duration 2m52s 확인.
+  alias는 `dealmind.space`, `www.dealmind.space`, `dealsync-jade.vercel.app`, `dealsync-git-main-vcwoong.vercel.app`.
+  Custom Domains 할당 오류는 화면에 없음. **aliasError API 필드 값은 NOT VERIFIED**:
+  연결 앱의 프로젝트 목록은 0개, 해당 배포의 ID/URL 조회는 404. 브라우저 로그인 후 UI 읽기로 확인했다.
+- 런타임: 해당 deploymentId 필터, 2026-10-01 11:25 KST의 Last 30 minutes에서
+  Warning/Error/Fatal 각 0, 표시된 10개 GET 요청 모두 200, Error 필터 결과 없음.
+  짧은 배포 직후 관찰이며 인증된 운영 VC/PE 흐름이나 이후 cron 성공을 의미하지 않는다.
+  확인 증거는 로컬 `screenshots/post-118-vercel-{ready,errors}.png`.
+- rebase 후 실제 재실행 PASS: `npm run test:all`, `npx tsc --noEmit`, `npm run lint`,
+  `test:vc-decision-e2e`, `test:pe-frontend-productization-e2e`, `test:pe-document-text-e2e`,
+  `npx tsx tools/test-home-pe-design.ts after` (6 화면, 1440/390, PE 입력 해시 동일).
+  fixture SQLite `file:./dev.db`/Edge이며, AI·운영 DB 호출 없음.
+  `npm run build`와 build 후 `npx tsc --noEmit`도 PASS. 작업의 dev 서버는 build 전에 종료했다.
+- 후속 변경은 Codex 브랜치 push와 Draft PR까지만 진행한다. 후속 PR 병합은 미승인.
+  운영 DB/env/결제 설정은 변경하지 않았다. main 갱신으로 기존 Git 연동 운영 배포가 발생했다.
+
 ## 2026-10-01 — 10월 2주차 첫 구현: PE 파싱 텍스트 조회
 
 - 시작 branch `codex/vc-design-review`, HEAD `bffbecee5f26b61d98d8e5902d227d60e42c5f6e`, clean.

@@ -2,6 +2,10 @@
 
 ## 인수 기준
 
+2026-10-01 후속 승인: PR #118은 `b919e5d`로 squash 병합 완료.
+Codex 후속 브랜치는 해당 main 위에 rebase·실제 재검증 후 push/Draft PR까지만 진행한다.
+후속 PR 병합과 운영 DB/env/결제 변경은 승인하지 않은 범위다. 배포/검증 상세는 PRODUCT-STATUS의 후속 기록 참조.
+
 2026-10-01 사용자 제공 Claude 계획을 현재 코드와 대조했다. 첨부의 운영 장애·한도·테스트 횟수는 당시 보고이며 현재 검증 결과로 복사하지 않는다.
 최초 인수 기준은 `codex/vc-design-review`의 `79e8bec`. 이번 원문 조회 작업 시작 HEAD는 `bffbece`, 로컬 clean.
 main `a60f465`와 개발 원격 `bffbece`는 이번 작업에서 ls-remote로 재확인했다.
