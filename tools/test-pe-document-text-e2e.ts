@@ -4,6 +4,7 @@ import { mkdirSync } from "node:fs";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { chromium } from "playwright";
+import { gotoAppReady } from "./helpers/app-ready";
 
 const db = new PrismaClient();
 const base = "http://localhost:3000";
@@ -98,7 +99,7 @@ async function main() {
     page.on("pageerror", (error) => errors.push(error.message));
     for (const width of [1440, 390]) {
       await page.setViewportSize({ width, height: 1000 });
-      await page.goto(`${base}/ma-deals/${deal.id}`, { waitUntil: "networkidle" });
+      await gotoAppReady(page, `${base}/ma-deals/${deal.id}`, page.getByRole("tab", { name: "데이터룸", exact: true }));
       await page.getByRole("tab", { name: "데이터룸", exact: true }).click();
       if (before) await page.getByText(doc.name, { exact: true }).click();
       else {

@@ -58,6 +58,8 @@
     "test:deal-queue-security": "tsx tools/test-deal-queue-security.ts",
     "test:paid-product-e2e": "tsx tools/test-paid-product-e2e.ts",
     "test:week3-onboarding-e2e": "tsx tools/test-week3-onboarding-e2e.ts",
+    "test:week4-accessibility-e2e": "tsx tools/test-week4-accessibility-e2e.ts",
+    "test:week4-performance": "tsx tools/test-week4-performance.ts",
     "test:vc-decision-layer": "tsx tools/test-vc-decision-layer.ts",
     "test:vc-decision-memo": "tsx tools/test-vc-decision-memo.ts",
     "test:cron-resume": "tsx tools/test-cron-resume.ts",

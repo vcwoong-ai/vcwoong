@@ -1,0 +1,82 @@
+{
+  "database": "local SQLite",
+  "warmup": 1,
+  "runs": 5,
+  "results": [
+    {
+      "count": 1,
+      "samples": [
+        {
+          "milliseconds": 2.28,
+          "queries": 7
+        },
+        {
+          "milliseconds": 1.99,
+          "queries": 7
+        },
+        {
+          "milliseconds": 1.98,
+          "queries": 7
+        },
+        {
+          "milliseconds": 2.02,
+          "queries": 7
+        },
+        {
+          "milliseconds": 1.76,
+          "queries": 7
+        }
+      ]
+    },
+    {
+      "count": 10,
+      "samples": [
+        {
+          "milliseconds": 7.51,
+          "queries": 7
+        },
+        {
+          "milliseconds": 3.08,
+          "queries": 7
+        },
+        {
+          "milliseconds": 2.67,
+          "queries": 7
+        },
+        {
+          "milliseconds": 2.43,
+          "queries": 7
+        },
+        {
+          "milliseconds": 6.66,
+          "queries": 7
+        }
+      ]
+    },
+    {
+      "count": 30,
+      "samples": [
+        {
+          "milliseconds": 4.41,
+          "queries": 7
+        },
+        {
+          "milliseconds": 3.83,
+          "queries": 7
+        },
+        {
+          "milliseconds": 3.68,
+          "queries": 7
+        },
+        {
+          "milliseconds": 3.86,
+          "queries": 7
+        },
+        {
+          "milliseconds": 4.27,
+          "queries": 7
+        }
+      ]
+    }
+  ]
+}

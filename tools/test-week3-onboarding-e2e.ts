@@ -4,6 +4,7 @@ import { mkdirSync } from "node:fs";
 import bcrypt from "bcryptjs";
 import { PrismaClient } from "@prisma/client";
 import { chromium } from "playwright";
+import { gotoAppReady } from "./helpers/app-ready";
 
 const db = new PrismaClient();
 const base = "http://localhost:3000";
@@ -54,7 +55,8 @@ async function main() {
     for (const width of [1440, 390]) {
       await page.setViewportSize({ width, height: 1000 });
       for (const path of ["dashboard", "deals", "ma-deals"]) {
-        await page.goto(`${base}/${path}`, { waitUntil: "networkidle" });
+        if (before) await page.goto(`${base}/${path}`, { waitUntil: "networkidle" });
+        else await gotoAppReady(page, `${base}/${path}`, page.getByTestId("first-deal-guide").first());
         if (!before) {
           assert(await page.getByTestId("first-deal-guide").count() > 0);
           assert(await page.getByText("딜을 만든 뒤에도 자료 입력과 검토가 필요합니다.", { exact: true }).count() > 0);
@@ -68,7 +70,7 @@ async function main() {
         ["deals", "첫 VC 딜 만들기", "VC 예시 기업"],
         ["ma-deals", "첫 PE/M&A 딜 만들기", "PE 예시 기업"],
       ]) {
-        await page.goto(`${base}/${path}`, { waitUntil: "networkidle" });
+        await gotoAppReady(page, `${base}/${path}`, page.getByTestId("first-deal-guide").first());
         const trigger = page.getByRole("button", { name: button, exact: true });
         await trigger.focus();
         await page.keyboard.press("Enter");
