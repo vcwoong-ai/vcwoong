@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -41,6 +42,10 @@ import { useToast } from "@/hooks/use-toast";
 import { useConfirm } from "@/hooks/use-confirm";
 import { AgentType, DealSector, DealStage } from "@prisma/client";
 import { SECTOR_LABEL, STAGE_LABEL } from "@/lib/deal-labels";
+
+const ExitSimulation = dynamic(() => import("./exit-simulation"), {
+  loading: () => <p role="status" className="p-4 text-sm">회수 시뮬레이션을 불러오는 중입니다.</p>,
+});
 
 interface DealWithRelations {
   id: string;
@@ -183,6 +188,7 @@ export function DealDetailClient({
   const toast = useToast();
   const confirm = useConfirm();
   const [generating, setGenerating] = useState(false);
+  const [exitVisited, setExitVisited] = useState(false);
   const [progress, setProgress] = useState<GenerationProgress | null>(null);
   const [uploadKey, setUploadKey] = useState(0);
   const [detectingsector, setDetectingSector] = useState(false);
@@ -583,9 +589,8 @@ export function DealDetailClient({
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="documents">
-        {/* 탭 3개가 좁은 화면 폭을 넘기므로 가로 스크롤을 허용한다 */}
-        <TabsList className="w-full overflow-x-auto justify-start">
+      <Tabs defaultValue="documents" onValueChange={(value) => { if (value === "exit") setExitVisited(true); }}>
+        <TabsList className="grid h-auto w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
           <TabsTrigger value="documents" className="flex items-center gap-1.5">
             <Upload className="w-3.5 h-3.5" />
             문서 ({deal.documents.length})
@@ -606,6 +611,7 @@ export function DealDetailClient({
             <Landmark className="w-3.5 h-3.5" />
             전자공시
           </TabsTrigger>
+          <TabsTrigger value="exit">회수 시뮬레이션</TabsTrigger>
         </TabsList>
 
         {/* Documents tab */}
@@ -847,6 +853,9 @@ export function DealDetailClient({
         {/* DART 전자공시 tab */}
         <TabsContent value="dart">
           <DealDartPanel dealId={deal.id} />
+        </TabsContent>
+        <TabsContent value="exit" forceMount className="data-[state=inactive]:hidden">
+          {exitVisited && <ExitSimulation key={deal.id} investAmount={deal.investAmount} valuation={deal.valuation} />}
         </TabsContent>
       </Tabs>
     </div>

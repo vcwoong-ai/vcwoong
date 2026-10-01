@@ -1,5 +1,20 @@
 # DealMind 제품 현황
 
+## 2026-10-02 — 회수 시뮬레이션 1단계 · 디자인 검토 준비
+
+- 새 `codex/exit-simulation-phase1`, 시작 main/HEAD `a5796bb`. 기존 `codex/site-review-release` clean 상태와 Claude 작업 보존.
+- main에 없던 엔진/12건 테스트를 OPEN #127 head `1268db4`에서 원본 그대로 인수했고 Git blob 일치를 확인했다.
+  엔진·VC NOT_COMPUTABLE·권한·결제·DB/env/schema 수정 없음. API 쓰기/시나리오 저장도 없다.
+- 딜 상세에 회수 시뮬레이션 탭: 기존 주주/라운드/SAFE/후속/청산 가정을 입력하고
+  라운드 지분·분배액·MOIC·선택 기간 IRR·전환 판정·회수 곡선·원문 경고를 보여준다.
+  투자금과 포스트밸류에서만 초기값을 채우며, 필수 가정은 임의로 채우지 않는다. 새로고침 시 초기화.
+- 실제 exit-waterfall 12건, 입력 테스트, test:all VC/PE 체인, tsc, lint, build PASS.
+  실제 인증 딜 탭 개발 서버 E2E 1440/390 PASS: 손계산 400원/20%/10·20억원, IRR 14.87%,
+  복합 입력의 동일 엔진 snapshot 결과, 가로 넘침 없음, API 쓰기/딜 변경 없음 확인.
+- 최적화 build 서버 시작은 자동 승인 검토가 `blocked by policy`로 거절해 최적화 build 브라우저는 NOT VERIFIED.
+  원격 CI/Preview/운영 인증 검증도 로컬 PASS로 대체하지 않는다. main 대상 Draft PR, 병합/배포 승인 없음.
+- [구현·명령·실제 desktop/mobile 캡처·남은 범위](exit-simulation/README.md). READY FOR DESIGN REVIEW.
+
 ## 2026-10-02 — 통합 배포 전 검증 완료
 
 - 사용자 실행으로 3001 수정 production build HTTP 200 확인. 서버 시작 차단은 해소되었다.
