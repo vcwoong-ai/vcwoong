@@ -33,6 +33,10 @@ export default async function NewReportPage() {
           </p>
         </div>
 
+        <ol aria-label="보고서 작성 순서" className="grid gap-3 sm:grid-cols-3">
+          {[["1", "딜 선택", "아래에서 작성할 기업을 선택합니다."], ["2", "자료·양식 확인", "IR 자료와 보고서 양식을 확인합니다."], ["3", "생성 후 검토", "수치 근거와 상충 내용을 검토합니다."]].map(([step, title, detail]) => <li key={step} className="rounded-xl border bg-white p-4"><span className="text-xs font-semibold text-primary">STEP {step}</span><p className="mt-2 font-semibold">{title}</p><p className="mt-1 text-xs leading-relaxed text-muted-foreground">{detail}</p></li>)}
+        </ol>
+
         {deals.length === 0 ? (
           <Card>
             <CardContent className="py-12 text-center space-y-4">
@@ -55,7 +59,7 @@ export default async function NewReportPage() {
               return (
                 <Card key={deal.id} className="hover:shadow-sm transition-shadow">
                   <CardContent className="py-4 px-5">
-                    <div className="flex items-center justify-between gap-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <p className="font-semibold text-gray-900">{deal.companyName}</p>

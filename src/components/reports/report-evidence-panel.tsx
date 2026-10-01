@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { Badge } from "@/components/ui/badge";
+import { DistributionPanel } from "@/components/ui/distribution-panel";
 import { Button } from "@/components/ui/button";
 import { SECTION_META } from "@/types";
 import {
@@ -195,6 +196,23 @@ export function ReportEvidencePanel({
         })}
       </div>
 
+      <div className="mt-4">
+        <DistributionPanel title="근거의 구성" description="현재 보고서 API의 근거 분류 건수입니다. 자료 내 일치 여부이며 사실 확정이나 투자 판단 점수가 아닙니다." rows={(["document", "deal", "unverified"] as const).map(status => ({ label: STATUS_META[status].label, count: totals[status] }))} />
+      </div>
+
+      <details className="mt-4 rounded-lg border p-3">
+        <summary className="cursor-pointer text-sm font-medium">수치·출처 비교표 ({data.claims.filter(claim => claim.claimType === "numeric").length}건)</summary>
+        <p className="mt-2 text-xs text-muted-foreground">원문에 기재된 값을 그대로 표시합니다. 기간·단위가 다른 숫자를 합산하거나 추정하지 않습니다.</p>
+        <table className="mt-3 w-full table-fixed text-xs">
+          <caption className="sr-only">보고서 수치와 원문 출처 비교</caption>
+          <thead><tr className="border-b text-left"><th scope="col" className="w-1/3 p-2">수치 / 항목</th><th scope="col" className="p-2">출처 / 확인 상태</th></tr></thead>
+          <tbody>{data.claims.filter(claim => claim.claimType === "numeric").map((claim, index) => <tr key={`${claim.sectionKey}-${index}`} className="border-b align-top">
+            <td className="break-words p-2"><span className="font-semibold">{claim.value} {claim.unit}</span><br />{claim.label || claim.raw}<p className="mt-1 text-muted-foreground">{sectionTitle(claim.sectionKey)}</p></td>
+            <td className="break-words p-2"><span className="font-medium">{STATUS_META[claim.status].label}</span>{claim.source ? <details className="mt-1"><summary className="cursor-pointer">{claim.source.documentName}{claim.source.location ? ` · ${claim.source.location}` : ""}</summary><p className="mt-1 leading-relaxed">{claim.source.snippet}</p></details> : <p className="mt-1 text-muted-foreground">{claim.status === "deal" ? "딜 입력값 · 별도 원문 확인 필요" : "연결된 원문 없음"}</p>}</td>
+          </tr>)}</tbody>
+        </table>
+      </details>
+
       {error && (
         <p className="mt-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1.5">
           {error}
@@ -219,7 +237,7 @@ export function ReportEvidencePanel({
 
       {visible.length === 0 ? (
         <p className="mt-3 text-sm text-green-700">
-          근거 없는 주장이 없습니다. 모든 숫자·핵심 주장이 자료나 딜 입력값으로 되짚어집니다.
+          {totals.checked === 0 ? "추출된 주장이 없어 근거 상태를 판단할 수 없습니다." : "현재 필터에 해당하는 주장이 없습니다. 추적 결과는 사실 검증 완료를 의미하지 않습니다."}
         </p>
       ) : (
         <ul className="mt-3 space-y-2">

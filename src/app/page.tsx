@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BrandMark } from "@/components/brand-mark";
 import styles from "./landing.module.css";
 import { BRAND } from "@/lib/brand";
 import { PLAN_LIMITS } from "@/lib/quotas";
@@ -143,7 +144,7 @@ export default function LandingPage() {
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
           <Link href="/" className="flex items-center gap-2.5">
             <span className={styles.brandMark}>
-              {BRAND.name.slice(0, 1)}
+              <BrandMark className="h-7 w-7" />
             </span>
             <span className="text-base font-semibold tracking-tight text-white">{BRAND.name}</span>
           </Link>
@@ -347,7 +348,7 @@ export default function LandingPage() {
           <div>
             <p className="flex items-center gap-2 font-semibold text-foreground">
               <span className="flex h-6 w-6 items-center justify-center rounded-md bg-primary text-[10px] font-bold text-primary-foreground">
-                {BRAND.name.slice(0, 1)}
+                <BrandMark className="h-7 w-7" />
               </span>
               {BRAND.name}
             </p>

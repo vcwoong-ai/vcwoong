@@ -565,7 +565,12 @@ export function ReportPageClient({
       </div>
 
       {report.sections.length > 0 && (
-        <Card className="p-4 sm:p-7">
+        <Card id="decision-summary" className="p-4 sm:p-7">
+          <nav aria-label="보고서 작업 바로가기" className="mb-5 flex flex-wrap gap-2 border-b pb-4 text-xs">
+            <a className="rounded-md border px-3 py-2 hover:bg-slate-50" href="#report-detail">본문 읽기</a>
+            <a className="rounded-md border px-3 py-2 hover:bg-slate-50" href="#report-evidence">수치 근거 확인</a>
+            <a className="rounded-md border px-3 py-2 hover:bg-slate-50" href="#ic-questions">IC 질문 확인</a>
+          </nav>
           <DecisionWorkspace
             key={report.id}
             reportId={report.id}
@@ -581,6 +586,7 @@ export function ReportPageClient({
         <SectionHeader
           className="pt-2"
           eyebrow="Evidence & verification"
+          id="report-evidence"
           title="근거 추적 · 보조 검증"
           description="결정 요약을 뒷받침하는 도구입니다 — 근거 대조, 외부 검증, IC 질문, 작성 품질"
         />

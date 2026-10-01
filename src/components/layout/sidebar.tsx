@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { BrandMark } from "@/components/brand-mark";
 import { usePathname } from "next/navigation";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { cn } from "@/lib/utils";
@@ -12,7 +13,6 @@ import {
   Inbox,
   Upload,
   Settings,
-  Zap,
   LayoutTemplate,
   LineChart,
   Sparkles,
@@ -96,7 +96,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
       <div className="p-6 border-b border-white/10 flex items-start justify-between gap-2">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="w-9 h-9 rounded-md flex items-center justify-center flex-shrink-0 bg-primary">
-            <Zap className="w-5 h-5 text-white" />
+            <BrandMark className="w-7 h-7 text-white" />
           </div>
           <div className="min-w-0">
             <p className="text-lg font-bold tracking-tight">{BRAND.name}</p>
@@ -150,11 +150,11 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         ))}
       </nav>
 
-      {/* Agent badges */}
-      <div className="p-4 border-t border-white/10">
-        <p className="text-[10px] text-slate-500 mb-2.5 font-semibold uppercase tracking-[0.12em]">
-          활성 에이전트
-        </p>
+      {/* These are available tools, not a live execution indicator. */}
+      <details className="p-4 border-t border-white/10">
+        <summary className="cursor-pointer text-xs text-slate-400 mb-2.5 font-semibold">
+          섹터별 분석 도구
+        </summary>
         <div className="space-y-1.5">
           {[
             { dot: "bg-purple-400", name: "Dr. Cell" },
@@ -177,7 +177,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
             </div>
           ))}
         </div>
-      </div>
+      </details>
     </>
   );
 

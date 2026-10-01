@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils";
 import { SECTION_META, getKoreanVisualWidth } from "@/types";
 import { SectionStatus } from "@prisma/client";
 import { Markdown } from "@/components/ui/markdown";
+import { ReportTableCharts } from "@/components/reports/report-table-charts";
 import { ReportPreviewPanel } from "@/components/reports/report-preview-panel";
 import { useToast } from "@/hooks/use-toast";
 import { useConfirm } from "@/hooks/use-confirm";
@@ -460,6 +461,14 @@ export function ReportEditor({
         </div>
       )}
 
+      <nav aria-label="보고서 목차" className="rounded-xl border bg-slate-50 p-4">
+        <p className="mb-3 text-sm font-semibold">섹션으로 바로 이동</p>
+        <ol className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {sortedSections.map((section, index) => <li key={section.id}><a href={`#section-${section.sectionKey}`} className="flex items-start gap-2 rounded-md border bg-white p-2 text-xs hover:border-blue-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600"><span className="font-mono text-muted-foreground">{String(index + 1).padStart(2, "0")}</span><span className="min-w-0 flex-1 break-words">{section.title}</span><span className="shrink-0 text-muted-foreground">{section.status === "APPROVED" ? "승인" : section.status === "REVIEWED" ? "검토됨" : "초안"}</span></a></li>)}
+        </ol>
+        <p className="mt-3 text-xs text-muted-foreground">섹션 검토 상태이며 투자 승인 여부가 아닙니다.</p>
+      </nav>
+
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
         <div className="xl:col-span-3 space-y-4">
         {sortedSections.map((section) => {
@@ -597,7 +606,10 @@ export function ReportEditor({
                 ) : (
                   <div>
                     {section.content ? (
-                      <Markdown content={section.content} />
+                      <>
+                        <ReportTableCharts content={section.content} />
+                        <Markdown content={section.content} />
+                      </>
                     ) : (
                       <span className="text-gray-400 italic text-sm">내용이 없습니다</span>
                     )}

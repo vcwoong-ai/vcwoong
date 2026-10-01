@@ -7,7 +7,7 @@ import { createPaidProductFixture } from "./helpers/paid-product-fixture";
 
 const base = process.env.BASE_URL ?? "http://localhost:3000";
 const target = new URL(base);
-assert(target.hostname === "localhost" && ["3000", "3001"].includes(target.port) && target.protocol === "http:", "local review only");
+assert(target.hostname === "localhost" && ["3000", "3001", "3003"].includes(target.port) && target.protocol === "http:", "local review only");
 const dir = "screenshots/site-review";
 const db = new PrismaClient();
 const rows: Array<Record<string, unknown>> = [];
@@ -34,6 +34,7 @@ async function main() {
   const testIp = `2001:db8:4::${Date.now().toString(16).slice(-4)}`;
   try {
     fixture = await createPaidProductFixture(db);
+    await db.reportSection.updateMany({ where: { reportId: fixture.report.id, sectionKey: "FINANCIAL_STATUS" }, data: { content: "예시 자료의 연도별 기재값입니다.\n\n| 항목 | 2022 | 2023 | 2024 |\n| --- | --- | --- | --- |\n| 매출 (억원) | 60 | 80 | 110 |\n| 영업이익 (억원) | -20 | 미확인 | -12 |" } });
     const ownerId = fixture.owner.id;
     const fund = await db.fund.create({ data: { userId: ownerId, name: "순회 검토 펀드 (예시)", vintageYear: 2024, fundSize: 300, paidIn: 150 } });
     const company = await db.portfolioCompany.create({ data: { userId: ownerId, fundId: fund.id, companyName: "사후관리 기업 (예시)", sector: "IT", investedAt: new Date("2024-01-01"), investAmount: 30, ownershipPercent: 10, entryValuation: 300, currentValuation: 350 } });
@@ -66,6 +67,13 @@ async function main() {
         ["/upload", "upload"], ["/settings", "settings"], ["/admin/usage-cost", "admin-denied"],
       ];
       for (const [path, name] of routes) await inspect(page, path, name, width);
+      await page.goto(`${base}/reports/${fixture.report.id}`, { waitUntil: "networkidle" });
+      assert.equal(await page.getByRole("navigation", { name: "보고서 목차" }).count(), 1);
+      assert.equal(await page.locator("figure").filter({ hasText: "매출 (억원)" }).count(), 1);
+      await page.getByText(/^수치·출처 비교표/).click();
+      await page.getByRole("table", { name: "보고서 수치와 원문 출처 비교" }).waitFor({ state: "visible" });
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+      await page.screenshot({ path: `${dir}/report-evidence-table-${width}.png`, fullPage: true });
       await page.goto(`${base}/ma-deals/${fixture.peDeal.id}`, { waitUntil: "networkidle" });
       for (const tab of ["ic-review", "ic-decision", "ic-review-workflow", "committee-pack", "data-room", "financials", "lbo"]) {
         await page.locator(`button[role=tab][aria-controls$="-${tab}"]`).click();

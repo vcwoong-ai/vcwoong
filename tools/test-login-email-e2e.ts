@@ -10,7 +10,7 @@ const base = process.env.BASE_URL ?? "http://localhost:3000";
 async function main() {
   assert.equal(process.env.DATABASE_URL, "file:./dev.db");
   const target = new URL(base);
-  assert.ok(target.protocol === "http:" && target.hostname === "localhost" && ["3000", "3001"].includes(target.port), "local review server only");
+  assert.ok(target.protocol === "http:" && target.hostname === "localhost" && ["3000", "3001", "3003"].includes(target.port), "local review server only");
   const db = new PrismaClient();
   const stamp = Date.now();
   const suffix = stamp.toString(16).slice(-4);
