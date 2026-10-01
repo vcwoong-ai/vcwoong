@@ -57,6 +57,7 @@
     "test:deal-queue": "tsx tools/test-deal-queue.ts",
     "test:deal-queue-security": "tsx tools/test-deal-queue-security.ts",
     "test:paid-product-e2e": "tsx tools/test-paid-product-e2e.ts",
+    "test:landing-visual-e2e": "tsx tools/test-landing-visual-e2e.ts",
     "test:week3-onboarding-e2e": "tsx tools/test-week3-onboarding-e2e.ts",
     "test:week4-accessibility-e2e": "tsx tools/test-week4-accessibility-e2e.ts",
     "test:week4-performance": "tsx tools/test-week4-performance.ts",
