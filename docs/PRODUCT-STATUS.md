@@ -31,7 +31,12 @@
   전체 가입/요금/인가 시나리오의 이번 실행은 NOT VERIFIED. 기존 데이터를 재시드하거나 테스트를 약화하지 않았다.
 - Before/After: `docs/design-review-home-pe/`의 랜딩·대시보드·PE 1440/390 PNG 12개.
   로그와 첫 화면 캡처는 ignored `screenshots/home-pe-design/`. 로컬 SQLite·예시 데이터만 사용, 유료 AI/운영 DB 접근 없음.
-- 최종 `npm run build` PASS (개발 서버 종료 후 실행). 클라우드 반영 전까지 로컬 검증 결과로 구분한다.
+- 최종 `npm run build` PASS (개발 서버 종료 후 실행).
+- 클라우드: 구현 커밋 `553fb7b`를 승인된 브랜치에 push하고 기존 Codespace에서 fast-forward했다.
+  PE fixture 보존 seed 및 clean 상태 확인. 인증된 대시보드·PE 개요 실화면 확인,
+  다음 행동 → 재무·QoE 탭 → 매출 1,000억원/950억원과 각 출처 표시 PASS.
+  같은 Private 3000 개발 포트를 사용한다. 전체 테스트·typecheck/lint/build 결과는 로컬 실행 결과이며
+  클라우드에서 전체 재실행한 것은 아니다. 운영 배포는 하지 않았다.
 - 승인: 사용자 디자인 확인 대기. **READY FOR DESIGN REVIEW**.
 
 ## 2026-10-01 — 회사·집 공용 Codespaces 이전 준비
