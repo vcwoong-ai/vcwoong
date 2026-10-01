@@ -3,6 +3,27 @@
 5축 차별화 기준으로 현재 무엇이 동작하고 무엇이 남았는지 정리한 문서입니다.
 다른 환경(예: Claude)에서 작업한 내용과 병합할 때 기준점으로 사용하세요.
 
+## 2026-10-01 — 전체 제품 E2E fixture 보강
+
+- 새 브랜치 `codex/product-e2e-fixtures`, 기준 HEAD `3ad2c3b30825094976463600c21f20ef96697ba8` (#123).
+  clean checkout에서 시작. 로그인 보강 및 Claude #121 브랜치를 보존했다. main 변경/병합 없음.
+- tools/docs만 수정. 기존 demo 데이터 의존과 전체 rate limit 삭제를 제거하고,
+  테스트 전용 사용자·VC 상충/근거 없는 초안·PE 재무/QoE/DD/빈 딜을 생성·정리한다.
+  실제 evidence tracing/score assessment와 앱 canonical 경로를 사용한다. 앱·엔진·권한·결제·schema 변경 없음.
+- PASS: `npm run test:paid-product-e2e` exit 0, **134개 assertion**.
+  실제 가입·빈 상태·소유자 VC/PE·근거 패널·상충·다른 사용자 404,
+  390/430/768/1024/1440px의 11개 화면, 기본 접근성 및 suite 기준 console 확인.
+  스크린샷은 `design-review-product-e2e/README.md`, 상세 범위는 `PRODUCT-E2E-FIXTURES.md`.
+- PASS: `npx tsc --noEmit`, `npm run lint`, `git diff --check`.
+  의도적 브라우저 시작 실패(exit 1) 후에도 테스트 사용자 0건, 기존 demo/검토용 로그인 계정 유지: PASS.
+  정상 실행 후에도 같은 데이터 보존/정리를 DB에서 확인했다.
+- 환경: 정확히 `file:./dev.db` + `http://localhost:3000`, Edge. 외부 브라우저 요청은 204 fixture stub.
+  이전 #123의 로컬 production build를 `npm run start`로 제공하며 앱 소스는 이번 브랜치와 동일하다.
+  이번 tools/docs 변경에서는 `test:all`/build를 재실행하지 않았다. 이전 결과를 이번 실행으로 세지 않는다.
+- NOT VERIFIED: 실제 청구/유료 AI/DART/PDF 원본, PostgreSQL/운영 인증, 클라우드 checkout 최신 반영.
+  운영 DB/env/배포 변경 없음. 로컬 검토 계정과 테스트 화면은 유지한다.
+  별도 branch push 및 Draft PR까지만 진행하며 사람 디자인 확인/병합은 대기한다.
+
 ## 2026-10-01 — 로그인 이메일 충돌 보강
 
 - 사용자 로그인 이메일 수정·테스트 화면 요청에 따라 `codex/login-email-resolution` 생성, base `bb315ea` (#122).
