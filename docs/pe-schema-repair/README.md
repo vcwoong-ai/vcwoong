@@ -4,10 +4,10 @@
 
 The user explicitly approved recovery and revoked the prior DB/env/schema approval restriction, granting full project access. The earlier pending-approval statements below are historical and superseded. Necessary DB/env/schema work within the project may proceed under this authorization without asking the same question again.
 
-- Applied the exact rehearsed additive SQL to `holy-haze-98999891` / `br-round-brook-ahohaqtt` / `neondb` in one transaction. SQL SHA256 remains `80B791E378CA3C39E4BC1A06DE7050F568F2337841BE6D580D39651FE7F042AB`.
+- Applied the exact rehearsed additive SQL to `holy-haze-98999891` / `br-round-brook-ahohaqtt` / `neondb` in one transaction. Applied SQL SHA256 (before trailing blank-line normalization) is `80B791E378CA3C39E4BC1A06DE7050F568F2337841BE6D580D39651FE7F042AB`.
 - Final catalog: 15 PE tables, 19 enums, 153 columns, 41 constraints, 49 indexes. Existing column/index hashes match before/after. User/Deal/Report counts remain 7/18/28. No production fixture records were inserted.
 - Snapshot creation hit the snapshot-count limit. Existing `snap-little-rice-ahj3hrf1` was retained. A fresh no-compute recovery branch `br-billowing-sunset-ah5g7faz` was created from main, parent LSN `0/4A743F0`, parent timestamp `2026-10-01T21:37:05Z`. Although the create call returned 401, console and list_branches confirmed the branch is ready; no duplicate branch was created.
-- Actual authenticated production `/dashboard` and `/ma-deals` now render. PE empty state matches the actual MADeal count of 0. Both routes passed 390px overflow/error checks; browser console error query was empty.
+- Actual authenticated production `/dashboard`, `/ma-deals`, and the existing VC `/deals` list now render. PE empty state matches the actual MADeal count of 0. Both routes passed 390px overflow/error checks; browser console error query was empty.
 - Refreshed Vercel error-filter view at 06:41 KST shows only the seven pre-repair dashboard errors (latest 06:31:02). No post-repair error was present in the inspected 30-minute window. This is a bounded check, not a future uptime guarantee.
 - Existing production deployment remains `dpl_Gj7zY1Z88V1czynHdFkvxEA2tLmC` / `a5796bb`. No app redeploy or environment/billing change was needed. Actual production recovery confirms this Neon branch is the application's current DB target.
 - Offline canonical DDL verifier rerun: PASS. Production PE detail/write workflows are NOT VERIFIED because no PE deals exist; do not infer all PE functions pass from the empty list. Earlier isolated schema/constraint/default tests remain documented below.
@@ -22,7 +22,7 @@ Prisma P2021, `prisma.mADeal.count()`, `public.MADeal does not exist`, digest `1
 The request detail identifies production deployment `dpl_Gj7zY1Z88V1czynHdFkvxEA2tLmC`, main,
 and host `www.dealmind.space`. A 200 response does not indicate successful Server Components rendering.
 The connected logs API returned 403; these findings came from the authenticated Vercel browser instead.
-[Current production error screenshot](current-production-error.png).
+Current production error screenshot is retained locally as `current-production-error.png` and is not published.
 No production DDL, environment, code, merge, or deployment change was made in this incident recheck.
 The repair below remains prepared, unapplied, and subject to explicit production schema approval.
 Before application, recheck the actual production DB target, catalogs, and a fresh recovery point.

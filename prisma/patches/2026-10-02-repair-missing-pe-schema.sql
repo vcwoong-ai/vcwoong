@@ -392,4 +392,3 @@ ALTER TABLE "PEICAuditEvent" ADD CONSTRAINT "PEICAuditEvent_actorId_fkey" FOREIG
 
 ALTER TABLE "PEICAuditEvent" ADD CONSTRAINT "PEICAuditEvent_reviewSnapshotId_fkey" FOREIGN KEY ("reviewSnapshotId") REFERENCES "PEICReviewSnapshot"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 COMMIT;
-
