@@ -157,11 +157,11 @@ export default async function SettingsPage() {
               <div className="flex justify-between">
                 <span>스토리지 모드</span>
                 <Badge variant="outline">
-                  {process.env.STORAGE_MODE === "s3" ? "AWS S3" : "로컬"}
+                  {(process.env.STORAGE_MODE ?? (process.env.BLOB_READ_WRITE_TOKEN ? "vercel-blob" : "local")) === "vercel-blob" ? "Vercel Blob" : process.env.STORAGE_MODE === "s3" ? "AWS S3" : "로컬"}
                 </Badge>
               </div>
               <p className="text-xs text-gray-400">
-                프로덕션 배포 시 AWS S3로 전환하세요.
+                파일 저장 방식입니다. 연결 설정과 실제 업로드 성공 여부는 별도로 확인해야 합니다.
               </p>
             </div>
           </CardContent>

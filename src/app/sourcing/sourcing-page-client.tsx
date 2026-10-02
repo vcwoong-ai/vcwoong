@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { DistributionPanel } from "@/components/ui/distribution-panel";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -296,7 +297,6 @@ export function SourcingPageClient({
           <h1 className="text-2xl font-bold text-gray-900">딜소싱 인박스</h1>
           <p className="text-sm text-gray-500 mt-1">
             인바운드 딜을 모아 AI로 1차 선별하고 심사 파이프라인으로 넘깁니다.
-            외부 연동: <code className="text-xs bg-gray-100 px-1 rounded">POST /api/sourcing/webhook</code>
           </p>
           {role === "ANALYST" && (
             <p className="text-xs text-amber-700 mt-1">
@@ -311,7 +311,7 @@ export function SourcingPageClient({
             ) : (
               <RefreshCw className="w-4 h-4 mr-2" />
             )}
-            메일함 폴링
+            메일 가져오기
           </Button>
           <Button
             onClick={() => setShowForm((v) => !v)}
@@ -325,7 +325,7 @@ export function SourcingPageClient({
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: "전체", value: counts.total },
+          { label: "표시 중", value: counts.total },
           { label: "적격", value: counts.qualified },
           { label: "딜 전환", value: counts.promoted },
           { label: "미평가", value: counts.unscored },
@@ -338,6 +338,8 @@ export function SourcingPageClient({
           </Card>
         ))}
       </div>
+
+      <DistributionPanel title="인입 딜 검토 현황" description={`전체 ${total ?? leads.length}건 중 표시된 ${leads.length}건 기준 · 단계별 현재 건수이며 전환율이 아닙니다.`} rows={STATUS_FILTERS.filter(status => status !== "ALL").map(status => ({ label: INBOUND_STATUS_LABEL[status as InboundStatus], count: leads.filter(lead => lead.status === status).length }))} />
 
       {showForm && (
         <Card>

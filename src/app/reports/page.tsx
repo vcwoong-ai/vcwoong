@@ -1,4 +1,5 @@
 import { getServerSession } from "next-auth";
+import { DistributionPanel } from "@/components/ui/distribution-panel";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -70,7 +71,7 @@ export default async function ReportsPage({
     <AppLayout title="보고서">
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">보고서</h1>
             <p className="text-gray-500 mt-1">
@@ -79,16 +80,17 @@ export default async function ReportsPage({
           </div>
           <div className="flex gap-3 text-sm text-gray-500">
             <span>
-              전체 <strong className="text-gray-900">{reports.length}</strong>건
+              전체 <strong className="text-gray-900">{total}</strong>건
             </span>
             <span>·</span>
             <span>
-              최종 <strong className="text-green-700">{totalFinal}</strong>건
+              표시 중 최종 <strong className="text-green-700">{totalFinal}</strong>건
             </span>
           </div>
         </div>
 
         {/* Report list */}
+        {reports.length > 0 && <DistributionPanel title="보고서 작업 현황" description={`전체 ${total}건 중 최근 ${reports.length}건 기준 · 최종·섹션 승인은 투자 승인을 의미하지 않습니다.`} rows={Object.entries(STATUS_DISPLAY).map(([key, value]) => ({ label: value.label, count: reports.filter(report => report.status === key).length }))} />}
         {reports.length === 0 ? (
           <div className="text-center py-20 text-gray-400">
             {/* eslint-disable-next-line @next/next/no-img-element */}

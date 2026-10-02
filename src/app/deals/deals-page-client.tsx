@@ -1,6 +1,8 @@
 "use client";
 
 import { FirstDealGuide } from "@/components/onboarding/first-deal-guide";
+import { DistributionPanel } from "@/components/ui/distribution-panel";
+import { STAGE_LABEL } from "@/lib/deal-labels";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -236,6 +238,7 @@ export function DealsPageClient({
 
   return (
     <div className="space-y-6">
+      {loadedDeals.length > 0 && <DistributionPanel title="딜 파이프라인" description={`전체 ${total}건 중 불러온 ${loadedDeals.length}건 기준 · 현재 업무 단계별 건수`} rows={Object.entries(STAGE_LABEL).map(([stage, label]) => ({ label, count: loadedDeals.filter(deal => deal.stage === stage).length }))} />}
       {/* 툴바 */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="relative w-full sm:max-w-sm sm:flex-1">

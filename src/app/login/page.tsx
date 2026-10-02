@@ -10,7 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Zap, AlertCircle } from "lucide-react";
+import { AlertCircle } from "lucide-react";
+import { BrandMark } from "@/components/brand-mark";
 import Link from "next/link";
 import { BRAND } from "@/lib/brand";
 
@@ -43,7 +44,7 @@ export default function LoginPage() {
         redirect: false,
       });
 
-      if (result?.error) {
+      if (!result?.ok || result.error) {
         setError("로그인에 실패했습니다. 계정 정보를 확인하고 잠시 후 다시 시도해 주세요.");
         return;
       }
@@ -91,7 +92,7 @@ export default function LoginPage() {
         {/* Logo */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-14 h-14 bg-blue-600 rounded-2xl mb-4">
-            <Zap className="w-8 h-8 text-white" />
+            <BrandMark className="w-10 h-10 text-white" />
           </div>
           <h1 className="text-3xl font-bold text-gray-900">{BRAND.name}</h1>
           <p className="text-gray-500 mt-1 text-sm">{BRAND.nameKr} · AI 투자심의 자동화</p>
@@ -117,6 +118,9 @@ export default function LoginPage() {
                 <Input
                   id="email"
                   type="email"
+                  autoComplete="username"
+                  autoCapitalize="none"
+                  spellCheck={false}
                   placeholder="analyst@vcfirm.co.kr"
                   {...register("email")}
                   className={errors.email ? "border-red-300" : ""}
@@ -139,6 +143,7 @@ export default function LoginPage() {
                 <Input
                   id="password"
                   type="password"
+                  autoComplete="current-password"
                   placeholder="••••••••"
                   {...register("password")}
                   className={errors.password ? "border-red-300" : ""}
