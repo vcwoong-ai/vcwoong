@@ -1,6 +1,7 @@
 /**
- * 여러 AI 모델(OpenRouter 현재 프로덕션 모델 + NVIDIA NIM 모델 목록)에
- * 똑같은 DealMind 섹션 프롬프트를 보내 결과를 나란히 비교한다.
+ * 여러 AI 모델(OpenRouter 현재 프로덕션 모델 + NVIDIA NIM 모델 목록 +
+ * Google AI Studio Gemini 모델 목록)에 똑같은 DealMind 섹션 프롬프트를
+ * 보내 결과를 나란히 비교한다.
  *
  * 목적: "어떤 섹션에 어떤 모델이 필요한가"를 실제 출력을 보고 판단하기
  * 위한 수동 벤치마킹 도구다. 자동 채점은 하지 않는다 — 보고서 품질은
@@ -23,8 +24,14 @@
  *   직접 골라서 .env.local에 채운 뒤 다시 실행해야 한다.
  *
  *   OPENROUTER_API_KEY가 설정돼 있으면 현재 프로덕션 모델(claude.ts의
- *   MODEL)도 베이스라인으로 같이 돌린다. 둘 다 없어도 실행은 되고,
+ *   MODEL)도 베이스라인으로 같이 돌린다. 셋 다 없어도 실행은 되고,
  *   prompt.txt만 생성해서 NIM 플레이그라운드에 직접 붙여넣을 수 있다.
+ *
+ *   GOOGLE_AI_API_KEY(또는 GEMINI_API_KEY, https://aistudio.google.com/apikey
+ *   에서 발급)와(선택) GEMINI_MODELS="모델1,모델2"를 채우면 Google AI
+ *   Studio에서 직접 Gemini 모델을 호출해 같이 비교한다(OpenRouter를 거치는
+ *   프로덕션 폴백의 gemini-2.5-pro와는 별개 경로 — 요금·쿼터가 다름).
+ *   GEMINI_MODELS를 비워두면 계정에서 쓸 수 있는 모델 목록만 보여준다.
  *
  * 실제 회사 자료(IR 덱 등)로 테스트하려면:
  *   비공개 정보가 섞인 실제 딜 자료를 이 파일(git 추적 대상)에 직접
@@ -65,6 +72,11 @@ import {
   listNimModels,
   getNimModelOptions,
 } from "../src/lib/nim";
+import {
+  callGeminiModel,
+  isGeminiConfigured,
+  listGeminiModels,
+} from "../src/lib/gemini";
 
 const CONTEXT_FILE =
   process.env.COMPARE_CONTEXT_FILE ??
@@ -281,6 +293,55 @@ async function main() {
         } catch (error) {
           results.push({
             label: `[NIM] ${model}`,
+            ok: false,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+    }
+  }
+
+  // 3) Google AI Studio(Gemini) 모델들
+  if (!isGeminiConfigured()) {
+    console.log("[건너뜀] GOOGLE_AI_API_KEY(또는 GEMINI_API_KEY) 미설정 — Gemini 모델 비교 생략");
+  } else {
+    const requested = (process.env.GEMINI_MODELS ?? "")
+      .split(",")
+      .map((m) => m.trim())
+      .filter(Boolean);
+
+    if (requested.length === 0) {
+      console.log("\nGEMINI_MODELS가 비어 있음 — 계정에서 호출 가능한 모델 목록을 조회한다...");
+      try {
+        const models = await listGeminiModels();
+        console.log(`\n사용 가능한 Gemini 모델 ${models.length}개:`);
+        models.forEach((m) => console.log(`  - ${m}`));
+        console.log(
+          "\n위 목록에서 비교하고 싶은 모델을 골라 GEMINI_MODELS=\"모델1,모델2\" 형태로 다시 실행하세요."
+        );
+      } catch (error) {
+        console.error(
+          "Gemini 모델 목록 조회 실패:",
+          error instanceof Error ? error.message : error
+        );
+      }
+    } else {
+      for (const model of requested) {
+        console.log(`[Gemini] ${model} 호출 중...`);
+        try {
+          const r = await callGeminiModel(model, systemPrompt, userPrompt, {
+            maxTokens: BASE_MAX_TOKENS,
+          });
+          results.push({
+            label: `[Gemini] ${model}`,
+            ok: true,
+            content: r.content,
+            elapsedMs: r.elapsedMs,
+            tokens: `in=${r.inputTokens} out=${r.outputTokens}`,
+          });
+        } catch (error) {
+          results.push({
+            label: `[Gemini] ${model}`,
             ok: false,
             error: error instanceof Error ? error.message : String(error),
           });

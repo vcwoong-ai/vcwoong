@@ -229,11 +229,11 @@ function GeneratingView({
 export function ReportPageClient({
   report,
   canEdit = true,
-  nimConfigured = false,
+  compareModelsConfigured = false,
 }: {
   report: Report;
   canEdit?: boolean;
-  nimConfigured?: boolean;
+  compareModelsConfigured?: boolean;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -681,7 +681,7 @@ export function ReportPageClient({
         }
         improveRequest={canEdit ? improveRequest : null}
         onImproveHandled={() => setImproveRequest(null)}
-        nimConfigured={nimConfigured}
+        compareModelsConfigured={compareModelsConfigured}
       />
     </div>
   );
