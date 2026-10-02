@@ -1,5 +1,11 @@
 # DealMind 제품 현황
 
+## 2026-10-02 — PR #131 미리보기 읽기 검증
+
+- 정확한 code head 9bee1b4의 Preview에서 데모 로그인·기존 보고서·1440/390 넘침·표 표시 기준·근거 비교표 확인. 새 build/tsc/lint/표 변환 테스트 PASS.
+- 실제 보고서는 추정 열/단위 누락으로 그래프 제외가 정상. 합성 FY 그래프와 전체 로컬 E2E는 서버 실행 정책 차단으로 NOT VERIFIED.
+- 앱·DB·설정 변경이나 운영 배포 없음. [검증 상세](report-visualization-followup.md).
+
 ## 2026-10-02 — 상대기간 그래프·표시 기준 안내 후속
 
 - main `9764833`에서 새 branch `codex/report-visualization-coverage`. 기존 worktree/브랜치 보존.

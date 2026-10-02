@@ -1,6 +1,13 @@
 # Current state — 2026-10-02
 
-## Latest follow-up
+## Latest verification
+
+- PR #131 code head 9bee1b4: Preview READY and authenticated read-only report verified at 1440/390; no page overflow, eligibility guide and evidence-table interaction confirmed.
+- Fresh test:report-table-series / tsc / lint / isolated optimized build PASS. Existing report lacks chart-eligible input (forecast column and missing units), so actual FY chart is NOT VERIFIED.
+- Local npm start again rejected by execution tool: blocked by policy, no detail. Full synthetic browser E2E remains blocked. No alternate launch used.
+- No application code, operational data, settings, merge or production deployment changed in this verification. Details: docs/report-visualization-followup.md.
+
+## Previous follow-up
 
 - Branch codex/report-visualization-coverage; base main 9764833a81a7b0320637c4b7e877f1f7dbdc8465. Exact HEAD: git rev-parse HEAD.
 - Relative FY chart labels without inferred calendar years; collapsible eligibility explanation; targeted/browser tests; diagnostic-only gate reproduction.
