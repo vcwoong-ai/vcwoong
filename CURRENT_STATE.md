@@ -1,5 +1,17 @@
 # Current state — 2026-10-02
 
+## Latest follow-up
+
+- Branch codex/report-visualization-coverage; base main 9764833a81a7b0320637c4b7e877f1f7dbdc8465. Exact HEAD: git rev-parse HEAD.
+- Relative FY chart labels without inferred calendar years; collapsible eligibility explanation; targeted/browser tests; diagnostic-only gate reproduction.
+- PASS: test:report-table-series, test:all, tsc --noEmit, lint, optimized build, diff check. Logs: screenshots/.
+- PASS reproduction: npx.cmd tsx tools/repro-vc-low-confidence-gate.ts. LOW claim -> HIGH dimension -> empty positive drivers -> gate rejection. Engine unchanged; policy correction needs separate approval.
+- New worktree SQLite only: file:./dev.db. Initial db push failed creating the absent DB; after creating an empty local prisma/dev.db, db push succeeded. No production data/env/schema/billing changes.
+- Browser 1440/390 E2E NOT VERIFIED: npm.cmd run start -- --hostname 127.0.0.1 --port 3003 rejected by execution policy (blocked by policy, no detailed reason). No alternative launch attempted.
+- Draft PR only for this follow-up. PR 130 previously merged/deployed at 9764833; original worktrees preserved.
+
+## Previous branch record (historical)
+
 - Branch: codex/workspace-ux-reliability; base main a5796bb. Current exact HEAD: git rev-parse HEAD.
 - Scope: internal list distributions, source-preserving report table charts, evidence table, navigation, brand mark, display/login-response fixes.
 - Other worktrees and ports 3000/3001 preserved. Review app: localhost:3003, isolated SQLite prisma/dev.db, synthetic fixtures only.
