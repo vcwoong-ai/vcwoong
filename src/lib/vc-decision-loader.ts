@@ -9,7 +9,7 @@
  */
 import { traceReportEvidence, type EvidenceReport } from "./evidence";
 import { verdictsToMap } from "./evidence-ai";
-import type { ScoreEvidenceAssessment } from "./deal-scoring-evidence";
+import { guardStoredWeakEvidence, type ScoreEvidenceAssessment } from "./deal-scoring-evidence";
 import type { ScoreDimensionKey } from "./deal-scoring-shared";
 import type { IcQuestion } from "./ic-questions";
 import { buildContradictions, buildInvestmentDecision } from "./vc-decision";
@@ -121,8 +121,10 @@ export function computeReportDecision(report: ReportForDecision): ReportDecision
     verdictsToMap(report.evidenceCheck?.verdicts)
   );
   const score = report.deal.score;
-  const assessment = (score?.evidenceAssessment ?? null) as ScoreEvidenceAssessment | null;
   const rationale = (score?.rationale ?? {}) as Partial<Record<ScoreDimensionKey, string>>;
+  // Correct only the known legacy weak-only confidence inconsistency, using the
+  // stored snapshot. Never mix a new live assessment with the saved score.
+  const assessment = guardStoredWeakEvidence((score?.evidenceAssessment ?? null) as ScoreEvidenceAssessment | null, rationale);
   const storedQuestions = (report.icQuestions?.questions ?? null) as IcQuestion[] | null;
   // 저장된 질문이 없으면 생성 API가 쓰는 것과 같은 결정적 함수로 미리보기를 계산한다(AI·DB 쓰기 없음).
   // 그래야 "질문을 눌러 생성하기 전에는 결정 화면의 질문이 비어 있는" 상태가 되지 않고,

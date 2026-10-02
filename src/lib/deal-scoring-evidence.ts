@@ -145,9 +145,13 @@ const CONFIDENCE_RANK: Record<ClaimConfidence, number> = {
 
 function coverageToConfidence(
   coveragePct: number | null,
-  hasUnsupported: boolean
+  hasUnsupported: boolean,
+  hasReliableEvidence: boolean
 ): ScoreConfidence {
   if (coveragePct === null) return "NO_EVIDENCE";
+  // Coverage measures traceability, not strength. LOW-only matches cannot
+  // establish VERIFIED decision dimensions, even when coverage is 100%.
+  if (coveragePct > 0 && !hasReliableEvidence) return "LOW";
   if (coveragePct >= 70 && !hasUnsupported) return "HIGH";
   if (coveragePct >= 40) return "MEDIUM";
   if (coveragePct > 0) return "LOW";
@@ -171,7 +175,8 @@ function computeDecisionImpact(score: number, confidence: ScoreConfidence): Deci
 function buildUncertaintyNote(
   confidence: ScoreConfidence,
   unsupportedClaims: Array<{ raw: string }>,
-  claimsTotal: number
+  claimsTotal: number,
+  weakOnly = false
 ): string {
   if (confidence === "HIGH") return "";
   if (confidence === "NO_EVIDENCE") {
@@ -180,6 +185,7 @@ function buildUncertaintyNote(
   if (unsupportedClaims.length > 0) {
     return `핵심 주장 일부가 자료에서 확인되지 않음(예: "${unsupportedClaims[0].raw}") — 실사 시 직접 검증 필요`;
   }
+  if (weakOnly) return "근거가 모두 낮은 확신도의 매칭입니다 — 원문 대조로 추가 확인이 필요합니다.";
   return `근거 커버리지가 부분적임(${claimsTotal}건 중 일부만 확인) — 추가 자료 확인 필요`;
 }
 
@@ -210,7 +216,8 @@ function assessDimension(
 
   const confidence = coverageToConfidence(
     coverage,
-    claims.some((c) => c.confidence === "UNSUPPORTED")
+    claims.some((c) => c.confidence === "UNSUPPORTED"),
+    claims.some((c) => c.confidence === "HIGH" || c.confidence === "MEDIUM")
   );
 
   return {
@@ -223,7 +230,8 @@ function assessDimension(
     keyEvidence,
     unsupportedClaims,
     decisionImpact: computeDecisionImpact(score, confidence),
-    uncertaintyNote: buildUncertaintyNote(confidence, unsupportedClaims, claims.length),
+    uncertaintyNote: buildUncertaintyNote(confidence, unsupportedClaims, claims.length,
+      claims.length > 0 && claims.every((c) => c.confidence === "LOW")),
   };
 }
 
@@ -238,10 +246,42 @@ export const DIMENSION_FLAG: Record<ScoreDimensionKey, RiskFlag> = {
 };
 
 /**
- * scoreResult(이미 계산된 6개 차원 점수)와 claims(evidence.ts가 이미 계산한
- * 근거 목록)를 받아 확신도·근거 커버리지·risk flag·IC 요약을 만든다.
- * 새 AI 호출 없음 — 전부 결정적 계산.
+ * 저장된 근거 스냅샷에서 LOW 매칭만으로 승격된 확신도를 보정한다.
+ * 최신 문서로 재평가하거나 원본·점수·커버리지를 수정하지 않는다.
  */
+export function guardStoredWeakEvidence(
+  assessment: ScoreEvidenceAssessment | null,
+  rationale: Partial<Record<ScoreDimensionKey, string>>
+): ScoreEvidenceAssessment | null {
+  if (!assessment) return null;
+  const dimensions = { ...assessment.dimensions };
+  let changed = false;
+  for (const { key } of SCORE_DIMENSIONS) {
+    const dim = dimensions[key];
+    // Stored keyEvidence is strongest-first. An empty or malformed snapshot is
+    // not repaired here: the existing gate must still reject invalid evidence.
+    if (!dim || !['HIGH', 'MEDIUM'].includes(dim.confidence) || !dim.keyEvidence.length ||
+        !dim.keyEvidence.some(e => e.confidence === 'LOW') ||
+        !dim.keyEvidence.every(e => e.confidence === 'LOW' || e.confidence === 'UNSUPPORTED')) continue;
+    changed = true;
+    dimensions[key] = { ...dim, confidence: 'LOW',
+      decisionImpact: computeDecisionImpact(dim.score, 'LOW'),
+      uncertaintyNote: buildUncertaintyNote("LOW", dim.unsupportedClaims, dim.claimsTotal, true) };
+  }
+  if (!changed) return assessment;
+  const list = Object.values(dimensions);
+  const hasReliable = list.some(d => d.keyEvidence.some(e => e.confidence === 'HIGH' || e.confidence === 'MEDIUM'));
+  const overallConfidence = assessment.overallCoverage !== null && assessment.overallCoverage > 0 && !hasReliable
+    ? 'LOW' : assessment.overallConfidence;
+  const riskFlags = [...assessment.riskFlags];
+  if (list.some(d => d.score >= 70 && d.confidence === 'LOW') && !riskFlags.includes('HIGH_SCORE_LOW_EVIDENCE')) {
+    riskFlags.push('HIGH_SCORE_LOW_EVIDENCE');
+  }
+  const icSummary = { ...buildIcSummary(dimensions, rationale, []), unresolved: assessment.icSummary.unresolved };
+  return { ...assessment, dimensions, overallConfidence, riskFlags, icSummary };
+}
+
+/** 기존 점수와 claim으로 확신도·커버리지·위험 신호를 계산한다. AI 호출 없음. */
 export function buildScoreEvidenceAssessment(
   scores: Record<ScoreDimensionKey, number>,
   rationale: Partial<Record<ScoreDimensionKey, string>>,
@@ -291,7 +331,10 @@ export function buildScoreEvidenceAssessment(
   const overallCoverage = totalClaims === 0 ? null : Math.round((totalSupported / totalClaims) * 100);
   const overallConfidence = coverageToConfidence(
     overallCoverage,
-    dimensionList.some((d) => d.claimsTotal > 0 && d.claimsSupported < d.claimsTotal)
+    dimensionList.some((d) => d.claimsTotal > 0 && d.claimsSupported < d.claimsTotal),
+    // keyEvidence is sorted strongest first, so the bounded list retains any
+    // HIGH/MEDIUM evidence. Only mapped dimensions contribute to this total.
+    dimensionList.some((d) => d.keyEvidence.some((e) => e.confidence === "HIGH" || e.confidence === "MEDIUM"))
   );
 
   const icSummary = buildIcSummary(dimensions, rationale, claims);
