@@ -18,6 +18,9 @@ import { buildScoreEvidenceAssessment } from "../src/lib/deal-scoring-evidence";
 import { RATE_LIMITS } from "../src/lib/rate-limit";
 import { SectionKey } from "@prisma/client";
 import type { NumericClaim } from "../src/lib/evidence";
+import { buildInvestmentDecision } from "../src/lib/vc-decision";
+import { checkVCDecisionGate } from "../src/lib/vc-decision-gate";
+import { computeReportDecision } from "../src/lib/vc-decision-loader";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -414,6 +417,47 @@ function testRateLimitStillConfigured() {
   console.log("✅ 딜 스코어링 rate limit 유지 확인 (AI 비용 남용 방지)");
 }
 
+function testWeakOnlyConfidenceDoesNotBecomeVerified() {
+  const weak = fakeClaim({ sectionKey: SectionKey.COMPANY_OVERVIEW, confidence: "LOW", status: "document" });
+  for (const claims of [[weak], [weak, { ...weak, claimKey: 'second-weak' }], [weak, fakeClaim({ sectionKey: SectionKey.COMPANY_OVERVIEW, confidence: "UNSUPPORTED" })]]) {
+    const a = buildScoreEvidenceAssessment(BASE_SCORES, {}, claims);
+    assert(a.dimensions.team.confidence === 'LOW', 'weak-only dimension must stay LOW');
+    assert(a.overallConfidence === 'LOW', 'weak-only overall confidence must stay LOW');
+    assert(a.dimensions.team.score === BASE_SCORES.team, 'score must not change');
+    const decision = buildInvestmentDecision(80, a, {}, claims, [], {});
+    assert(decision.decisionDimensions.find(d => d.dimension === 'team')?.state !== 'VERIFIED', 'no verified weak-only dimension');
+    assert(checkVCDecisionGate(decision).ok, 'real builder output must pass unchanged gate');
+  }
+  const a = buildScoreEvidenceAssessment(BASE_SCORES, {}, [weak]);
+  assert(a.dimensions.team.evidenceCoverage === 100 && a.overallCoverage === 100, 'coverage is independent and preserved');
+  const legacy = structuredClone(a);
+  legacy.dimensions.team.confidence = 'HIGH';
+  legacy.overallConfidence = 'HIGH';
+  const snapshot = JSON.stringify(legacy);
+  const report = { sections: [], deal: { investAmount: null, valuation: null, documents: [], score: { overall: 80, rationale: {}, evidenceAssessment: legacy } }, evidenceCheck: null, icQuestions: null };
+  const loaded = computeReportDecision(report);
+  assert(loaded.gate.ok, 'legacy snapshot must pass unchanged canonical gate');
+  assert(loaded.decision.confidence !== 'VERIFIED', 'legacy overall is not verified');
+  assert(loaded.decision.decisionDimensions.find(d => d.dimension === 'team')?.state !== 'VERIFIED', 'legacy team is not verified');
+  assert(JSON.stringify(legacy) === snapshot, 'saved snapshot must not be mutated');
+  assert(JSON.stringify(computeReportDecision(report)) === JSON.stringify(loaded), 'same input stays deterministic for API/export consumers');
+  const empty = structuredClone(report);
+  empty.deal.score.evidenceAssessment.dimensions.team.keyEvidence = [];
+  assert(!computeReportDecision(empty).gate.ok, 'empty VERIFIED evidence must still fail the gate');
+  const partlyUnsupported = structuredClone(report);
+  partlyUnsupported.deal.score.evidenceAssessment.dimensions.team.keyEvidence.push({ raw: 'unsupported', confidence: 'UNSUPPORTED' });
+  assert(computeReportDecision(partlyUnsupported).gate.ok, 'LOW plus unsupported legacy snapshot must be corrected');
+  assert(a.dimensions.team.uncertaintyNote.includes('낮은 확신도'), 'weak matching needs an accurate uncertainty note');
+  for (const confidence of ['HIGH', 'MEDIUM'] as const) {
+    const mixed = buildScoreEvidenceAssessment(BASE_SCORES, {}, [weak, fakeClaim({ sectionKey: SectionKey.COMPANY_OVERVIEW, confidence, status: 'document' })]);
+    assert(mixed.dimensions.team.confidence === 'HIGH', 'existing reliable-evidence threshold preserved');
+    assert(mixed.overallConfidence === 'HIGH', 'existing overall threshold preserved');
+  }
+  const unmapped = fakeClaim({ sectionKey: SectionKey.APPENDIX, confidence: 'HIGH', status: 'document' });
+  assert(buildScoreEvidenceAssessment(BASE_SCORES, {}, [weak, unmapped]).overallConfidence === 'LOW', 'unmapped evidence cannot raise overall confidence');
+  console.log('✅ LOW-only claims preserve coverage without VERIFIED dimensions; canonical gate passes');
+}
+
 function main() {
   console.log("\n=== DealMind 딜 스코어링 테스트 ===\n");
   testWellFormedJson();
@@ -440,6 +484,7 @@ function main() {
   testBenchmarkInsufficientData();
   testBenchmarkPercentile();
   testRateLimitStillConfigured();
+  testWeakOnlyConfidenceDoesNotBecomeVerified();
   console.log("\n✅ 딜 스코어링 테스트 통과\n");
 }
 
