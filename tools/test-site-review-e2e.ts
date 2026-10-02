@@ -36,6 +36,7 @@ async function main() {
     fixture = await createPaidProductFixture(db);
     await db.reportSection.updateMany({ where: { reportId: fixture.report.id, sectionKey: "FINANCIAL_STATUS" }, data: { content: "예시 자료의 연도별 기재값입니다.\n\n| 항목 | 2022 | 2023 | 2024 |\n| --- | --- | --- | --- |\n| 매출 (억원) | 60 | 80 | 110 |\n| 영업이익 (억원) | -20 | 미확인 | -12 |" } });
     const ownerId = fixture.owner.id;
+    await db.reportSection.updateMany({ where: { reportId: fixture.report.id, sectionKey: "COMPANY_OVERVIEW" }, data: { content: "합성 상대기간 예시입니다.\n\n| 항목 | FY-1 | FY |\n| --- | --- | --- |\n| 임직원 (명) | 20 | 23 |\n\n| 항목 | FY-1 | FY |\n| --- | --- | --- |\n| 매출 | 10 | 12 |" } });
     const fund = await db.fund.create({ data: { userId: ownerId, name: "순회 검토 펀드 (예시)", vintageYear: 2024, fundSize: 300, paidIn: 150 } });
     const company = await db.portfolioCompany.create({ data: { userId: ownerId, fundId: fund.id, companyName: "사후관리 기업 (예시)", sector: "IT", investedAt: new Date("2024-01-01"), investAmount: 30, ownershipPercent: 10, entryValuation: 300, currentValuation: 350 } });
     await db.companyKPI.create({ data: { companyId: company.id, period: "2025Q1", metric: "매출", value: 20, unit: "억원" } });
@@ -70,6 +71,16 @@ async function main() {
       await page.goto(`${base}/reports/${fixture.report.id}`, { waitUntil: "networkidle" });
       assert.equal(await page.getByRole("navigation", { name: "보고서 목차" }).count(), 1);
       assert.equal(await page.locator("figure").filter({ hasText: "매출 (억원)" }).count(), 1);
+      const relativeChart = page.locator("figure").filter({ hasText: "임직원 (명)" });
+      assert.equal(await relativeChart.count(), 1);
+      assert(await relativeChart.innerText().then(text => text.includes("FY의 기준연도를 추정하지 않았습니다")));
+      await relativeChart.screenshot({ path: `${dir}/relative-period-chart-${width}.png` });
+      const explanation = page.getByText("일부 표는 원본으로 확인하세요 · 그래프 표시 기준", { exact: true }).first();
+      await explanation.focus();
+      await page.keyboard.press("Enter");
+      assert(await page.getByText(/보고서를 다시 생성할 필요는 없습니다/).first().isVisible());
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+      await page.screenshot({ path: `${dir}/report-chart-eligibility-${width}.png`, fullPage: true });
       await page.getByText(/^수치·출처 비교표/).click();
       await page.getByRole("table", { name: "보고서 수치와 원문 출처 비교" }).waitFor({ state: "visible" });
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
