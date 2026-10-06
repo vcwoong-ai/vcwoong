@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   Dialog,
@@ -22,7 +22,8 @@ import {
   LayoutTemplate,
   Brain,
 } from "lucide-react";
-import { AgentType, DealSector } from "@prisma/client";
+import { AgentType, DealSector, ReportStatus } from "@prisma/client";
+import { SECTION_META } from "@/types";
 import { AGENT_META } from "@/agents/agent-meta";
 import { cn } from "@/lib/utils";
 
@@ -42,6 +43,7 @@ interface WizardProps {
   };
   open: boolean;
   onClose: () => void;
+  canEdit?: boolean;
 }
 
 const SECTOR_AGENT_MAP: Partial<Record<DealSector, AgentType>> = {
@@ -66,6 +68,33 @@ interface GenerationProgress {
    * "진짜 오류"를 구분하는 핵심 신호다(아래 decideResumeAction 주석 참고).
    */
   reportStatus?: string;
+}
+
+export function isValidReportId(value: unknown): value is string {
+  return typeof value === "string" && (/^c[a-z0-9]{24}$/.test(value) ||
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value));
+}
+
+export function isGenerationProgress(value: unknown): value is GenerationProgress {
+  if (!value || typeof value !== "object") return false;
+  const progress = value as GenerationProgress;
+  return ["generating", "completed", "error"].includes(progress.status) &&
+    Number.isInteger(progress.completed) && Number.isInteger(progress.total) &&
+    progress.total === SECTION_META.length && progress.completed >= 0 && progress.completed <= progress.total &&
+    typeof progress.currentSection === "string" &&
+    (progress.status !== "completed" || (progress.completed === progress.total &&
+      progress.reportStatus !== "PENDING" && progress.reportStatus !== "GENERATING")) &&
+    (progress.reportStatus === undefined || Object.values(ReportStatus).includes(progress.reportStatus as ReportStatus));
+}
+
+function generationResponseMessage(status: number) {
+  if (status === 401) return "로그인이 만료되었습니다. 다시 로그인한 뒤 딜의 보고서 목록을 확인하세요.";
+  if (status === 403) return "보고서를 생성하거나 재개할 권한이 없습니다. 딜의 접근 권한을 확인하세요.";
+  if (status === 404) return "딜 또는 보고서를 찾지 못했습니다. 딜 목록에서 현재 상태를 확인하세요.";
+  if (status === 409) return "이미 진행 중인 보고서 작업이 있습니다. 딜의 보고서 목록에서 진행 상태를 확인하세요.";
+  if (status === 429) return "생성 한도에 도달했거나 요청이 많습니다. 사용량과 기존 보고서를 확인하세요.";
+  if (status === 503) return "AI 보고서 생성 서비스가 준비되지 않았습니다. 서비스 관리자에게 문의해 주세요.";
+  return "생성 요청 결과를 확인하지 못했습니다. 새로 생성하기 전에 딜의 보고서 목록을 확인하세요.";
 }
 
 // report-generation.ts는 함수 실행시간 상한(GENERATION_BUDGET_MS) 소진 시
@@ -123,7 +152,7 @@ export function decideResumeAction(
   return isResumableCheckpoint && withinLimit ? "auto-resume" : "error";
 }
 
-export function ReportWizard({ deal, open, onClose }: WizardProps) {
+export function ReportWizard({ deal, open, onClose, canEdit = true }: WizardProps) {
   const router = useRouter();
   const [step, setStep] = useState(1); // 1: 에이전트 선택, 2: 양식 선택, 3: 생성
   const [selectedAgent, setSelectedAgent] = useState<AgentType>(
@@ -131,6 +160,25 @@ export function ReportWizard({ deal, open, onClose }: WizardProps) {
   );
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
   const [templates, setTemplates] = useState<Template[]>([]);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [templatesError, setTemplatesError] = useState<string | null>(null);
+  const [sectorError, setSectorError] = useState<string | null>(null);
+  const templateControllerRef = useRef<AbortController | null>(null);
+  const templateEpochRef = useRef(0);
+  const sectorControllerRef = useRef<AbortController | null>(null);
+  const sectorEpochRef = useRef(0);
+  const sessionEpochRef = useRef(0);
+  const generationPendingRef = useRef(false);
+  const cancelAuxiliaryRequests = useCallback(() => {
+    sessionEpochRef.current++;
+    generationPendingRef.current = false;
+    templateEpochRef.current++;
+    sectorEpochRef.current++;
+    templateControllerRef.current?.abort();
+    sectorControllerRef.current?.abort();
+    templateControllerRef.current = null;
+    sectorControllerRef.current = null;
+  }, []);
   const [detectedSector, setDetectedSector] = useState<{ sector: string; label: string } | null>(null);
   const [detecting, setDetecting] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -140,6 +188,32 @@ export function ReportWizard({ deal, open, onClose }: WizardProps) {
   // 마법사가 닫히면 진행 중인 폴링 루프를 멈춘다.
   const pollAbortRef = useRef(false);
 
+  const loadTemplates = useCallback(async () => {
+    templateControllerRef.current?.abort();
+    const controller = new AbortController();
+    const epoch = ++templateEpochRef.current;
+    templateControllerRef.current = controller;
+    setTemplatesLoading(true);
+    setTemplatesError(null);
+    try {
+      const response = await fetch("/api/templates", { cache: "no-store", signal: controller.signal });
+      if (!response.ok) throw new Error("Templates unavailable");
+      const { data } = await response.json();
+      if (controller.signal.aborted || epoch !== templateEpochRef.current) return;
+      if (!Array.isArray(data) || !data.every(t => t && typeof t.id === "string" && typeof t.name === "string" &&
+        typeof t.status === "string" && typeof t.fileType === "string")) throw new Error("Templates unavailable");
+      setTemplates(data.filter((template: Template) => template.status === "READY"));
+    } catch {
+      if (!controller.signal.aborted && epoch === templateEpochRef.current)
+        setTemplatesError("양식 목록을 불러오지 못했습니다. 다시 조회하거나 기본 양식을 선택해 주세요.");
+    } finally {
+      if (!controller.signal.aborted && epoch === templateEpochRef.current) {
+        templateControllerRef.current = null;
+        setTemplatesLoading(false);
+      }
+    }
+  }, []);
+
   useEffect(() => {
     if (open) {
       pollAbortRef.current = false;
@@ -147,34 +221,57 @@ export function ReportWizard({ deal, open, onClose }: WizardProps) {
       setProgress(null);
       setReportId(null);
       setGenerating(false);
-      fetch("/api/templates")
-        .then((r) => r.json())
-        .then((d) => setTemplates((d.data ?? []).filter((t: Template) => t.status === "READY")))
-        .catch(() => {});
+      setGenError(null);
+      setDetectedSector(null);
+      setSectorError(null);
+      setDetecting(false);
+      loadTemplates();
     }
     return () => {
       pollAbortRef.current = true;
+      cancelAuxiliaryRequests();
     };
-  }, [open]);
+  }, [open, deal.id, loadTemplates, cancelAuxiliaryRequests]);
 
   const detectSector = async () => {
-    if (!deal.documents.length) return;
+    if (!canEdit || !deal.documents.length || sectorControllerRef.current) return;
+    const controller = new AbortController();
+    const epoch = ++sectorEpochRef.current;
+    sectorControllerRef.current = controller;
     setDetecting(true);
+    setSectorError(null);
+    setDetectedSector(null);
     try {
-      const res = await fetch(`/api/deals/${deal.id}/detect-sector`, { method: "POST" });
+      const res = await fetch(`/api/deals/${deal.id}/detect-sector`, { method: "POST", signal: controller.signal });
+      if (!res.ok) throw new Error("Sector unavailable");
       const { data } = await res.json();
-      if (data?.sector) {
+      if (controller.signal.aborted || epoch !== sectorEpochRef.current) return;
+      if (data && typeof data.sector === "string" && Object.values(DealSector).includes(data.sector as DealSector) && typeof data.label === "string") {
         setDetectedSector(data);
         const agentType = SECTOR_AGENT_MAP[data.sector as DealSector] ?? AgentType.GENERAL;
         setSelectedAgent(agentType);
+      } else throw new Error("Sector unavailable");
+    } catch {
+      if (!controller.signal.aborted && epoch === sectorEpochRef.current)
+        setSectorError("섹터를 자동 감지하지 못했습니다. 분석할 에이전트를 직접 선택해 주세요.");
+    } finally {
+      if (!controller.signal.aborted && epoch === sectorEpochRef.current) {
+        sectorControllerRef.current = null;
+        setDetecting(false);
       }
-    } catch { /* ignore */ } finally {
-      setDetecting(false);
     }
   };
 
   const startGeneration = async () => {
-    if (generating) return;
+    if (generating || generationPendingRef.current || !canEdit) return;
+    if (selectedTemplateId && (templatesLoading || templatesError || !templates.some(template => template.id === selectedTemplateId))) {
+      setGenError("선택한 양식을 확인하지 못했습니다. 양식 목록을 다시 조회하거나 기본 양식을 선택하세요.");
+      return;
+    }
+    const sessionEpoch = sessionEpochRef.current;
+    const isCurrentSession = () => !pollAbortRef.current && sessionEpoch === sessionEpochRef.current;
+    if (!isCurrentSession()) return;
+    generationPendingRef.current = true;
     setGenerating(true);
     setGenError(null);
     setStep(3);
@@ -188,13 +285,19 @@ export function ReportWizard({ deal, open, onClose }: WizardProps) {
           ...(selectedTemplateId ? { templateId: selectedTemplateId } : {}),
         }),
       });
+      if (!isCurrentSession()) return;
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error ?? "보고서 생성 요청 실패");
+        setGenError(generationResponseMessage(res.status));
+        return;
       }
 
       const { data } = await res.json();
-      const id = data?.id as string;
+      if (!isCurrentSession()) return;
+      const id: unknown = data?.id;
+      if (!isValidReportId(id)) {
+        setGenError(generationResponseMessage(0));
+        return;
+      }
       setReportId(id);
 
       // 진행 상태 폴링 — SSE는 서버리스에서 장시간 연결이 쉽게 끊겨,
@@ -211,15 +314,22 @@ export function ReportWizard({ deal, open, onClose }: WizardProps) {
       // 사용한다.
       let autoResumeCount = 0;
 
-      while (!pollAbortRef.current) {
+      while (isCurrentSession()) {
         try {
           const statusRes = await fetch(`/api/reports/${id}/status`, {
             cache: "no-store",
           });
-          if (!statusRes.ok) throw new Error(String(statusRes.status));
+          if (!isCurrentSession()) return;
+          if ([401, 403, 404].includes(statusRes.status)) {
+            setGenError(generationResponseMessage(statusRes.status));
+            return;
+          }
+          if (!statusRes.ok) throw new Error("Status unavailable");
           const { data: prog } = (await statusRes.json()) as {
             data: GenerationProgress;
           };
+          if (!isCurrentSession()) return;
+          if (!isGenerationProgress(prog)) throw new Error("Status unavailable");
           consecutiveErrors = 0;
 
           const action = decideResumeAction(prog, { autoResumeCount });
@@ -242,11 +352,12 @@ export function ReportWizard({ deal, open, onClose }: WizardProps) {
               // isAutoResumeExemptFromRateLimit 참고).
               body: JSON.stringify({ trigger: "auto" }),
             }).catch(() => null);
+            if (!isCurrentSession()) return;
             // 409 = 다른 요청이 이미 재개 중 — 실패로 보지 않고 계속 폴링한다.
             if (!resumeRes || (!resumeRes.ok && resumeRes.status !== 409)) {
               setProgress(prog);
-              finalStatus = "error";
-              break;
+              setGenError(generationResponseMessage(resumeRes?.status ?? 0));
+              return;
             }
           } else if (action === "error") {
             setProgress(prog);
@@ -256,6 +367,7 @@ export function ReportWizard({ deal, open, onClose }: WizardProps) {
             setProgress(prog);
           }
         } catch {
+          if (!isCurrentSession()) return;
           // 일시적 오류로 곧장 실패 처리하지 않는다.
           consecutiveErrors += 1;
           if (consecutiveErrors >= 5) {
@@ -267,17 +379,21 @@ export function ReportWizard({ deal, open, onClose }: WizardProps) {
       }
 
       if (finalStatus !== "completed") {
+        if (!isCurrentSession()) return;
         setGenError(
           finalStatus === "error"
             ? "생성 중 오류가 발생했습니다. 보고서 페이지에서 상태를 확인하세요."
             : "진행 상태를 확인하지 못했습니다. 보고서 페이지에서 확인하세요."
         );
       }
-    } catch (e) {
-      setGenError(e instanceof Error ? e.message : "오류 발생");
-      setStep(2);
+    } catch {
+      if (!isCurrentSession()) return;
+      setGenError(generationResponseMessage(0));
     } finally {
-      setGenerating(false);
+      if (isCurrentSession()) {
+        generationPendingRef.current = false;
+        setGenerating(false);
+      }
     }
   };
 
@@ -334,12 +450,15 @@ export function ReportWizard({ deal, open, onClose }: WizardProps) {
             <div className="flex items-center justify-between">
               <p className="text-sm text-gray-600">분석할 AI 에이전트를 선택하세요</p>
               {deal.documents.length > 0 && (
-                <Button variant="outline" size="sm" onClick={detectSector} disabled={detecting}>
+                <Button variant="outline" size="sm" onClick={detectSector} disabled={detecting || !canEdit}>
                   {detecting ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Sparkles className="w-3.5 h-3.5 mr-1" />}
                   자동 감지
                 </Button>
               )}
             </div>
+
+            {!canEdit && <p className="text-sm text-muted-foreground">보고서 생성과 자동 감지는 딜 소유자 또는 편집 권한이 있는 팀원만 가능합니다.</p>}
+            {sectorError && <p role="alert" data-testid="wizard-sector-error" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">{sectorError}</p>}
 
             {detectedSector && (
               <div className="text-xs text-primary bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
@@ -381,6 +500,11 @@ export function ReportWizard({ deal, open, onClose }: WizardProps) {
         {step === 2 && (
           <div className="space-y-4">
             <p className="text-sm text-gray-600">출력 양식을 선택하세요 (선택 사항)</p>
+            {templatesLoading && <p role="status" className="text-sm text-muted-foreground">양식 목록을 불러오는 중입니다.</p>}
+            {templatesError && <div role="alert" data-testid="wizard-template-error" className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+              <p>{templatesError}</p>
+              <Button variant="outline" size="sm" onClick={loadTemplates} disabled={templatesLoading}>양식 목록 다시 조회</Button>
+            </div>}
 
             <div className="space-y-2">
               <button
@@ -420,7 +544,7 @@ export function ReportWizard({ deal, open, onClose }: WizardProps) {
                 </button>
               ))}
 
-              {templates.length === 0 && (
+              {!templatesLoading && !templatesError && templates.length === 0 && (
                 <div className="text-center py-4 text-xs text-gray-400 border border-dashed rounded-lg">
                   등록된 양식 없음 — <a href="/templates" className="text-primary underline">양식 관리</a>에서 추가
                 </div>
@@ -447,7 +571,7 @@ export function ReportWizard({ deal, open, onClose }: WizardProps) {
               </Button>
               <Button
                 onClick={startGeneration}
-                disabled={generating}
+                disabled={generating || !canEdit || (!!selectedTemplateId && (templatesLoading || !!templatesError || !templates.some(template => template.id === selectedTemplateId)))}
                 className="flex-1 bg-primary hover:bg-primary/90"
               >
                 {generating ? (
@@ -470,17 +594,17 @@ export function ReportWizard({ deal, open, onClose }: WizardProps) {
           <div className="space-y-6 py-2">
             {genError ? (
               <div className="space-y-4 text-center">
-                <p className="text-sm text-red-600">{genError}</p>
+                <p role="alert" data-testid="wizard-generation-error" className="text-sm text-red-600">{genError}</p>
                 <div className="flex gap-2">
                   <Button
                     variant="outline"
                     className="flex-1"
-                    onClick={() => {
-                      setGenError(null);
-                      setStep(2);
-                    }}
+                     onClick={() => {
+                       router.push(`/deals/${deal.id}`);
+                       onClose();
+                     }}
                   >
-                    다시 시도
+                    딜 보고서 목록 확인
                   </Button>
                   {reportId && (
                     <Button className="flex-1" onClick={goToReport}>

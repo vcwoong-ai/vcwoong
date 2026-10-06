@@ -29,46 +29,63 @@ export function hashToken(token: string): string {
  */
 export async function createResetToken(email: string): Promise<string> {
   const identifier = identifierFor(email);
-  await prisma.verificationToken.deleteMany({ where: { identifier } });
-
   const token = randomBytes(32).toString("hex");
-  await prisma.verificationToken.create({
-    data: {
-      identifier,
-      token: hashToken(token),
-      expires: new Date(Date.now() + RESET_TOKEN_TTL_MINUTES * 60 * 1000),
-    },
-  });
-  return token;
+  const tokenHash = hashToken(token);
+  const expires = new Date(Date.now() + RESET_TOKEN_TTL_MINUTES * 60 * 1000);
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      await prisma.$transaction(async tx => {
+        await tx.verificationToken.deleteMany({ where: { identifier } });
+        await tx.verificationToken.create({ data: { identifier, token: tokenHash, expires } });
+      }, { isolationLevel: "Serializable", maxWait: 5000, timeout: 10000 });
+      return token;
+    } catch (error) {
+      const serializationConflict = typeof error === "object" && error !== null && "code" in error && error.code === "P2034";
+      if (serializationConflict && attempt < 2) continue;
+      throw new Error("Password reset token could not be issued");
+    }
+  }
+  throw new Error("Password reset token could not be issued");
 }
 
-/**
- * 토큰을 검증하고 해당 이메일을 돌려준다. 유효하지 않으면 null.
- * 성공 여부와 무관하게 만료된 토큰은 정리한다.
- */
-export async function consumeResetToken(
+/** Token consumption and password change either both commit or both roll back. */
+export async function resetPasswordWithToken(
   email: string,
-  token: string
-): Promise<string | null> {
+  token: string,
+  passwordHash: string
+): Promise<"updated" | "invalid" | "account_missing"> {
   const identifier = identifierFor(email);
-  const record = await prisma.verificationToken.findFirst({
-    where: { identifier },
-  });
-  if (!record) return null;
-
-  if (record.expires.getTime() < Date.now()) {
-    await prisma.verificationToken.deleteMany({ where: { identifier } });
-    return null;
+  const tokenHash = hashToken(token);
+  try {
+    return await prisma.$transaction(async tx => {
+      const now = new Date();
+      const record = await tx.verificationToken.findFirst({ where: { identifier, token: tokenHash } });
+      if (!record) return "invalid" as const;
+      if (record.expires.getTime() <= now.getTime()) {
+        // Never remove a newer token issued while this expired link was being checked.
+        await tx.verificationToken.deleteMany({
+          where: { identifier, token: record.token, expires: { equals: record.expires, lte: now } },
+        });
+        return "invalid" as const;
+      }
+      const provided = Buffer.from(tokenHash, "hex");
+      const stored = Buffer.from(record.token, "hex");
+      if (provided.length !== stored.length || !timingSafeEqual(provided, stored)) return "invalid" as const;
+      const consumed = await tx.verificationToken.deleteMany({
+        where: { identifier, token: record.token, expires: { equals: record.expires, gt: new Date() } },
+      });
+      if (consumed.count !== 1) return "invalid" as const;
+      const changed = await tx.user.updateMany({
+        where: { email: email.toLowerCase() },
+        data: { passwordHash },
+      });
+      if (changed.count !== 1) throw new ResetAccountMissingError();
+      return "updated" as const;
+    });
+  } catch (error) {
+    if (error instanceof ResetAccountMissingError) return "account_missing";
+    throw new Error("Password reset transaction failed");
   }
-
-  // 길이가 같을 때만 timingSafeEqual을 쓸 수 있다.
-  const provided = Buffer.from(hashToken(token), "hex");
-  const stored = Buffer.from(record.token, "hex");
-  if (provided.length !== stored.length || !timingSafeEqual(provided, stored)) {
-    return null;
-  }
-
-  // 한 번 쓰면 즉시 무효화한다.
-  await prisma.verificationToken.deleteMany({ where: { identifier } });
-  return email.toLowerCase();
 }
+
+class ResetAccountMissingError extends Error {}

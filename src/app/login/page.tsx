@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Zap, AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { BRAND } from "@/lib/brand";
+import { isSuccessfulSignIn } from "@/lib/client-flow-status";
 
 const loginSchema = z.object({
   email: z.string().trim().email("유효한 이메일을 입력해주세요"),
@@ -43,7 +44,7 @@ export default function LoginPage() {
         redirect: false,
       });
 
-      if (result?.error) {
+      if (!isSuccessfulSignIn(result)) {
         setError("로그인에 실패했습니다. 계정 정보를 확인하고 잠시 후 다시 시도해 주세요.");
         return;
       }

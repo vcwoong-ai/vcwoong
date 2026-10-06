@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useDropzone } from "react-dropzone";
 import { upload } from "@vercel/blob/client";
 import { Upload, File, X, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { uploadRejectionMessage, withCleanup } from "@/lib/client-flow-status";
 
 // Vercel 서버리스 함수는 요청 본문이 4.5MB를 넘으면 플랫폼 단에서 차단하므로,
 // 이보다 큰 파일은 브라우저에서 Vercel Blob으로 직접 업로드한다.
@@ -26,6 +27,7 @@ interface UploadedFile {
 interface FileUploaderProps {
   dealId: string;
   onUploadComplete?: (documentId: string) => void;
+  onUploadingChange?: (uploading: boolean) => void;
 }
 
 const ACCEPTED_TYPES = {
@@ -42,12 +44,17 @@ const ACCEPTED_TYPES = {
   "text/plain": [".txt"],
 };
 
-export function FileUploader({ dealId, onUploadComplete }: FileUploaderProps) {
+export function FileUploader({ dealId, onUploadComplete, onUploadingChange }: FileUploaderProps) {
   const [files, setFiles] = useState<UploadedFile[]>([]);
+  const [rejectionMessage, setRejectionMessage] = useState("");
   const dealIdRef = useRef(dealId);
   dealIdRef.current = dealId;
+  const uploading = files.some((file) => file.status === "idle" || file.status === "uploading");
+  useEffect(() => { onUploadingChange?.(uploading); }, [onUploadingChange, uploading]);
 
   const uploadSingleFile = useCallback(async (uploadedFile: UploadedFile) => {
+    // Every phase of this request is bound to the deal selected when it started.
+    const targetDealId = dealIdRef.current;
     setFiles((prev) =>
       prev.map((f) =>
         f.file === uploadedFile.file
@@ -61,13 +68,18 @@ export function FileUploader({ dealId, onUploadComplete }: FileUploaderProps) {
 
       if (uploadedFile.file.size > DIRECT_UPLOAD_THRESHOLD) {
         // 큰 파일: 서버를 거치지 않고 브라우저에서 Blob으로 직접 업로드
-        const ext = uploadedFile.file.name.split(".").pop() ?? "bin";
-        const pathname = `deals/${dealIdRef.current}/${crypto.randomUUID()}.${ext}`;
+        const prepare = await fetch("/api/upload/blob-token", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ type: "upload.prepare", dealId: targetDealId, fileName: uploadedFile.file.name, mimeType: uploadedFile.file.type, fileSize: uploadedFile.file.size }),
+        });
+        const grant = await prepare.json();
+        if (!prepare.ok) throw new Error(grant.error ?? "업로드 승인 실패");
+        const { pathname, binding } = grant;
 
         const blob = await upload(pathname, uploadedFile.file, {
-          access: "public",
+          access: "private",
           handleUploadUrl: "/api/upload/blob-token",
-          clientPayload: JSON.stringify({ dealId: dealIdRef.current }),
+          clientPayload: JSON.stringify({ dealId: targetDealId, binding }),
           onUploadProgress: ({ percentage }) => {
             setFiles((prev) =>
               prev.map((f) =>
@@ -84,7 +96,8 @@ export function FileUploader({ dealId, onUploadComplete }: FileUploaderProps) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             blobUrl: blob.url,
-            dealId: dealIdRef.current,
+            binding,
+            dealId: targetDealId,
             fileName: uploadedFile.file.name,
             mimeType: uploadedFile.file.type,
             fileSize: uploadedFile.file.size,
@@ -93,7 +106,7 @@ export function FileUploader({ dealId, onUploadComplete }: FileUploaderProps) {
       } else {
         const formData = new FormData();
         formData.append("file", uploadedFile.file);
-        formData.append("dealId", dealIdRef.current);
+        formData.append("dealId", targetDealId);
 
         const progressInterval = setInterval(() => {
           setFiles((prev) =>
@@ -105,12 +118,10 @@ export function FileUploader({ dealId, onUploadComplete }: FileUploaderProps) {
           );
         }, 500);
 
-        response = await fetch("/api/upload", {
+        response = await withCleanup(() => fetch("/api/upload", {
           method: "POST",
           body: formData,
-        });
-
-        clearInterval(progressInterval);
+        }), () => clearInterval(progressInterval));
       }
 
       if (!response.ok) {
@@ -155,6 +166,7 @@ export function FileUploader({ dealId, onUploadComplete }: FileUploaderProps) {
 
   const onDrop = useCallback(
     (acceptedFiles: File[]) => {
+      setRejectionMessage("");
       const newFiles: UploadedFile[] = acceptedFiles.map((file) => ({
         file,
         status: "idle" as const,
@@ -169,6 +181,7 @@ export function FileUploader({ dealId, onUploadComplete }: FileUploaderProps) {
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
+    onDropRejected: (rejections) => setRejectionMessage(uploadRejectionMessage(rejections)),
     accept: ACCEPTED_TYPES,
     maxSize: 50 * 1024 * 1024,
   });
@@ -185,6 +198,7 @@ export function FileUploader({ dealId, onUploadComplete }: FileUploaderProps) {
 
   return (
     <div className="space-y-4">
+      {rejectionMessage && <p role="alert" className="whitespace-pre-line text-sm text-state-critical">{rejectionMessage}</p>}
       <div
         {...getRootProps()}
         className={cn(
@@ -250,7 +264,7 @@ export function FileUploader({ dealId, onUploadComplete }: FileUploaderProps) {
                     </span>
                   )}
                   {uf.status === "error" && (
-                    <span className="text-xs text-red-600">{uf.error}</span>
+                    <span role="alert" className="text-xs text-red-600">{uf.error}</span>
                   )}
                   {uf.status === "uploading" && (
                     <Progress value={uf.progress} className="w-24 h-1.5" />
@@ -264,6 +278,7 @@ export function FileUploader({ dealId, onUploadComplete }: FileUploaderProps) {
                   size="icon"
                   className="h-7 w-7"
                   onClick={() => removeFile(uf.file)}
+                  aria-label={`${uf.file.name} 업로드 목록에서 제거`}
                 >
                   <X className="w-3 h-3" />
                 </Button>

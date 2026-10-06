@@ -176,7 +176,7 @@ export async function POST(
         skipped.push({ fiscalYear, reason: "duplicate_import" });
         continue;
       }
-      console.error("PE DART import error:", error);
+      console.error("PE_DART_IMPORT_SAVE_FAILED");
       return NextResponse.json(
         { error: "normalization_error", message: "재무 데이터 저장 중 오류가 발생했습니다" },
         { status: 500 }

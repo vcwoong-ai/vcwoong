@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import styles from "./workspace-shell.module.css";
 
 interface HeaderProps {
   title?: string;
@@ -42,13 +43,7 @@ export function Header({ title, onMenuClick, menuOpen = false }: HeaderProps) {
 
   return (
     <header
-      className={
-        // 스크롤해도 헤더가 남아 있어야 알림·계정에 늘 닿는다.
-        // 반투명 + blur로 아래 내용이 비쳐 지나가게 해서 평평한 흰 띠보다 깊이가 생긴다.
-        "sticky top-0 z-30 h-16 border-b border-slate-200/80 " +
-        "bg-white/85 backdrop-blur-md supports-[backdrop-filter]:bg-white/70 " +
-        "flex items-center justify-between px-4 sm:px-6 gap-2"
-      }
+      className={styles.header}
     >
       <div className="flex items-center gap-2 min-w-0">
         <Button
@@ -63,11 +58,10 @@ export function Header({ title, onMenuClick, menuOpen = false }: HeaderProps) {
         >
           <Menu className="w-5 h-5" />
         </Button>
-        {title && (
-          <h2 className="text-base sm:text-lg font-semibold text-gray-900 truncate">
-            {title}
-          </h2>
-        )}
+        <div className="min-w-0">
+          <p className={styles.headerEyebrow}>INVESTMENT DESK</p>
+          {title && <h2 className={styles.headerTitle}>{title}</h2>}
+        </div>
       </div>
 
       <div className="flex items-center gap-1 sm:gap-3 flex-shrink-0">
@@ -75,14 +69,14 @@ export function Header({ title, onMenuClick, menuOpen = false }: HeaderProps) {
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="flex items-center gap-2 h-9">
+            <Button variant="ghost" className={styles.accountButton} aria-label="계정 메뉴">
               <Avatar className="h-7 w-7">
-                <AvatarFallback className="bg-primary text-white text-xs font-bold">
+                <AvatarFallback className={styles.avatar}>
                   {initials}
                 </AvatarFallback>
               </Avatar>
               <div className="text-left hidden sm:block">
-                <p className="text-sm font-medium text-gray-900">
+                <p className={styles.accountName}>
                   {session?.user?.name ?? "사용자"}
                 </p>
                 <p className="text-xs text-gray-500">

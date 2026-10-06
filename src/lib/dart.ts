@@ -91,8 +91,8 @@ export async function resolveDartCorpCode(
     );
     if (partial.length === 0) return undefined;
     return partial.find((e) => e.stockCode) ?? partial[0];
-  } catch (err) {
-    console.warn("[DART] corp_code 조회 실패:", err instanceof Error ? err.message : err);
+  } catch {
+    console.warn("DART_CORP_LOOKUP_FAILED");
     return undefined;
   }
 }
@@ -160,8 +160,8 @@ export async function fetchDartFinancials(
       }
     }
     return result;
-  } catch (err) {
-    console.warn("[DART] 재무제표 조회 실패:", err instanceof Error ? err.message : err);
+  } catch {
+    console.warn("DART_FINANCIALS_FAILED");
     return null;
   }
 }
@@ -199,8 +199,8 @@ export async function fetchDartDisclosures(
       date: r.rcept_dt,
       url: `https://dart.fss.or.kr/dsaf001/main.do?rcpNo=${r.rcept_no}`,
     }));
-  } catch (err) {
-    console.warn("[DART] 공시 목록 조회 실패:", err instanceof Error ? err.message : err);
+  } catch {
+    console.warn("DART_DISCLOSURES_FAILED");
     return [];
   }
 }

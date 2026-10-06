@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 import { getUserPlanKey } from "@/lib/subscription";
 import { kstStartOfMonth } from "@/lib/utils";
 
@@ -25,32 +26,41 @@ export interface QuotaResult {
  * 월 한도의 기준 시각 — 한국 시간 기준 이번 달 1일 0시.
  * (서버 UTC 기준으로 세면 매월 1일 0~9시에 한도가 안 풀린 것처럼 보인다)
  */
-function startOfMonth(): Date {
-  return kstStartOfMonth();
+function reportMonthWindow(now: Date): { gte: Date; lt: Date } {
+  const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  return { gte: kstStartOfMonth(now),
+    lt: new Date(Date.UTC(kst.getUTCFullYear(), kst.getUTCMonth() + 1, 1) - 9 * 60 * 60 * 1000) };
 }
 
 export async function checkQuota(
   userId: string,
   action: "report" | "template",
-  plan?: PlanKey
+  plan?: PlanKey,
+  client: Pick<Prisma.TransactionClient, "report" | "template" | "reportQuotaAdmission"> = prisma,
+  now: Date = new Date()
 ): Promise<QuotaResult> {
   const effectivePlan = plan ?? (await getUserPlanKey(userId));
   const limits = PLAN_LIMITS[effectivePlan];
   const limit = action === "report" ? limits.reports : limits.templates;
-  const since = startOfMonth();
+  const window = reportMonthWindow(now);
 
-  const used =
-    action === "report"
-      ? await prisma.report.count({
+  let used: number;
+  if (action === "report") {
+    // The owner-billed admission survives report/deal deletion. Only unlinked legacy reports
+    // remain in the old count; counting linked reports too would consume the same slot twice.
+    // A missing ledger/schema must fail closed, never silently restore an allowance.
+    const [admissions, legacyReports] = await Promise.all([
+      client.reportQuotaAdmission.count({ where: { userId, createdAt: window } }),
+      client.report.count({
           where: {
             deal: { userId },
-            createdAt: { gte: since },
-            status: { not: "PENDING" },
+            quotaAdmission: { is: null },
+            createdAt: window,
           },
-        })
-      : await prisma.template.count({
-          where: { userId, createdAt: { gte: since } },
-        });
+        }),
+    ]);
+    used = admissions + legacyReports;
+  } else used = await client.template.count({ where: { userId, createdAt: { gte: window.gte } } });
 
   const allowed = used < limit;
 

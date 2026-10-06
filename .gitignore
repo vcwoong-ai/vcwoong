@@ -38,6 +38,7 @@ yarn-error.log*
 
 # STORAGE_MODE=local(로컬 개발) 업로드 파일 — 프로덕션은 Vercel Blob을 쓴다
 /public/uploads/
+/.private-uploads/
 
 # demo artifacts
 /screenshots/
@@ -59,3 +60,26 @@ next-env.d.ts
 
 # 빌드 시 tools/setup-fonts.ts가 node_modules에서 생성 (368개·5.5MB)
 /public/fonts/pretendard
+
+# Codex local configuration
+.codex/
+# Claude Code files created by Ruflo's shared initializer
+.claude/
+# Local Ruflo memory database
+.swarm/
+# Ruflo runtime data
+.claude-flow/data/
+.claude-flow/logs/
+.claude-flow/sessions/
+.claude-flow/metrics/
+.claude-flow/daemon-state.json
+.claude-flow/mods/
+
+# Isolated HTTP integration fixtures
+.e2e-uploads/
+
+# Local source migration backups; never publish
+/.dealmind-backups/
+
+# Local agent runtime state is not public source
+/.claude-flow/

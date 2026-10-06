@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { DealSector, DealStage, DealStatus } from "@prisma/client";
 import { deleteStoredFile } from "@/lib/storage";
+import { publicDocument } from "@/lib/upload-security";
 import { getUserTeamContext, dealReadWhere, dealWriteWhere, dealOwnerWhere, permissionDeniedMessage } from "@/lib/team-access";
 
 const updateDealSchema = z.object({
@@ -54,7 +55,7 @@ async function getAuthorizedDeal(dealId: string, userId: string, teamId: string 
       },
     },
   });
-  return deal;
+  return deal ? { ...deal, documents: deal.documents.map(publicDocument) } : null;
 }
 
 export async function GET(

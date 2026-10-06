@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
@@ -31,7 +31,7 @@ import { useToast } from "@/hooks/use-toast";
 const formSchema = z.object({
   name: z.string().min(1, "딜 이름을 입력해주세요"),
   companyName: z.string().min(1, "기업명을 입력해주세요"),
-  sector: z.nativeEnum(DealSector),
+  sector: z.nativeEnum(DealSector, { message: "섹터를 선택해주세요" }),
   investRound: z.string().optional(),
   investAmount: z.string().optional(),
   valuation: z.string().optional(),
@@ -61,7 +61,7 @@ export function CreateDealDialog({ trigger }: { trigger?: React.ReactNode }) {
   const {
     register,
     handleSubmit,
-    setValue,
+    control,
     formState: { errors },
     reset,
   } = useForm<FormData>({
@@ -124,20 +124,24 @@ export function CreateDealDialog({ trigger }: { trigger?: React.ReactNode }) {
               <Input
                 id="companyName"
                 placeholder="예: (주)테크스타트업"
+                aria-required="true"
+                aria-invalid={!!errors.companyName}
+                aria-describedby={errors.companyName ? "companyName-error" : undefined}
                 {...register("companyName")}
               />
               {errors.companyName && (
-                <p className="text-xs text-red-500">
+                <p id="companyName-error" className="text-xs text-red-500" role="alert">
                   {errors.companyName.message}
                 </p>
               )}
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="sector">섹터 *</Label>
-              <Select
-                onValueChange={(val) => setValue("sector", val as DealSector)}
-              >
-                <SelectTrigger>
+              <Controller name="sector" control={control} render={({ field }) => (
+              <Select value={field.value ?? ""} onValueChange={field.onChange}>
+                <SelectTrigger id="sector" ref={field.ref} onBlur={field.onBlur}
+                  aria-required="true" aria-invalid={!!errors.sector}
+                  aria-describedby={errors.sector ? "sector-error" : undefined}>
                   <SelectValue placeholder="섹터 선택" />
                 </SelectTrigger>
                 <SelectContent>
@@ -148,8 +152,9 @@ export function CreateDealDialog({ trigger }: { trigger?: React.ReactNode }) {
                   ))}
                 </SelectContent>
               </Select>
+              )} />
               {errors.sector && (
-                <p className="text-xs text-red-500">{errors.sector.message}</p>
+                <p id="sector-error" className="text-xs text-red-500" role="alert">{errors.sector.message}</p>
               )}
             </div>
           </div>
@@ -159,10 +164,13 @@ export function CreateDealDialog({ trigger }: { trigger?: React.ReactNode }) {
             <Input
               id="name"
               placeholder="예: 테크스타트업 Series A 투자 검토"
+              aria-required="true"
+              aria-invalid={!!errors.name}
+              aria-describedby={errors.name ? "name-error" : undefined}
               {...register("name")}
             />
             {errors.name && (
-              <p className="text-xs text-red-500">{errors.name.message}</p>
+              <p id="name-error" className="text-xs text-red-500" role="alert">{errors.name.message}</p>
             )}
           </div>
 

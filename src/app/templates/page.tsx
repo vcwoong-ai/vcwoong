@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { publicTemplate } from "@/lib/upload-security";
 import { AppLayout } from "@/components/layout/app-layout";
 import { TemplatesClient } from "./templates-client";
 import { getUserTeamContext, templateReadWhere } from "@/lib/team-access";
@@ -36,7 +37,7 @@ export default async function TemplatesPage({
   ]);
 
   // Serialize for client component
-  const templates = JSON.parse(JSON.stringify(templatesRaw));
+  const templates = JSON.parse(JSON.stringify(templatesRaw.map(publicTemplate)));
 
   return (
     <AppLayout title="양식 관리">

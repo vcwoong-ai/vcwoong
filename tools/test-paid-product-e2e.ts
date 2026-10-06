@@ -1,22 +1,26 @@
+import { assertE2ETarget, assertNoExternalE2ECredentials, assertCleanE2EWorkspace, chromiumLaunchOptions } from "./helpers/e2e-environment";
 /**
  * 유료 제품 프론트엔드 E2E — 랜딩·요금·가입·대시보드·VC 목록/근거 패널·PE 목록/개요/재무/위원회 자료·반응형.
  *
- * 로컬 SQLite + 실행 중인 dev 서버(npm run dev:local) 전용. 운영 DB에는 실행하지 않는다.
+ * 명시적 격리 PostgreSQL + 깨끗한 loopback 앱 전용. 운영 DB에는 실행하지 않는다.
  * 실행마다 합성 소유자/VC/PE 데이터를 만들고 끝나면 자기 fixture만 지운다. 기존 demo 데이터는 쓰지 않는다.
  * 실제 결제·AI 호출은 하지 않는다(가입 후 결제 화면으로 "이동"만 확인).
  *
- * Usage: DATABASE_URL='file:./dev.db' npx tsx tools/test-paid-product-e2e.ts
+ * Usage: explicit isolated PostgreSQL + clean loopback app; npm run test:paid-product-e2e
  */
 import { chromium, type Browser, type BrowserContext, type BrowserContextOptions, type Page } from "playwright";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { PUBLIC_PLANS, hasFeature } from "../src/lib/plans";
-import { PLAN_LIMITS } from "../src/lib/quotas";
 import { createPaidProductFixture } from "./helpers/paid-product-fixture";
 import { mkdirSync, writeFileSync } from "node:fs";
 
 const BASE = process.env.BASE_URL ?? "http://localhost:3000";
+assertE2ETarget(BASE);
+assertNoExternalE2ECredentials();
+assertCleanE2EWorkspace();
 const prisma = new PrismaClient();
+
 let pass = 0;
 function assert(cond: unknown, msg: string) {
   if (!cond) throw new Error(`FAIL: ${msg}`);
@@ -46,11 +50,7 @@ async function noHorizontalOverflow(page: Page): Promise<boolean> {
 }
 
 async function main() {
-  const target = new URL(BASE);
-  if (process.env.DATABASE_URL !== "file:./dev.db" || target.hostname !== "localhost" || !["3000", "3001"].includes(target.port) || target.protocol !== "http:") {
-    console.error("중단: 로컬 SQLite가 아닌 DB에는 실행하지 않습니다.");
-    process.exit(1);
-  }
+  const { PLAN_LIMITS } = await import("../src/lib/quotas");
   console.log(`\n=== 유료 제품 프론트엔드 E2E — 대상: ${BASE} ===\n`);
 
   const stamp = Date.now();
@@ -65,12 +65,14 @@ async function main() {
     const vcReportId = fixture.report.id;
     const DEMO = { email: fixture.owner.email, password: fixture.password };
 
-    emptyUser = await prisma.user.create({
+    const createdEmptyUser = await prisma.user.create({
       data: { email: `paid-e2e-empty-${stamp}@example.com`, name: "신규 사용자", passwordHash: await bcrypt.hash("Paid1234!Test", 4) },
       select: { id: true, email: true },
     });
+    if (!createdEmptyUser.email) throw new Error("Synthetic empty user requires an email.");
+    emptyUser = { ...createdEmptyUser, email: createdEmptyUser.email };
 
-    browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH ?? "/opt/pw-browsers/chromium" });
+    browser = await chromium.launch(chromiumLaunchOptions());
     const newLocalContext = async (options: BrowserContextOptions = {}) => {
       const context = await browser!.newContext({ ...options, extraHTTPHeaders: { "x-forwarded-for": testIp } });
       // Local test stubs only: no telemetry/paid SDK requests can leave the browser.

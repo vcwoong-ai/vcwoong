@@ -19,7 +19,7 @@ import type { CanonicalLineItem, MaFinancialSourceType } from "./financial-types
 import { buildPEDDCaseFromRows } from "./pe-dd-persistence-adapter";
 import type { PEDDCase } from "./dd-types";
 import type { DashboardPeriod, DashboardAdjustmentRow } from "./ma-deal-dashboard";
-import type { MADeal } from "@prisma/client";
+import type { Prisma, MADeal } from "@prisma/client";
 
 export interface MaDealPeriodWithSummary {
   id: string;
@@ -51,14 +51,15 @@ export type MaDealIcContextResult = { status: "not_found" } | { status: "ok"; da
 export async function loadMaDealIcContext(
   userId: string,
   teamId: string | null,
-  maDealId: string
+  maDealId: string,
+  client: Prisma.TransactionClient = prisma
 ): Promise<MaDealIcContextResult> {
-  const maDeal = await prisma.mADeal.findFirst({
+  const maDeal = await client.mADeal.findFirst({
     where: { id: maDealId, ...maDealReadWhere(userId, teamId) },
   });
   if (!maDeal) return { status: "not_found" };
 
-  const periods = await prisma.mAFinancialPeriod.findMany({
+  const periods = await client.mAFinancialPeriod.findMany({
     where: { maDealId },
     // lineItems/adjustments도 명시적으로 정렬한다(PR #112) — 정렬 없는
     // include는 Postgres가 행 순서를 보장하지 않아, 데이터가 전혀
@@ -119,12 +120,12 @@ export async function loadMaDealIcContext(
   // 않는 이유: 그 함수는 재무기간을 다시 조회하는데, 바로 위에서 이미
   // lineItems/adjustments까지 포함해 조회해 둔 `periods`를 재사용하면 같은
   // 쿼리를 두 번 보낼 필요가 없다(성능 — 중복 조회 금지).
-  const ddCaseRow = await prisma.pEDDCase.findUnique({ where: { maDealId } });
+  const ddCaseRow = await client.pEDDCase.findUnique({ where: { maDealId } });
   let ddCase: PEDDCase | undefined;
   if (ddCaseRow) {
     const [findingRows, evidenceRows] = await Promise.all([
-      prisma.pEDDFinding.findMany({ where: { ddCaseId: ddCaseRow.id } }),
-      prisma.pEEvidence.findMany({ where: { ddCaseId: ddCaseRow.id } }),
+      client.pEDDFinding.findMany({ where: { ddCaseId: ddCaseRow.id } }),
+      client.pEEvidence.findMany({ where: { ddCaseId: ddCaseRow.id } }),
     ]);
     ddCase = buildPEDDCaseFromRows(periods, findingRows, evidenceRows);
   }

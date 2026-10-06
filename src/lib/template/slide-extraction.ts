@@ -121,8 +121,8 @@ ${context}
       .map((l) => (/^[-*]\s*/.test(l) ? l.replace(/^[-*]\s*/, "- ") : `- ${l}`));
 
     return lines.length > 0 ? lines.join("\n") : null;
-  } catch (error) {
-    console.warn(`[SlideExtraction] "${title}" 추출 실패(무시):`, error);
+  } catch {
+    console.warn("[SlideExtraction] extraction failed; original template retained");
     return null;
   }
 }

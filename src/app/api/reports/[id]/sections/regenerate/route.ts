@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { z } from "zod";
-import { SectionKey, SectionStatus } from "@prisma/client";
+import { SectionKey } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getAgent } from "@/agents";
@@ -10,13 +10,14 @@ import {
   formatSharedFactsForPrompt,
 } from "@/lib/shared-facts";
 import { evaluateSection } from "@/lib/report-quality";
-import { checkQuota } from "@/lib/quotas";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { buildPriorSectionSummary } from "@/lib/section-context";
-import { resolveModelChainForTier, isPaidPlanKey, type AIAttemptRecord } from "@/lib/claude";
+import { resolveModelChainForTier, isPaidPlanKey, isAIConfigured, AIServiceUnavailableError, type AIAttemptRecord } from "@/lib/claude";
 import { getUserPlanKey } from "@/lib/subscription";
 import { resolveTaskTierForSection } from "@/agents/base-agent";
 import { recordAIAttempts } from "@/lib/usage-log";
+import { saveGeneratedSection, GeneratedSectionConflict, STALE_GENERATION_MS } from "@/lib/report-generation";
+import { claimSectionGeneration, releaseSectionGeneration, GenerationLeaseLost } from "@/lib/report-generation-lease";
 import {
   getUserTeamContext,
   reportWriteWhere,
@@ -44,8 +45,11 @@ export async function POST(
     return NextResponse.json({ error: "인증이 필요합니다" }, { status: 401 });
   }
 
+  let lease: { token: string; updatedAt: Date } | null = null;
+  const attempts: AIAttemptRecord[] = [];
+  let attemptContext: Omit<Parameters<typeof recordAIAttempts>[0], "attempts"> | null = null;
   try {
-    const body = bodySchema.parse(await request.json());
+    const body = bodySchema.parse(await request.json().catch(() => null));
 
     const { teamId, role } = await getUserTeamContext(session.user.id);
     const report = await prisma.report.findFirst({
@@ -60,7 +64,6 @@ export async function POST(
         },
         sections: {
           orderBy: { order: "asc" },
-          select: { sectionKey: true, title: true, content: true },
         },
       },
     });
@@ -71,6 +74,9 @@ export async function POST(
         { status: 403 }
       );
     }
+    if (report.status === "GENERATING") return NextResponse.json({ error: "보고서 전체 생성 중에는 섹션을 재생성할 수 없습니다" }, { status: 409 });
+    const original = report.sections.find((section) => section.sectionKey === body.sectionKey);
+    if (!original) return NextResponse.json({ error: "해당 섹션을 찾을 수 없습니다" }, { status: 404 });
 
     // quota(월 한도)는 "이번 달 새로 만든 보고서 수"만 세서 이미 완성된
     // 보고서의 섹션 재생성 호출을 막지 못한다(status가 PENDING이 아니면
@@ -88,11 +94,15 @@ export async function POST(
       );
     }
 
-    const quota = await checkQuota(session.user.id, "report");
-    if (!quota.allowed) {
-      return NextResponse.json({ error: quota.message }, { status: 429 });
-    }
-
+    if (process.env.NODE_ENV === "production" && !isAIConfigured()) throw new AIServiceUnavailableError();
+    const planKey = await getUserPlanKey(session.user.id);
+    const taskTier = resolveTaskTierForSection(body.sectionKey);
+    const modelChain = resolveModelChainForTier(planKey, taskTier);
+    lease = await prisma.$transaction(tx => claimSectionGeneration(tx, report.id, STALE_GENERATION_MS, report.updatedAt));
+    if (!lease) return NextResponse.json({ error: "이 딜의 다른 생성 작업이 진행 중이거나 보고서가 변경되었습니다. 잠시 후 최신 내용을 확인해 주세요." }, { status: 409 });
+    attemptContext = { userId: session.user.id, dealId: report.deal.id, reportId: report.id,
+      agentType: report.agentType, sectionKey: body.sectionKey,
+      userTier: isPaidPlanKey(planKey) ? "paid" : "free", taskTier };
     const deal = report.deal;
     const sharedFacts = extractSharedFacts({
       companyName: deal.companyName,
@@ -115,12 +125,6 @@ export async function POST(
     const focusGuide = body.focusNote?.trim()
       ? `## 사용자 지시\n${body.focusNote.trim()}`
       : "";
-
-    const planKey = await getUserPlanKey(session.user.id);
-    const taskTier = resolveTaskTierForSection(body.sectionKey);
-    const modelChain = resolveModelChainForTier(planKey, taskTier);
-    /** 이번 재생성이 실제로 시도한 모델 전부(성공/실패 무관) — recordAIAttempts로 UsageLog에 남긴다 */
-    const attempts: AIAttemptRecord[] = [];
 
     const agent = getAgent(report.agentType, deal.sector);
     const result = await agent.generateSection(
@@ -152,39 +156,7 @@ export async function POST(
 
     const quality = evaluateSection(result.sectionKey, result.content);
 
-    const updated = await prisma.reportSection.updateMany({
-      where: { reportId: report.id, sectionKey: body.sectionKey },
-      data: {
-        content: result.content,
-        status: SectionStatus.DRAFT,
-      },
-    });
-
-    if (updated.count === 0) {
-      return NextResponse.json(
-        { error: "해당 섹션을 찾을 수 없습니다" },
-        { status: 404 }
-      );
-    }
-
-    // 시도 전부(성공 직전 실패한 fallback 전환 포함)를 UsageLog에 남긴다 —
-    // 예전엔 tokensUsed*0.7/0.3 추정치를 썼는데(실측 아님), 이제
-    // callOnce가 실제로 받은 usage.prompt_tokens/completion_tokens를
-    // 시도별로 그대로 쓴다.
-    recordAIAttempts({
-      userId: session.user.id,
-      dealId: deal.id,
-      reportId: report.id,
-      agentType: report.agentType,
-      sectionKey: result.sectionKey,
-      userTier: isPaidPlanKey(planKey) ? "paid" : "free",
-      taskTier,
-      attempts,
-    });
-
-    const section = await prisma.reportSection.findFirst({
-      where: { reportId: report.id, sectionKey: body.sectionKey },
-    });
+    const section = await saveGeneratedSection(report.id, original, result.content, lease.updatedAt, undefined, lease.token);
 
     return NextResponse.json({
       data: {
@@ -200,10 +172,20 @@ export async function POST(
         { status: 400 }
       );
     }
-    console.error("Section regenerate error:", error);
+    if (error instanceof AIServiceUnavailableError) return NextResponse.json({ error: error.message }, { status: 503 });
+    if (error instanceof GeneratedSectionConflict || error instanceof GenerationLeaseLost ||
+        (typeof error === "object" && error !== null && "code" in error && error.code === "P2034")) {
+      return NextResponse.json({ error: "재생성 중 보고서가 변경되었습니다. 최신 내용을 확인하고 다시 시도해 주세요." }, { status: 409 });
+    }
+    console.error("Section regenerate failed");
     return NextResponse.json(
       { error: "섹션 재생성 중 오류가 발생했습니다" },
       { status: 500 }
     );
+  } finally {
+    // Record attempts once, including provider failure or a losing content CAS.
+    try { if (attemptContext) recordAIAttempts({ ...attemptContext, attempts }); }
+    catch { /* Best-effort usage logging must not replace the request outcome. */ }
+    finally { if (lease) await releaseSectionGeneration(params.id, lease.token).catch(() => {}); }
   }
 }

@@ -65,6 +65,7 @@ model User {
   passwordHash       String?
   role               UserRole           @default(ANALYST)
   teamId             String?
+  teamRole           UserRole?
   subscriptionPlan   SubscriptionPlan   @default(FREE)
   subscriptionStatus SubscriptionStatus @default(ACTIVE)
   billingKey         String?
@@ -73,11 +74,20 @@ model User {
 
   accounts           Account[]
   sessions           Session[]
-  team               Team?                 @relation(fields: [teamId], references: [id])
+  team               Team?                 @relation("TeamMembers", fields: [teamId], references: [id])
+  ownedTeams         Team[]                @relation("TeamOwner")
+  sentTeamInvitations TeamInvitation[]     @relation("TeamInvitationSender")
+  receivedTeamInvitations TeamInvitation[] @relation("TeamInvitationTarget")
   deals              Deal[]
   templates          Template[]
   usageLogs          UsageLog[]
+  reportQuotaAdmissions ReportQuotaAdmission[]
   payments           SubscriptionPayment[]
+  billingSubscription BillingSubscription?
+  billingIntents      BillingIntent[]
+  billingPayments     BillingPayment[]
+  billingPaymentMethods BillingPaymentMethod[]
+  billingCheckoutSessions BillingCheckoutSession[]
   funds              Fund[]
   portfolioCompanies PortfolioCompany[]
   inboundDeals       InboundDeal[]
@@ -93,16 +103,48 @@ model User {
 model Team {
   id        String   @id @default(cuid())
   name      String
+  ownerUserId String?
+  owner       User? @relation("TeamOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users              User[]
+  users              User[] @relation("TeamMembers")
+  invitations        TeamInvitation[]
   deals              Deal[]
   templates          Template[]
   funds              Fund[]
   portfolioCompanies PortfolioCompany[]
   inboundDeals       InboundDeal[]
   maDeals            MADeal[]
+
+  @@index([ownerUserId])
+}
+
+enum TeamInvitationStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  EXPIRED
+  CANCELLED
+}
+
+model TeamInvitation {
+  id              String @id @default(cuid())
+  teamId          String
+  invitedByUserId String
+  targetUserId    String
+  role            UserRole @default(ANALYST)
+  status          TeamInvitationStatus @default(PENDING)
+  expiresAt       DateTime
+  respondedAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  team            Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  invitedBy       User @relation("TeamInvitationSender", fields: [invitedByUserId], references: [id], onDelete: Cascade)
+  target          User @relation("TeamInvitationTarget", fields: [targetUserId], references: [id], onDelete: Cascade)
+
+  @@index([teamId, targetUserId, status])
+  @@index([targetUserId, status, expiresAt])
 }
 
 model Deal {
@@ -205,6 +247,8 @@ model Report {
   status      ReportStatus @default(PENDING)
   exportUrl   String?
   generatedAt DateTime?
+  generationClaim String?
+  generationLeaseExpiresAt DateTime?
   currentSectionTitle String?
   autoResumeCount Int @default(0)
   createdAt   DateTime     @default(now())
@@ -216,6 +260,7 @@ model Report {
   deepDive ReportDeepDive?
   evidenceCheck ReportEvidenceCheck?
   icQuestions ReportIcQuestions?
+  quotaAdmission ReportQuotaAdmission?
 
   @@index([dealId])
   @@index([templateId])
@@ -315,6 +360,116 @@ model SubscriptionPayment {
 
   @@index([userId])
   @@index([paymentKey])
+}
+
+model BillingCheckoutSession {
+  id               String   @id
+  userId           String
+  activeUserId     String?  @unique
+  plan             String
+  cycle            String
+  anchor           DateTime
+  periodStart      DateTime
+  periodEnd        DateTime
+  amount           Int
+  customerRef      String   @unique
+  paymentMethodRef String   @unique
+  intentId         String   @unique
+  orderId          String   @unique
+  idempotencyKey   String   @unique
+  callbackOrigin   String
+  status           String
+  version          Int      @default(0)
+  authKeyHash      String?  @unique
+  workerToken      String?
+  leaseUntil       DateTime?
+  createdAt        DateTime @default(now())
+  expiresAt        DateTime
+  user             User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  @@index([status, leaseUntil])
+  @@index([userId])
+}
+model BillingPaymentMethod {
+  id                  String   @id
+  userId              String
+  customerRef         String
+  encryptedBillingKey String
+  keyVersion          String
+  revokedAt           DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  user                User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  @@index([userId, revokedAt])
+}
+// Server-only durable billing state. Legacy access fields are deliberately not synchronized.
+model BillingSubscription {
+  id                 String   @id
+  userId             String   @unique
+  version            Int      @default(0)
+  plan               String
+  cycle              String
+  anchor             DateTime
+  paidThroughIndex   Int
+  periodStart        DateTime
+  periodEnd          DateTime
+  status             String
+  cancelAtPeriodEnd  Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  user               User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  intents            BillingIntent[]
+  payments           BillingPayment[]
+}
+
+model BillingIntent {
+  id                  String   @id
+  userId              String
+  reservationKey      String   @unique
+  operation           String
+  plan                String
+  cycle               String
+  anchor              DateTime
+  periodIndex         Int
+  periodStart         DateTime
+  periodEnd           DateTime
+  subscriptionId      String?
+  subscriptionVersion Int?
+  amount              Int
+  currency            String
+  orderId             String   @unique
+  idempotencyKey      String   @unique
+  customerRef         String
+  paymentMethodRef    String
+  status              String
+  version             Int      @default(0)
+  createdAt           DateTime
+  expiresAt           DateTime
+  firstChargeAt       DateTime?
+  leaseUntil          DateTime?
+  workerToken         String?
+  user                User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  subscription        BillingSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  payment             BillingPayment?
+  @@unique([subscriptionId, periodIndex])
+  @@index([userId, status])
+  @@index([status, leaseUntil])
+}
+
+model BillingPayment {
+  id             String   @id
+  userId         String
+  intentId       String   @unique
+  subscriptionId String?
+  paymentKey     String   @unique
+  orderId        String   @unique
+  amount         Int
+  currency       String
+  status         String
+  createdAt      DateTime @default(now())
+  user           User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  intent         BillingIntent @relation(fields: [intentId], references: [id], onDelete: Restrict)
+  subscription   BillingSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  @@index([userId, createdAt])
 }
 
 enum DealSector {
@@ -1137,4 +1292,35 @@ enum PEDDFindingStatus {
   ACCEPTED
   REJECTED
   CLOSED
+}
+
+// Monthly generation admissions survive report/deal deletion; no content, keys or customer names.
+// Account deletion removes these non-financial quota records. Existing billing retention is separate.
+model ReportQuotaAdmission {
+  id           String   @id @default(cuid())
+  userId       String
+  reportId     String?  @unique
+  admissionRef String   @unique
+  createdAt    DateTime @default(now())
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  report Report? @relation(fields: [reportId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+}
+
+// Independent scheduling metadata. No customer content or financial keys; never an entitlement.
+// Cursors are private opaque references without FKs so deletion cannot reset scan progress.
+model BillingMaintenanceState {
+  id                   String    @id
+  renewalCursor        String?
+  reconciliationCursor String?
+  reconcileFirst       Boolean   @default(true)
+  workerToken          String?
+  leaseUntil           DateTime?
+  nextAttemptAt        DateTime?
+  failureStreak        Int       @default(0)
+  lastStartedAt        DateTime?
+  lastCompletedAt      DateTime?
+  lastOutcome          String    @default("NEVER")
 }

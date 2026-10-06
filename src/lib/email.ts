@@ -1,9 +1,8 @@
 /**
  * 이메일 발송 (Resend).
  *
- * RESEND_API_KEY가 없으면 실제로 보내지 않고 콘솔에 남긴다. 로컬 개발에서
- * 비밀번호 재설정 링크를 확인할 수 있고, 키를 안 넣었다고 회원가입·재설정
- * 흐름이 깨지지도 않는다.
+ * 미설정·발송 실패를 결과로 반환한다. 수신자, 본문과 재설정 링크는
+ * 개발 환경에서도 로그에 남기지 않는다.
  */
 
 import { BRAND } from "@/lib/brand";
@@ -31,10 +30,7 @@ export async function sendEmail({
   const apiKey = process.env.RESEND_API_KEY?.trim();
 
   if (!apiKey) {
-    // 개발 환경에서 링크를 확인할 수 있도록 본문을 그대로 남긴다.
-    console.info(
-      `[Email] RESEND_API_KEY 미설정 — 발송하지 않음\n  to: ${to}\n  subject: ${subject}\n  body:\n${html}`
-    );
+    console.info("[Email] 발송 서비스 미설정 — 발송하지 않음");
     return { sent: false, reason: "not_configured" };
   }
 
@@ -55,13 +51,13 @@ export async function sendEmail({
     });
 
     if (!res.ok) {
-      const body = await res.text();
-      console.error(`[Email] 발송 실패 (${res.status}): ${body.slice(0, 300)}`);
+      // 제공자 오류 본문에도 주소나 요청 정보가 포함될 수 있다.
+      console.error(`[Email] 발송 실패 (${res.status})`);
       return { sent: false, reason: `http_${res.status}` };
     }
     return { sent: true };
-  } catch (error) {
-    console.error("[Email] 발송 중 오류:", error);
+  } catch {
+    console.error("[Email] 발송 중 오류");
     return { sent: false, reason: "exception" };
   }
 }

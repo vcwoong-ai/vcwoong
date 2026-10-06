@@ -85,18 +85,35 @@ export async function POST(
   );
   const merged = mergeVerdicts(report.evidenceCheck?.verdicts, fresh);
 
-  await prisma.reportEvidenceCheck.upsert({
-    where: { reportId: report.id },
-    create: {
-      reportId: report.id,
-      verdicts: merged as unknown as import("@prisma/client").Prisma.InputJsonValue,
-      modelUsed: "ai_semantic",
-    },
-    update: {
-      verdicts: merged as unknown as import("@prisma/client").Prisma.InputJsonValue,
-      modelUsed: "ai_semantic",
-    },
+  const saved = await prisma.$transaction(async (tx) => {
+    // 보고서 행을 조건부로 잠가 수동 수정의 캐시 삭제와 저장 순서를 맞춘다.
+    const unchanged = await tx.report.updateMany({
+      where: { id: report.id, updatedAt: report.updatedAt },
+      data: { updatedAt: report.updatedAt },
+    });
+    if (unchanged.count !== 1) return false;
+    const sections = await tx.reportSection.findMany({ where: { reportId: report.id } });
+    if (sections.length !== report.sections.length || sections.some((section) => {
+      const original = report.sections.find((item) => item.id === section.id);
+      return !original || original.content !== section.content;
+    })) return false;
+    await tx.reportEvidenceCheck.upsert({
+      where: { reportId: report.id },
+      create: {
+        reportId: report.id,
+        verdicts: merged as unknown as import("@prisma/client").Prisma.InputJsonValue,
+        modelUsed: "ai_semantic",
+      },
+      update: {
+        verdicts: merged as unknown as import("@prisma/client").Prisma.InputJsonValue,
+        modelUsed: "ai_semantic",
+      },
+    });
+    return true;
   });
+  if (!saved) {
+    return NextResponse.json({ error: "검증 중 보고서가 변경되었습니다. 최신 내용으로 다시 검증해 주세요." }, { status: 409 });
+  }
 
   const after = traceReportEvidence(
     report.sections.map((s) => ({ sectionKey: s.sectionKey, content: s.content })),

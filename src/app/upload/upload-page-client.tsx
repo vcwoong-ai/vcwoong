@@ -21,6 +21,7 @@ interface Deal {
 
 export function UploadPageClient({ deals }: { deals: Deal[] }) {
   const [selectedDealId, setSelectedDealId] = useState<string>("");
+  const [uploading, setUploading] = useState(false);
 
   return (
     <div className="max-w-5xl space-y-6">
@@ -42,9 +43,9 @@ export function UploadPageClient({ deals }: { deals: Deal[] }) {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-1.5">
-                <Label>연결할 딜</Label>
-                <Select onValueChange={setSelectedDealId}>
-                  <SelectTrigger>
+                <Label htmlFor="upload-deal">연결할 딜</Label>
+                <Select value={selectedDealId} onValueChange={setSelectedDealId} disabled={uploading}>
+                  <SelectTrigger id="upload-deal">
                     <SelectValue placeholder="딜을 선택하세요" />
                   </SelectTrigger>
                   <SelectContent>
@@ -58,6 +59,7 @@ export function UploadPageClient({ deals }: { deals: Deal[] }) {
                     ))}
                   </SelectContent>
                 </Select>
+                {uploading && <p role="status" className="text-xs text-gray-500">업로드가 끝나면 연결할 딜을 변경할 수 있습니다.</p>}
               </div>
 
               {deals.length === 0 && (
@@ -76,8 +78,9 @@ export function UploadPageClient({ deals }: { deals: Deal[] }) {
               </CardHeader>
               <CardContent>
                 <FileUploader
+                  key={selectedDealId}
                   dealId={selectedDealId}
-                  onUploadComplete={() => {}}
+                  onUploadingChange={setUploading}
                 />
               </CardContent>
             </Card>

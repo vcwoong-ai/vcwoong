@@ -7,13 +7,13 @@ import { loadPECommitteePackForDeal } from "@/lib/pe/pe-committee-pack-loader";
 import { listPEICReviews, upsertOwnPEICReview, type PEDDActor } from "@/lib/pe/pe-ic-review-signoff-repository";
 import { toPEICReviewView } from "@/lib/pe/pe-ic-review-signoff-types";
 import { PE_IC_REVIEW_SIGNOFF_STATUSES } from "@/lib/pe/pe-ic-review-signoff-types";
-import { extractOpenQuestionSummary } from "@/lib/pe/pe-ic-review-audit";
 import { z } from "zod";
 
 const patchSchema = z.object({
   status: z.enum(PE_IC_REVIEW_SIGNOFF_STATUSES),
   comment: z.string().optional(),
-});
+  expectedFingerprint: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+}).refine(input => input.status !== "REVIEWED" || !!input.expectedFingerprint, { message: "검토한 자료 버전이 필요합니다", path: ["expectedFingerprint"] });
 
 /**
  * PE IC Review Sign-off(PR #110). GET은 이 딜의 모든 리뷰어 서명 상태를
@@ -45,6 +45,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 }
 
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+  try {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) return NextResponse.json({ error: "인증이 필요합니다" }, { status: 401 });
 
@@ -54,22 +55,20 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   const body = await request.json().catch(() => null);
   const parsed = patchSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: "입력값이 올바르지 않습니다", issues: parsed.error.issues }, { status: 400 });
+    return NextResponse.json({ error: "입력값이 올바르지 않습니다" }, { status: 400 });
   }
 
-  const packResult = await loadPECommitteePackForDeal(actor, params.id);
-  if (packResult.status === "not_found") return NextResponse.json({ error: "PE 딜을 찾을 수 없습니다" }, { status: 404 });
-  const breakdown = packResult.data.pack.fingerprintBreakdown;
-  // REVIEWED 스냅샷에 담을 "지금 미해결 항목" 요약 — 같은 pack.decision.questions에서
-  // 뽑는다(새 계산이 아니라 이미 계산된 questions를 요약만 하는 것, §4).
-  const openQuestionSummary = extractOpenQuestionSummary(packResult.data.pack.decision.questions);
-
-  const result = await upsertOwnPEICReview(actor, params.id, parsed.data, breakdown, openQuestionSummary);
+  const result = await upsertOwnPEICReview(actor, params.id, parsed.data);
   if (result.status === "not_found") return NextResponse.json({ error: "쓰기 권한이 없습니다" }, { status: 404 });
   if (result.status === "invalid") return NextResponse.json({ error: "요청을 처리할 수 없습니다", issues: result.issues }, { status: 400 });
+  if (result.status === "conflict") return NextResponse.json({ error: "검토 자료가 변경되었거나 다른 검토가 진행 중입니다. 자료를 다시 불러와 확인한 뒤 검토해 주세요." }, { status: 409 });
+  const breakdown = result.breakdown;
 
   const reviewer = await prisma.user.findUnique({ where: { id: session.user.id }, select: { name: true, email: true } });
   return NextResponse.json({
     data: toPEICReviewView({ ...result.data, reviewer: reviewer ?? { name: null, email: null } }, breakdown),
   });
+  } catch {
+    return NextResponse.json({ error: "검토 상태를 저장하지 못했습니다. 현재 검토 상태를 다시 확인해 주세요." }, { status: 500 });
+  }
 }

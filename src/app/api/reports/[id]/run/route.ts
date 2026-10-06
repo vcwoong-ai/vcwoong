@@ -7,10 +7,10 @@ import { prisma } from "@/lib/prisma";
 import { ReportStatus } from "@prisma/client";
 import {
   generateSectionsAsync,
-  claimPendingGeneration,
   STALE_GENERATION_MS,
 } from "@/lib/report-generation";
-import { checkQuota } from "@/lib/quotas";
+import { claimGeneration, generationLeaseWhere } from "@/lib/report-generation-lease";
+import { isAIConfigured, AIServiceUnavailableError } from "@/lib/claude";
 import {
   checkRateLimit,
   RATE_LIMITS,
@@ -89,11 +89,16 @@ export async function POST(
     return NextResponse.json({ error: permissionDeniedMessage("edit") }, { status: 403 });
   }
 
+  // 재생성 claim이나 기존 섹션 삭제 전에 서비스 준비 상태를 확인한다.
+  if (process.env.NODE_ENV === "production" && !isAIConfigured()) {
+    return NextResponse.json({ error: new AIServiceUnavailableError().message }, { status: 503 });
+  }
+
   // 함수가 실행시간 제한으로 강제 종료되면 상태가 GENERATING에 멈출 수 있다.
   // 일정 시간이 지나도 안 끝났으면 멈춘 것으로 보고 재시도를 허용한다.
   const isStale =
     report.status === ReportStatus.GENERATING &&
-    Date.now() - report.updatedAt.getTime() > STALE_GENERATION_MS;
+    (report.generationLeaseExpiresAt ? report.generationLeaseExpiresAt.getTime() <= Date.now() : Date.now() - report.updatedAt.getTime() > STALE_GENERATION_MS);
 
   if (report.status === ReportStatus.GENERATING && !isStale) {
     return NextResponse.json({ error: "이미 생성 중입니다" }, { status: 409 });
@@ -126,35 +131,33 @@ export async function POST(
     }
   }
 
-  const quota = await checkQuota(session.user.id, "report");
-  if (!quota.allowed) {
-    return NextResponse.json({ error: quota.message }, { status: 429 });
-  }
-
   // 동시 요청이 둘 다 통과하지 않도록 조건부 업데이트로 락을 건다.
   // stale(멈춘) GENERATING 상태도 재시도 대상에 포함한다 — cron
   // (/api/cron/resume-generations)도 같은 함수로 동일하게 선점하므로,
   // 브라우저와 cron이 같은 순간 재개를 시도해도 한쪽만 성공한다.
-  const claimedOk = await claimPendingGeneration(report.id);
-  if (!claimedOk) {
-    return NextResponse.json({ error: "이미 생성 중입니다" }, { status: 409 });
-  }
-
   // 재생성이면 기존 섹션을 비운다. 락을 잡은 뒤에 지워야 동시 요청이
   // 남의 섹션을 지우는 일이 없다. autoResumeCount도 리셋 — 사용자가
   // 명시적으로 다시 시작한 것이라 이전 실패 이력을 지운다.
-  if (mode === "restart") {
-    const removed = await prisma.reportSection.deleteMany({
-      where: { reportId: report.id },
-    });
-    await prisma.report.update({
-      where: { id: report.id },
-      data: { autoResumeCount: 0 },
-    });
-    console.log(
-      `[Report] report=${report.id} 재생성 — 기존 섹션 ${removed.count}개 삭제`
-    );
-  }
+  const token = await prisma.$transaction(async (tx) => {
+    const claimed = await claimGeneration(tx, report.id, STALE_GENERATION_MS);
+    if (!claimed) return null;
+    if (mode === "restart") {
+      const locked = await tx.report.updateMany({ where: generationLeaseWhere(report.id, claimed), data: { updatedAt: new Date() } });
+      if (locked.count !== 1) return null;
+      const deleted = await tx.reportSection.deleteMany({
+        where: { reportId: report.id },
+      });
+      // 이전 생성의 완료 시각이 남으면 폴링이 새 생성도 즉시 완료로 판단한다.
+      await tx.report.updateMany({
+        where: generationLeaseWhere(report.id, claimed),
+        data: { autoResumeCount: 0, generatedAt: null, currentSectionTitle: null },
+      });
+      await tx.reportEvidenceCheck.deleteMany({ where: { reportId: report.id } });
+      console.log(`[Report] report=${report.id} 재생성 — 기존 섹션 ${deleted.count}개 삭제`);
+    }
+    return claimed;
+  });
+  if (!token) return NextResponse.json({ error: "이미 생성 중입니다" }, { status: 409 });
 
   // 응답을 먼저 보낸 뒤에도 Vercel이 함수를 바로 얼리지 않도록 생성 작업의
   // 수명을 연장한다. waitUntil 없이 fire-and-forget으로 두면 서버리스
@@ -165,8 +168,9 @@ export async function POST(
       report.deal,
       report.agentType,
       undefined,
-      session.user.id
-    ).catch((err) => console.error("generateSectionsAsync failed:", err))
+      session.user.id,
+      token
+    ).catch(() => console.error("generateSectionsAsync failed"))
   );
 
   return NextResponse.json({ data: { id: report.id, status: "GENERATING" } });

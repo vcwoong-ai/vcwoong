@@ -13,6 +13,7 @@ import { AlertCircle, ArrowLeft } from "lucide-react";
 import { BRAND } from "@/lib/brand";
 import { PUBLIC_PLANS } from "@/lib/plans";
 import Link from "next/link";
+import { isSuccessfulSignIn } from "@/lib/client-flow-status";
 
 const registerSchema = z
   .object({
@@ -61,6 +62,7 @@ const DEFAULT_COPY = {
 function RegisterForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [accountCreated, setAccountCreated] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
   const track = searchParams.get("track") ?? "";
@@ -76,8 +78,10 @@ function RegisterForm() {
   } = useForm<RegisterForm>({ resolver: zodResolver(registerSchema) });
 
   const onSubmit = async (data: RegisterForm) => {
+    if (accountCreated) return;
     setLoading(true);
     setError(null);
+    let registered = false;
 
     try {
       const res = await fetch("/api/auth/register", {
@@ -96,11 +100,18 @@ function RegisterForm() {
       }
 
       // Auto login after registration
-      await signIn("credentials", {
+      registered = true;
+      setAccountCreated(true);
+      const result = await signIn("credentials", {
         email: data.email,
         password: data.password,
         redirect: false,
       });
+
+      if (!isSuccessfulSignIn(result)) {
+        setError("가입은 완료되었지만 자동 로그인하지 못했습니다. 다시 가입하지 말고 로그인 화면에서 계정 정보를 입력해 주세요.");
+        return;
+      }
 
       router.push(
         requestedPlan
@@ -110,7 +121,7 @@ function RegisterForm() {
           : "/dashboard"
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : "오류가 발생했습니다");
+      setError(registered ? "가입은 완료되었습니다. 로그인 화면에서 다시 로그인해 주세요." : err instanceof Error ? err.message : "오류가 발생했습니다");
     } finally {
       setLoading(false);
     }
@@ -143,10 +154,15 @@ function RegisterForm() {
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 mt-8">
             {error && (
-              <div className="flex items-center gap-2 p-3 rounded-md text-sm border border-state-critical-line bg-state-critical-bg text-state-critical">
+              <div role="alert" className="flex items-center gap-2 p-3 rounded-md text-sm border border-state-critical-line bg-state-critical-bg text-state-critical">
                 <AlertCircle className="w-4 h-4 flex-shrink-0" />
                 {error}
               </div>
+            )}
+            {accountCreated && !loading && (
+              <Button asChild variant="outline" className="w-full">
+                <Link href="/login">가입한 계정으로 로그인</Link>
+              </Button>
             )}
 
             <div className="space-y-1.5">
@@ -215,9 +231,9 @@ function RegisterForm() {
             <Button
               type="submit"
               className="w-full font-medium"
-              disabled={loading}
+              disabled={loading || accountCreated}
             >
-              {loading ? "가입 중..." : "무료로 시작하기"}
+              {loading ? "가입 중..." : accountCreated ? "가입 완료" : "무료로 시작하기"}
             </Button>
             <p className="text-xs text-center text-muted-foreground">신용카드 없이 가입 · Free 플랜으로 시작</p>
           </form>

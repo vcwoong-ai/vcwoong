@@ -6,6 +6,7 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { ReportPageClient } from "./report-page-client";
 import { getUserTeamContext, reportReadWhere, canEditResource } from "@/lib/team-access";
 import { isNimConfigured } from "@/lib/nim";
+import { publicGenerationReport } from "@/lib/report-generation-lease";
 
 export default async function ReportPage({
   params,
@@ -42,7 +43,7 @@ export default async function ReportPage({
     <AppLayout title={`보고서: ${report.deal.companyName}`}>
       <ReportPageClient
         key={report.id}
-        report={JSON.parse(JSON.stringify(report))}
+        report={JSON.parse(JSON.stringify(publicGenerationReport(report)))}
         canEdit={canEdit}
         nimConfigured={isNimConfigured()}
       />

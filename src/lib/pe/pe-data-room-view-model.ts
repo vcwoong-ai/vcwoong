@@ -17,6 +17,9 @@ export interface DataRoomDocumentRow {
   size: number;
   mimeType: string;
   createdAt: string;
+  parseStatus?: "complete" | "unavailable" | "processing" | "unknown";
+  parseRetryAllowed?: boolean;
+  parseAttempts?: number;
 }
 
 export interface DataRoomEvidenceRow {
@@ -53,6 +56,9 @@ export interface DataRoomDocumentView {
   size: number;
   mimeType: string;
   createdAt: string;
+  parseStatus?: DataRoomDocumentRow["parseStatus"];
+  parseRetryAllowed?: boolean;
+  parseAttempts?: number;
   linkedEvidence: LinkedEvidenceView[];
 }
 
@@ -91,6 +97,9 @@ export function buildPEDataRoomViewModel(
       size: doc.size,
       mimeType: doc.mimeType,
       createdAt: doc.createdAt,
+      parseStatus: doc.parseStatus,
+      parseRetryAllowed: doc.parseRetryAllowed,
+      parseAttempts: doc.parseAttempts,
       linkedEvidence: linked.map((e) => ({
         id: e.id,
         sourceName: e.sourceName,

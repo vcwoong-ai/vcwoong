@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { QUESTION_CATEGORY_LABEL, type IcQuestion, type QuestionPriority } from "@/lib/ic-questions";
@@ -10,6 +10,15 @@ interface IcQuestionsData {
   questions: IcQuestion[];
   top5: IcQuestion[];
   modelUsed: string;
+}
+
+function isQuestionsData(value: unknown): value is IcQuestionsData | null {
+  if (value === null) return true;
+  if (!value || typeof value !== "object") return false;
+  const data = value as Record<string, unknown>;
+  return [data.questions, data.top5].every(items => Array.isArray(items) && items.every(item =>
+    item && typeof item === "object" && ["HIGH", "MEDIUM", "LOW"].includes(item.priority)
+      && ["id", "question", "whyItMatters"].every(key => typeof item[key] === "string")));
 }
 
 const PRIORITY_META: Record<QuestionPriority, { label: string; className: string }> = {
@@ -71,40 +80,79 @@ export function IcQuestionsPanel({
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
+  const [readError, setReadError] = useState<string | null>(null);
+  const request = useRef<{ epoch: number; controller?: AbortController }>({ epoch: 0 });
+  const resource = useRef(reportId);
+  resource.current = reportId;
+  const mutation = useRef({ epoch: 0 });
+  const active = useRef(true);
 
   const load = useCallback(async () => {
+    request.current.controller?.abort();
+    const controller = new AbortController();
+    const epoch = ++request.current.epoch;
+    request.current.controller = controller;
+    const current = () => active.current && resource.current === reportId && request.current.epoch === epoch && !controller.signal.aborted;
     setLoading(true);
+    setReadError(null);
+    setData(null);
     try {
-      const res = await fetch(`/api/reports/${reportId}/ic-questions`);
-      if (res.ok) {
+      const res = await fetch(`/api/reports/${reportId}/ic-questions`, { signal: controller.signal });
+      if (!res.ok) throw new Error("read_failed");
+      if (current()) {
         const { data } = await res.json();
-        setData(data);
+        if (!isQuestionsData(data)) throw new Error("read_failed");
+        if (current()) setData(data);
       }
+    } catch {
+      if (current()) setReadError("IC 질문을 불러오지 못했습니다. 연결과 로그인 상태를 확인한 뒤 다시 조회해주세요.");
     } finally {
-      setLoading(false);
+      if (current()) setLoading(false);
     }
   }, [reportId]);
 
   useEffect(() => {
-    load();
+    active.current = true;
+    setError(null);
+    setRunning(false);
+    setExpanded(false);
+    void load();
+    const pending = request.current;
+    const mutations = mutation.current;
+    return () => {
+      active.current = false;
+      mutations.epoch++;
+      pending.epoch++;
+      pending.controller?.abort();
+    };
   }, [load]);
 
   const run = async () => {
+    const token = ++mutation.current.epoch;
+    const current = () => active.current && resource.current === reportId && mutation.current.epoch === token;
+    request.current.controller?.abort();
+    request.current.epoch++;
     setRunning(true);
+    setLoading(false);
     setError(null);
     try {
       const res = await fetch(`/api/reports/${reportId}/ic-questions/generate`, {
         method: "POST",
       });
+      if (!res.ok) throw new Error(res.status === 503 ? "IC 질문 생성 서비스를 사용할 수 없습니다. 잠시 후 다시 시도해주세요."
+        : res.status === 429 ? "요청 한도에 도달했습니다. 잠시 후 다시 시도해주세요."
+        : "IC 질문을 생성하지 못했습니다. 연결과 로그인 상태를 확인해주세요.");
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "IC 질문 생성 실패");
+      if (!isQuestionsData(json.data) || json.data === null) throw new Error("invalid_questions");
+      if (!current()) return;
       setData(json.data);
       setExpanded(false);
       onGenerated?.();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "IC 질문 생성 실패");
+      if (current()) setError(e instanceof Error && ["IC 질문 생성 서비스를 사용할 수 없습니다. 잠시 후 다시 시도해주세요.", "요청 한도에 도달했습니다. 잠시 후 다시 시도해주세요.", "IC 질문을 생성하지 못했습니다. 연결과 로그인 상태를 확인해주세요."].includes(e.message)
+        ? e.message : "IC 질문을 생성하지 못했습니다. 연결과 로그인 상태를 확인해주세요.");
     } finally {
-      setRunning(false);
+      if (current()) setRunning(false);
     }
   };
 
@@ -128,6 +176,13 @@ export function IcQuestionsPanel({
     );
   }
 
+  if (readError) {
+    return <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+      <p role="alert" className="text-sm text-red-700">{readError}</p>
+      <Button variant="outline" size="sm" className="mt-3" onClick={() => void load()}>IC 질문 다시 조회</Button>
+    </div>;
+  }
+
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-4">
       <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -144,7 +199,7 @@ export function IcQuestionsPanel({
       </p>
 
       {error && (
-        <p className="mt-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1.5">
+        <p role="alert" className="mt-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1.5">
           {error}
         </p>
       )}

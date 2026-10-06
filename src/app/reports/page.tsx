@@ -10,6 +10,7 @@ import Link from "next/link";
 import { ReportStatus } from "@prisma/client";
 import { getUserTeamContext, reportReadWhere } from "@/lib/team-access";
 import { REPORTS_PAGE_SIZE, resolveListLimit } from "@/lib/list-paging";
+import { isReportFinalized } from "@/lib/report-completion";
 
 const STATUS_DISPLAY: Record<
   ReportStatus,
@@ -63,7 +64,7 @@ export default async function ReportsPage({
   ]);
 
   const totalFinal = reports.filter(
-    (r) => r.status === ReportStatus.FINAL || r.status === ReportStatus.EXPORTED
+    (r) => isReportFinalized(r.status, r.sections)
   ).length;
 
   return (
@@ -105,7 +106,13 @@ export default async function ReportsPage({
         ) : (
           <div className="space-y-3">
             {reports.map((report) => {
-              const status = STATUS_DISPLAY[report.status] ?? {
+              const needsReview =
+                (report.status === "FINAL" || report.status === "EXPORTED") &&
+                !isReportFinalized(report.status, report.sections);
+              const status = needsReview ? {
+                label: "검토 필요",
+                className: "bg-amber-100 text-amber-700",
+              } : STATUS_DISPLAY[report.status] ?? {
                 label: report.status,
                 className: "bg-gray-100 text-gray-600",
               };

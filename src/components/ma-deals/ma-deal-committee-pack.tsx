@@ -1,7 +1,7 @@
 "use client";
 import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import { buildPECommitteePackContent } from "@/lib/pe/pe-committee-pack";
 import { MaDealThesis } from "./ma-deal-thesis";
@@ -13,6 +13,7 @@ import { MaDealIcSnapshot } from "./ma-deal-ic-snapshot";
 import { MaDealDdFindings } from "./ma-deal-dd-findings";
 import { MaDealIcQuestions } from "./ma-deal-ic-questions";
 import { MaDealCommitteePackExport } from "./ma-deal-committee-pack-export";
+import { fingerprintDisplayedCommitteePack } from "@/lib/pe/pe-committee-pack-material";
 import { MaDealCommitteePackReviewPanel } from "./ma-deal-committee-pack-review-panel";
 import { MaDealReviewHistory } from "./ma-deal-review-history";
 import { presentBlockerDetail } from "@/lib/pe/blocker-display";
@@ -92,6 +93,18 @@ export function MaDealCommitteePack({
     [maDeal, dashboard, ddCase, evidenceRequests]
   );
 
+  const [displayedVersion, setDisplayedVersion] = useState<{ pack: typeof pack; fingerprint: string } | null>(null);
+  useEffect(() => {
+    let active = true;
+    setDisplayedVersion(null);
+    if (!evidenceRequestsLoading) {
+      fingerprintDisplayedCommitteePack(pack.decision, evidenceRequests)
+        .then(fingerprint => { if (active) setDisplayedVersion({ pack, fingerprint }); })
+        .catch(() => { /* Keep review completion unavailable when displayed content cannot be verified. */ });
+    }
+    return () => { active = false; };
+  }, [pack, evidenceRequests, evidenceRequestsLoading]);
+  const displayedFingerprint = displayedVersion?.pack === pack ? displayedVersion.fingerprint : null;
   const { decision, review } = pack;
 
   // PR #111 — 리뷰 패널에서 서명/코멘트를 남기면 그 즉시 검토 이력 카드도
@@ -166,6 +179,7 @@ export function MaDealCommitteePack({
         <>
           <MaDealCommitteePackReviewPanel
             maDealId={maDeal.id}
+            displayedFingerprint={displayedFingerprint}
             currentUserId={currentUserId}
             canEdit={canEdit}
             onReviewChanged={() => setHistoryRefreshKey((k) => k + 1)}

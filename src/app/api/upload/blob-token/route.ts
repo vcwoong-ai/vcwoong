@@ -4,18 +4,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getUserTeamContext, dealWriteWhere } from "@/lib/team-access";
-
-const ALLOWED_CONTENT_TYPES = [
-  "application/pdf",
-  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-  "application/vnd.ms-powerpoint",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  "application/vnd.ms-excel",
-  "text/plain",
-];
-
-const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+import { createUploadGrant, verifyUploadGrant, type UploadFileInput } from "@/lib/upload-security";
+import { assertPrivateBlobUploads } from "@/lib/storage";
 
 /**
  * Vercel 서버리스 함수는 요청 본문이 4.5MB를 넘으면 플랫폼 단에서 차단하므로,
@@ -29,18 +19,29 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
   const userId = session.user.id;
 
-  const body = (await request.json()) as HandleUploadBody;
-
   try {
+    assertPrivateBlobUploads();
+    const body = await request.json();
+    if (body.type === "upload.prepare") {
+      const { dealId, fileName, mimeType, fileSize } = body as UploadFileInput & { dealId: string };
+      if (typeof dealId !== "string" || !/^[A-Za-z0-9_-]+$/.test(dealId)) return NextResponse.json({ error: "딜 ID가 필요합니다" }, { status: 400 });
+      const { teamId, role } = await getUserTeamContext(userId);
+      const deal = await prisma.deal.findFirst({ where: { id: dealId, ...dealWriteWhere(userId, teamId, role) } });
+      if (!deal) return NextResponse.json({ error: "업로드 권한이 없습니다" }, { status: 403 });
+      return NextResponse.json(createUploadGrant({ userId, scope: "deal", resourceId: dealId, fileName, mimeType, fileSize }));
+    }
+    if (body.type !== "blob.generate-client-token") return NextResponse.json({ error: "잘못된 요청입니다" }, { status: 400 });
     const jsonResponse = await handleUpload({
-      body,
+      body: body as HandleUploadBody,
       request,
-      onBeforeGenerateToken: async (_pathname, clientPayload) => {
+      onBeforeGenerateToken: async (pathname, clientPayload) => {
         const payload = clientPayload ? JSON.parse(clientPayload) : {};
         const dealId = payload.dealId as string | undefined;
         if (!dealId) {
           throw new Error("딜 ID가 필요합니다");
         }
+        const claims = verifyUploadGrant(payload.binding, userId, "deal", dealId);
+        if (claims.pathname !== pathname) throw new Error("업로드 승인과 경로가 다릅니다");
 
         const { teamId, role } = await getUserTeamContext(userId);
         const deal = await prisma.deal.findFirst({
@@ -51,9 +52,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         }
 
         return {
-          allowedContentTypes: ALLOWED_CONTENT_TYPES,
-          maximumSizeInBytes: MAX_FILE_SIZE,
+          allowedContentTypes: [claims.mimeType],
+          maximumSizeInBytes: claims.fileSize,
+          validUntil: claims.expiresAt,
           addRandomSuffix: false,
+          allowOverwrite: false,
           tokenPayload: JSON.stringify({ dealId, userId }),
         };
       },

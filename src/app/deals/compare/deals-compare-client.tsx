@@ -15,6 +15,7 @@ import {
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Loader2, ArrowLeft } from "lucide-react";
 import { SCORE_DIMENSIONS, scoreLabel } from "@/lib/deal-scoring-shared";
 
@@ -48,24 +49,56 @@ function buildRadarData(rows: CompareRow[]) {
 
 function CompareContent() {
   const searchParams = useSearchParams();
-  const ids = (searchParams.get("ids") ?? "").split(",").filter(Boolean);
+  const idsKey = (searchParams.get("ids") ?? "").split(",").filter(Boolean).join(",");
   const [rows, setRows] = useState<CompareRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [retryVersion, setRetryVersion] = useState(0);
 
   useEffect(() => {
-    if (ids.length === 0) {
+    const controller = new AbortController();
+    let active = true;
+    setError(null);
+    setRows(null);
+    if (!idsKey) {
       setRows([]);
-      return;
+      return () => { active = false; controller.abort(); };
     }
-    fetch(`/api/deals/score/compare?ids=${ids.join(",")}`)
-      .then((r) => r.json())
-      .then((json) => setRows(json.data ?? []))
-      .catch(() => setError("비교 데이터를 불러오지 못했습니다"));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams.toString()]);
+    const loadComparison = async () => {
+      try {
+        const response = await fetch(`/api/deals/score/compare?ids=${encodeURIComponent(idsKey)}`, {
+          cache: "no-store", signal: controller.signal,
+        });
+        if (!active || controller.signal.aborted) return;
+        if (!response.ok) {
+          setError(response.status === 401 ? "로그인이 만료되었습니다. 다시 로그인한 뒤 비교를 확인하세요."
+            : response.status === 403 ? "선택한 딜을 비교할 권한이 없습니다."
+            : "비교 데이터를 불러오지 못했습니다. 다시 조회해 주세요.");
+          return;
+        }
+        const json = await response.json();
+        if (!active || controller.signal.aborted) return;
+        if (!Array.isArray(json.data) || !json.data.every((row: CompareRow | null) =>
+          row && typeof row.id === "string" && typeof row.companyName === "string" &&
+          (row.score === null || (typeof row.score === "object" && row.score &&
+            Number.isFinite(row.score.overall) && SCORE_DIMENSIONS.every(dimension =>
+              Number.isFinite(row.score![dimension.key])))))) throw new Error("Comparison unavailable");
+        setRows(json.data);
+      } catch {
+        if (active && !controller.signal.aborted) setError("비교 데이터를 불러오지 못했습니다. 다시 조회해 주세요.");
+      }
+    };
+    void loadComparison();
+    return () => { active = false; controller.abort(); };
+  }, [idsKey, retryVersion]);
 
   if (error) {
-    return <p className="text-sm text-red-600">{error}</p>;
+    return <div role="alert" data-testid="deal-compare-error" className="space-y-3 text-sm">
+      <p className="text-red-600">{error}</p>
+      <div className="flex flex-wrap items-center gap-3">
+        <Button variant="outline" size="sm" onClick={() => setRetryVersion(value => value + 1)}>비교 다시 조회</Button>
+        <Link href="/deals" className="underline">딜 목록으로</Link>
+      </div>
+    </div>;
   }
 
   if (!rows) {

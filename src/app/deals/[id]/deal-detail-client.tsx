@@ -184,10 +184,24 @@ export function DealDetailClient({
   const confirm = useConfirm();
   const [generating, setGenerating] = useState(false);
   const [progress, setProgress] = useState<GenerationProgress | null>(null);
-  const [uploadKey, setUploadKey] = useState(0);
   const [detectingsector, setDetectingSector] = useState(false);
   const [detectedSector, setDetectedSector] = useState<{ sector: string; reason: string } | null>(null);
   const [templates, setTemplates] = useState<TemplateOption[]>([]);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [templatesError, setTemplatesError] = useState<string | null>(null);
+  const [sectorError, setSectorError] = useState<string | null>(null);
+  const templateControllerRef = useRef<AbortController | null>(null);
+  const templateEpochRef = useRef(0);
+  const sectorControllerRef = useRef<AbortController | null>(null);
+  const sectorEpochRef = useRef(0);
+  const cancelAuxiliaryRequests = useCallback(() => {
+    templateEpochRef.current++;
+    sectorEpochRef.current++;
+    templateControllerRef.current?.abort();
+    sectorControllerRef.current?.abort();
+    templateControllerRef.current = null;
+    sectorControllerRef.current = null;
+  }, []);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(
     DEFAULT_TEMPLATE_VALUE
   );
@@ -195,25 +209,54 @@ export function DealDetailClient({
   const [loadingFixture, setLoadingFixture] = useState(false);
   const [deletingDeal, setDeletingDeal] = useState(false);
   const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
-  // 페이지를 벗어나면 진행 중인 폴링 루프를 멈춘다.
-  const pollAbortRef = useRef(false);
+  const [statusError, setStatusError] = useState<string | null>(null);
+  const [monitoredReportId, setMonitoredReportId] = useState<string | null>(null);
+  const pollControllerRef = useRef<AbortController | null>(null);
+  const pollEpochRef = useRef(0);
+  const cancelStatusPolling = useCallback(() => {
+    pollEpochRef.current++;
+    pollControllerRef.current?.abort();
+    pollControllerRef.current = null;
+  }, []);
 
   // 사용 가능한 템플릿 로드
   const loadTemplates = useCallback(async () => {
+    templateControllerRef.current?.abort();
+    const controller = new AbortController();
+    const epoch = ++templateEpochRef.current;
+    templateControllerRef.current = controller;
+    setTemplatesLoading(true);
+    setTemplatesError(null);
     try {
-      const res = await fetch("/api/templates");
-      if (!res.ok) return;
+      const res = await fetch("/api/templates", { cache: "no-store", signal: controller.signal });
+      if (!res.ok) throw new Error("Templates unavailable");
       const { data } = await res.json();
-      setTemplates((data as TemplateOption[]).filter((t: TemplateOption) => t.status === "READY"));
-    } catch { /* ignore */ }
+      if (controller.signal.aborted || epoch !== templateEpochRef.current) return;
+      if (!Array.isArray(data) || !data.every(t => t && typeof t.id === "string" && typeof t.name === "string" &&
+        typeof t.status === "string" && typeof t.fileType === "string")) throw new Error("Templates unavailable");
+      setTemplates(data.filter((t: TemplateOption) => t.status === "READY"));
+    } catch {
+      if (!controller.signal.aborted && epoch === templateEpochRef.current)
+        setTemplatesError("양식 목록을 불러오지 못했습니다. 다시 조회하거나 기본 양식을 선택해 주세요.");
+    } finally {
+      if (!controller.signal.aborted && epoch === templateEpochRef.current) {
+        templateControllerRef.current = null;
+        setTemplatesLoading(false);
+      }
+    }
   }, []);
 
   useEffect(() => {
     loadTemplates();
-    return () => {
-      pollAbortRef.current = true;
-    };
-  }, [loadTemplates]);
+    setGenerating(false);
+    setProgress(null);
+    setStatusError(null);
+    setMonitoredReportId(null);
+    setDetectedSector(null);
+    setSectorError(null);
+    setDetectingSector(false);
+    return () => { cancelStatusPolling(); cancelAuxiliaryRequests(); };
+  }, [loadTemplates, deal.id, cancelStatusPolling, cancelAuxiliaryRequests]);
 
   // ?wizard=1로 들어오면 보고서 마법사를 자동으로 연다.
   // searchParams를 의존성에 넣되 "한 번 처리하면 끝"으로 잠근다 — 안 그러면
@@ -311,13 +354,87 @@ export function DealDetailClient({
     }
   };
 
+  const pollReportStatus = async (reportId: string, controller: AbortController, epoch: number) => {
+    const isCurrent = () => !controller.signal.aborted && epoch === pollEpochRef.current;
+    let consecutiveErrors = 0;
+    while (isCurrent()) {
+      try {
+        const response = await fetch(`/api/reports/${reportId}/status`, {
+          cache: "no-store", signal: controller.signal,
+        });
+        if (!isCurrent()) return;
+        if (response.status === 401 || response.status === 403) {
+          setStatusError(response.status === 401
+            ? "로그인이 만료되어 진행 상태를 확인하지 못했습니다. 다시 로그인한 뒤 보고서를 확인하세요."
+            : "이 보고서의 진행 상태를 조회할 권한이 없습니다.");
+          return;
+        }
+        if (!response.ok) throw new Error("Status unavailable");
+        const { data } = await response.json() as { data?: GenerationProgress };
+        if (!isCurrent()) return;
+        if (!data || !["generating", "completed", "error"].includes(data.status) ||
+            !Number.isFinite(data.completed) || !Number.isFinite(data.total)) throw new Error("Status unavailable");
+        consecutiveErrors = 0;
+        setProgress(data);
+        if (data.status === "completed") { router.refresh(); return; }
+        if (data.status === "error") {
+          setStatusError("생성이 중단되었거나 확인할 내용이 있습니다. 보고서에서 저장된 내용과 진행 상태를 확인하세요.");
+          router.refresh();
+          return;
+        }
+      } catch {
+        if (!isCurrent()) return;
+        consecutiveErrors++;
+        if (consecutiveErrors >= 5) {
+          setStatusError("진행 상태 조회가 중단되었습니다. 생성 결과는 아직 확인하지 못했습니다. 다시 조회하거나 보고서를 열어 확인하세요.");
+          return;
+        }
+      }
+      await new Promise<void>(resolve => {
+        const finish = () => { clearTimeout(timer); controller.signal.removeEventListener("abort", finish); resolve(); };
+        const timer = setTimeout(finish, 3000);
+        controller.signal.addEventListener("abort", finish, { once: true });
+        if (controller.signal.aborted) finish();
+      });
+    }
+  };
+
+  const retryReportStatus = async () => {
+    if (!monitoredReportId || pollControllerRef.current) return;
+    const controller = new AbortController();
+    const epoch = ++pollEpochRef.current;
+    pollControllerRef.current = controller;
+    setStatusError(null);
+    setGenerating(true);
+    try { await pollReportStatus(monitoredReportId, controller, epoch); }
+    finally {
+      if (!controller.signal.aborted && epoch === pollEpochRef.current) {
+        pollControllerRef.current = null;
+        setGenerating(false);
+        setProgress(null);
+      }
+    }
+  };
+
   const generateReport = async () => {
+    if (pollControllerRef.current) return;
+    if (selectedTemplateId !== DEFAULT_TEMPLATE_VALUE && selectedTemplateId &&
+        (templatesLoading || templatesError || !templates.some(template => template.id === selectedTemplateId))) {
+      setStatusError("선택한 양식을 확인하지 못했습니다. 양식 목록을 다시 조회하거나 기본 양식을 선택하세요.");
+      return;
+    }
+    const controller = new AbortController();
+    const epoch = ++pollEpochRef.current;
+    pollControllerRef.current = controller;
     setGenerating(true);
     setProgress(null);
+    setStatusError(null);
+    setMonitoredReportId(null);
     try {
       const response = await fetch(`/api/deals/${deal.id}/reports`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({
           agentType: recommendedAgent,
           ...(selectedTemplateId && selectedTemplateId !== DEFAULT_TEMPLATE_VALUE
@@ -327,65 +444,66 @@ export function DealDetailClient({
       });
 
       if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.error ?? "보고서 생성 실패");
+        if (controller.signal.aborted || epoch !== pollEpochRef.current) return;
+        setStatusError(response.status === 401
+          ? "로그인이 만료되었습니다. 다시 로그인한 뒤 보고서 목록을 확인하세요."
+          : response.status === 403 ? "보고서를 생성할 권한이 없습니다."
+          : response.status === 429 ? "보고서 생성 한도에 도달했거나 요청이 많습니다. 사용량과 기존 보고서를 확인하세요."
+          : "생성 요청을 완료하지 못했습니다. 새로 요청하기 전에 보고서 목록에서 진행 중인 작업을 확인하세요.");
+        router.refresh();
+        return;
       }
 
       const { data: created } = await response.json();
+      if (controller.signal.aborted || epoch !== pollEpochRef.current) return;
       const reportId: string | undefined = created?.id;
-
-      if (reportId) {
-        // 진행 상태 폴링 — SSE는 서버리스에서 장시간 연결이 쉽게 끊긴다.
-        const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-        let consecutiveErrors = 0;
-
-        while (!pollAbortRef.current) {
-          try {
-            const statusRes = await fetch(`/api/reports/${reportId}/status`, {
-              cache: "no-store",
-            });
-            if (!statusRes.ok) throw new Error(String(statusRes.status));
-            const { data } = (await statusRes.json()) as {
-              data: GenerationProgress;
-            };
-            consecutiveErrors = 0;
-            setProgress(data);
-            if (data.status === "completed" || data.status === "error") break;
-          } catch {
-            consecutiveErrors += 1;
-            if (consecutiveErrors >= 5) break;
-          }
-          await sleep(3000);
-        }
+      if (typeof reportId !== "string" || !reportId) {
+        setStatusError("생성 요청 결과를 확인하지 못했습니다. 새로 생성하기 전에 딜의 보고서 목록을 확인하세요.");
+        router.refresh();
+        return;
       }
-
+      setMonitoredReportId(reportId);
+      await pollReportStatus(reportId, controller, epoch);
+    } catch {
+      if (controller.signal.aborted || epoch !== pollEpochRef.current) return;
+      setStatusError("생성 요청 결과를 확인하지 못했습니다. 새로 생성하기 전에 딜의 보고서 목록을 확인하세요.");
       router.refresh();
-    } catch (error) {
-      toast.error("보고서 생성 실패", {
-        description:
-          error instanceof Error ? error.message : "다시 시도해 주세요",
-      });
     } finally {
-      setGenerating(false);
-      setProgress(null);
+      if (!controller.signal.aborted && epoch === pollEpochRef.current) {
+        pollControllerRef.current = null;
+        setGenerating(false);
+        setProgress(null);
+      }
     }
   };
 
   const detectSector = async () => {
-    if (!deal.documents.length) return;
+    if (!deal.documents.length || sectorControllerRef.current) return;
+    const controller = new AbortController();
+    const epoch = ++sectorEpochRef.current;
+    sectorControllerRef.current = controller;
     setDetectingSector(true);
     setDetectedSector(null);
+    setSectorError(null);
     try {
       const res = await fetch(`/api/deals/${deal.id}/detect-sector`, {
         method: "POST",
+        signal: controller.signal,
       });
       if (!res.ok) throw new Error("섹터 감지 실패");
       const data = await res.json();
+      if (controller.signal.aborted || epoch !== sectorEpochRef.current) return;
+      if (!data.data || typeof data.data.sector !== "string" || !Object.values(DealSector).includes(data.data.sector as DealSector) ||
+          typeof data.data.reason !== "string") throw new Error("Sector unavailable");
       setDetectedSector(data.data);
     } catch {
-      // silently fail
+      if (!controller.signal.aborted && epoch === sectorEpochRef.current)
+        setSectorError("섹터를 자동 감지하지 못했습니다. 기존 섹터로 진행하거나 딜 편집에서 직접 선택하세요.");
     } finally {
-      setDetectingSector(false);
+      if (!controller.signal.aborted && epoch === sectorEpochRef.current) {
+        sectorControllerRef.current = null;
+        setDetectingSector(false);
+      }
     }
   };
 
@@ -398,6 +516,7 @@ export function DealDetailClient({
     <div className="space-y-6">
       <ReportWizard
         deal={deal}
+        canEdit={canEdit}
         open={wizardOpen}
         onClose={() => { setWizardOpen(false); router.refresh(); }}
       />
@@ -405,10 +524,9 @@ export function DealDetailClient({
         <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           <Zap className="w-4 h-4 mt-0.5 flex-shrink-0" />
           <span>
-            <strong>데모 모드</strong> — OpenRouter API 키가 설정되지 않아
-            보고서가 샘플 콘텐츠로 생성됩니다. 전체 흐름(생성·편집·내보내기)은
-            그대로 동작하며, <code className="text-xs">OPENROUTER_API_KEY</code>를
-            설정하면 자동으로 실제 AI 생성으로 전환됩니다.
+            <strong>생성 서비스 확인 필요</strong> — 실제 AI 연결이 확인되지 않았습니다.
+            운영 환경에서는 생성이 제한되며, 개발 환경의 샘플은 실제 투자 분석이 아닙니다.
+            서비스 관리자에게 연결 상태를 확인해 주세요.
           </span>
         </div>
       )}
@@ -517,6 +635,12 @@ export function DealDetailClient({
       </div>
 
       {/* Sector detection result */}
+      {templatesLoading && <p role="status" className="text-sm text-muted-foreground">양식 목록을 불러오는 중입니다.</p>}
+      {templatesError && <div role="alert" data-testid="detail-template-error" className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+        <p>{templatesError}</p>
+        <Button variant="outline" size="sm" onClick={loadTemplates} disabled={templatesLoading}>양식 목록 다시 조회</Button>
+      </div>}
+      {sectorError && <p role="alert" data-testid="detail-sector-error" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">{sectorError}</p>}
       {detectedSector && (
         <div className="flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
           <Sparkles className="w-4 h-4 mt-0.5 flex-shrink-0" />
@@ -528,6 +652,19 @@ export function DealDetailClient({
       )}
 
       {/* Generation progress bar */}
+      {statusError && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 space-y-3"
+          role="alert" data-testid="report-status-error">
+          <p>{statusError}</p>
+          <div className="flex flex-wrap items-center gap-3">
+            {monitoredReportId && <>
+              <Button variant="outline" size="sm" onClick={retryReportStatus} disabled={generating}>진행 상태 다시 확인</Button>
+              <Link className="underline" href={`/reports/${monitoredReportId}`}>보고서 열기</Link>
+            </>}
+            {!monitoredReportId && <Button variant="outline" size="sm" onClick={() => router.refresh()}>보고서 목록 새로고침</Button>}
+          </div>
+        </div>
+      )}
       {generating && progress && (
         <div className="rounded-lg border bg-white p-4 space-y-2">
           <div className="flex items-center justify-between text-sm">
@@ -637,10 +774,9 @@ export function DealDetailClient({
                 연습용: 딜 섹터에 맞는 골든 IR 마크다운을 문서에 추가합니다.
               </p>
               <FileUploader
-                key={uploadKey}
+                key={deal.id}
                 dealId={deal.id}
                 onUploadComplete={() => {
-                  setUploadKey((k) => k + 1);
                   router.refresh();
                 }}
               />
@@ -700,6 +836,7 @@ export function DealDetailClient({
                             </p>
                           )}
                         </div>
+                        <a href={`/api/documents/${doc.id}/download`} className="text-xs text-primary underline" aria-label={`${doc.name} 원본 다운로드`}>원본 다운로드</a>
                         {canEdit && (
                           <Button
                             variant="ghost"

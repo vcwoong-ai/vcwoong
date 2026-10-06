@@ -2,33 +2,52 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { hasFeature } from "@/lib/plans";
 import { getUserPlanKey } from "@/lib/subscription";
-import { ReportStatus } from "@prisma/client";
+import { ReportStatus, type Prisma } from "@prisma/client";
+import { createHash } from "node:crypto";
+import { reportReviewVersion } from "@/lib/report-review-version";
 import { getUserTeamContext, reportReadWhere } from "@/lib/team-access";
 import { computeReportDecision } from "@/lib/vc-decision-loader";
 import { buildDecisionMemoSections } from "@/lib/vc-decision-memo";
+
+// Both initial file inputs and final state admission read exactly the same DB projection.
+const REPORT_EXPORT_INCLUDE = {
+  deal: {
+    include: {
+      // metadata: PPTX 첨부 이미지 슬라이드용(문서 업로드 시 추출해둔 이미지 URL).
+      // parsedText: 양식 재현 시 표준 섹션에 대응 안 되는 슬라이드/헤딩
+      // (인력 구성·주주 구성 등)을 원본 IR 자료에서 대신 채우기 위해 필요.
+      documents: { select: { id: true, name: true, metadata: true, parsedText: true }, orderBy: { id: "asc" } },
+      // PR-K: Decision-First memo(vc-decision-memo.ts)가 필요로 하는 값 —
+      // 새 AI 호출이 아니라 이미 계산·저장된 값을 추가로 select만 한다.
+      score: true,
+    },
+  },
+  template: true,
+  sections: { orderBy: [{ order: "asc" }, { id: "asc" }] },
+  evidenceCheck: { select: { verdicts: true } },
+  icQuestions: { select: { questions: true } },
+} satisfies Prisma.ReportInclude;
+
+type ReportExportInput = Prisma.ReportGetPayload<{ include: typeof REPORT_EXPORT_INCLUDE }>;
+export interface ReportExportState {
+  eligible: boolean;
+  updatedAt: Date;
+  contentVersion: string;
+  artifactVersion: string;
+}
+
+function artifactVersion(report: ReportExportInput): string {
+  // Server-only comparison, including memo evidence, score, template and document inputs.
+  // This does not attest to external bytes behind a stored URL or later AI output.
+  return createHash("sha256").update(JSON.stringify(["dealmind-export-input-v1", report])).digest("hex");
+}
 
 export async function loadReportForExport(userId: string, reportId: string) {
   const { teamId } = await getUserTeamContext(userId);
 
   const report = await prisma.report.findFirst({
     where: { id: reportId, ...reportReadWhere(userId, teamId) },
-    include: {
-      deal: {
-        include: {
-          // metadata: PPTX 첨부 이미지 슬라이드용(문서 업로드 시 추출해둔 이미지 URL).
-          // parsedText: 양식 재현 시 표준 섹션에 대응 안 되는 슬라이드/헤딩
-          // (인력 구성·주주 구성 등)을 원본 IR 자료에서 대신 채우기 위해 필요.
-          documents: { select: { name: true, metadata: true, parsedText: true } },
-          // PR-K: Decision-First memo(vc-decision-memo.ts)가 필요로 하는 값 —
-          // 새 AI 호출이 아니라 이미 계산·저장된 값을 추가로 select만 한다.
-          score: true,
-        },
-      },
-      template: true,
-      sections: { orderBy: { order: "asc" } },
-      evidenceCheck: { select: { verdicts: true } },
-      icQuestions: { select: { questions: true } },
-    },
+    include: REPORT_EXPORT_INCLUDE,
   });
 
   if (!report) {
@@ -56,14 +75,42 @@ export async function loadReportForExport(userId: string, reportId: string) {
   const { decision, sectionRefs } = computeReportDecision(report);
   const decisionMemoSections = buildDecisionMemoSections(decision, sectionRefs);
 
-  return { report, canUseEngine, decisionMemoSections } as const;
+  const exportState: ReportExportState = {
+    eligible: report.status === ReportStatus.FINAL && report.sections.length > 0 && report.sections.every(section => section.status === "APPROVED"),
+    updatedAt: report.updatedAt,
+    contentVersion: await reportReviewVersion(report.sections),
+    artifactVersion: artifactVersion(report),
+  };
+  return { report, canUseEngine, decisionMemoSections, exportState } as const;
 }
 
-export async function markExported(reportId: string) {
-  await prisma.report.update({
-    where: { id: reportId },
-    data: { status: ReportStatus.EXPORTED },
-  });
+export async function markExported(reportId: string, expected: ReportExportState): Promise<boolean> {
+  // Bytes from the original snapshot may still be downloaded, but may never mark
+  // a subsequently edited/reapproved report or changed memo inputs as exported.
+  if (!expected?.eligible) return false;
+  try {
+    return await prisma.$transaction(async tx => {
+      const current = await tx.report.findUnique({ where: { id: reportId }, include: REPORT_EXPORT_INCLUDE });
+      if (!current || current.status !== ReportStatus.FINAL || !current.sections.length ||
+          current.sections.some(section => section.status !== "APPROVED") ||
+          current.updatedAt.getTime() !== expected.updatedAt.getTime() ||
+          await reportReviewVersion(current.sections) !== expected.contentVersion ||
+          artifactVersion(current) !== expected.artifactVersion) return false;
+      const changed = await tx.report.updateMany({
+        where: {
+          id: reportId,
+          updatedAt: expected.updatedAt,
+          status: ReportStatus.FINAL,
+          sections: { some: {}, every: { status: "APPROVED" } },
+        },
+        data: { status: ReportStatus.EXPORTED },
+      });
+      return changed.count === 1;
+    }, { isolationLevel: "Serializable", maxWait: 5000, timeout: 15000 });
+  } catch (error) {
+    if (typeof error === "object" && error !== null && "code" in error && error.code === "P2034") return false;
+    throw new Error("Export state could not be recorded");
+  }
 }
 
 export function exportFilename(companyName: string, ext: "docx" | "pptx"): string {

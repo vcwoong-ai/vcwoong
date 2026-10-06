@@ -3,6 +3,7 @@ import { ReportStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { SECTION_META } from "@/types";
 import { secureCompare } from "@/lib/secure-compare";
+import { generationLeaseWhere, staleGenerationWhere } from "@/lib/report-generation-lease";
 import {
   generateSectionsAsync,
   claimPendingGeneration,
@@ -76,7 +77,6 @@ export async function GET(request: NextRequest) {
   const tickStartedAt = Date.now();
   const invocationDeadline = tickStartedAt + CRON_BUDGET_MS;
   const totalSections = SECTION_META.length;
-  const staleBefore = new Date(Date.now() - STALE_GENERATION_MS);
 
   // PENDING(정상 checkpoint 또는 진짜 실패 — 둘 다 이하 필터에서 한 번 더
   // 걸러짐) + 오래 갱신 없는 GENERATING(함수가 checkpoint도 못 거치고 죽은
@@ -86,7 +86,7 @@ export async function GET(request: NextRequest) {
     where: {
       OR: [
         { status: ReportStatus.PENDING },
-        { status: ReportStatus.GENERATING, updatedAt: { lt: staleBefore } },
+        staleGenerationWhere(STALE_GENERATION_MS),
       ],
     },
     select: {
@@ -94,6 +94,7 @@ export async function GET(request: NextRequest) {
       dealId: true,
       agentType: true,
       autoResumeCount: true,
+      generatedAt: true,
       _count: { select: { sections: true } },
     },
     orderBy: { updatedAt: "asc" }, // 오래 기다린 것부터
@@ -105,6 +106,7 @@ export async function GET(request: NextRequest) {
       id: r.id,
       completedSections: r._count.sections,
       autoResumeCount: r.autoResumeCount,
+      generatedAt: r.generatedAt,
     })),
     { totalSections, maxAutoResumeAttempts: MAX_AUTO_RESUME_ATTEMPTS }
   );
@@ -137,8 +139,8 @@ export async function GET(request: NextRequest) {
       continue;
     }
 
-    const claimedOk = await claimPendingGeneration(candidate.id);
-    if (!claimedOk) {
+    const token = await claimPendingGeneration(candidate.id);
+    if (!token) {
       // 브라우저(또는 다른 cron tick)가 먼저 선점했다 — 중복 생성 아님.
       results.push({ reportId: candidate.id, outcome: "already_claimed" });
       console.log(
@@ -170,10 +172,11 @@ export async function GET(request: NextRequest) {
       continue;
     }
 
-    await prisma.report.update({
-      where: { id: candidate.id },
+    const counted = await prisma.report.updateMany({
+      where: generationLeaseWhere(candidate.id, token),
       data: { autoResumeCount: { increment: 1 } },
     });
+    if (counted.count !== 1) continue;
 
     console.log(
       `[Cron] report=${candidate.id} claimed 시도=${candidate.autoResumeCount + 1}/${MAX_AUTO_RESUME_ATTEMPTS} ` +
@@ -191,10 +194,11 @@ export async function GET(request: NextRequest) {
       deal,
       byId.get(candidate.id)!.agentType,
       undefined,
-      deal.userId
-    ).catch((err) => {
+      deal.userId,
+      token
+    ).catch(() => {
       outcome = "resume_error";
-      console.error(`[Cron] report=${candidate.id} 재개 실패:`, err);
+      console.error(`[Cron] report=${candidate.id} 재개 실패`);
     });
     const durationSec = ((Date.now() - resumeStartedAt) / 1000).toFixed(1);
     console.log(

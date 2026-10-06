@@ -14,7 +14,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import type { MADeal } from "@prisma/client";
+import type { Prisma, MADeal } from "@prisma/client";
 import { loadMaDealIcContext } from "./pe-ma-deal-context";
 import { buildMaDealDashboard } from "./ma-deal-dashboard";
 import { listPEEvidenceRequests, type PEDDActor } from "./pe-evidence-request-repository";
@@ -29,15 +29,15 @@ export interface LoadedPECommitteePack {
 
 export type LoadPECommitteePackResult = { status: "not_found" } | { status: "ok"; data: LoadedPECommitteePack };
 
-export async function loadPECommitteePackForDeal(actor: PEDDActor, maDealId: string): Promise<LoadPECommitteePackResult> {
-  const context = await loadMaDealIcContext(actor.userId, actor.teamId, maDealId);
+export async function loadPECommitteePackForDeal(actor: PEDDActor, maDealId: string, client: Prisma.TransactionClient = prisma): Promise<LoadPECommitteePackResult> {
+  const context = await loadMaDealIcContext(actor.userId, actor.teamId, maDealId, client);
   if (context.status === "not_found") return { status: "not_found" };
 
   const { maDeal, dashboardPeriods, ddCase } = context.data;
   const dashboard = buildMaDealDashboard(dashboardPeriods, ddCase);
 
-  const ddCaseRow = await prisma.pEDDCase.findUnique({ where: { maDealId }, select: { id: true } });
-  const evidenceRequestsResult = ddCaseRow ? await listPEEvidenceRequests(actor, ddCaseRow.id) : undefined;
+  const ddCaseRow = await client.pEDDCase.findUnique({ where: { maDealId }, select: { id: true } });
+  const evidenceRequestsResult = ddCaseRow ? await listPEEvidenceRequests(actor, ddCaseRow.id, client) : undefined;
   const evidenceRequests = evidenceRequestsResult?.status === "ok" ? evidenceRequestsResult.data.map((r) => toPEEvidenceRequestView(r)) : [];
 
   const pack = buildPECommitteePack({

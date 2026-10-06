@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { PRIVATE_RESPONSE_HEADERS } from "@/lib/private-response-headers";
 import { getUserTeamContext } from "@/lib/team-access";
 import { prisma } from "@/lib/prisma";
 import { loadMaDealIcContext } from "@/lib/pe/pe-ma-deal-context";
@@ -13,6 +14,8 @@ import { toPEEvidenceRequestView } from "@/lib/pe/pe-ic-review-types";
 import { generateMarkdownDOCX } from "@/lib/docx-export";
 import { generateMarkdownPPTX } from "@/lib/pptx-export";
 import { MA_DEAL_TYPE_LABEL, MA_DEAL_STATUS_LABEL } from "@/lib/pe/ma-deal-labels";
+
+export const dynamic = "force-dynamic";
 
 /**
  * PE IC Memo export(PR #108) — READ-ONLY. 새 계산을 하지 않는다.
@@ -30,68 +33,73 @@ import { MA_DEAL_TYPE_LABEL, MA_DEAL_STATUS_LABEL } from "@/lib/pe/ma-deal-label
  * 않는다(§1 "PE는 별도 도메인").
  */
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "인증이 필요합니다" }, { status: 401 });
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "인증이 필요합니다" }, { status: 401, headers: PRIVATE_RESPONSE_HEADERS });
+    }
+
+    const { teamId, role } = await getUserTeamContext(session.user.id);
+    const result = await loadMaDealIcContext(session.user.id, teamId, params.id);
+    if (result.status === "not_found") {
+      return NextResponse.json({ error: "PE 딜을 찾을 수 없습니다" }, { status: 404, headers: PRIVATE_RESPONSE_HEADERS });
+    }
+
+    const { maDeal, dashboardPeriods, ddCase } = result.data;
+    const dashboard = buildMaDealDashboard(dashboardPeriods, ddCase);
+    const decision = buildPEICDecision({
+      dealId: maDeal.id,
+      readiness: dashboard.decisionReadiness,
+      financialQuality: dashboard.financialQuality,
+      qoeSummary: dashboard.qoeSummary,
+      lboEntryEbitda: dashboard.lboEntryEbitda,
+      dartStatus: dashboard.dartStatus,
+      ddCase,
+      // LBO 가정은 세션 로컬 client state일 뿐 서버에 없다 — 지어내지 않는다.
+      lboAssumptionKeysProvided: undefined,
+    });
+
+    // IC Review Status(PR #109) — 화면(ma-deal-ic-review-workspace.tsx)과
+    // 정확히 같은 조립 함수(buildPEICReviewWorkspace)에 정확히 같은 입력
+    // (decision.questions + 영속된 evidence requests)을 넣는다.
+    const actor: PEDDActor = { userId: session.user.id, teamId, role };
+    const ddCaseRow = await prisma.pEDDCase.findUnique({ where: { maDealId: params.id }, select: { id: true } });
+    const evidenceRequestsResult = ddCaseRow ? await listPEEvidenceRequests(actor, ddCaseRow.id) : undefined;
+    const evidenceRequests = evidenceRequestsResult?.status === "ok" ? evidenceRequestsResult.data.map((r) => toPEEvidenceRequestView(r)) : [];
+    const reviewWorkspace = buildPEICReviewWorkspace(maDeal.id, decision.processState, decision.questions, evidenceRequests);
+
+    const markdown = buildPEICMemoMarkdown(
+      decision,
+      {
+        companyName: maDeal.companyName,
+        name: maDeal.name,
+        dealTypeLabel: MA_DEAL_TYPE_LABEL[maDeal.dealType],
+        statusLabel: MA_DEAL_STATUS_LABEL[maDeal.status],
+      },
+      reviewWorkspace
+    );
+
+    const format = request.nextUrl.searchParams.get("format") === "pptx" ? "pptx" : "docx";
+    const title = `${maDeal.companyName} IC Memo`;
+
+    const buffer =
+      format === "pptx"
+        ? await generateMarkdownPPTX({ title, subtitle: maDeal.name, markdown })
+        : await generateMarkdownDOCX({ title, subtitle: maDeal.name, markdown });
+
+    const filename = `${maDeal.companyName}_IC_Memo_${new Date().toISOString().slice(0, 10)}.${format}`;
+
+    return new NextResponse(new Uint8Array(buffer), {
+      headers: {
+        ...PRIVATE_RESPONSE_HEADERS,
+        "Content-Type":
+          format === "pptx"
+            ? "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+            : "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "Content-Disposition": `attachment; filename="${encodeURIComponent(filename)}"`,
+      },
+    });
+  } catch {
+    return NextResponse.json({ error: "내보내기 파일을 만들지 못했습니다. 잠시 후 다시 시도해 주세요." }, { status: 500, headers: PRIVATE_RESPONSE_HEADERS });
   }
-
-  const { teamId, role } = await getUserTeamContext(session.user.id);
-  const result = await loadMaDealIcContext(session.user.id, teamId, params.id);
-  if (result.status === "not_found") {
-    return NextResponse.json({ error: "PE 딜을 찾을 수 없습니다" }, { status: 404 });
-  }
-
-  const { maDeal, dashboardPeriods, ddCase } = result.data;
-  const dashboard = buildMaDealDashboard(dashboardPeriods, ddCase);
-  const decision = buildPEICDecision({
-    dealId: maDeal.id,
-    readiness: dashboard.decisionReadiness,
-    financialQuality: dashboard.financialQuality,
-    qoeSummary: dashboard.qoeSummary,
-    lboEntryEbitda: dashboard.lboEntryEbitda,
-    dartStatus: dashboard.dartStatus,
-    ddCase,
-    // LBO 가정은 세션 로컬 client state일 뿐 서버에 없다 — 지어내지 않는다.
-    lboAssumptionKeysProvided: undefined,
-  });
-
-  // IC Review Status(PR #109) — 화면(ma-deal-ic-review-workspace.tsx)과
-  // 정확히 같은 조립 함수(buildPEICReviewWorkspace)에 정확히 같은 입력
-  // (decision.questions + 영속된 evidence requests)을 넣는다.
-  const actor: PEDDActor = { userId: session.user.id, teamId, role };
-  const ddCaseRow = await prisma.pEDDCase.findUnique({ where: { maDealId: params.id }, select: { id: true } });
-  const evidenceRequestsResult = ddCaseRow ? await listPEEvidenceRequests(actor, ddCaseRow.id) : undefined;
-  const evidenceRequests = evidenceRequestsResult?.status === "ok" ? evidenceRequestsResult.data.map((r) => toPEEvidenceRequestView(r)) : [];
-  const reviewWorkspace = buildPEICReviewWorkspace(maDeal.id, decision.processState, decision.questions, evidenceRequests);
-
-  const markdown = buildPEICMemoMarkdown(
-    decision,
-    {
-      companyName: maDeal.companyName,
-      name: maDeal.name,
-      dealTypeLabel: MA_DEAL_TYPE_LABEL[maDeal.dealType],
-      statusLabel: MA_DEAL_STATUS_LABEL[maDeal.status],
-    },
-    reviewWorkspace
-  );
-
-  const format = request.nextUrl.searchParams.get("format") === "pptx" ? "pptx" : "docx";
-  const title = `${maDeal.companyName} IC Memo`;
-
-  const buffer =
-    format === "pptx"
-      ? await generateMarkdownPPTX({ title, subtitle: maDeal.name, markdown })
-      : await generateMarkdownDOCX({ title, subtitle: maDeal.name, markdown });
-
-  const filename = `${maDeal.companyName}_IC_Memo_${new Date().toISOString().slice(0, 10)}.${format}`;
-
-  return new NextResponse(new Uint8Array(buffer), {
-    headers: {
-      "Content-Type":
-        format === "pptx"
-          ? "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-          : "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      "Content-Disposition": `attachment; filename="${encodeURIComponent(filename)}"`,
-    },
-  });
 }

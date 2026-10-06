@@ -18,10 +18,13 @@ import {
 import { hasFeature } from "@/lib/plans";
 import { TeamSettings } from "@/components/settings/team-settings";
 import { Users } from "lucide-react";
+import { storageConfigurationSummary } from "@/lib/storage-configuration";
+import { isSubscriptionCheckoutReady } from "@/lib/payments/checkout-readiness";
 
 export default async function SettingsPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/login");
+  const storageSummary = storageConfigurationSummary(process.env);
 
   const subscription = await getUserSubscription(session.user.id);
   const currentPlan = subscription
@@ -91,7 +94,12 @@ export default async function SettingsPage() {
               <SubscriptionPlans
                 userId={session.user.id}
                 currentPlan={currentPlan}
-                hasBillingKey={Boolean(subscription?.billingKey)}
+                hasBillingKey={Boolean(subscription?.hasBillingKey)}
+                checkoutReady={isSubscriptionCheckoutReady()}
+                billingPeriodInfo={subscription?.source === "durable" && subscription.billing?.paidUntil ? {
+                  paidUntil: subscription.billing.paidUntil.toISOString(),
+                  cancelAtPeriodEnd: subscription.billing.cancelAtPeriodEnd,
+                } : undefined}
               />
             </Suspense>
           </CardContent>
@@ -157,11 +165,11 @@ export default async function SettingsPage() {
               <div className="flex justify-between">
                 <span>스토리지 모드</span>
                 <Badge variant="outline">
-                  {process.env.STORAGE_MODE === "s3" ? "AWS S3" : "로컬"}
+                  {storageSummary.label}
                 </Badge>
               </div>
               <p className="text-xs text-gray-400">
-                프로덕션 배포 시 AWS S3로 전환하세요.
+                {storageSummary.description}
               </p>
             </div>
           </CardContent>

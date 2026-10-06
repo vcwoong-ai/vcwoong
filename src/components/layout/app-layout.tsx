@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect } from "react";
 import { Sidebar } from "./sidebar";
 import { Header } from "./header";
+import styles from "./workspace-shell.module.css";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -30,16 +31,16 @@ export function AppLayout({ children, title }: AppLayoutProps) {
   }, []);
 
   return (
-    <div className="min-h-screen bg-background" data-app-ready={hydrated}>
+    <div className={styles.shell} data-app-ready={hydrated}>
       <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-md focus:bg-background focus:px-4 focus:py-3 focus:text-foreground focus:outline focus:outline-2 focus:outline-primary">
         본문으로 이동
       </a>
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       {/* 사이드바는 lg 이상에서만 자리를 차지한다. 모바일에서도 pl-64를 주면
           좁은 화면에서 본문 폭이 100px대로 줄어 글자가 세로로 깨진다. */}
-      <div className="lg:pl-64">
+      <div className="lg:pl-64 min-w-0">
         <Header title={title} menuOpen={sidebarOpen} onMenuClick={() => setSidebarOpen(true)} />
-        <main id="main-content" tabIndex={-1} className="p-4 sm:p-6">{children}</main>
+        <main id="main-content" tabIndex={-1} className={styles.main}>{children}</main>
       </div>
     </div>
   );

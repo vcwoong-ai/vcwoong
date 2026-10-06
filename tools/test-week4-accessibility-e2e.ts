@@ -1,3 +1,4 @@
+import { assertE2ETarget, assertNoExternalE2ECredentials, assertCleanE2EWorkspace, chromiumLaunchOptions } from "./helpers/e2e-environment";
 /** Local-only browser checks and SSR measurements. No external requests or paid actions. */
 import assert from "node:assert/strict";
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -6,16 +7,20 @@ import { PrismaClient } from "@prisma/client";
 import { chromium } from "playwright";
 import { gotoAppReady, expectNoHorizontalOverflow } from "./helpers/app-ready";
 
-const base = "http://localhost:3000";
+const base = process.env.BASE_URL ?? "http://localhost:3000";
+assertE2ETarget(base);
+assertNoExternalE2ECredentials();
+assertCleanE2EWorkspace();
+
 async function main() {
-  assert.equal(process.env.DATABASE_URL, "file:./dev.db");
   mkdirSync("screenshots/week4", { recursive: true });
   const db = new PrismaClient();
   const password = "LocalFixture1234!";
   const user = await db.user.create({ data: { email: `a11y-${Date.now()}@example.com`, name: "키보드 검토 예시", passwordHash: await bcrypt.hash(password, 4) } });
   let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
   try {
-    browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH });
+    assert(user.email, "Synthetic accessibility user requires an email.");
+    browser = await chromium.launch(chromiumLaunchOptions());
     const context = await browser.newContext();
     await context.route("**/*", route => new URL(route.request().url()).hostname === "localhost" ? route.continue() : route.abort());
     const { csrfToken } = await (await context.request.get(`${base}/api/auth/csrf`)).json();

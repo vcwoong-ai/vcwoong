@@ -104,10 +104,10 @@ export async function createPEEvidenceRequest(
   return { status: "ok", data: created };
 }
 
-export async function listPEEvidenceRequests(actor: PEDDActor, ddCaseId: string): Promise<PEDDResult<PEEvidenceRequestRow[]>> {
-  const ddCase = await prisma.pEDDCase.findFirst({ where: { id: ddCaseId, ...ddCaseReadWhere(actor) } });
+export async function listPEEvidenceRequests(actor: PEDDActor, ddCaseId: string, client: Prisma.TransactionClient = prisma): Promise<PEDDResult<PEEvidenceRequestRow[]>> {
+  const ddCase = await client.pEDDCase.findFirst({ where: { id: ddCaseId, ...ddCaseReadWhere(actor) } });
   if (!ddCase) return { status: "not_found" };
-  const rows = await prisma.pEEvidenceRequest.findMany({ where: { ddCaseId }, orderBy: { createdAt: "asc" } });
+  const rows = await client.pEEvidenceRequest.findMany({ where: { ddCaseId }, orderBy: { createdAt: "asc" } });
   return { status: "ok", data: rows };
 }
 

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isAIConfigured, AIServiceUnavailableError } from "@/lib/claude";
 import { waitUntil } from "@vercel/functions";
 import { getServerSession } from "next-auth";
 import { z } from "zod";
@@ -11,6 +12,8 @@ import {
   STALE_GENERATION_MS,
 } from "@/lib/report-generation";
 import { checkQuota } from "@/lib/quotas";
+import { randomUUID } from "node:crypto";
+import { activeGenerationWhere, staleGenerationWhere, GENERATION_LEASE_MS, publicGenerationReport } from "@/lib/report-generation-lease";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { getUserTeamContext, dealWriteWhere, templateReadWhere, permissionDeniedMessage } from "@/lib/team-access";
 
@@ -49,7 +52,7 @@ export async function GET(
     orderBy: { createdAt: "desc" },
   });
 
-  return NextResponse.json({ data: reports });
+  return NextResponse.json({ data: reports.map(publicGenerationReport) });
 }
 
 export async function POST(
@@ -92,7 +95,8 @@ export async function POST(
     );
   }
 
-  const quota = await checkQuota(session.user.id, "report");
+  const quota = await checkQuota(deal.userId, "report").catch(() => null);
+  if (!quota) return NextResponse.json({ error: "보고서 생성 한도를 확인할 수 없습니다. 잠시 후 다시 시도해 주세요." }, { status: 500 });
   if (!quota.allowed) {
     return NextResponse.json({ error: quota.message }, { status: 429 });
   }
@@ -104,39 +108,14 @@ export async function POST(
     );
   }
 
+  // 서비스 미연결 시 새 보고서·복구 상태를 쓰거나 샘플을 생성하지 않는다.
+  if (process.env.NODE_ENV === "production" && !isAIConfigured()) {
+    return NextResponse.json({ error: new AIServiceUnavailableError().message }, { status: 503 });
+  }
+
   // 실행시간 제한으로 함수가 강제 종료되면 status가 GENERATING에 남는다.
   // 그런 리포트를 계속 "생성 중"으로 취급하면 이 딜은 영영 새 보고서를
   // 만들 수 없으므로(항상 409), 오래된 것은 멈춘 것으로 보고 정리한다.
-  const staleBefore = new Date(Date.now() - STALE_GENERATION_MS);
-  const stale = await prisma.report.updateMany({
-    where: {
-      dealId: params.id,
-      status: ReportStatus.GENERATING,
-      updatedAt: { lt: staleBefore },
-    },
-    data: { status: ReportStatus.PENDING },
-  });
-  if (stale.count > 0) {
-    console.warn(
-      `[Report] deal=${params.id} 멈춘 생성 ${stale.count}건을 PENDING으로 정리`
-    );
-  }
-
-  const inFlight = await prisma.report.findFirst({
-    where: {
-      dealId: params.id,
-      status: ReportStatus.GENERATING,
-      updatedAt: { gte: staleBefore },
-    },
-    select: { id: true },
-  });
-  if (inFlight) {
-    return NextResponse.json(
-      { error: "이미 생성 중인 보고서가 있습니다.", data: { id: inFlight.id } },
-      { status: 409 }
-    );
-  }
-
   try {
     const body = await request.json();
     const validated = createReportSchema.parse(body);
@@ -157,15 +136,37 @@ export async function POST(
     }
 
     // Create report record
-    const report = await prisma.report.create({
-      data: {
+    const token = randomUUID();
+    const result = await prisma.$transaction(async (tx) => {
+      // Quota is owned by the deal owner; same owner admissions serialize across deals.
+      const owner = await tx.user.updateMany({ where: { id: deal.userId }, data: { updatedAt: new Date() } });
+      const lockedDeal = await tx.deal.updateMany({ where: { id: params.id }, data: { updatedAt: new Date() } });
+      if (owner.count !== 1 || lockedDeal.count !== 1) return { error: "딜을 찾을 수 없습니다", status: 404 } as const;
+      const inFlight = await tx.report.findFirst({ where: { dealId: params.id, ...activeGenerationWhere(STALE_GENERATION_MS) }, select: { id: true } });
+      if (inFlight) return { error: "이미 생성 중인 보고서가 있습니다.", status: 409, id: inFlight.id } as const;
+      const admissionAt = new Date();
+      const admitted = await checkQuota(deal.userId, "report", undefined, tx, admissionAt);
+      if (!admitted.allowed) return { error: admitted.message, status: 429 } as const;
+      await tx.report.updateMany({
+        where: { dealId: params.id, ...staleGenerationWhere(STALE_GENERATION_MS) },
+        data: { status: ReportStatus.PENDING, generationClaim: null, generationLeaseExpiresAt: null, currentSectionTitle: null },
+      });
+      const report = await tx.report.create({ data: {
         dealId: params.id,
         title: `${deal.companyName} 투자심의보고서`,
         agentType,
         status: ReportStatus.GENERATING,
+        generationClaim: token,
+        generationLeaseExpiresAt: new Date(admissionAt.getTime() + GENERATION_LEASE_MS),
+        createdAt: admissionAt,
         ...(validated.templateId ? { templateId: validated.templateId } : {}),
-      },
+      } });
+      await tx.reportQuotaAdmission.create({ data: { userId: deal.userId, reportId: report.id,
+        admissionRef: report.id, createdAt: admissionAt } });
+      return { report } as const;
     });
+    if ("error" in result) return NextResponse.json({ error: result.error, ...("id" in result && result.id ? { data: { id: result.id } } : {}) }, { status: result.status });
+    const report = result.report;
 
     // 응답을 먼저 보낸 뒤에도 Vercel이 함수를 바로 얼리지 않도록 생성 작업의
     // 수명을 연장한다. waitUntil 없이 fire-and-forget으로 두면 서버리스
@@ -176,11 +177,12 @@ export async function POST(
         deal,
         agentType,
         validated.additionalContext,
-        session.user.id
-      ).catch((err) => console.error("generateSectionsAsync failed:", err))
+        deal.userId,
+        token
+      ).catch(() => console.error("generateSectionsAsync failed"))
     );
 
-    return NextResponse.json({ data: report }, { status: 201 });
+    return NextResponse.json({ data: publicGenerationReport(report) }, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -188,7 +190,7 @@ export async function POST(
         { status: 400 }
       );
     }
-    console.error("Report creation error:", error);
+    console.error("Report creation failed");
     return NextResponse.json(
       { error: "보고서 생성 중 오류가 발생했습니다" },
       { status: 500 }

@@ -1,18 +1,19 @@
+import { assertE2ETarget, assertNoExternalE2ECredentials, assertCleanE2EWorkspace, chromiumLaunchOptions } from "./helpers/e2e-environment";
 import { chromium, expect } from "playwright/test";
 import { mkdirSync } from "node:fs";
 import { expectNoHorizontalOverflow } from "./helpers/app-ready";
 
 const before = process.argv.includes("before");
 const base = process.env.BASE_URL ?? (before ? "http://localhost:3000" : "http://localhost:3001");
-const target = new URL(base);
-if (target.protocol !== "http:" || target.hostname !== "localhost" || !["3000", "3001"].includes(target.port)) {
-  throw new Error("Local preview only");
-}
+assertE2ETarget(base);
+assertNoExternalE2ECredentials();
+assertCleanE2EWorkspace();
+
 const dir = "docs/design-review-landing-visual";
 mkdirSync(dir, { recursive: true });
 
 async function main() {
-  const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH });
+  const browser = await chromium.launch(chromiumLaunchOptions());
   try {
     for (const width of [1440, 390]) {
       const context = await browser.newContext({ viewport: { width, height: 960 }, reducedMotion: "reduce" });

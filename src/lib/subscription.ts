@@ -2,6 +2,7 @@ import { SubscriptionPlan } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import type { PlanKey } from "@/lib/quotas";
 import { PLAN_LIMITS } from "@/lib/quotas";
+import { billingAccessView } from "@/lib/payments/billing-access";
 
 export const PLAN_DISPLAY: Record<SubscriptionPlan, { name: string; price: number; planKey: PlanKey }> = {
   FREE: { name: "Free", price: 0, planKey: "free" },
@@ -34,7 +35,13 @@ export function enumToPlanKey(plan: SubscriptionPlan): PlanKey {
   return PLAN_DISPLAY[plan].planKey;
 }
 
+const billingAccessSelect = { plan: true, cycle: true, status: true, anchor: true,
+  paidThroughIndex: true, periodStart: true, periodEnd: true, version: true, cancelAtPeriodEnd: true } as const;
+
 export async function getUserPlanKey(userId: string): Promise<PlanKey> {
+  // Billing schema migration is a deployment prerequisite. DB errors must not become legacy access.
+  const durable = await prisma.billingSubscription.findUnique({ where: { userId }, select: billingAccessSelect });
+  if (durable) return billingAccessView(durable, null, new Date()).plan;
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { subscriptionPlan: true, subscriptionStatus: true },
@@ -44,7 +51,15 @@ export async function getUserPlanKey(userId: string): Promise<PlanKey> {
 }
 
 export async function getUserSubscription(userId: string) {
-  return prisma.user.findUnique({
+  const durable = await prisma.billingSubscription.findUnique({ where: { userId }, select: billingAccessSelect });
+  if (durable) {
+    const access = billingAccessView(durable, null, new Date());
+    const methods = await prisma.billingPaymentMethod.count({ where: { userId, revokedAt: null } });
+    return { subscriptionPlan: access.plan.toUpperCase() as SubscriptionPlan,
+      subscriptionStatus: durable.status, hasBillingKey: methods > 0,
+      source: access.source, billing: access.billing };
+  }
+  const legacy = await prisma.user.findUnique({
     where: { id: userId },
     select: {
       subscriptionPlan: true,
@@ -52,6 +67,9 @@ export async function getUserSubscription(userId: string) {
       billingKey: true,
     },
   });
+  if (!legacy) return null;
+  return { subscriptionPlan: legacy.subscriptionPlan, subscriptionStatus: legacy.subscriptionStatus,
+    hasBillingKey: Boolean(legacy.billingKey), source: "legacy" as const, billing: null };
 }
 
 export async function activateSubscription(

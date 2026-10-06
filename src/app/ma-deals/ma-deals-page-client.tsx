@@ -14,6 +14,7 @@ import { MaDealType, MaDealStatus } from "@prisma/client";
 import { useToast } from "@/hooks/use-toast";
 import { useConfirm } from "@/hooks/use-confirm";
 import type { MaDealListReadinessSummary } from "@/lib/pe/ma-deal-list-readiness";
+import styles from "@/components/ma-deals/pe-investment-desk.module.css";
 
 interface MaDeal {
   id: string;
@@ -112,20 +113,61 @@ export function MaDealsPageClient({
       (d.companyName.toLowerCase().includes(search.toLowerCase()) ||
         d.name.toLowerCase().includes(search.toLowerCase()))
   );
+  const activeDeals = loadedDeals.filter((deal) => deal.status === "ACTIVE");
+  const loadedSummary = {
+    blocked: activeDeals.filter((deal) => (readiness[deal.id]?.blockerCount ?? 0) > 0).length,
+    ready: activeDeals.filter((deal) => readiness[deal.id]?.overall === "READY").length,
+    unavailable: activeDeals.filter((deal) => !readiness[deal.id]).length,
+  };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="relative w-full sm:max-w-sm sm:flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+    <div className={styles.workspace}>
+      <section className={styles.masthead} aria-labelledby="pe-desk-title">
+        <div className={styles.mastheadIntro}>
+          <p className={styles.eyebrow}>PRIVATE EQUITY · DEAL DESK</p>
+          <h1 id="pe-desk-title">PE/M&A 검토 데스크</h1>
+          <p className={styles.brief}>딜별 자료 준비 상태와 차단 요인을 확인하고, 다음 검토를 이어가세요.</p>
+        </div>
+        <div className={styles.createAction}><CreateMaDealDialog /></div>
+      </section>
+
+      <section className={styles.summary} aria-label="불러온 활성 딜 요약">
+        <div className={styles.summaryScope}>불러온 활성 딜 {activeDeals.length}건 기준 <span>· 전체 목록의 집계가 아닙니다</span></div>
+        <dl className={styles.stats}>
+          <div><dt>활성 딜</dt><dd>{activeDeals.length}<span>건</span></dd></div>
+          <div><dt>차단 요인 있는 딜</dt><dd>{loadedSummary.blocked}<span>건</span></dd></div>
+          <div><dt>자료 준비됨</dt><dd>{loadedSummary.ready}<span>건</span></dd></div>
+          <div><dt>상태 미수신</dt><dd>{loadedSummary.unavailable}<span>건</span></dd></div>
+        </dl>
+      </section>
+
+      <div className={styles.toolbar}>
+        <div className={styles.searchGroup}>
+          <label htmlFor="pe-deal-search" className={styles.controlLabel}>딜 찾기</label>
+          <div className="relative min-w-0">
+          <Search aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
+            id="pe-deal-search"
             placeholder="딜 또는 기업명 검색..."
-            className="pl-9"
+            className={cn("pl-9", styles.searchInput)}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            aria-describedby="pe-search-scope"
           />
+          </div>
+          <p id="pe-search-scope" className={styles.searchScope}>현재 불러온 활성 딜에서 검색합니다.</p>
         </div>
-        <CreateMaDealDialog />
+        <div className={styles.sortGroup}>
+          <span className={styles.controlLabel}>검토 순서</span>
+          <div className={styles.sortControls} role="group" aria-label="정렬">
+            {([
+              ["urgency", "검토 필요 순"],
+              ["recent", "최근 수정 순"],
+            ] as const).map(([key, label]) => (
+              <button key={key} type="button" onClick={() => setSort(key)} aria-pressed={sort === key} className={cn(styles.sortButton, sort === key && styles.sortSelected)}>{label}</button>
+            ))}
+          </div>
+        </div>
       </div>
 
       {loadedDeals.length === 0 ? (
@@ -133,32 +175,12 @@ export function MaDealsPageClient({
           <CreateMaDealDialog trigger={<Button>첫 PE/M&A 딜 만들기</Button>} />
         } />
       ) : (
-        <div className="space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-xs text-muted-foreground">
-              준비 상태는 재무·QoE·LBO·실사 데이터에서 계산된 값입니다.
-              {sort === "urgency" ? " 차단된 딜을 먼저 보여줍니다." : " 최근 수정한 딜부터 보여줍니다."}
-            </p>
-            <div className="flex rounded-lg border border-border bg-card overflow-hidden text-xs" role="group" aria-label="정렬">
-              {([
-                ["urgency", "검토 필요 순"],
-                ["recent", "최근 수정 순"],
-              ] as const).map(([key, label]) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => setSort(key)}
-                  aria-pressed={sort === key}
-                  className={cn(
-                    "px-3 py-1.5 font-medium transition-colors",
-                    sort === key ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
+        <div className={styles.queueSection}>
+          <div className={styles.sectionHeading}>
+            <div><p className={styles.sectionEyebrow}>REVIEW QUEUE</p><h2>검토 대기열 <span>{filtered.length}</span></h2></div>
+            <p>{sort === "urgency" ? "차단된 딜을 먼저 보여줍니다." : "최근 수정한 딜부터 보여줍니다."}</p>
           </div>
+          <p className={styles.readinessNote}>준비 상태는 재무·QoE·LBO·실사 자료에서 계산되며, 투자 승인 여부를 뜻하지 않습니다.</p>
           <PeDealQueue
             deals={filtered}
             readiness={readiness}
@@ -171,7 +193,7 @@ export function MaDealsPageClient({
       )}
 
       {loadedDeals.length > 0 && hasMore && (
-        <div className="flex flex-col items-center gap-2 pt-2">
+        <div className={styles.pagination}>
           <p className="text-xs text-muted-foreground">
             전체 {total}개 중 {loadedDeals.length}개 표시 중
           </p>

@@ -1,3 +1,4 @@
+import { assertE2ETarget, assertNoExternalE2ECredentials, assertCleanE2EWorkspace, chromiumLaunchOptions } from "./helpers/e2e-environment";
 /**
  * VC 결정 정합성(parity) E2E — API → 화면 → DOCX를 같은 report ID로 나란히 대조한다.
  *
@@ -20,9 +21,13 @@ import { INVESTMENT_SIGNAL_LABEL } from "../src/lib/ic-review";
 import { VC_EVIDENCE_STATE_LABEL } from "../src/lib/vc-decision-types";
 
 const BASE = (process.argv[2] ?? process.env.E2E_TEST_URL ?? "http://localhost:3000").replace(/\/$/, "");
+assertE2ETarget(BASE);
+assertNoExternalE2ECredentials();
+assertCleanE2EWorkspace();
+const prisma = new PrismaClient();
 const EMAIL = process.env.SMOKE_EMAIL ?? "demo@dealmind.kr";
 const PASSWORD = process.env.SMOKE_PASSWORD ?? "Demo1234!";
-const prisma = new PrismaClient();
+
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error("FAIL: " + msg);
@@ -175,7 +180,7 @@ async function main() {
   const emptyDeal = await prisma.deal.create({ data: { name: `PARITY empty ${tag}`, companyName: "PARITY-empty", sector: "IT", stage: "SCREENING", userId: demo!.id, teamId: demo!.teamId } });
   const emptyReport = await prisma.report.create({ data: { dealId: emptyDeal.id, title: "빈 보고서", agentType: "IT", status: "PENDING" } });
 
-  const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH ?? "/opt/pw-browsers/chromium" });
+  const browser = await chromium.launch(chromiumLaunchOptions());
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   const page = await ctx.newPage();
   const req: APIRequestContext = ctx.request;

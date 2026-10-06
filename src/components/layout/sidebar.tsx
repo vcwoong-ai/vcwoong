@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { cn } from "@/lib/utils";
 import { BRAND } from "@/lib/brand";
+import styles from "./workspace-shell.module.css";
 import {
   LayoutDashboard,
   Briefcase,
@@ -93,20 +94,20 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
   const content = (
     <>
       {/* Logo */}
-      <div className="p-6 border-b border-white/10 flex items-start justify-between gap-2">
+      <div className={styles.brandBlock}>
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-9 h-9 rounded-md flex items-center justify-center flex-shrink-0 bg-primary">
-            <Zap className="w-5 h-5 text-white" />
+          <div className={styles.brandMark}>
+            <Zap className="w-5 h-5" aria-hidden="true" />
           </div>
           <div className="min-w-0">
-            <p className="text-lg font-bold tracking-tight">{BRAND.name}</p>
-            <p className="text-xs text-slate-400 truncate">{BRAND.nameKr} · {BRAND.tagline}</p>
+            <p className={styles.brandName}>{BRAND.name}</p>
+            <p className={styles.brandCaption}>{BRAND.nameKr} · {BRAND.tagline}</p>
           </div>
         </div>
         <button
           type="button"
           onClick={onClose}
-          className="lg:hidden text-slate-400 hover:text-white p-1 -mr-1 flex-shrink-0"
+          className={cn("lg:hidden", styles.closeButton)}
           aria-label="메뉴 닫기"
         >
           <X className="w-5 h-5" />
@@ -114,11 +115,11 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-4 space-y-5" aria-label="주 메뉴">
+      <nav className={styles.navigation} aria-label="주 메뉴">
         {navGroups.map((group, gi) => (
           <div key={group.heading ?? `g${gi}`} role="group" aria-label={group.heading ?? undefined}>
             {group.heading && (
-              <p className="px-3 pb-1.5 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
+              <p className={styles.groupHeading}>
                 {group.heading}
               </p>
             )}
@@ -132,14 +133,13 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                     // 모바일에서 메뉴를 고르면 드로어가 닫혀야 이동한 화면이 보인다.
                     onClick={onClose}
                     className={cn(
-                      "relative flex items-center gap-3 px-3 py-2 rounded-md",
-                      "text-sm font-medium transition-colors duration-150",
-                      isActive ? "bg-white/10 text-white" : "text-slate-400 hover:bg-white/5 hover:text-white"
+                      styles.navLink,
+                      isActive && styles.navActive
                     )}
                     aria-current={isActive ? "page" : undefined}
                   >
-                    {/* 활성 표시는 배경 글로우가 아니라 왼쪽 2px 바 — 어디에 있는지가 절제되게 읽힌다 */}
-                    {isActive && <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 bg-blue-400" />}
+                    {/* 현재 화면을 금색 가장자리와 aria-current로 함께 표시한다. */}
+                    {isActive && <span className={styles.activeMarker} aria-hidden="true" />}
                     <item.icon className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
                     <span>{item.label}</span>
                   </Link>
@@ -150,30 +150,15 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         ))}
       </nav>
 
-      {/* Agent badges */}
-      <div className="p-4 border-t border-white/10">
-        <p className="text-[10px] text-slate-500 mb-2.5 font-semibold uppercase tracking-[0.12em]">
-          활성 에이전트
+      {/* Available report specializations; these labels do not indicate runtime activity. */}
+      <div className={styles.capabilities}>
+        <p className={styles.capabilityHeading}>
+          보고서 전문 분야
         </p>
-        <div className="space-y-1.5">
-          {[
-            { dot: "bg-purple-400", name: "Dr. Cell" },
-            { dot: "bg-blue-400",   name: "Code" },
-            { dot: "bg-cyan-400",   name: "Neuron" },
-            { dot: "bg-orange-400", name: "Maker" },
-            { dot: "bg-pink-400",   name: "Story" },
-            { dot: "bg-emerald-400",name: "Vault" },
-          ].map((agent) => (
-            <div key={agent.name} className="flex items-center gap-2 text-xs text-slate-400">
-              {/* 점 바깥으로 같은 색 후광을 줘서 '켜져 있다'는 느낌을 준다 */}
-              <span className="relative flex h-1.5 w-1.5 flex-shrink-0">
-                <span
-                  className={`absolute inline-flex h-full w-full rounded-full opacity-40 ${agent.dot}`}
-                  style={{ transform: "scale(2)" }}
-                />
-                <span className={`relative inline-flex h-1.5 w-1.5 rounded-full ${agent.dot}`} />
-              </span>
-              <span>{agent.name}</span>
+        <div className={styles.capabilityList}>
+          {["Dr. Cell", "Code", "Neuron", "Maker", "Story", "Vault"].map((name) => (
+            <div key={name} className={styles.capabilityItem}>
+              <span>{name}</span>
             </div>
           ))}
         </div>
@@ -183,7 +168,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
 
   return (
     <>
-      <aside className="fixed left-0 top-0 z-50 hidden h-screen w-64 flex-col overflow-y-auto border-r border-white/5 bg-slate-900 text-white lg:flex">
+      <aside className={cn("fixed left-0 top-0 z-50 hidden h-screen w-64 flex-col overflow-y-auto lg:flex", styles.sidebar)}>
         {content}
       </aside>
       <DialogPrimitive.Root open={open} onOpenChange={(next) => { if (!next) onClose?.(); }}>
@@ -191,7 +176,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
           <DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-black/50 lg:hidden" />
           <DialogPrimitive.Content
             id="workspace-mobile-menu"
-            className="fixed inset-y-0 left-0 z-50 flex w-64 max-w-[calc(100%-2rem)] flex-col overflow-y-auto border-r border-white/5 bg-slate-900 text-white lg:hidden"
+            className={cn("fixed inset-y-0 left-0 z-50 flex w-64 max-w-[calc(100%-2rem)] flex-col overflow-y-auto lg:hidden", styles.sidebar)}
             onCloseAutoFocus={(event) => {
               event.preventDefault();
               document.getElementById("workspace-menu-trigger")?.focus();

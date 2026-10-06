@@ -6,15 +6,21 @@
  * 실제 브라우저로 폭을 재는 게 확실하다.
  *
  * Usage:
- *   npm run dev:local          # 다른 터미널에서 서버 실행 후
+ *   clean checkout, DEALMIND_E2E_ISOLATED=1, matching DATABASE_URL/TEST_DATABASE_URL
+ *   dedicated loopback PostgreSQL dealmind_test + clean test app + synthetic account
  *   npm run test:mobile
- *   npm run test:mobile -- https://preview-url.vercel.app
+ *   npm run test:mobile -- http://localhost:3100  # isolated test app only
  *
  * Playwright가 devDependency라 CI(오프라인 test:all)에는 넣지 않는다.
  */
 import { chromium } from "playwright";
+import { assertE2ETarget, assertNoExternalE2ECredentials, assertCleanE2EWorkspace, chromiumLaunchOptions } from "./helpers/e2e-environment";
 
 const BASE = (process.argv[2] ?? process.env.MOBILE_TEST_URL ?? "http://localhost:3000").replace(/\/$/, "");
+assertE2ETarget(BASE);
+assertNoExternalE2ECredentials();
+assertCleanE2EWorkspace();
+
 const EMAIL = process.env.SMOKE_EMAIL ?? "demo@dealmind.kr";
 const PASSWORD = process.env.SMOKE_PASSWORD ?? "Demo1234!";
 const WIDTH = 375; // iPhone SE / 일반적인 최소 폭
@@ -33,9 +39,7 @@ const PAGES = [
 ];
 
 async function main() {
-  const browser = await chromium.launch({
-    executablePath: "/opt/pw-browsers/chromium-1194/chrome-linux/chrome",
-  });
+  const browser = await chromium.launch(chromiumLaunchOptions());
   const context = await browser.newContext({
     viewport: { width: WIDTH, height: 812 },
     deviceScaleFactor: 2,

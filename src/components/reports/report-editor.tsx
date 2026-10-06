@@ -26,6 +26,8 @@ import { Markdown } from "@/components/ui/markdown";
 import { ReportPreviewPanel } from "@/components/reports/report-preview-panel";
 import { useToast } from "@/hooks/use-toast";
 import { useConfirm } from "@/hooks/use-confirm";
+import { isReportFinalized } from "@/lib/report-completion";
+import { reportReviewVersion } from "@/lib/report-review-version";
 
 interface Section {
   id: string;
@@ -51,6 +53,8 @@ interface ReportEditorProps {
   isRegenerating?: boolean;
   /** 섹션 단위 재생성 성공 시 (품질 패널 새로고침용) */
   onSectionRegenerated?: (sectionKey: string, qualityScore?: number) => void;
+  onSectionSaved?: () => void;
+  onSectionsChanged?: (sections: Section[]) => void;
   /** 품질 패널에서 요청한 개선 재생성 */
   improveRequest?: {
     sectionKey: string;
@@ -85,6 +89,8 @@ export function ReportEditor({
   onRegenerate,
   isRegenerating,
   onSectionRegenerated,
+  onSectionSaved,
+  onSectionsChanged,
   improveRequest,
   onImproveHandled,
   readOnly = false,
@@ -113,11 +119,63 @@ export function ReportEditor({
   >({});
   const handledImproveToken = useRef<number | null>(null);
 
-  // 서버에서 섹션이 갱신되면(재생성·일괄개선 후 refresh) 로컬 상태를 다시 맞춘다
+  const sectionsRef = useRef(sections);
+  const resourceRef = useRef({ reportId, readOnly });
+  resourceRef.current = { reportId, readOnly };
+  const editBaseRef = useRef<Section | null>(null);
+  const mutationPendingRef = useRef(false);
+  const mutationEpochRef = useRef(0);
+  const mutationControllerRef = useRef<AbortController | null>(null);
+  const [editError, setEditError] = useState<string | null>(null);
+
   useEffect(() => {
-    setLocalSections(sections);
+    editBaseRef.current = null;
     setEditingSectionId(null);
-  }, [sections]);
+    setEditContent("");
+    setEditError(null);
+    return () => {
+      // This ref is a request epoch, not a DOM node; cleanup intentionally invalidates its current value.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      mutationEpochRef.current++;
+      mutationControllerRef.current?.abort();
+      mutationPendingRef.current = false;
+    };
+  }, [reportId]);
+
+  useEffect(() => {
+    mutationEpochRef.current++;
+    mutationControllerRef.current?.abort();
+    mutationPendingRef.current = false;
+    setSaving(null);
+    setApprovingAll(false);
+    setRegeneratingKey(null);
+    sectionsRef.current = sections;
+    setLocalSections(sections);
+    // Preserve a user's edit and its original base even when newer server props arrive.
+  }, [sections, readOnly]);
+
+  const commitSections = (next: Section[]) => {
+    sectionsRef.current = next;
+    setLocalSections(next);
+    onSectionsChanged?.(next);
+  };
+  const beginMutation = () => {
+    if (readOnly || resourceRef.current.readOnly || resourceRef.current.reportId !== reportId || mutationPendingRef.current) return null;
+    mutationPendingRef.current = true;
+    const epoch = mutationEpochRef.current;
+    const controller = new AbortController();
+    mutationControllerRef.current = controller;
+    return {
+      signal: controller.signal,
+      current: () => !controller.signal.aborted && epoch === mutationEpochRef.current && resourceRef.current.reportId === reportId && !resourceRef.current.readOnly,
+      finish: () => {
+        if (!controller.signal.aborted && epoch === mutationEpochRef.current) {
+          mutationPendingRef.current = false;
+          mutationControllerRef.current = null;
+        }
+      },
+    };
+  };
 
   const sortedSections = [...localSections].sort((a, b) => a.order - b.order);
 
@@ -139,67 +197,85 @@ export function ReportEditor({
   };
 
   const startEdit = (section: Section) => {
+    if (readOnly || mutationPendingRef.current) return;
+    editBaseRef.current = { ...section };
+    setEditError(null);
     setEditingSectionId(section.id);
     setEditContent(section.content);
   };
 
   const cancelEdit = () => {
+    if (mutationPendingRef.current) return;
+    editBaseRef.current = null;
+    setEditError(null);
     setEditingSectionId(null);
     setEditContent("");
   };
 
   const saveSection = async (section: Section) => {
+    const base = editBaseRef.current;
+    if (!base || base.id !== section.id) return;
+    const mutation = beginMutation();
+    if (!mutation) return;
+    const content = editContent;
     setSaving(section.id);
+    setEditError(null);
     try {
+      const expectedReviewVersion = await reportReviewVersion([base]);
+      if (!mutation.current()) return;
       const response = await fetch(`/api/reports/${reportId}/sections`, {
-        method: "PATCH",
+        method: "PATCH", signal: mutation.signal,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sectionId: section.id,
-          content: editContent,
-        }),
+        body: JSON.stringify({ sectionId: base.id, content, expectedReviewVersion }),
       });
-
-      if (!response.ok) throw new Error("저장 실패");
-
-      setLocalSections((prev) =>
-        prev.map((s) =>
-          s.id === section.id ? { ...s, content: editContent } : s
-        )
-      );
+      if (!mutation.current()) return;
+      if (!response.ok) {
+        setEditError(response.status === 409
+          ? "다른 변경이 먼저 저장되었습니다. 작성 중인 내용은 유지했습니다. 최신 본문을 확인한 뒤 다시 편집해 주세요."
+          : response.status === 401 || response.status === 403
+            ? "저장 권한을 확인하지 못했습니다. 작성 중인 내용을 보관한 뒤 로그인과 권한을 확인해 주세요."
+            : "저장 결과를 확인하지 못했습니다. 작성 중인 내용을 보관하고 최신 본문을 조회해 확인해 주세요.");
+        return;
+      }
+      const result = await response.json();
+      if (!mutation.current()) return;
+      if (!result.data || result.data.id !== base.id || typeof result.data.content !== "string" ||
+          !["DRAFT", "REVIEWED", "APPROVED"].includes(result.data.status)) throw new Error("Invalid save response");
+      commitSections(sectionsRef.current.map(s => s.id === base.id ? { ...s, ...result.data } : s));
+      editBaseRef.current = null;
       setEditingSectionId(null);
-    } catch (error) {
-      console.error(error);
-      toast.error("저장 실패", { description: "다시 시도해 주세요" });
+      onSectionSaved?.();
+    } catch {
+      if (mutation.current()) setEditError("저장 결과를 확인하지 못했습니다. 작성 중인 내용을 보관하고 최신 본문을 조회해 확인해 주세요.");
     } finally {
-      setSaving(null);
+      if (mutation.current()) setSaving(null);
+      mutation.finish();
     }
   };
 
   const approveSection = async (section: Section) => {
+    const mutation = beginMutation();
+    if (!mutation) return;
     setSaving(section.id);
     try {
+      const expectedReviewVersion = await reportReviewVersion([section]);
+      if (!mutation.current()) return;
       const response = await fetch(`/api/reports/${reportId}/sections`, {
-        method: "PATCH",
+        method: "PATCH", signal: mutation.signal,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sectionId: section.id,
-          status: SectionStatus.APPROVED,
-        }),
+        body: JSON.stringify({ sectionId: section.id, status: SectionStatus.APPROVED, expectedReviewVersion }),
       });
-
-      if (!response.ok) throw new Error("승인 실패");
-
-      setLocalSections((prev) =>
-        prev.map((s) =>
-          s.id === section.id ? { ...s, status: SectionStatus.APPROVED } : s
-        )
-      );
-    } catch (error) {
-      console.error(error);
-      toast.error("섹션 승인 실패", { description: "다시 시도해 주세요" });
+      if (!mutation.current()) return;
+      if (!response.ok) throw new Error("Approval unavailable");
+      const result = await response.json();
+      if (!mutation.current()) return;
+      if (!result.data || result.data.id !== section.id || result.data.status !== "APPROVED") throw new Error("Invalid approval response");
+      commitSections(sectionsRef.current.map(s => s.id === section.id ? { ...s, ...result.data } : s));
+    } catch {
+      if (mutation.current()) toast.error("섹션 승인 결과를 확인하지 못했습니다", { description: "최신 본문과 승인 상태를 다시 확인해 주세요." });
     } finally {
-      setSaving(null);
+      if (mutation.current()) setSaving(null);
+      mutation.finish();
     }
   };
 
@@ -207,6 +283,8 @@ export function ReportEditor({
     section: Section,
     opts?: { qualityIssues?: string[]; skipConfirm?: boolean }
   ) => {
+    if (readOnly || mutationPendingRef.current) return;
+    const confirmedEpoch = mutationEpochRef.current;
     if (!opts?.skipConfirm) {
       const ok = await confirm({
         title: `"${section.title}" 섹션을 다시 생성할까요?`,
@@ -216,12 +294,16 @@ export function ReportEditor({
       });
       if (!ok) return;
     }
+    if (confirmedEpoch !== mutationEpochRef.current || resourceRef.current.reportId !== reportId || resourceRef.current.readOnly) return;
+    const mutation = beginMutation();
+    if (!mutation) return;
     setRegeneratingKey(section.sectionKey);
     try {
       const response = await fetch(
         `/api/reports/${reportId}/sections/regenerate`,
         {
           method: "POST",
+          signal: mutation.signal,
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             sectionKey: section.sectionKey,
@@ -229,14 +311,14 @@ export function ReportEditor({
           }),
         }
       );
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error(err.error ?? "재생성 실패");
-      }
+      if (!mutation.current()) return;
+      if (!response.ok) throw new Error("Regeneration unavailable");
       const { data } = await response.json();
-      if (data?.section) {
-        setLocalSections((prev) =>
-          prev.map((s) =>
+      if (!mutation.current()) return;
+      if (!data?.section || data.section.sectionKey !== section.sectionKey || typeof data.section.content !== "string") throw new Error("Invalid regeneration response");
+      if (data.section) {
+        commitSections(
+          sectionsRef.current.map((s) =>
             s.sectionKey === section.sectionKey
               ? {
                   ...s,
@@ -255,14 +337,11 @@ export function ReportEditor({
         }
         onSectionRegenerated?.(section.sectionKey, score);
       }
-    } catch (error) {
-      console.error(error);
-      toast.error("섹션 재생성 실패", {
-        description:
-          error instanceof Error ? error.message : "다시 시도해 주세요",
-      });
+    } catch {
+      if (mutation.current()) toast.error("섹션 재생성 결과를 확인하지 못했습니다", { description: "최신 본문을 다시 확인해 주세요." });
     } finally {
-      setRegeneratingKey(null);
+      if (mutation.current()) setRegeneratingKey(null);
+      mutation.finish();
     }
   };
 
@@ -329,22 +408,30 @@ export function ReportEditor({
   }, [improveRequest?.token]);
 
   const approveAll = async () => {
+    const mutation = beginMutation();
+    if (!mutation) return;
+    const snapshot = sectionsRef.current;
     setApprovingAll(true);
     try {
+      const expectedReviewVersion = await reportReviewVersion(snapshot);
+      if (!mutation.current()) return;
       const response = await fetch(`/api/reports/${reportId}`, {
-        method: "PATCH",
+        method: "PATCH", signal: mutation.signal,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ approveAllSections: true }),
+        body: JSON.stringify({ approveAllSections: true, expectedReviewVersion }),
       });
-      if (!response.ok) throw new Error("전체 승인 실패");
-      setLocalSections((prev) =>
-        prev.map((s) => ({ ...s, status: SectionStatus.APPROVED }))
-      );
-    } catch (error) {
-      console.error(error);
-      toast.error("전체 승인 실패", { description: "다시 시도해 주세요" });
+      if (!mutation.current()) return;
+      if (!response.ok) throw new Error("Approval unavailable");
+      const result = await response.json();
+      if (!mutation.current()) return;
+      if (!Array.isArray(result.data?.sections) || result.data.sections.length !== snapshot.length ||
+          !result.data.sections.every((s: Section) => s && snapshot.some(original => original.id === s.id) && s.status === "APPROVED" && typeof s.content === "string")) throw new Error("Invalid approval response");
+      commitSections(result.data.sections);
+    } catch {
+      if (mutation.current()) toast.error("전체 승인 결과를 확인하지 못했습니다", { description: "최신 본문과 승인 상태를 다시 확인해 주세요." });
     } finally {
-      setApprovingAll(false);
+      if (mutation.current()) setApprovingAll(false);
+      mutation.finish();
     }
   };
 
@@ -353,7 +440,7 @@ export function ReportEditor({
   ).length;
   const totalCount = localSections.length;
   const allApproved = totalCount > 0 && approvedCount === totalCount;
-  const isFinal = reportStatus === "FINAL" || reportStatus === "EXPORTED";
+  const isFinal = isReportFinalized(reportStatus, localSections);
 
   return (
     <div className="space-y-4">
@@ -557,6 +644,7 @@ export function ReportEditor({
               <CardContent>
                 {isEditing ? (
                   <div className="space-y-3">
+                    {editError && <p role="alert" data-testid="report-edit-error" className="text-sm text-red-600">{editError}</p>}
                     <Textarea
                       value={editContent}
                       onChange={(e) => setEditContent(e.target.value)}

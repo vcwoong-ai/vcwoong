@@ -11,13 +11,13 @@
  * 쓰기는 fire-and-forget(.catch 무시)이다 — 호출부가 await로 기다릴 필요가
  * 없어 섹션 루프의 타이밍에 영향을 주지 않는다.
  */
-import { prisma } from "./prisma";
+import { renewGenerationLease } from "./report-generation-lease";
 
 export function setCurrentSection(
   reportId: string,
-  sectionTitle: string | null
+  sectionTitle: string | null,
+  generationToken: string
 ): void {
-  prisma.report
-    .update({ where: { id: reportId }, data: { currentSectionTitle: sectionTitle } })
-    .catch(() => {});
+  if (!generationToken) return;
+  renewGenerationLease(reportId, generationToken, sectionTitle).catch(() => {});
 }

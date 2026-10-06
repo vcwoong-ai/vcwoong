@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { UserRole } from "@prisma/client";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { findLoginEmailCandidates } from "@/lib/login-email";
+import { passwordSessionVersion, validatePasswordSession } from "@/lib/auth-session-version";
 
 /** NextAuth가 authorize에 넘겨주는 요청에서 클라이언트 IP를 추정한다 */
 function ipFromAuthRequest(headers?: Record<string, unknown>): string {
@@ -80,6 +81,7 @@ export const authOptions: NextAuthOptions = {
           email: user.email,
           name: user.name,
           role: user.role,
+          authSessionVersion: passwordSessionVersion(user.id, user.passwordHash),
         };
       },
     }),
@@ -89,11 +91,14 @@ export const authOptions: NextAuthOptions = {
   },
   callbacks: {
     async jwt({ token, user }) {
-      if (user) {
-        token.id = user.id;
-        token.role = (user as { id: string; role?: UserRole }).role;
-      }
-      return token;
+      return validatePasswordSession(
+        token,
+        (id) => prisma.user.findUnique({
+          where: { id },
+          select: { passwordHash: true, role: true },
+        }),
+        user
+      );
     },
     async session({ session, token }) {
       if (token && session.user) {

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { BRAND } from "@/lib/brand";
 import { yearlyPriceFromMonthly, type BillingCycle } from "@/lib/plans";
 import { secureCompare } from "@/lib/secure-compare";
+import { inspectTossConfiguration } from "@/lib/payments/provider-configuration";
 
 export const PLAN_PRICES: Record<string, number> = {
   solo: 99000,
@@ -45,11 +46,7 @@ function getAuthHeader(): string | null {
 }
 
 export function isTossConfigured(): boolean {
-  return Boolean(
-    getAuthHeader() &&
-      (process.env.NEXT_PUBLIC_TOSS_CLIENT_KEY?.startsWith("test_ck_") ||
-        process.env.NEXT_PUBLIC_TOSS_CLIENT_KEY?.startsWith("live_ck_"))
-  );
+  return inspectTossConfiguration(process.env).ready;
 }
 
 export async function issueBillingKey(authKey: string, customerKey: string) {
@@ -156,8 +153,8 @@ export async function getPayment(
     const data = await res.json();
     if (typeof data?.status !== "string") return null;
     return { status: data.status, orderId: String(data.orderId ?? "") };
-  } catch (error) {
-    console.error("[Toss] 결제 조회 실패:", error);
+  } catch {
+    console.error("[Toss] 결제 조회 실패");
     return null;
   }
 }

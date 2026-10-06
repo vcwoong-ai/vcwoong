@@ -123,63 +123,29 @@ function testCustomerKey() {
  * 응답 본문이 parsedText로 저장돼 그대로 열람까지 된다.
  */
 function testBlobUrlValidation() {
-  const ok =
-    "https://abc123.public.blob.vercel-storage.com/deals/deal_1/uuid.pdf";
-  assert(isAllowedBlobUrl(ok, "deals/deal_1/"), "정상 Blob URL이 거부됨");
-  assert(
-    isAllowedBlobUrl(
-      "https://x.public.blob.vercel-storage.com/templates/uuid.docx",
-      "templates/"
-    ),
-    "정상 템플릿 Blob URL이 거부됨"
-  );
-
-  // 외부 주소 — SSRF의 핵심 차단 대상
-  assert(
-    !isAllowedBlobUrl("http://169.254.169.254/latest/meta-data/", "deals/d1/"),
-    "클라우드 메타데이터 주소가 통과됨"
-  );
-  assert(
-    !isAllowedBlobUrl("http://localhost:3000/api/internal", "deals/d1/"),
-    "내부 주소가 통과됨"
-  );
-  assert(
-    !isAllowedBlobUrl("https://evil.example.com/deals/d1/x.pdf", "deals/d1/"),
-    "임의 호스트가 경로만 맞으면 통과됨"
-  );
-  // 호스트 접미사를 흉내낸 도메인
-  assert(
-    !isAllowedBlobUrl(
-      "https://blob.vercel-storage.com.evil.example.com/deals/d1/x.pdf",
-      "deals/d1/"
-    ),
-    "접미사를 흉내낸 호스트가 통과됨"
-  );
-  // https가 아닌 스킴
-  assert(
-    !isAllowedBlobUrl("file:///etc/passwd", "deals/d1/"),
-    "file 스킴이 통과됨"
-  );
-
-  // 남의 딜 경로 — 권한 검사를 통과한 딜의 자리만 허용해야 한다
-  assert(
-    !isAllowedBlobUrl(
-      "https://x.public.blob.vercel-storage.com/deals/other_deal/x.pdf",
-      "deals/deal_1/"
-    ),
-    "다른 딜의 경로가 통과됨"
-  );
-  // 인코딩된 상위 경로 우회
-  assert(
-    !isAllowedBlobUrl(
-      "https://x.public.blob.vercel-storage.com/deals/deal_1/%2e%2e/other/x.pdf",
-      "deals/deal_1/"
-    ),
-    "인코딩된 상위 경로(..)가 통과됨"
-  );
-  assert(!isAllowedBlobUrl("not a url", "deals/d1/"), "URL이 아닌 값이 통과됨");
-
-  console.log("✅ 업로드 Blob URL 검증 (SSRF·타 딜 경로·스킴 우회 차단)");
+  const host = "fixture.private.blob.vercel-storage.com";
+  const allowed = (url: string, prefix = "deals/deal_1/") => isAllowedBlobUrl(url, prefix, host);
+  assert(allowed(`https://${host}/deals/deal_1/uuid.pdf`), "same-store private Blob URL allowed");
+  assert(allowed(`https://${host}/templates/user_1/uuid.docx`, "templates/user_1/"), "owned template URL allowed");
+  for (const url of [
+    "http://169.254.169.254/latest/meta-data/",
+    "http://localhost:3000/api/internal",
+    "https://evil.example.com/deals/deal_1/x.pdf",
+    "https://blob.vercel-storage.com.evil.example.com/deals/deal_1/x.pdf",
+    "https://other.private.blob.vercel-storage.com/deals/deal_1/x.pdf",
+    "https://fixture.public.blob.vercel-storage.com/deals/deal_1/x.pdf",
+    "file:///etc/passwd",
+    `https://${host}/deals/other_deal/x.pdf`,
+    `https://${host}/deals/deal_1/../other/x.pdf`,
+    `https://${host}/deals/deal_1/%2e%2e/other/x.pdf`,
+    `https://${host}/deals/deal_1/%252e%252e/x.pdf`,
+    `https://${host}/deals/deal_1/x.pdf?download=1`,
+    `https://${host}/deals/deal_1/x.pdf#fragment`,
+    `https://user:pass@${host}/deals/deal_1/x.pdf`,
+    "not a url",
+  ]) assert(!allowed(url), "malformed, cross-store, cross-deal or ambiguous Blob URL must be rejected");
+  assert(!isAllowedBlobUrl(`https://${host}/deals/deal_1/x.pdf`, "deals/deal_1/", ""), "unconfigured store must fail closed");
+  console.log("✅ private Blob URL exact-store/prefix, traversal, credentials and URL-options validation");
 }
 
 /**
@@ -207,11 +173,14 @@ function testSecureCompare() {
  * document-images.ts(임베드 이미지)가 공통으로 쓴다.
  */
 async function testZipBombGuard() {
-  const fakeEntry = (uncompressedSize: number, payload: string) => ({
-    _data: { uncompressedSize },
-    async: async (type: "text" | "nodebuffer") =>
-      type === "text" ? payload : Buffer.from(payload),
-  });
+  function fakeEntry(uncompressedSize: number, payload: string) {
+    function read(type: "text"): Promise<string>;
+    function read(type: "nodebuffer"): Promise<Buffer>;
+    async function read(type: "text" | "nodebuffer"): Promise<string | Buffer> {
+      return type === "text" ? payload : Buffer.from(payload);
+    }
+    return { _data: { uncompressedSize }, async: read };
+  }
 
   const small = await readZipEntrySafe(fakeEntry(100, "정상 슬라이드"), "text", 1000);
   assert(small === "정상 슬라이드", "상한 이내 항목을 읽지 못함");

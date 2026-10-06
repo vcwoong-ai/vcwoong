@@ -1,8 +1,9 @@
 "use client";
 
-import type { RefObject } from "react";
+import { useState, type RefObject } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DocumentSourceText } from "./document-source-text";
+import { PeDocumentParseRetry } from "./pe-document-parse-retry";
 import { Badge } from "@/components/ui/badge";
 import { MA_DOCUMENT_TYPE_LABEL, PE_EVIDENCE_REQUEST_STATUS_LABEL } from "@/lib/pe/ma-deal-labels";
 import type { DataRoomDocumentView } from "@/lib/pe/pe-data-room-view-model";
@@ -11,7 +12,7 @@ import type { MaDocumentType } from "@prisma/client";
 
 /**
  * PE Data Room 문서 상세(PR #106, PR #109에서 근거 요청 연결 표시 추가) —
- * READ-ONLY. 기존 파싱 텍스트를 별도 인가 API로 읽는다. AI 요약/근거 편집 없음.
+ * 기존 파싱 텍스트를 별도 인가 API로 읽고, 편집 권한자는 저장 원본 재추출을 요청한다.
  *
  * "이 자료로 해결 가능한 이슈" 절은 파일명 추론을 하지 않는다(§Step12
  * 명시 요구) — `linkedDocumentId === document.id`로 **실제로 연결된**
@@ -24,13 +25,16 @@ export function MaDealDocumentDetailDialog({
   document,
   linkedEvidenceRequests,
   onOpenChange,
+  canEdit = false,
 }: {
   dealId: string;
   returnFocusRef: RefObject<HTMLButtonElement>;
   document: DataRoomDocumentView | null;
   linkedEvidenceRequests: PEEvidenceRequestView[];
   onOpenChange: (open: boolean) => void;
+  canEdit?: boolean;
 }) {
+  const [textRevision, setTextRevision] = useState(0);
   return (
     <Dialog open={document !== null} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[560px]" onCloseAutoFocus={(event) => { event.preventDefault(); returnFocusRef.current?.focus(); }}>
@@ -56,7 +60,8 @@ export function MaDealDocumentDetailDialog({
                 </div>
               </div>
 
-              <DocumentSourceText key={`${dealId}-${document.id}`} dealId={dealId} documentId={document.id} />
+              <PeDocumentParseRetry key={`${dealId}-${document.id}`} dealId={dealId} document={document} canEdit={canEdit} onRecovered={() => setTextRevision(value => value + 1)} />
+              <DocumentSourceText key={`${dealId}-${document.id}-${textRevision}`} dealId={dealId} documentId={document.id} />
 
               <div>
                 <p className="text-xs text-gray-400 mb-2">연결된 근거(Evidence)</p>

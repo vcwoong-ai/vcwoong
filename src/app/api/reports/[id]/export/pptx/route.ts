@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { PRIVATE_RESPONSE_HEADERS } from "@/lib/private-response-headers";
 import { generateReportPPTX } from "@/lib/pptx-export";
 import { reconstructPPTX } from "@/lib/template/pptx-reconstructor";
 import { readStoredFile } from "@/lib/storage";
@@ -22,16 +23,27 @@ export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "인증이 필요합니다" }, { status: 401 });
-  }
-
-  const result = await loadReportForExport(session.user.id, params.id);
-  if ("error" in result) return result.error;
-  const { report, canUseEngine, decisionMemoSections } = result;
-
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "인증이 필요합니다" }, { status: 401, headers: PRIVATE_RESPONSE_HEADERS });
+    }
+
+    const result = await loadReportForExport(session.user.id, params.id);
+    if ("error" in result) {
+      const errorResponse = result.error;
+      if (!errorResponse) throw new Error("Export result unavailable");
+      const headers = new Headers(errorResponse.headers);
+      const vary = headers.get("Vary")?.split(",").map(value => value.trim()).filter(Boolean) ?? [];
+      if (!vary.some(value => value.toLowerCase() === "cookie")) vary.push("Cookie");
+      for (const [name, value] of Object.entries(PRIVATE_RESPONSE_HEADERS)) {
+        if (name !== "Vary") headers.set(name, value);
+      }
+      headers.set("Vary", vary.join(", "));
+      return new NextResponse(errorResponse.body, { status: errorResponse.status, statusText: errorResponse.statusText, headers });
+    }
+    const { report, canUseEngine, decisionMemoSections, exportState } = result;
+
     let pptxBuffer: Buffer | null = null;
     let mode = "pptx-generated";
 
@@ -62,11 +74,8 @@ export async function POST(
             (result.extractedFromDocuments.length
               ? `+extracted:${result.extractedFromDocuments.length}`
               : "");
-        } catch (err) {
-          console.warn(
-            "[Export] PPTX 재현 실패 — 신규 생성으로 폴백:",
-            err instanceof Error ? err.message : err
-          );
+        } catch {
+          console.warn("[Export] PPTX reconstruction fallback");
         }
       }
     }
@@ -83,13 +92,14 @@ export async function POST(
         collectDocumentImages(report.deal.documents)
       ));
 
-    await markExported(params.id);
+    await markExported(params.id, exportState);
 
     const filename = exportFilename(report.deal.companyName, "pptx");
 
     return new NextResponse(new Uint8Array(buffer), {
       status: 200,
       headers: {
+        ...PRIVATE_RESPONSE_HEADERS,
         "Content-Type":
           "application/vnd.openxmlformats-officedocument.presentationml.presentation",
         "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
@@ -97,11 +107,11 @@ export async function POST(
         "X-Export-Mode": mode,
       },
     });
-  } catch (error) {
-    console.error("PPTX export error:", error);
+  } catch {
+    console.error("[Export] PPTX export failed");
     return NextResponse.json(
       { error: "보고서 내보내기 중 오류가 발생했습니다" },
-      { status: 500 }
+      { status: 500, headers: PRIVATE_RESPONSE_HEADERS }
     );
   }
 }

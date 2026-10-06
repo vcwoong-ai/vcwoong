@@ -7,18 +7,21 @@ import { Badge } from "@/components/ui/badge";
 import { Check, CreditCard, Loader2 } from "lucide-react";
 import { PLANS } from "@/lib/subscription";
 import type { PlanKey } from "@/lib/quotas";
-import { brandCustomerKey, BRAND } from "@/lib/brand";
+import { BRAND } from "@/lib/brand";
 import {
   PUBLIC_PLANS,
   monthlyEquivalent,
   type BillingCycle,
 } from "@/lib/plans";
 import { useConfirm } from "@/hooks/use-confirm";
+import { SUBSCRIPTION_CHECKOUT_NOTICE } from "@/lib/payments/checkout-readiness";
 
 interface SubscriptionPlansProps {
   userId: string;
   currentPlan: PlanKey;
   hasBillingKey: boolean;
+  checkoutReady: boolean;
+  billingPeriodInfo?: { paidUntil: string; cancelAtPeriodEnd: boolean };
 }
 
 const PLAN_ORDER: PlanKey[] = [
@@ -31,9 +34,10 @@ const PLAN_ORDER: PlanKey[] = [
 ];
 
 export function SubscriptionPlans({
-  userId,
   currentPlan,
   hasBillingKey,
+  checkoutReady,
+  billingPeriodInfo,
 }: SubscriptionPlansProps) {
   const searchParams = useSearchParams();
   const [loadingPlan, setLoadingPlan] = useState<PlanKey | null>(null);
@@ -45,8 +49,10 @@ export function SubscriptionPlans({
   async function handleCancel() {
     const ok = await confirm({
       title: "구독을 해지할까요?",
-      description: "Free 플랜으로 전환되며 유료 기능을 쓸 수 없게 됩니다.",
-      confirmLabel: "구독 해지",
+      description: billingPeriodInfo
+        ? "다음 갱신을 중단합니다. 이미 결제한 기간이 끝날 때까지 유료 기능을 이용할 수 있습니다. 자동 환불은 제공되지 않습니다."
+        : "Free 플랜으로 전환되며 유료 기능을 쓸 수 없게 됩니다.",
+      confirmLabel: billingPeriodInfo ? "갱신 중단" : "구독 해지",
       destructive: true,
     });
     if (!ok) return;
@@ -67,19 +73,18 @@ export function SubscriptionPlans({
 
   useEffect(() => {
     const payment = searchParams.get("payment");
-    const plan = searchParams.get("plan");
-    const paidCycle = searchParams.get("cycle");
-    if (payment === "success" && plan) {
-      const cycleNote = paidCycle === "yearly" ? " (연간)" : "";
-      setMessage(
-        `${PLANS[plan as PlanKey]?.name ?? plan} 플랜${cycleNote}이 활성화되었습니다.`
-      );
+    if (payment === "success") {
+      setMessage("결제 처리가 완료되었습니다. 아래에서 현재 플랜을 확인해 주세요.");
     } else if (payment === "fail") {
-      setMessage(
-        searchParams.get("message") ?? "결제에 실패했습니다. 다시 시도해 주세요."
-      );
+      setMessage("결제 수단 인증이 완료되지 않았습니다. 기존 결제 요청의 상태를 먼저 확인해 주세요.");
+    } else if (payment === "pending") {
+      setMessage("결제 결과를 확인하고 있습니다. 새로 결제하지 마시고 잠시 후 구독 상태를 확인해 주세요.");
+    } else if (payment === "hold") {
+      setMessage(`결제 요청에 확인이 필요합니다. 새로 결제하지 마시고 ${BRAND.supportEmail}으로 문의해 주세요.`);
     } else if (payment === "not_configured") {
-      setMessage("결제 시스템이 아직 설정되지 않았습니다. (TOSS_SECRET_KEY)");
+      setMessage("결제 서비스 연결이 준비되지 않았습니다. 서비스 관리자에게 문의해 주세요.");
+    } else if (payment === "not_ready") {
+      setMessage(SUBSCRIPTION_CHECKOUT_NOTICE);
     } else if (payment === "charged_not_activated") {
       // 결제는 성사됐는데 활성화가 실패한 경우 — 여기서 "다시 시도"를
       // 안내하면 이중 결제로 이어진다.
@@ -93,6 +98,10 @@ export function SubscriptionPlans({
   }, [searchParams]);
 
   async function handleUpgrade(planKey: PlanKey) {
+    if (!checkoutReady) {
+      setMessage(SUBSCRIPTION_CHECKOUT_NOTICE);
+      return;
+    }
     if (planKey === "free" || planKey === currentPlan) return;
 
     const plan = PLANS[planKey];
@@ -102,24 +111,33 @@ export function SubscriptionPlans({
     setMessage(null);
 
     try {
+      const prepared = await fetch("/api/payments/checkout", { method: "POST",
+        headers: { "Content-Type": "application/json" }, body: JSON.stringify({ plan: planKey, cycle }) });
+      if (!prepared.ok) {
+        setMessage(prepared.status === 409
+          ? `기존 결제 요청을 확인해야 합니다. 새로 결제하지 마시고 ${BRAND.supportEmail}으로 문의해 주세요.`
+          : "결제 요청을 준비할 수 없습니다. 서비스 관리자에게 문의해 주세요.");
+        return;
+      }
+      const checkout = await prepared.json() as { customerKey: string; successUrl: string; failUrl: string };
+      if (typeof checkout.customerKey !== "string" || !checkout.customerKey ||
+          new URL(checkout.successUrl).origin !== window.location.origin ||
+          new URL(checkout.failUrl).origin !== window.location.origin) throw new Error("Checkout unavailable");
       const { loadTossPayments } = await import("@tosspayments/payment-sdk");
       const clientKey = process.env.NEXT_PUBLIC_TOSS_CLIENT_KEY;
       if (!clientKey) {
-        setMessage("NEXT_PUBLIC_TOSS_CLIENT_KEY가 설정되지 않았습니다.");
+        setMessage("결제 서비스 연결이 준비되지 않았습니다. 서비스 관리자에게 문의해 주세요.");
         return;
       }
 
       const tossPayments = await loadTossPayments(clientKey);
-      const customerKey = brandCustomerKey(userId);
-
       await tossPayments.requestBillingAuth("카드", {
-        customerKey,
-        successUrl: `${window.location.origin}/api/payments/success?plan=${planKey}&cycle=${cycle}`,
-        failUrl: `${window.location.origin}/api/payments/fail`,
+        customerKey: checkout.customerKey,
+        successUrl: checkout.successUrl,
+        failUrl: checkout.failUrl,
       });
-    } catch (error) {
-      console.error("Billing auth error:", error);
-      setMessage("결제창을 열 수 없습니다. 다시 시도해 주세요.");
+    } catch {
+      setMessage("결제창을 열 수 없습니다. 기존 결제 요청의 상태를 먼저 확인해 주세요.");
     } finally {
       setLoadingPlan(null);
     }
@@ -127,6 +145,11 @@ export function SubscriptionPlans({
 
   return (
     <div className="space-y-4">
+      {!checkoutReady && (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800" role="status">
+          {SUBSCRIPTION_CHECKOUT_NOTICE}
+        </p>
+      )}
       {message && (
         <div
           className={`rounded-lg border p-3 text-sm ${
@@ -166,25 +189,27 @@ export function SubscriptionPlans({
       {hasBillingKey && (
         <p className="text-sm text-muted-foreground flex items-center gap-2">
           <CreditCard className="h-4 w-4" />
-          등록된 결제 수단이 있습니다. 플랜 변경 시 즉시 청구됩니다.
+          등록된 결제 수단이 있습니다.
         </p>
       )}
 
-      {currentPlan !== "free" && (
+      {(currentPlan !== "free" || billingPeriodInfo) && (
         <div className="rounded-lg border p-3 flex items-center justify-between gap-3">
           <p className="text-sm text-muted-foreground">
-            구독을 해지하면 즉시 Free 플랜으로 전환됩니다. 위약금은 없습니다.
+            {billingPeriodInfo
+              ? `결제된 이용 기간의 종료일은 ${new Date(billingPeriodInfo.paidUntil).toLocaleDateString("ko-KR")}입니다. ${billingPeriodInfo.cancelAtPeriodEnd ? "갱신 중단이 예약되었습니다." : "갱신을 중단해도 이미 결제한 기간은 유지됩니다."}`
+              : "구독을 해지하면 즉시 Free 플랜으로 전환됩니다. 위약금은 없습니다."}
           </p>
           <Button
             variant="outline"
             size="sm"
-            disabled={canceling}
+            disabled={canceling || billingPeriodInfo?.cancelAtPeriodEnd}
             onClick={handleCancel}
           >
             {canceling ? (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
             ) : null}
-            구독 해지
+            {billingPeriodInfo?.cancelAtPeriodEnd ? "갱신 중단 예약됨" : billingPeriodInfo ? "갱신 중단" : "구독 해지"}
           </Button>
         </div>
       )}
@@ -244,10 +269,10 @@ export function SubscriptionPlans({
                 <Button
                   className="w-full mt-4"
                   size="sm"
-                  disabled={loadingPlan !== null}
+                  disabled={!checkoutReady || loadingPlan !== null}
                   onClick={() => handleUpgrade(key)}
                 >
-                  {loadingPlan === key ? (
+                  {!checkoutReady ? "유료 구독 준비 중" : loadingPlan === key ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                       처리 중...

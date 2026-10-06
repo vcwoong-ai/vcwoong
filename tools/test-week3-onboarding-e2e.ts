@@ -1,3 +1,4 @@
+import { assertE2ETarget, assertNoExternalE2ECredentials, assertCleanE2EWorkspace, chromiumLaunchOptions } from "./helpers/e2e-environment";
 /** Local SQLite only; no AI/payment calls. Exercises empty states and real create dialogs. */
 import assert from "node:assert/strict";
 import { mkdirSync } from "node:fs";
@@ -6,18 +7,21 @@ import { PrismaClient } from "@prisma/client";
 import { chromium } from "playwright";
 import { gotoAppReady } from "./helpers/app-ready";
 
+
+const base = process.env.BASE_URL ?? "http://localhost:3000";
+assertE2ETarget(base);
+assertNoExternalE2ECredentials();
+assertCleanE2EWorkspace();
 const db = new PrismaClient();
-const base = "http://localhost:3000";
 const before = process.argv.includes("before");
 const dir = "screenshots/week3-onboarding";
 async function main() {
-  assert.equal(process.env.DATABASE_URL, "file:./dev.db");
   mkdirSync(dir, { recursive: true });
   const stamp = Date.now();
   const email = `onboarding-${stamp}@example.com`;
   const password = "LocalFixture1234!";
   const user = await db.user.create({ data: { email, name: "첫 검토 예시", passwordHash: await bcrypt.hash(password, 4) } });
-  const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH });
+  const browser = await chromium.launch(chromiumLaunchOptions());
   const signupEmails: string[] = [];
   try {
     if (!before) {

@@ -139,12 +139,12 @@ interface ReportImage {
  */
 async function toDataUri(image: ReportImage): Promise<string | null> {
   try {
-    const res = await fetch(image.url, { signal: AbortSignal.timeout(10000) });
-    if (!res.ok) return null;
-    const buf = Buffer.from(await res.arrayBuffer());
+    const { readStoredFile } = await import("@/lib/storage");
+    const buf = await readStoredFile(image.url);
+    if (!buf) return null;
     return `data:${image.mimeType};base64,${buf.toString("base64")}`;
-  } catch (error) {
-    console.warn(`[PptxExport] 이미지 로드 실패(건너뜀): ${image.url}`, error);
+  } catch {
+    console.warn("[PptxExport] 이미지 로드 실패(건너뜀)");
     return null;
   }
 }

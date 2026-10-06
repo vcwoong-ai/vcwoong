@@ -4,6 +4,8 @@ import { z } from "zod";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ReportStatus, SectionStatus } from "@prisma/client";
+import { reportReviewVersion } from "@/lib/report-review-version";
+import { publicGenerationReport } from "@/lib/report-generation-lease";
 import {
   getUserTeamContext,
   reportReadWhere,
@@ -14,6 +16,7 @@ import {
 const patchSchema = z.object({
   status: z.nativeEnum(ReportStatus).optional(),
   approveAllSections: z.boolean().optional(),
+  expectedReviewVersion: z.string().regex(/^[a-f0-9]{64}$/).optional(),
 });
 
 export async function GET(
@@ -44,7 +47,7 @@ export async function GET(
     );
   }
 
-  return NextResponse.json({ data: report });
+  return NextResponse.json({ data: publicGenerationReport(report) });
 }
 
 export async function PATCH(
@@ -80,25 +83,57 @@ export async function PATCH(
       { status: 400 }
     );
   }
-  const { status, approveAllSections } = parsed.data;
-
-  if (approveAllSections) {
-    await prisma.reportSection.updateMany({
-      where: { reportId: params.id },
-      data: { status: SectionStatus.APPROVED },
-    });
+  const { status, approveAllSections, expectedReviewVersion } = parsed.data;
+  try {
+    const updated = await prisma.$transaction(async (tx) => {
+      const current = await tx.report.findFirst({
+        where: { id: params.id, ...reportWriteWhere(session.user.id, teamId, role) },
+        include: { sections: { orderBy: { order: "asc" } } },
+      });
+      if (!current) throw new Error("REPORT_REVIEW_CONFLICT");
+      const locked = await tx.report.updateMany({
+        where: { id: current.id, updatedAt: current.updatedAt, status: current.status },
+        data: { updatedAt: current.updatedAt },
+      });
+      if (locked.count !== 1) throw new Error("REPORT_REVIEW_CONFLICT");
+      if (approveAllSections || status === ReportStatus.FINAL) {
+        if (!current.sections.length || expectedReviewVersion !== await reportReviewVersion(current.sections)) {
+          throw new Error("REPORT_REVIEW_CONFLICT");
+        }
+        if (!approveAllSections && current.sections.some((section) => section.status !== SectionStatus.APPROVED)) {
+          throw new Error("REPORT_REVIEW_CONFLICT");
+        }
+      }
+      if (approveAllSections) {
+        for (const section of current.sections) {
+          const saved = await tx.reportSection.updateMany({
+            where: { id: section.id, reportId: current.id, updatedAt: section.updatedAt,
+              status: section.status, content: section.content, title: section.title,
+              sectionKey: section.sectionKey, order: section.order },
+            data: { status: SectionStatus.APPROVED },
+          });
+          if (saved.count !== 1) throw new Error("REPORT_REVIEW_CONFLICT");
+        }
+      }
+      const saved = await tx.report.updateMany({
+        where: { id: current.id, updatedAt: current.updatedAt, status: current.status },
+        data: {
+          ...(status ? { status } : {}),
+          ...(status === ReportStatus.FINAL ? { generatedAt: current.generatedAt ?? new Date() } : {}),
+          updatedAt: new Date(),
+        },
+      });
+      if (saved.count !== 1) throw new Error("REPORT_REVIEW_CONFLICT");
+      return tx.report.findFirst({ where: { id: current.id }, include: { sections: { orderBy: { order: "asc" } } } });
+    }, { isolationLevel: "Serializable" });
+    return NextResponse.json({ data: updated ? publicGenerationReport(updated) : null });
+  } catch (error) {
+    if ((error instanceof Error && error.message === "REPORT_REVIEW_CONFLICT") ||
+        (typeof error === "object" && error !== null && "code" in error && error.code === "P2034")) {
+      return NextResponse.json({ error: "본문이 변경되었거나 승인 상태가 달라졌습니다. 새로고침 후 내용을 확인하고 다시 승인해 주세요." }, { status: 409 });
+    }
+    // Never log the report body or Prisma query diagnostics.
+    console.error("Report update failed");
+    return NextResponse.json({ error: "보고서 수정 중 오류가 발생했습니다" }, { status: 500 });
   }
-
-  const updated = await prisma.report.update({
-    where: { id: params.id },
-    data: {
-      ...(status ? { status } : {}),
-      ...(status === ReportStatus.FINAL ? { generatedAt: report.generatedAt ?? new Date() } : {}),
-    },
-    include: {
-      sections: { orderBy: { order: "asc" } },
-    },
-  });
-
-  return NextResponse.json({ data: updated });
 }

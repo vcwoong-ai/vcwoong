@@ -8,7 +8,20 @@
  *
  * Usage: npm run test:nav-active
  */
-import { isActiveHref } from "../src/components/layout/sidebar";
+import { createRequire } from "node:module";
+
+// 이 검사는 메뉴 판정만 실행한다. CSS module은 Next.js에서 처리하므로
+// Node 검사에서는 스타일 로더를 잠시 대체한다(화면 렌더 검증은 별도).
+const loadForTest = createRequire(import.meta.url);
+const previousCssLoader = loadForTest.extensions[".css"];
+let isActiveHref: typeof import("../src/components/layout/sidebar").isActiveHref;
+try {
+  loadForTest.extensions[".css"] = (module) => { module.exports = {}; };
+  ({ isActiveHref } = loadForTest("../src/components/layout/sidebar"));
+} finally {
+  if (previousCssLoader) loadForTest.extensions[".css"] = previousCssLoader;
+  else delete loadForTest.extensions[".css"];
+}
 
 const HREFS = [
   "/dashboard",

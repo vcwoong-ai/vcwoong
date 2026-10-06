@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,6 +13,7 @@ import type { FinancialCalcResult } from "@/lib/pe/financial-types";
 import { useToast } from "@/hooks/use-toast";
 import { isMaDealTab } from "@/lib/pe/ma-deal-queue";
 import { AddFinancialPeriodDialog } from "@/components/ma-deals/add-financial-period-dialog";
+import { PeFileUploader } from "@/components/ma-deals/pe-file-uploader";
 import { LboSimulatorPanel } from "@/components/ma-deals/lbo-simulator-panel";
 import { MaDealOverview, type MaDealDashboardData } from "@/components/ma-deals/ma-deal-overview";
 import { MaDealDataRoom } from "@/components/ma-deals/ma-deal-data-room";
@@ -136,8 +137,67 @@ export function MaDealDetailClient({
   const router = useRouter();
   const toast = useToast();
   const [periods, setPeriods] = useState<Period[]>(initialPeriods);
+  const [financialLoading, setFinancialLoading] = useState(false);
+  const [financialError, setFinancialError] = useState<string | null>(null);
+  const financialControllerRef = useRef<AbortController | null>(null);
+  const financialEpochRef = useRef(0);
+  const savedRefreshPendingRef = useRef(false);
+  const cancelFinancialRead = useCallback(() => {
+    financialEpochRef.current++;
+    financialControllerRef.current?.abort();
+    financialControllerRef.current = null;
+  }, []);
+  useEffect(() => {
+    setPeriods(initialPeriods);
+    setFinancialError(null);
+    setFinancialLoading(false);
+    savedRefreshPendingRef.current = false;
+    return cancelFinancialRead;
+  }, [initialPeriods, maDeal.id, cancelFinancialRead]);
   const [importingDart, setImportingDart] = useState(false);
   const [togglingStatus, setTogglingStatus] = useState(false);
+  const [confirmedStatus, setConfirmedStatus] = useState<MaDealStatus>(maDeal.status);
+  const confirmedStatusRef = useRef<MaDealStatus>(maDeal.status);
+  const [dartError, setDartError] = useState<string | null>(null);
+  const [archiveError, setArchiveError] = useState<string | null>(null);
+  const [dartUncertain, setDartUncertain] = useState(false);
+  const [archiveUncertain, setArchiveUncertain] = useState(false);
+  const [checkingArchive, setCheckingArchive] = useState(false);
+  const dartPendingRef = useRef(false);
+  const archivePendingRef = useRef(false);
+  const dartUncertainRef = useRef(false);
+  const archiveUncertainRef = useRef(false);
+  const mutationEpochRef = useRef(0);
+  const dartControllerRef = useRef<AbortController | null>(null);
+  const archiveControllerRef = useRef<AbortController | null>(null);
+  const archiveReadControllerRef = useRef<AbortController | null>(null);
+  const cancelMutations = useCallback(() => {
+    mutationEpochRef.current++;
+    dartControllerRef.current?.abort();
+    archiveControllerRef.current?.abort();
+    archiveReadControllerRef.current?.abort();
+    dartControllerRef.current = null;
+    archiveControllerRef.current = null;
+    archiveReadControllerRef.current = null;
+    dartPendingRef.current = false;
+    archivePendingRef.current = false;
+    dartUncertainRef.current = false;
+    archiveUncertainRef.current = false;
+  }, []);
+  useEffect(() => {
+    setImportingDart(false);
+    setTogglingStatus(false);
+    setCheckingArchive(false);
+    setDartError(null);
+    setArchiveError(null);
+    setDartUncertain(false);
+    setArchiveUncertain(false);
+    return cancelMutations;
+  }, [maDeal.id, cancelMutations]);
+  useEffect(() => {
+    confirmedStatusRef.current = maDeal.status;
+    setConfirmedStatus(maDeal.status);
+  }, [maDeal.id, maDeal.status]);
   // 탭은 URL(?tab=)과 같이 움직인다 — 새로고침·링크 공유·목록의 "다음 행동" 링크가 같은 탭을 연다.
   // 알 수 없는 값은 무시하고 개요로 시작한다(임의 문자열로 탭이 깨지지 않게).
   const searchParams = useSearchParams();
@@ -160,26 +220,50 @@ export function MaDealDetailClient({
   const [documents, setDocuments] = useState<DataRoomDocumentRow[]>([]);
   const [evidence, setEvidence] = useState<DataRoomEvidenceRow[]>([]);
   const [findings, setFindings] = useState<DataRoomFindingRow[]>([]);
+  const [dataRoomError, setDataRoomError] = useState<string | null>(null);
+  const dataRoomControllerRef = useRef<AbortController | null>(null);
+  const dataRoomEpochRef = useRef(0);
+  const evidenceControllerRef = useRef<AbortController | null>(null);
+  const evidenceEpochRef = useRef(0);
+  const cancelDocumentRequests = useCallback(() => {
+    dataRoomEpochRef.current++;
+    evidenceEpochRef.current++;
+    dataRoomControllerRef.current?.abort();
+    evidenceControllerRef.current?.abort();
+    dataRoomControllerRef.current = null;
+    evidenceControllerRef.current = null;
+  }, []);
 
-  useEffect(() => {
-    // "검토 Workflow"/"위원회 자료" 탭의 문서 연결 select도 같은 문서 목록을
-    // 쓴다(§Step9/PR #110 — 데이터룸을 먼저 열지 않아도 문서를 고를 수 있어야 한다).
-    if (!DOCUMENT_DEPENDENT_TABS.includes(activeTab) || dataRoomLoaded || dataRoomLoading) return;
+  const loadDataRoom = useCallback(async (): Promise<boolean> => {
+    dataRoomControllerRef.current?.abort();
+    const controller = new AbortController();
+    const epoch = ++dataRoomEpochRef.current;
+    dataRoomControllerRef.current = controller;
     setDataRoomLoading(true);
-    fetch(`/api/ma-deals/${maDeal.id}/documents`)
-      .then((res) => (res.ok ? res.json() : Promise.reject(res)))
-      .then((json) => {
-        setDocuments(json.data?.documents ?? []);
-        setEvidence(json.data?.evidence ?? []);
-        setFindings(json.data?.findings ?? []);
-        setDataRoomLoaded(true);
-      })
-      .catch(() => {
-        toast.error("Data Room을 불러오지 못했습니다");
-      })
-      .finally(() => setDataRoomLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, dataRoomLoaded, dataRoomLoading, maDeal.id]);
+    setDataRoomError(null);
+    try {
+      const response = await fetch(`/api/ma-deals/${maDeal.id}/documents`, { cache: "no-store", signal: controller.signal });
+      if (!response.ok) throw new Error("Data unavailable");
+      const { data } = await response.json();
+      if (controller.signal.aborted || epoch !== dataRoomEpochRef.current) return false;
+      if (!data || ![data.documents, data.evidence, data.findings].every(value => Array.isArray(value) &&
+        value.every((row: unknown) => row && typeof row === "object" && "id" in row && typeof row.id === "string"))) throw new Error("Data unavailable");
+      setDocuments(data.documents);
+      setEvidence(data.evidence);
+      setFindings(data.findings);
+      setDataRoomLoaded(true);
+      return true;
+    } catch {
+      if (!controller.signal.aborted && epoch === dataRoomEpochRef.current)
+        setDataRoomError("자료 목록을 불러오지 못했습니다. 등록된 자료가 없는 상태로 판단하지 마세요. 다시 조회해 주세요.");
+      return false;
+    } finally {
+      if (!controller.signal.aborted && epoch === dataRoomEpochRef.current) {
+        dataRoomControllerRef.current = null;
+        setDataRoomLoading(false);
+      }
+    }
+  }, [maDeal.id]);
 
   // Evidence Request(PR #109) — 데이터룸 문서 상세의 "이 자료로 해결 가능한
   // 이슈"와 "검토 Workflow" 탭이 공유하는 하나의 state다(중복 조회 방지).
@@ -188,27 +272,58 @@ export function MaDealDetailClient({
   const [evidenceRequestsLoaded, setEvidenceRequestsLoaded] = useState(false);
   const [evidenceRequestsLoading, setEvidenceRequestsLoading] = useState(false);
   const [evidenceRequests, setEvidenceRequests] = useState<PEEvidenceRequestView[]>([]);
+  const [evidenceRequestsError, setEvidenceRequestsError] = useState<string | null>(null);
 
-  const refreshEvidenceRequests = async () => {
+  const refreshEvidenceRequests = useCallback(async () => {
+    evidenceControllerRef.current?.abort();
+    const controller = new AbortController();
+    const epoch = ++evidenceEpochRef.current;
+    evidenceControllerRef.current = controller;
     setEvidenceRequestsLoading(true);
+    setEvidenceRequestsError(null);
     try {
-      const res = await fetch(`/api/ma-deals/${maDeal.id}/evidence-requests`);
-      if (!res.ok) return;
+      const res = await fetch(`/api/ma-deals/${maDeal.id}/evidence-requests`, { cache: "no-store", signal: controller.signal });
+      if (!res.ok) throw new Error("Requests unavailable");
       const json = await res.json();
-      setEvidenceRequests(json.data ?? []);
+      if (controller.signal.aborted || epoch !== evidenceEpochRef.current) return;
+      if (!Array.isArray(json.data) || !json.data.every((row: unknown) => row && typeof row === "object" && "id" in row && typeof row.id === "string")) throw new Error("Requests unavailable");
+      setEvidenceRequests(json.data);
       setEvidenceRequestsLoaded(true);
     } catch {
-      toast.error("근거 요청 목록을 불러오지 못했습니다");
+      if (!controller.signal.aborted && epoch === evidenceEpochRef.current)
+        setEvidenceRequestsError("근거 요청 목록을 불러오지 못했습니다. 요청이 없는 상태로 판단하지 마세요. 다시 조회해 주세요.");
     } finally {
-      setEvidenceRequestsLoading(false);
+      if (!controller.signal.aborted && epoch === evidenceEpochRef.current) {
+        evidenceControllerRef.current = null;
+        setEvidenceRequestsLoading(false);
+      }
     }
-  };
+  }, [maDeal.id]);
 
   useEffect(() => {
-    if (!DOCUMENT_DEPENDENT_TABS.includes(activeTab) || evidenceRequestsLoaded || evidenceRequestsLoading) return;
-    refreshEvidenceRequests();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, evidenceRequestsLoaded, evidenceRequestsLoading, maDeal.id]);
+    setDataRoomLoaded(false);
+    setDataRoomLoading(false);
+    setDataRoomError(null);
+    setDocuments([]);
+    setEvidence([]);
+    setFindings([]);
+    setEvidenceRequestsLoaded(false);
+    setEvidenceRequestsLoading(false);
+    setEvidenceRequestsError(null);
+    setEvidenceRequests([]);
+    return cancelDocumentRequests;
+  }, [maDeal.id, cancelDocumentRequests]);
+
+  useEffect(() => {
+    // Document-dependent tabs share one bounded initial read; errors require a manual retry.
+    if (!DOCUMENT_DEPENDENT_TABS.includes(activeTab) || dataRoomLoaded || dataRoomLoading || dataRoomError) return;
+    void loadDataRoom();
+  }, [activeTab, dataRoomLoaded, dataRoomLoading, dataRoomError, loadDataRoom]);
+
+  useEffect(() => {
+    if (!DOCUMENT_DEPENDENT_TABS.includes(activeTab) || evidenceRequestsLoaded || evidenceRequestsLoading || evidenceRequestsError) return;
+    void refreshEvidenceRequests();
+  }, [activeTab, evidenceRequestsLoaded, evidenceRequestsLoading, evidenceRequestsError, refreshEvidenceRequests]);
 
   // IC Decision Dashboard(PR #102) — periods state(재무 추가/DART 임포트 시
   // refreshPeriods()로 이미 최신화됨)에서 매번 다시 계산한다. page.tsx가
@@ -255,51 +370,143 @@ export function MaDealDetailClient({
     [periods, dashboard.decisionReadiness.factConflicts.length]
   );
 
-  const refreshPeriods = async () => {
-    const res = await fetch(`/api/ma-deals/${maDeal.id}/financials`);
-    if (!res.ok) return;
-    const json = await res.json();
-    setPeriods(json.data ?? []);
+  const refreshPeriods = async (reason: "read" | "saved" = "read"): Promise<boolean> => {
+    financialControllerRef.current?.abort();
+    const controller = new AbortController();
+    const epoch = ++financialEpochRef.current;
+    financialControllerRef.current = controller;
+    setFinancialLoading(true);
+    if (reason === "saved") savedRefreshPendingRef.current = true;
+    setFinancialError(null);
+    try {
+      const res = await fetch(`/api/ma-deals/${maDeal.id}/financials`, { cache: "no-store", signal: controller.signal });
+      if (!res.ok) throw new Error("Financial data unavailable");
+      const json = await res.json();
+      if (controller.signal.aborted || epoch !== financialEpochRef.current) return false;
+      if (!Array.isArray(json.data) || !json.data.every((period: unknown) => period && typeof period === "object" &&
+        "id" in period && typeof period.id === "string" && "lineItems" in period && Array.isArray(period.lineItems))) throw new Error("Financial data unavailable");
+      setPeriods(json.data);
+      savedRefreshPendingRef.current = false;
+      return true;
+    } catch {
+      if (!controller.signal.aborted && epoch === financialEpochRef.current)
+        setFinancialError(savedRefreshPendingRef.current
+          ? "재무 데이터는 저장되었지만 목록을 갱신하지 못했습니다. 재무 목록만 다시 조회해 주세요."
+          : "재무 목록을 조회하지 못했습니다. 이전에 불러온 내용을 유지하고 있습니다. 다시 조회해 주세요.");
+      return false;
+    } finally {
+      if (!controller.signal.aborted && epoch === financialEpochRef.current) {
+        financialControllerRef.current = null;
+        setFinancialLoading(false);
+      }
+    }
   };
 
   const handleDartImport = async () => {
+    if (!canEdit || dartPendingRef.current || dartUncertainRef.current) return;
+    dartPendingRef.current = true;
+    const epoch = mutationEpochRef.current;
+    const controller = new AbortController();
+    dartControllerRef.current = controller;
+    const isCurrent = () => !controller.signal.aborted && epoch === mutationEpochRef.current;
     setImportingDart(true);
+    setDartError(null);
+    const hold = () => {
+      dartUncertainRef.current = true;
+      setDartUncertain(true);
+      setDartError("DART 가져오기 결과를 확인하지 못했습니다. 일부 재무 기간이 저장되었을 수 있습니다. 다시 가져오지 말고 재무 목록을 조회해 확인하세요.");
+    };
     try {
-      const res = await fetch(`/api/ma-deals/${maDeal.id}/dart/import`, { method: "POST" });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json.message ?? json.error ?? "DART 연동 실패");
-      toast.success("DART 재무데이터를 가져왔습니다");
-      await refreshPeriods();
-    } catch (e) {
-      toast.error("DART 연동 실패", {
-        description: e instanceof Error ? e.message : "다시 시도해 주세요",
-      });
+      const res = await fetch(`/api/ma-deals/${maDeal.id}/dart/import`, { method: "POST", signal: controller.signal });
+      if (!isCurrent()) return;
+      if (!res.ok) {
+        if (res.status >= 500) hold();
+        else setDartError(res.status === 401 ? "로그인이 만료되었습니다. 다시 로그인한 뒤 재무 목록을 확인하세요."
+          : res.status === 403 ? "재무 데이터를 가져올 권한이 없습니다."
+          : "DART 가져오기 요청을 완료하지 못했습니다. 기업 정보와 기존 재무 목록을 확인하세요.");
+        return;
+      }
+      const { data } = await res.json();
+      if (!isCurrent()) return;
+      if (!data || data.maDealId !== maDeal.id || data.source !== "DART" || !Number.isSafeInteger(data.importedPeriods) ||
+          data.importedPeriods < 0 || !Number.isSafeInteger(data.importedLineItems) || data.importedLineItems < 0 || !Array.isArray(data.skippedPeriods)) {
+        hold(); return;
+      }
+      toast.success(data.importedPeriods > 0 ? "DART 재무데이터를 가져왔습니다" : "기존 재무 기간을 보존했습니다. 새로 추가된 기간은 없습니다.");
+      await refreshPeriods(data.importedPeriods > 0 ? "saved" : "read");
+    } catch {
+      if (isCurrent()) hold();
     } finally {
-      setImportingDart(false);
+      if (isCurrent()) { dartPendingRef.current = false; dartControllerRef.current = null; setImportingDart(false); }
+    }
+  };
+
+  const refreshDealStatus = async () => {
+    archiveReadControllerRef.current?.abort();
+    const controller = new AbortController();
+    archiveReadControllerRef.current = controller;
+    const epoch = mutationEpochRef.current;
+    const isCurrent = () => !controller.signal.aborted && epoch === mutationEpochRef.current;
+    setCheckingArchive(true);
+    try {
+      const response = await fetch(`/api/ma-deals/${maDeal.id}`, { cache: "no-store", signal: controller.signal });
+      if (!response.ok) throw new Error("Status unavailable");
+      const { data } = await response.json();
+      if (!isCurrent()) return;
+      if (!data || data.id !== maDeal.id || !["ACTIVE", "ARCHIVED"].includes(data.status)) throw new Error("Status unavailable");
+      confirmedStatusRef.current = data.status;
+      setConfirmedStatus(data.status);
+      archiveUncertainRef.current = false;
+      setArchiveUncertain(false);
+      setArchiveError(null);
+    } catch {
+      if (isCurrent()) setArchiveError("딜 상태를 조회하지 못했습니다. 상태 변경을 다시 요청하기 전에 현재 상태를 확인하세요.");
+    } finally {
+      if (isCurrent()) { archiveReadControllerRef.current = null; setCheckingArchive(false); }
     }
   };
 
   const handleToggleStatus = async () => {
-    const nextStatus = maDeal.status === "ACTIVE" ? "ARCHIVED" : "ACTIVE";
+    if (!canEdit || archivePendingRef.current || archiveUncertainRef.current || archiveReadControllerRef.current) return;
+    archivePendingRef.current = true;
+    const controller = new AbortController();
+    archiveControllerRef.current = controller;
+    const epoch = mutationEpochRef.current;
+    const isCurrent = () => !controller.signal.aborted && epoch === mutationEpochRef.current;
+    const nextStatus = confirmedStatusRef.current === "ACTIVE" ? "ARCHIVED" : "ACTIVE";
     setTogglingStatus(true);
+    setArchiveError(null);
+    const hold = () => {
+      archiveUncertainRef.current = true;
+      setArchiveUncertain(true);
+      setArchiveError("딜 상태 변경 결과를 확인하지 못했습니다. 같은 변경을 다시 요청하지 말고 현재 딜 상태를 조회해 주세요.");
+    };
     try {
       const res = await fetch(`/api/ma-deals/${maDeal.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({ status: nextStatus }),
       });
+      if (!isCurrent()) return;
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error ?? "상태 변경 실패");
+        if (res.status >= 500) hold();
+        else setArchiveError(res.status === 401 ? "로그인이 만료되었습니다. 다시 로그인한 뒤 딜 상태를 확인하세요."
+          : res.status === 403 ? "딜 상태를 변경할 권한이 없습니다."
+          : "딜 상태 변경 요청을 완료하지 못했습니다. 현재 상태를 확인하세요.");
+        return;
       }
+      const { data } = await res.json();
+      if (!isCurrent()) return;
+      if (!data || data.id !== maDeal.id || data.status !== nextStatus) { hold(); return; }
+      confirmedStatusRef.current = data.status;
+      setConfirmedStatus(data.status);
       toast.success(nextStatus === "ARCHIVED" ? "딜을 보관했습니다" : "딜을 다시 활성화했습니다");
       router.refresh();
-    } catch (e) {
-      toast.error("상태 변경 실패", {
-        description: e instanceof Error ? e.message : "다시 시도해 주세요",
-      });
+    } catch {
+      if (isCurrent()) hold();
     } finally {
-      setTogglingStatus(false);
+      if (isCurrent()) { archivePendingRef.current = false; archiveControllerRef.current = null; setTogglingStatus(false); }
     }
   };
 
@@ -311,8 +518,8 @@ export function MaDealDetailClient({
         <div>
           <div className="flex items-center gap-2 mb-1 flex-wrap">
             <Badge variant="outline">{MA_DEAL_TYPE_LABEL[maDeal.dealType]}</Badge>
-            <Badge variant={maDeal.status === "ACTIVE" ? "default" : "secondary"}>
-              {MA_DEAL_STATUS_LABEL[maDeal.status]}
+            <Badge variant={confirmedStatus === "ACTIVE" ? "default" : "secondary"}>
+              {MA_DEAL_STATUS_LABEL[confirmedStatus]}
             </Badge>
             {maDeal.teamId && <Badge variant="secondary">팀 공유</Badge>}
           </div>
@@ -320,13 +527,29 @@ export function MaDealDetailClient({
           <p className="text-sm text-gray-500">{maDeal.name}</p>
         </div>
         {canEdit && (
-          <Button variant="outline" size="sm" onClick={handleToggleStatus} disabled={togglingStatus}>
-            {maDeal.status === "ACTIVE" ? "딜 보관" : "다시 활성화"}
+          <Button variant="outline" size="sm" onClick={handleToggleStatus} disabled={togglingStatus || archiveUncertain || checkingArchive}>
+            {confirmedStatus === "ACTIVE" ? "딜 보관" : "다시 활성화"}
           </Button>
         )}
       </div>
+      {archiveError && <div role="alert" data-testid="pe-archive-error" className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+        <p>{archiveError}</p>
+        <Button variant="outline" size="sm" onClick={refreshDealStatus} disabled={checkingArchive || togglingStatus}>딜 상태 다시 조회</Button>
+      </div>}
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
+        {DOCUMENT_DEPENDENT_TABS.includes(activeTab) && dataRoomError && (
+          <div role="alert" data-testid="pe-data-room-error" className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+            <p>{dataRoomError}</p>
+            <Button variant="outline" size="sm" onClick={loadDataRoom} disabled={dataRoomLoading}>자료 목록 다시 조회</Button>
+          </div>
+        )}
+        {DOCUMENT_DEPENDENT_TABS.includes(activeTab) && evidenceRequestsError && (
+          <div role="alert" data-testid="pe-evidence-requests-error" className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+            <p>{evidenceRequestsError}</p>
+            <Button variant="outline" size="sm" onClick={refreshEvidenceRequests} disabled={evidenceRequestsLoading}>근거 요청 다시 조회</Button>
+          </div>
+        )}
         {/* `sm:w-auto`가 640px 이상에서 폭 제약을 풀어버려 탭 9개가 자연
          * 너비로 렌더되면서 페이지 전체가 가로로 밀리는 문제가 있었다
          * (768px/1024px에서 실측 확인, PR #111/#112에서 "이 PR 범위 밖의
@@ -401,47 +624,54 @@ export function MaDealDetailClient({
         </TabsContent>
 
         <TabsContent value="ic-review-workflow" className="space-y-4">
-          <MaDealIcReviewWorkspace
+          {!dataRoomError && !evidenceRequestsError && <MaDealIcReviewWorkspace
             maDeal={maDeal}
             dashboard={dashboard}
             ddCase={ddCase}
             documents={documents}
             evidenceRequests={evidenceRequests}
-            evidenceRequestsLoading={evidenceRequestsLoading && !evidenceRequestsLoaded}
+            evidenceRequestsLoading={!evidenceRequestsLoaded}
             canEdit={canEdit}
             onRefresh={refreshEvidenceRequests}
-          />
+          />}
         </TabsContent>
 
         <TabsContent value="committee-pack" className="space-y-4">
-          <MaDealCommitteePack
+          {!dataRoomError && !evidenceRequestsError && <MaDealCommitteePack
             maDeal={maDeal}
             dashboard={dashboard}
             ddCase={ddCase}
             evidenceRequests={evidenceRequests}
-            evidenceRequestsLoading={evidenceRequestsLoading && !evidenceRequestsLoaded}
+            evidenceRequestsLoading={!evidenceRequestsLoaded}
             canEdit={canEdit}
             currentUserId={currentUserId}
             onNavigateTab={setActiveTab}
             onEvidenceRequestCreated={refreshEvidenceRequests}
-          />
+          />}
         </TabsContent>
 
         <TabsContent value="data-room" className="space-y-4">
-          <MaDealDataRoom
+          <PeFileUploader dealId={maDeal.id} canEdit={canEdit} onUploaded={loadDataRoom} />
+          {!dataRoomError && !evidenceRequestsError && <MaDealDataRoom
             dealId={maDeal.id}
+            canEdit={canEdit}
             documents={documents}
             evidence={evidence}
             findings={findings}
             evidenceRequests={evidenceRequests}
-            loading={dataRoomLoading && !dataRoomLoaded}
-          />
+            loading={!dataRoomLoaded || !evidenceRequestsLoaded}
+          />}
         </TabsContent>
 
         <TabsContent value="financials" className="space-y-4">
+          {financialLoading && <p role="status" className="text-sm text-muted-foreground">재무 목록을 조회하는 중입니다.</p>}
+          {financialError && <div role="alert" data-testid="pe-financial-read-error" className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+            <p>{financialError}</p>
+            <Button variant="outline" size="sm" onClick={() => refreshPeriods()} disabled={financialLoading}>재무 목록 다시 조회</Button>
+          </div>}
           <div className="flex justify-end">
             {canEdit && (
-              <AddFinancialPeriodDialog maDealId={maDeal.id} onCreated={refreshPeriods} />
+              <AddFinancialPeriodDialog maDealId={maDeal.id} onCreated={() => refreshPeriods("saved")} onReload={() => refreshPeriods()} />
             )}
           </div>
           {periods.length > 0 && (
@@ -454,7 +684,7 @@ export function MaDealDetailClient({
               <MaDealReadiness readiness={dashboard.decisionReadiness} />
             </>
           )}
-          {periods.length === 0 ? (
+          {periods.length === 0 ? (!financialError && !financialLoading &&
             <p className="text-center text-gray-400 py-12">
               등록된 재무 데이터가 없습니다. 재무 기간을 추가하거나 DART 탭에서 가져와보세요.
             </p>
@@ -515,19 +745,23 @@ export function MaDealDetailClient({
         </TabsContent>
 
         <TabsContent value="dart" className="space-y-4">
+          {dartError && <div role="alert" data-testid="pe-dart-import-error" className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+            <p>{dartError}</p>
+            <Button variant="outline" size="sm" onClick={() => refreshPeriods()} disabled={financialLoading || importingDart}>DART 결과 목록 조회</Button>
+          </div>}
           <div className="flex items-center justify-between">
             <p className="text-sm text-gray-500">
               DART(전자공시)에서 대상 기업명으로 최근 2개 사업연도 재무제표를 가져옵니다.
               비상장이거나 회사명이 일치하지 않으면 조회되지 않을 수 있습니다.
             </p>
             {canEdit && (
-              <Button size="sm" onClick={handleDartImport} disabled={importingDart}>
+              <Button size="sm" onClick={handleDartImport} disabled={importingDart || dartUncertain}>
                 <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${importingDart ? "animate-spin" : ""}`} />
                 {importingDart ? "가져오는 중..." : "DART에서 가져오기"}
               </Button>
             )}
           </div>
-          {dartPeriods.length === 0 ? (
+          {dartPeriods.length === 0 ? (!dartError && !financialError &&
             <p className="text-center text-gray-400 py-12">
               아직 DART에서 가져온 재무 데이터가 없습니다.
             </p>

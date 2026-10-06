@@ -19,12 +19,10 @@
  * 다른 사용자 id를 받지 않는다. "다른 리뷰어를 대신 검토 완료 처리"는
  * 구조적으로 불가능하다(함수 시그니처 자체에 그 여지가 없음).
  *
- * ## fingerprint는 여기서 계산하지 않는다
+ * ## fingerprint는 서명 트랜잭션 안에서 서버가 계산한다
  *
- * `upsertOwnPEICReview()`는 호출자(API route)가 `buildPECommitteePack()`으로
- * 이미 계산해 넘긴 fingerprint breakdown을 그대로 저장할 뿐이다 — 클라이언트
- * 요청 바디에서 fingerprint 값을 절대 읽지 않는다(§Step18 10, §Step24 2 —
- * "클라이언트가 fingerprint를 조작/주입할 수 없다"의 핵심 방어).
+ * 클라이언트 expectedFingerprint는 버전 비교에만 사용한다. 저장할 breakdown은
+ * 권한 확인·정규 자료 조회·서명/스냅샷/감사 저장과 동일한 Serializable 트랜잭션에서 계산한다.
  */
 
 import { prisma } from "@/lib/prisma";
@@ -41,6 +39,8 @@ import { collectSignoffTransitionIssues, collectReviewCommentIssues } from "./pe
 import type { PECommitteePackFingerprintBreakdown } from "./pe-committee-pack-fingerprint";
 import { recordAuditEvent, createReviewSnapshotInTransaction, isUniqueConstraintConflict } from "./pe-ic-review-audit-repository";
 import type { PEICAuditEventType } from "@prisma/client";
+import { loadPECommitteePackForDeal } from "./pe-committee-pack-loader";
+import { extractOpenQuestionSummary } from "./pe-ic-review-audit";
 export type { PEDDActor, PEDDResult };
 
 /** PEICReviewSignoffStatus → 이 전이가 만드는 감사 이벤트 종류(§12). NOT_REVIEWED로의
@@ -77,6 +77,7 @@ export async function listPEICReviews(actor: PEDDActor, maDealId: string): Promi
 export interface UpsertPEICReviewInput {
   status: PEICReviewSignoffStatus;
   comment?: string | null;
+  expectedFingerprint?: string;
 }
 
 /** REVIEWED 전환 시점의 스냅샷에 담을 "지금 미해결 항목" 요약(pe-ic-review-audit.ts의
@@ -94,9 +95,8 @@ export interface OpenQuestionSummary {
  * status가 REVIEWED일 때만 `currentBreakdown`을 `reviewedFingerprint`/
  * `reviewedFingerprintBreakdown`에 기록한다(다른 상태로 바뀔 때는 이전에
  * 기록된 값을 그대로 둔다 — "마지막으로 실제 검토 완료했던 시점"의 기록이라는
- * 의미를 유지). `currentBreakdown`은 항상 호출자(API route)가
- * `buildPECommitteePack()`으로 직접 계산해 넘긴다 — 요청 바디에서 읽지
- * 않는다(§Step18 10 "클라이언트가 fingerprint를 조작/주입할 수 없다").
+ * 의미를 유지). `currentBreakdown`은 항상 같은 트랜잭션의 canonical 조회로
+ * 직접 계산하며 요청 바디의 expectedFingerprint는 비교 조건으로만 사용한다.
  *
  * PR #111부터: 이 살아있는 행을 upsert하는 것과 별개로, status===REVIEWED로
  * 전환하는 매 순간(재검토 포함) `PEICReviewSnapshot`에 불변 행을 하나 더
@@ -106,24 +106,45 @@ export interface OpenQuestionSummary {
  * 두 번 검토 완료가 들어오면 unique(maDealId, version) 충돌이 나고
  * 최대 3번까지 재시도한다(§42 "duplicate review version impossible").
  */
+export type PEICReviewWriteResult =
+  | { status: "ok"; data: PEICReviewRow; breakdown: PECommitteePackFingerprintBreakdown }
+  | { status: "not_found" }
+  | { status: "invalid"; issues: string[] }
+  | { status: "conflict" };
+
 export async function upsertOwnPEICReview(
   actor: PEDDActor,
   maDealId: string,
-  input: UpsertPEICReviewInput,
-  currentBreakdown: PECommitteePackFingerprintBreakdown,
-  openQuestionSummary: OpenQuestionSummary
-): Promise<PEDDResult<PEICReviewRow>> {
-  const deal = await prisma.mADeal.findFirst({ where: { id: maDealId, ...maDealWhereWrite(actor) } });
-  if (!deal) return { status: "not_found" };
-
+  input: UpsertPEICReviewInput
+): Promise<PEICReviewWriteResult> {
   const issues = collectSignoffTransitionIssues(input);
+  if (input.status === "REVIEWED" && !/^[a-f0-9]{64}$/.test(input.expectedFingerprint ?? "")) {
+    issues.push("expected_fingerprint_required");
+  }
   if (issues.length > 0) return { status: "invalid", issues };
-
   const eventType = AUDIT_EVENT_FOR_STATUS[input.status];
-
   for (let attempt = 0; attempt < MAX_VERSION_CONFLICT_RETRIES; attempt++) {
     try {
-      const row = await prisma.$transaction(async (tx) => {
+      return await prisma.$transaction(async (tx): Promise<PEICReviewWriteResult> => {
+        // Membership and ownership are part of the same snapshot as canonical content.
+        const user = await tx.user.findUnique({
+          where: { id: actor.userId },
+          select: { role: true, teamRole: true, teamId: true, team: { select: { ownerUserId: true } } },
+        });
+        if (!user) return { status: "not_found" };
+        const teamRole = user.teamRole ?? user.role;
+        const freshActor: PEDDActor = {
+          userId: actor.userId,
+          teamId: user.teamId,
+          role: user.teamId && user.team?.ownerUserId === actor.userId && teamRole === "ANALYST" ? "PARTNER" : teamRole,
+        };
+        const deal = await tx.mADeal.findFirst({ where: { id: maDealId, ...maDealWhereWrite(freshActor) } });
+        if (!deal) return { status: "not_found" };
+        const loaded = await loadPECommitteePackForDeal(freshActor, maDealId, tx);
+        if (loaded.status !== "ok") return { status: "not_found" };
+        const currentBreakdown = loaded.data.pack.fingerprintBreakdown;
+        if (input.status === "REVIEWED" && input.expectedFingerprint !== currentBreakdown.overall) return { status: "conflict" };
+        const openQuestionSummary = extractOpenQuestionSummary(loaded.data.pack.decision.questions);
         const now = new Date();
         const reviewedFields =
           input.status === "REVIEWED"
@@ -156,16 +177,19 @@ export async function upsertOwnPEICReview(
           await recordAuditEvent(tx, { maDealId, reviewSnapshotId: snapshotId, actorId: actor.userId, eventType });
         }
 
-        return reviewRow;
-      });
-      return { status: "ok", data: row };
+        return { status: "ok", data: reviewRow, breakdown: currentBreakdown };
+      }, { isolationLevel: "Serializable", maxWait: 5000, timeout: 15000 });
     } catch (error) {
-      if (isUniqueConstraintConflict(error) && attempt < MAX_VERSION_CONFLICT_RETRIES - 1) continue;
-      throw error;
+      const retryable = isUniqueConstraintConflict(error) ||
+        (typeof error === "object" && error !== null && "code" in error && error.code === "P2034");
+      if (retryable) {
+        if (attempt < MAX_VERSION_CONFLICT_RETRIES - 1) continue;
+        return { status: "conflict" };
+      }
+      throw new Error("PE review could not be saved");
     }
   }
-  // 이론상 도달 불가(루프가 항상 return 또는 throw로 끝남) — TS 제어 흐름 분석용.
-  throw new Error("upsertOwnPEICReview: unreachable");
+  return { status: "conflict" };
 }
 
 // ── 코멘트(§Step10 — 의견/메모일 뿐 canonical 재무 데이터를 절대 바꾸지 않음) ──

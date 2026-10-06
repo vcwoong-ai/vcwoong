@@ -2,7 +2,7 @@
 
 import { FirstDealGuide } from "@/components/onboarding/first-deal-guide";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DealCard } from "@/components/deals/deal-card";
 import { DealKanban } from "@/components/deals/deal-kanban";
@@ -74,6 +74,10 @@ export function DealsPageClient({
   const [search, setSearch] = useState("");
   // 서버는 첫 페이지만 내려준다. 나머지는 여기서 이어 받아 누적한다.
   const [loadedDeals, setLoadedDeals] = useState<Deal[]>(initialDeals);
+  const [loadedTotal, setLoadedTotal] = useState(total);
+  const receivedPage = useRef(1);
+  const listEpoch = useRef(0);
+  const pageRequest = useRef<AbortController | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
   const [compareIds, setCompareIds] = useState<string[]>([]);
@@ -87,6 +91,33 @@ export function DealsPageClient({
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const toast = useToast();
   const confirm = useConfirm();
+
+  useEffect(() => {
+    listEpoch.current++;
+    pageRequest.current?.abort();
+    pageRequest.current = null;
+    receivedPage.current = 1;
+    setLoadedDeals(initialDeals);
+    setLoadedTotal(total);
+    setLoadingMore(false);
+    setLoadMoreError(null);
+    const ids = new Set(initialDeals.map(deal => deal.id));
+    setSelectedIds(previous => previous.filter(id => ids.has(id)));
+    setCompareIds(previous => previous.filter(id => ids.has(id)));
+    return () => { pageRequest.current?.abort(); };
+  }, [initialDeals, total]);
+
+  const removeDeletedDeals = (ids: string[]) => {
+    const removed = new Set(ids);
+    listEpoch.current++;
+    pageRequest.current?.abort();
+    pageRequest.current = null;
+    setLoadingMore(false);
+    setLoadedDeals(previous => previous.filter(deal => !removed.has(deal.id)));
+    setLoadedTotal(previous => Math.max(0, previous - removed.size));
+    setSelectedIds(previous => previous.filter(id => !removed.has(id)));
+    setCompareIds(previous => previous.filter(id => !removed.has(id)));
+  };
 
   const handleDeleteDeal = async (dealId: string, companyName: string) => {
     const ok = await confirm({
@@ -105,6 +136,7 @@ export function DealsPageClient({
         throw new Error(err.error ?? "삭제 실패");
       }
       toast.success("딜을 삭제했습니다");
+      removeDeletedDeals([dealId]);
       router.refresh();
     } catch (e) {
       toast.error("딜 삭제 실패", {
@@ -159,6 +191,7 @@ export function DealsPageClient({
     );
     const failed = results.filter((r) => r.status === "rejected").length;
     const succeeded = results.length - failed;
+    removeDeletedDeals(selectedIds.filter((_, index) => results[index].status === "fulfilled"));
 
     if (failed === 0) {
       toast.success(`${succeeded}건 삭제 완료`);
@@ -175,7 +208,7 @@ export function DealsPageClient({
     router.refresh();
   };
 
-  const hasMore = loadedDeals.length < total;
+  const hasMore = loadedDeals.length < loadedTotal;
 
   /**
    * 다음 페이지를 이어 받는다.
@@ -185,16 +218,22 @@ export function DealsPageClient({
    * "더 보기"를 함께 노출한다.
    */
   const handleLoadMore = async () => {
+    if (pageRequest.current) return;
+    const controller = new AbortController();
+    pageRequest.current = controller;
+    const epoch = listEpoch.current;
+    const nextPage = receivedPage.current + 1;
     setLoadingMore(true);
     setLoadMoreError(null);
     try {
-      const nextPage = Math.floor(loadedDeals.length / pageSize) + 1;
       const res = await fetch(
-        `/api/deals?page=${nextPage}&pageSize=${pageSize}`
+        `/api/deals?page=${nextPage}&pageSize=${pageSize}`, { signal: controller.signal }
       );
       if (!res.ok) throw new Error(`목록을 더 불러오지 못했습니다 (${res.status})`);
       const json = (await res.json()) as { data?: Deal[] };
       const next = json.data ?? [];
+      if (controller.signal.aborted || epoch !== listEpoch.current) return;
+      receivedPage.current = nextPage;
       setLoadedDeals((prev) => {
         // 그 사이 다른 곳에서 딜이 추가/삭제되면 같은 딜이 두 번 올 수
         // 있다 — id 기준으로 중복을 걸러 화면이 깨지지 않게 한다.
@@ -202,11 +241,15 @@ export function DealsPageClient({
         return [...prev, ...next.filter((d) => !seen.has(d.id))];
       });
     } catch (error) {
+      if (controller.signal.aborted || epoch !== listEpoch.current) return;
       setLoadMoreError(
         error instanceof Error ? error.message : "목록을 더 불러오지 못했습니다"
       );
     } finally {
-      setLoadingMore(false);
+      if (pageRequest.current === controller) {
+        pageRequest.current = null;
+        setLoadingMore(false);
+      }
     }
   };
 
@@ -232,6 +275,7 @@ export function DealsPageClient({
       body: JSON.stringify({ stage: newStage }),
     });
     if (!res.ok) throw new Error("단계 변경 실패");
+    setLoadedDeals(previous => previous.map(deal => deal.id === dealId ? { ...deal, stage: newStage } : deal));
   };
 
   return (
@@ -241,6 +285,7 @@ export function DealsPageClient({
         <div className="relative w-full sm:max-w-sm sm:flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <Input
+            aria-label="딜 또는 기업명 검색"
             placeholder="딜 또는 기업명 검색..."
             className="pl-9"
             value={search}
@@ -415,7 +460,7 @@ export function DealsPageClient({
       {loadedDeals.length > 0 && hasMore && (
         <div className="flex flex-col items-center gap-2 pt-2">
           <p className="text-xs text-gray-400">
-            전체 {total}개 중 {loadedDeals.length}개 표시 중
+            전체 {loadedTotal}개 중 {loadedDeals.length}개 표시 중
             {search && " · 검색은 불러온 딜에서만 동작합니다"}
           </p>
           {loadMoreError && (
@@ -427,7 +472,7 @@ export function DealsPageClient({
             onClick={handleLoadMore}
             disabled={loadingMore}
           >
-            {loadingMore ? "불러오는 중..." : `더 보기 (${total - loadedDeals.length}개 남음)`}
+            {loadingMore ? "불러오는 중..." : `더 보기 (${Math.max(0, loadedTotal - loadedDeals.length)}개 남음)`}
           </Button>
         </div>
       )}

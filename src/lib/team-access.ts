@@ -15,6 +15,8 @@ export interface TeamContext {
   teamId: string | null;
   teamName: string | null;
   role: UserRole | string;
+  accountRole: UserRole | string;
+  isTeamOwner: boolean;
 }
 
 /** ADMIN·PARTNER만 공유 리소스 편집 가능 */
@@ -22,8 +24,20 @@ export function canEditShared(role: string): boolean {
   return role === "ADMIN" || role === "PARTNER";
 }
 
-export function canManageTeam(role: string): boolean {
-  return canEditShared(role);
+export function canManageTeam(role: string, isTeamOwner = false): boolean {
+  return isTeamOwner || canEditShared(role);
+}
+
+/** 팀 관리 mutation은 같은 팀 행을 잠근 뒤 현재 소속/역할을 다시 읽는다. */
+export async function lockTeamManagementContext(tx: Prisma.TransactionClient, userId: string, teamId: string) {
+  const locked = await tx.team.updateMany({ where: { id: teamId }, data: { updatedAt: new Date() } });
+  if (locked.count !== 1) return null;
+  const [team, user] = await Promise.all([
+    tx.team.findUnique({ where: { id: teamId }, select: { ownerUserId: true } }),
+    tx.user.findFirst({ where: { id: userId, teamId }, select: { role: true, teamRole: true } }),
+  ]);
+  if (!team || !user) return null;
+  return { ownerUserId: team.ownerUserId, isTeamOwner: team.ownerUserId === userId, role: user.teamRole ?? user.role };
 }
 
 export async function getUserTeamContext(userId: string): Promise<TeamContext> {
@@ -31,15 +45,22 @@ export async function getUserTeamContext(userId: string): Promise<TeamContext> {
     where: { id: userId },
     select: {
       role: true,
+      teamRole: true,
       teamId: true,
-      team: { select: { id: true, name: true } },
+      team: { select: { id: true, name: true, ownerUserId: true } },
     },
   });
 
+  const isTeamOwner = !!user?.teamId && user.team?.ownerUserId === userId;
+  const accountRole = user?.role ?? "ANALYST";
+  const teamRole = user?.teamRole ?? accountRole;
   return {
     teamId: user?.teamId ?? null,
     teamName: user?.team?.name ?? null,
-    role: user?.role ?? "ANALYST",
+    // 소유자의 권한은 현재 팀에만 적용되며 계정/JWT의 전역 역할은 바꾸지 않는다.
+    role: isTeamOwner && teamRole === "ANALYST" ? "PARTNER" : teamRole,
+    accountRole,
+    isTeamOwner,
   };
 }
 

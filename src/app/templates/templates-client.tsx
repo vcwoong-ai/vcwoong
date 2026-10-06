@@ -311,6 +311,7 @@ function TemplateCard({
           </div>
 
           <div className="flex items-center gap-2 flex-shrink-0">
+            <a href={`/api/templates/${template.id}/download`} className="text-xs text-primary underline" aria-label={`${template.originalName} 원본 다운로드`}>원본 다운로드</a>
             <TeamShareToggle
               type="template"
               resourceId={template.id}
@@ -444,12 +445,18 @@ export function TemplatesClient({
 
       if (dragFile.size > DIRECT_UPLOAD_THRESHOLD) {
         // 큰 파일: 서버를 거치지 않고 브라우저에서 Blob으로 직접 업로드
-        const ext = dragFile.name.split(".").pop() ?? "bin";
-        const pathname = `templates/${crypto.randomUUID()}.${ext}`;
+        const prepare = await fetch("/api/templates/blob-token", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ type: "upload.prepare", fileName: dragFile.name, mimeType: dragFile.type, fileSize: dragFile.size }),
+        });
+        const grant = await prepare.json();
+        if (!prepare.ok) throw new Error(grant.error ?? "업로드 승인 실패");
+        const { pathname, binding } = grant;
 
         const blob = await upload(pathname, dragFile, {
-          access: "public",
+          access: "private",
           handleUploadUrl: "/api/templates/blob-token",
+          clientPayload: JSON.stringify({ binding }),
         });
 
         res = await fetch("/api/templates", {
@@ -457,6 +464,7 @@ export function TemplatesClient({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             blobUrl: blob.url,
+            binding,
             fileName: dragFile.name,
             mimeType: dragFile.type,
             fileSize: dragFile.size,

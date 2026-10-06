@@ -1,3 +1,4 @@
+import { assertE2ETarget, assertNoExternalE2ECredentials, assertCleanE2EWorkspace, chromiumLaunchOptions } from "./helpers/e2e-environment";
 /** Local-only read-only site walkthrough; isolated synthetic fixture, no AI/billing submissions. */
 import assert from "node:assert/strict";
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -6,10 +7,14 @@ import { chromium, type Page } from "playwright";
 import { createPaidProductFixture } from "./helpers/paid-product-fixture";
 
 const base = process.env.BASE_URL ?? "http://localhost:3000";
+assertE2ETarget(base);
+assertNoExternalE2ECredentials();
+assertCleanE2EWorkspace();
+const db = new PrismaClient();
 const target = new URL(base);
 assert(target.hostname === "localhost" && ["3000", "3001"].includes(target.port) && target.protocol === "http:", "local review only");
 const dir = "screenshots/site-review";
-const db = new PrismaClient();
+
 const rows: Array<Record<string, unknown>> = [];
 async function inspect(page: Page, path: string, name: string, width: number) {
   const errors: string[] = [];
@@ -27,7 +32,6 @@ async function inspect(page: Page, path: string, name: string, width: number) {
 }
 
 async function main() {
-  assert.equal(process.env.DATABASE_URL, "file:./dev.db");
   mkdirSync(dir, { recursive: true });
   let fixture: Awaited<ReturnType<typeof createPaidProductFixture>> | undefined;
   let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
@@ -40,7 +44,7 @@ async function main() {
     await db.companyKPI.create({ data: { companyId: company.id, period: "2025Q1", metric: "매출", value: 20, unit: "억원" } });
     await db.inboundDeal.create({ data: { userId: ownerId, companyName: "인바운드 기업 (예시)", summary: "순회 검토용 합성 자료" } });
     const lp = await db.lpReport.create({ data: { fundId: fund.id, period: "2025Q1", title: "분기 보고 (예시)", content: "# 분기 운용 보고\n합성 검토 데이터이며 실제 운용 실적이 아닙니다.", status: "DRAFT" } });
-    browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH });
+    browser = await chromium.launch(chromiumLaunchOptions());
     for (const width of [1440, 390]) {
       const context = await browser.newContext({ viewport: { width, height: 1000 }, reducedMotion: "reduce", extraHTTPHeaders: { "x-forwarded-for": testIp } });
       await context.route("**/*", route => {

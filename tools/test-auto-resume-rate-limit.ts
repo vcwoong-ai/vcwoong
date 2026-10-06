@@ -183,37 +183,20 @@ function testAutoResumeStillEnforcesAuthAndPermission() {
   console.log("✅ G. 자동 resume 요청도 기존과 동일한 순서로 인증(getServerSession)·권한(reportWriteWhere) 검증을 그대로 거침");
 }
 
-/**
- * H. claimPendingGeneration(generation lock) 로직 자체는 이번 수정과
- * 무관하게 그대로다 — report-generation.ts의 claim 함수가 trigger 개념을
- * 전혀 모르고(수정되지 않았고), run/route.ts가 여전히 그 함수를 호출하는지
- * 확인한다.
- */
+/** H. 자동 재개도 인증·rate limit 판정 뒤 현재 작업 토큰을 선점한다. */
 function testGenerationLockUntouched() {
-  const genSource = readSource("src/lib/report-generation.ts");
-  const claimFn = genSource.match(
-    /export async function claimPendingGeneration\([\s\S]*?\n\}/
-  );
-  assert(Boolean(claimFn), "claimPendingGeneration 함수를 찾지 못함");
-  assert(
-    !/trigger/.test(claimFn![0]),
-    "claimPendingGeneration이 trigger 개념을 참조함 — generation lock 로직을 건드리지 말라는 요구사항 위반"
-  );
-
   const runSource = readSource(RUN_ROUTE);
   assert(
-    /const claimedOk = await claimPendingGeneration\(report\.id\);/.test(runSource),
-    "run/route.ts가 claimPendingGeneration 호출을 더 이상 하지 않음 — generation lock이 빠짐"
+    /await claimGeneration\(tx, report\.id, STALE_GENERATION_MS\)/.test(runSource),
+    "재개 경로의 영속 generation lease 선점이 빠짐"
   );
   const rateGateIdx = runSource.indexOf("isAutoResumeExemptFromRateLimit(mode, trigger)");
-  const claimIdx = runSource.indexOf("claimPendingGeneration(report.id)");
-  assert(
-    rateGateIdx < claimIdx,
-    "rate limit 게이팅보다 claimPendingGeneration(락 선점)이 먼저 실행되는 순서로 바뀜 — 기존 순서(rate limit → quota → lock)와 다름"
-  );
-  console.log("✅ H. claimPendingGeneration(generation lock) 로직 불변 — trigger 개념과 무관, 호출 순서도 기존과 동일");
+  const claimIdx = runSource.indexOf("await claimGeneration(tx, report.id");
+  assert(rateGateIdx < claimIdx, "rate limit 판정 전에 작업 lease를 선점함");
+  assert(runSource.includes('if (!token)'), "lease 선점 실패 거절이 빠짐");
+  assert(/session\.user\.id,\s*token\s*\)/.test(runSource), "생성 worker에 현재 lease 토큰을 전달하지 않음");
+  console.log("✅ H. 인증·rate limit 판정 뒤 영속 lease 선점 및 worker 토큰 전달 유지");
 }
-
 /** 클라이언트 배선: 자동 재개 호출부만 trigger:"auto"를 보내고, 사용자 명시 호출부는 보내지 않는다 */
 function testClientWiringSendsCorrectTrigger() {
   const wizardSource = readSource(WIZARD);

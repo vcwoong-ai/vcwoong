@@ -459,6 +459,13 @@ export function isAIConfigured(): boolean {
   return openrouter.startsWith("sk-or-") && openrouter.length > 20;
 }
 
+export class AIServiceUnavailableError extends Error {
+  constructor() {
+    super("AI 보고서 생성 서비스가 준비되지 않았습니다. 서비스 관리자에게 문의해 주세요.");
+    this.name = "AIServiceUnavailableError";
+  }
+}
+
 export interface ClaudeMessage {
   role: "user" | "assistant";
   content: string;
@@ -1039,7 +1046,13 @@ export async function generateText(
   if (override) return override(messages, options);
 
   if (!isAIConfigured()) {
+    // 운영에서 샘플을 실제 투자자료 분석 결과로 저장하면 안 된다.
+    if (process.env.NODE_ENV === "production") throw new AIServiceUnavailableError();
     const content = generateMockContent(messages);
+    const validation = options.validate?.(content);
+    if (validation && !validation.ok) {
+      throw new QualityGateError("demo-mock", validation.reason ?? "UNKNOWN");
+    }
     await sleep(400);
     return { content, inputTokens: 0, outputTokens: 0, usedModel: "demo-mock" };
   }

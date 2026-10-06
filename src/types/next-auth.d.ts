@@ -15,6 +15,8 @@ declare module "next-auth" {
 
   interface User {
     role?: UserRole;
+    /** Server-only; omitted from the public Session object. */
+    authSessionVersion?: string;
   }
 }
 
@@ -22,5 +24,6 @@ declare module "next-auth/jwt" {
   interface JWT {
     id: string;
     role?: UserRole;
+    authSessionVersion?: string;
   }
 }

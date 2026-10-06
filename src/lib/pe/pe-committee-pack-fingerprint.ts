@@ -3,13 +3,13 @@
  *
  * Node의 `crypto` 모듈을 쓴다 — 이 파일은 서버 전용이다. 클라이언트
  * 컴포넌트에서 import하면 안 된다(`crypto` import가 그대로 클라이언트
- * 번들에 실려 나간다). "위원회 자료" 탭은 fingerprint가 필요 없다 —
- * `pe-committee-pack.ts`의 `buildPECommitteePackContent()`만 쓴다.
- * fingerprint는 리뷰 서명(REVIEWED)의 유효성을 서버가 판정할 때만
- * 쓰인다(§Step18 10 — 클라이언트는 이 값을 계산도, 제출도 하지 않는다).
+ * 번들에 실려 나간다). 화면은 browser-safe shared material을 WebCrypto로
+ * 해시하여 비교용 expectedFingerprint를 제출한다. 저장되는 fingerprint는
+ * 항상 서버가 같은 트랜잭션에서 독립 계산한 값이다.
  */
 
 import { createHash } from "crypto";
+import { evidenceRequestsMaterial } from "./pe-committee-pack-material";
 import { buildPECommitteePackContent, type PECommitteePackInput } from "./pe-committee-pack";
 import type { PEICDecision } from "./pe-ic-decision-types";
 import type { PEEvidenceRequestView } from "./pe-ic-review-types";
@@ -17,12 +17,6 @@ import type { PECommitteePack } from "./pe-committee-pack-types";
 
 function sha256(value: unknown): string {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
-}
-
-function evidenceRequestsMaterial(evidenceRequests: PEEvidenceRequestView[]) {
-  return [...evidenceRequests]
-    .sort((a, b) => a.id.localeCompare(b.id))
-    .map((r) => ({ id: r.id, reviewItemSourceId: r.reviewItemSourceId, status: r.status, linkedDocumentId: r.linkedDocumentId }));
 }
 
 export interface PECommitteePackFingerprintBreakdown {

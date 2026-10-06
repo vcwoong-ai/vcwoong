@@ -1,7 +1,7 @@
 "use client";
 import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -33,11 +33,13 @@ const DISPLAY_STATE_VARIANT: Record<string, StatusTone> = {
 export function MaDealCommitteePackReviewPanel({
   maDealId,
   currentUserId,
+  displayedFingerprint,
   canEdit,
   onReviewChanged,
 }: {
   maDealId: string;
   currentUserId: string;
+  displayedFingerprint: string | null;
   canEdit: boolean;
   /** PR #111 — 서명 상태 변경/코멘트 작성이 성공할 때마다 호출된다. 이
    * 패널 자신의 `refresh()`와는 별개로, 형제 컴포넌트(검토 이력/Audit
@@ -53,68 +55,106 @@ export function MaDealCommitteePackReviewPanel({
   const [draftComment, setDraftComment] = useState("");
   const [newComment, setNewComment] = useState("");
   const [busy, setBusy] = useState(false);
+  const [reviewHold, setReviewHold] = useState<string | null>(null);
+  const pending = useRef(false);
+  const readSequence = useRef(0);
+  const resourceKey = `${maDealId}:${currentUserId}:${canEdit}`;
+  const latestResource = useRef(resourceKey);
+  latestResource.current = resourceKey;
+  const alive = useRef(true);
+  const contextKey = `${maDealId}:${currentUserId}:${canEdit}:${displayedFingerprint}`;
+  const latestContext = useRef(contextKey);
+  latestContext.current = contextKey;
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
 
   const refresh = async () => {
+    const resource = resourceKey;
+    const sequence = ++readSequence.current;
+    const current = () => alive.current && latestResource.current === resource && readSequence.current === sequence;
     setLoading(true);
     try {
       const [reviewsRes, commentsRes] = await Promise.all([
         fetch(`/api/ma-deals/${maDealId}/ic-review-signoff`),
         fetch(`/api/ma-deals/${maDealId}/ic-review-signoff/comments?targetType=COMMITTEE_PACK`),
       ]);
-      if (reviewsRes.ok) {
-        const json = await reviewsRes.json();
-        setReviews(json.data ?? []);
-        const own = (json.data ?? []).find((r: PEICReviewView) => r.reviewerId === currentUserId);
-        if (own?.comment) setDraftComment(own.comment);
-      }
-      if (commentsRes.ok) {
-        const json = await commentsRes.json();
-        setComments(json.data ?? []);
-      }
+      if (!current()) return;
+      if (!reviewsRes.ok || !commentsRes.ok) throw new Error("Review read unavailable");
+      const [reviewJson, commentJson] = await Promise.all([reviewsRes.json(), commentsRes.json()]);
+      if (!current()) return;
+      if (!Array.isArray(reviewJson.data) || !Array.isArray(commentJson.data)) throw new Error("Review read invalid");
+      setReviews(reviewJson.data);
+      setComments(commentJson.data);
+      const own = reviewJson.data.find((r: PEICReviewView) => r.reviewerId === currentUserId);
+      if (own?.comment) setDraftComment(own.comment);
       setLoaded(true);
     } catch {
-      toast.error("검토 현황을 불러오지 못했습니다");
+      if (current()) { setLoaded(false); toast.error("검토 현황을 불러오지 못했습니다"); }
     } finally {
-      setLoading(false);
+      if (current()) setLoading(false);
     }
   };
 
   useEffect(() => {
-    if (!loaded && !loading) refresh();
+    setLoaded(false);
+    setReviews([]);
+    setComments([]);
+    setDraftComment("");
+    setReviewHold(null);
+    refresh();
+    const sequenceRef = readSequence;
+    return () => { sequenceRef.current++; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaded, loading]);
+  }, [maDealId, currentUserId, canEdit]);
 
   const ownReview = reviews.find((r) => r.reviewerId === currentUserId);
   const otherReviews = reviews.filter((r) => r.reviewerId !== currentUserId);
 
   const submitStatus = async (status: "IN_REVIEW" | "CHANGES_REQUESTED" | "REVIEWED") => {
+    if (!canEdit || pending.current || reviewHold) return;
+    if (status === "REVIEWED" && !displayedFingerprint) return;
     if (status === "CHANGES_REQUESTED" && !draftComment.trim()) {
       toast.error("변경 요청에는 코멘트가 필요합니다");
       return;
     }
+    const submittedContext = contextKey;
+    const current = () => alive.current && latestContext.current === submittedContext;
+    pending.current = true;
     setBusy(true);
     try {
       const res = await fetch(`/api/ma-deals/${maDealId}/ic-review-signoff`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status, comment: draftComment.trim() || undefined }),
+        body: JSON.stringify({ status, comment: draftComment.trim() || undefined,
+          ...(status === "REVIEWED" ? { expectedFingerprint: displayedFingerprint } : {}),
+        }),
       });
+      if (!current()) return;
+      if (res.status === 409) {
+        setReviewHold("자료가 변경되었거나 다른 검토가 진행되었습니다. 최신 자료를 불러와 다시 확인해 주세요.");
+        return;
+      }
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error ?? "상태 변경 실패");
+        if (res.status >= 500) setReviewHold("저장 결과를 확인하지 못했습니다. 최신 자료와 검토 이력을 확인해 주세요.");
+        toast.error("검토 상태를 변경하지 못했습니다");
+        return;
       }
       toast.success("검토 상태를 업데이트했습니다");
       await refresh();
-      onReviewChanged?.();
-    } catch (e) {
-      toast.error("상태 변경 실패", { description: e instanceof Error ? e.message : "다시 시도해 주세요" });
+      if (current()) onReviewChanged?.();
+    } catch {
+      if (current()) {
+        setReviewHold("저장 결과를 확인하지 못했습니다. 최신 자료와 검토 이력을 확인해 주세요.");
+        toast.error("검토 상태를 변경하지 못했습니다");
+      }
     } finally {
-      setBusy(false);
+      pending.current = false;
+      if (alive.current) setBusy(false);
     }
   };
 
   const submitComment = async () => {
-    if (!newComment.trim()) return;
+    if (!canEdit || pending.current || !newComment.trim()) return;
+    pending.current = true;
     setBusy(true);
     try {
       const res = await fetch(`/api/ma-deals/${maDealId}/ic-review-signoff/comments`, {
@@ -123,21 +163,29 @@ export function MaDealCommitteePackReviewPanel({
         body: JSON.stringify({ targetType: "COMMITTEE_PACK", text: newComment.trim() }),
       });
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error ?? "코멘트 작성 실패");
+        throw new Error("코멘트 작성 실패");
       }
       setNewComment("");
       await refresh();
       onReviewChanged?.();
-    } catch (e) {
-      toast.error("코멘트 작성 실패", { description: e instanceof Error ? e.message : "다시 시도해 주세요" });
+    } catch {
+      if (alive.current) toast.error("코멘트 작성 실패");
     } finally {
-      setBusy(false);
+      pending.current = false;
+      if (alive.current) setBusy(false);
     }
   };
 
   return (
     <div className="space-y-4">
+      {!loaded && !loading && <div role="alert" className="rounded-md border p-3 text-sm">
+        검토 현황을 확인하지 못했습니다. <Button size="sm" variant="outline" onClick={refresh}>검토 현황 다시 조회</Button>
+      </div>}
+      {reviewHold && <div role="alert" className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+        <p>{reviewHold}</p>
+        <Button size="sm" variant="outline" className="mt-2" onClick={() => window.location.reload()}>최신 자료 다시 불러오기</Button>
+      </div>}
+
       {ownReview?.displayState === "RE_REVIEW_REQUIRED" && (
         <div className="flex items-start gap-1.5 text-xs text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2">
           <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
@@ -171,13 +219,13 @@ export function MaDealCommitteePackReviewPanel({
           />
           {canEdit ? (
             <div className="flex items-center gap-2 flex-wrap">
-              <Button size="sm" variant="outline" disabled={busy} onClick={() => submitStatus("IN_REVIEW")}>
+              <Button size="sm" variant="outline" disabled={busy || !!reviewHold} onClick={() => submitStatus("IN_REVIEW")}>
                 검토 시작
               </Button>
-              <Button size="sm" variant="outline" disabled={busy} onClick={() => submitStatus("CHANGES_REQUESTED")}>
+              <Button size="sm" variant="outline" disabled={busy || !!reviewHold} onClick={() => submitStatus("CHANGES_REQUESTED")}>
                 변경 요청
               </Button>
-              <Button size="sm" disabled={busy} onClick={() => submitStatus("REVIEWED")}>
+              <Button size="sm" disabled={busy || !!reviewHold || !displayedFingerprint || loading || !loaded} onClick={() => submitStatus("REVIEWED")}>
                 검토 완료
               </Button>
             </div>

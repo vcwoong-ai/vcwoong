@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import {
   Radar,
   RadarChart,
@@ -94,6 +94,27 @@ function toRadarData(score: DealScore) {
   }));
 }
 
+function isScoreData(value: unknown): value is DealScore | null {
+  if (value === null) return true;
+  if (!value || typeof value !== "object") return false;
+  const score = value as Record<string, unknown>;
+  if (!["overall", ...SCORE_DIMENSIONS.map(d => d.key)].every(key => typeof score[key] === "number" && Number.isFinite(score[key]))) return false;
+  if (score.rationale != null && (typeof score.rationale !== "object" || Object.values(score.rationale).some(item => typeof item !== "string"))) return false;
+  if (score.evidenceAssessment != null) {
+    if (typeof score.evidenceAssessment !== "object") return false;
+    const assessment = score.evidenceAssessment as Record<string, unknown>;
+    const confidence = (item: unknown) => typeof item === "string" && Object.hasOwn(CONFIDENCE_META, item);
+    const strings = (items: unknown) => Array.isArray(items) && items.every(item => typeof item === "string");
+    if (!confidence(assessment.overallConfidence) || !strings(assessment.riskFlags)
+      || !assessment.dimensions || typeof assessment.dimensions !== "object"
+      || Object.values(assessment.dimensions).some(item => item != null && (typeof item !== "object" || !confidence(item.confidence)))
+      || !assessment.icSummary || typeof assessment.icSummary !== "object") return false;
+    const summary = assessment.icSummary as Record<string, unknown>;
+    if (![summary.strengths, summary.risks, summary.unresolved].every(strings)) return false;
+  }
+  return true;
+}
+
 export function DealScoreRadar({
   dealId,
   canEdit,
@@ -109,39 +130,78 @@ export function DealScoreRadar({
   const [loading, setLoading] = useState(true);
   const [computing, setComputing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [readError, setReadError] = useState<string | null>(null);
+  const request = useRef<{ epoch: number; controller?: AbortController }>({ epoch: 0 });
+  const resource = useRef(dealId);
+  resource.current = dealId;
+  const mutation = useRef({ epoch: 0 });
+  const active = useRef(true);
 
   const load = useCallback(async () => {
+    request.current.controller?.abort();
+    const controller = new AbortController();
+    const epoch = ++request.current.epoch;
+    request.current.controller = controller;
+    const current = () => active.current && resource.current === dealId && request.current.epoch === epoch && !controller.signal.aborted;
     setLoading(true);
+    setReadError(null);
+    setScore(null);
+    setBenchmark(null);
     try {
-      const res = await fetch(`/api/deals/${dealId}/score`);
-      if (res.ok) {
-        const json = await res.json();
+      const res = await fetch(`/api/deals/${dealId}/score`, { signal: controller.signal });
+      if (!res.ok) throw new Error("read_failed");
+      const json = await res.json();
+      if (!isScoreData(json.data)) throw new Error("read_failed");
+      if (current()) {
         setScore(json.data);
         setBenchmark(json.benchmark ?? null);
       }
+    } catch {
+      if (current()) setReadError("점수를 불러오지 못했습니다. 연결과 로그인 상태를 확인한 뒤 다시 조회해주세요.");
     } finally {
-      setLoading(false);
+      if (current()) setLoading(false);
     }
   }, [dealId]);
 
   useEffect(() => {
-    load();
+    active.current = true;
+    setError(null);
+    setComputing(false);
+    void load();
+    const pending = request.current;
+    const mutations = mutation.current;
+    return () => {
+      active.current = false;
+      mutations.epoch++;
+      pending.epoch++;
+      pending.controller?.abort();
+    };
   }, [load]);
 
   const compute = async () => {
+    const token = ++mutation.current.epoch;
+    const current = () => active.current && resource.current === dealId && mutation.current.epoch === token;
+    request.current.controller?.abort();
+    request.current.epoch++;
     setComputing(true);
+    setLoading(false);
     setError(null);
     try {
       const res = await fetch(`/api/deals/${dealId}/score`, { method: "POST" });
+      if (!res.ok) throw new Error(res.status === 503 ? "점수 계산 서비스를 사용할 수 없습니다. 잠시 후 다시 시도해주세요."
+        : res.status === 429 ? "요청 한도에 도달했습니다. 잠시 후 다시 시도해주세요."
+        : "점수를 계산하지 못했습니다. 연결과 로그인 상태를 확인해주세요.");
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "점수 계산 실패");
+      if (!isScoreData(json.data) || json.data === null) throw new Error("invalid_score");
+      if (!current()) return;
       setScore(json.data);
       await load(); // 벤치마크는 GET에서만 계산하므로 재계산 후 다시 불러온다
-      onComputed?.();
+      if (current()) onComputed?.();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "점수 계산 실패");
+      if (current()) setError(e instanceof Error && ["점수 계산 서비스를 사용할 수 없습니다. 잠시 후 다시 시도해주세요.", "요청 한도에 도달했습니다. 잠시 후 다시 시도해주세요.", "점수를 계산하지 못했습니다. 연결과 로그인 상태를 확인해주세요."].includes(e.message)
+        ? e.message : "점수를 계산하지 못했습니다. 연결과 로그인 상태를 확인해주세요.");
     } finally {
-      setComputing(false);
+      if (current()) setComputing(false);
     }
   };
 
@@ -152,6 +212,13 @@ export function DealScoreRadar({
         점수 불러오는 중...
       </div>
     );
+  }
+
+  if (readError) {
+    return <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+      <p role="alert" className="text-sm text-red-700">{readError}</p>
+      <Button variant="outline" size="sm" className="mt-3" onClick={() => void load()}>점수 다시 조회</Button>
+    </div>;
   }
 
   const assessment = score?.evidenceAssessment;
@@ -183,7 +250,7 @@ export function DealScoreRadar({
       </p>
 
       {error && (
-        <p className="mt-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1.5">
+        <p role="alert" className="mt-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1.5">
           {error}
         </p>
       )}

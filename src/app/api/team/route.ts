@@ -4,7 +4,7 @@ import { z } from "zod";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { requireFeature } from "@/lib/plan-gates";
-import { getUserTeamContext } from "@/lib/team-access";
+import { getUserTeamContext, canManageTeam, lockTeamManagementContext } from "@/lib/team-access";
 
 const createSchema = z.object({
   name: z.string().min(1, "팀 이름을 입력하세요").max(60),
@@ -29,7 +29,7 @@ export async function GET() {
     where: { id: ctx.teamId },
     include: {
       users: {
-        select: { id: true, name: true, email: true, role: true },
+        select: { id: true, name: true, email: true, role: true, teamRole: true },
         orderBy: { createdAt: "asc" },
       },
       _count: {
@@ -44,7 +44,12 @@ export async function GET() {
     },
   });
 
-  return NextResponse.json({ data: team });
+  return NextResponse.json({ data: team ? {
+    ...team,
+    users: team.users.map(({ teamRole, ...member }) => ({ ...member, role: teamRole ?? member.role, isOwner: member.id === team.ownerUserId })),
+    canManage: canManageTeam(ctx.role, ctx.isTeamOwner),
+    canChangeRoles: ctx.isTeamOwner || ctx.role === "ADMIN",
+  } : null });
 }
 
 export async function POST(request: NextRequest) {
@@ -69,16 +74,20 @@ export async function POST(request: NextRequest) {
     const { name } = createSchema.parse(body);
 
     const team = await prisma.$transaction(async (tx) => {
-      const created = await tx.team.create({ data: { name } });
-      await tx.user.update({
-        where: { id: session.user.id },
-        data: { teamId: created.id },
+      const created = await tx.team.create({ data: { name, ownerUserId: session.user.id } });
+      const claimed = await tx.user.updateMany({
+        where: { id: session.user.id, teamId: null },
+        data: { teamId: created.id, teamRole: "ANALYST" },
       });
+      if (claimed.count !== 1) throw new Error("TEAM_MEMBERSHIP_CONFLICT");
       return created;
     });
 
     return NextResponse.json({ data: team }, { status: 201 });
   } catch (error) {
+    if (error instanceof Error && error.message === "TEAM_MEMBERSHIP_CONFLICT") {
+      return NextResponse.json({ error: "이미 팀에 소속되어 있습니다" }, { status: 409 });
+    }
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: error.issues[0]?.message }, { status: 400 });
     }
@@ -98,7 +107,7 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: "소속된 팀이 없습니다" }, { status: 404 });
   }
 
-  if (ctx.role !== "ADMIN" && ctx.role !== "PARTNER") {
+  if (!canManageTeam(ctx.role, ctx.isTeamOwner)) {
     return NextResponse.json({ error: "팀 이름 변경 권한이 없습니다" }, { status: 403 });
   }
 
@@ -106,11 +115,12 @@ export async function PATCH(request: NextRequest) {
     const body = await request.json();
     const { name } = patchSchema.parse(body);
 
-    const team = await prisma.team.update({
-      where: { id: ctx.teamId },
-      data: { name },
+    const team = await prisma.$transaction(async (tx) => {
+      const current = await lockTeamManagementContext(tx, session.user.id, ctx.teamId!);
+      if (!current || !canManageTeam(current.role, current.isTeamOwner)) return null;
+      return tx.team.update({ where: { id: ctx.teamId! }, data: { name } });
     });
-
+    if (!team) return NextResponse.json({ error: "팀 이름 변경 권한이 없습니다" }, { status: 403 });
     return NextResponse.json({ data: team });
   } catch (error) {
     if (error instanceof z.ZodError) {

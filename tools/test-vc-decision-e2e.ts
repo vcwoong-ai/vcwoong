@@ -1,3 +1,4 @@
+import { assertE2ETarget, assertNoExternalE2ECredentials, assertCleanE2EWorkspace, chromiumLaunchOptions } from "./helpers/e2e-environment";
 /**
  * VC 결정 워크스페이스 종합 브라우저 E2E.
  *
@@ -16,9 +17,13 @@ import { buildScoreEvidenceAssessment } from "../src/lib/deal-scoring-evidence";
 import { SCORE_DIMENSIONS } from "../src/lib/deal-scoring-shared";
 
 const BASE = (process.argv[2] ?? process.env.E2E_TEST_URL ?? "http://localhost:3000").replace(/\/$/, "");
+assertE2ETarget(BASE);
+assertNoExternalE2ECredentials();
+assertCleanE2EWorkspace();
+const prisma = new PrismaClient();
 const EMAIL = process.env.SMOKE_EMAIL ?? "demo@dealmind.kr";
 const PASSWORD = process.env.SMOKE_PASSWORD ?? "Demo1234!";
-const prisma = new PrismaClient();
+
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error("FAIL: " + msg);
@@ -66,7 +71,7 @@ async function main() {
   });
   console.log(`딜 생성: ${deal.id} / 보고서: ${report.id}\n`);
 
-  const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH ?? "/opt/pw-browsers/chromium" });
+  const browser = await chromium.launch(chromiumLaunchOptions());
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   const page = await ctx.newPage();
   const consoleErrors: string[] = [];

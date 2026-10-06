@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { publicTemplate } from "@/lib/upload-security";
 import {
   getUserTeamContext,
   templateReadWhere,
@@ -27,7 +28,7 @@ export async function GET(
     return NextResponse.json({ error: "템플릿을 찾을 수 없습니다" }, { status: 404 });
   }
 
-  return NextResponse.json({ data: template });
+  return NextResponse.json({ data: publicTemplate(template) });
 }
 
 export async function DELETE(

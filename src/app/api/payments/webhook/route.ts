@@ -1,88 +1,55 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { parseCustomerKeyUserId } from "@/lib/brand";
-import { cancelSubscription } from "@/lib/subscription";
-import { getPayment, verifyTossWebhookSecret } from "@/lib/payments/toss";
+import { withBillingEventService } from "@/lib/payments/billing-runtime";
+import { isSubscriptionCheckoutReady } from "@/lib/payments/checkout-readiness";
 
-/**
- * Toss 결제 웹훅.
- *
- * 이 엔드포인트는 인증 없이 외부에 열려 있으므로, 본문 값을 그대로 믿고
- * DB를 바꾸면 안 된다. customerKey는 `dealmind-<userId>` 형태라 추측이 쉬워서,
- * 검증 없이 BILLING_DELETED를 받아주면 아무나 남의 구독을 해지시킬 수 있다.
- *
- * 두 겹으로 막는다:
- *   1. 공유 시크릿 헤더(TOSS_WEBHOOK_SECRET) — 미설정 시 상태 변경 거부(fail-closed)
- *   2. 결제 이벤트는 Toss API로 실제 상태를 되물어 확인
- */
+export const maxDuration = 10;
+const headers = { "Cache-Control": "private, no-store" };
 
-interface TossWebhookBody {
-  eventType?: string;
-  data?: {
-    paymentKey?: string;
-    orderId?: string;
-    status?: string;
-    customerKey?: string;
-    totalAmount?: number;
-  };
+/** Bound unauthenticated input before parsing. Never retain/log keys, provider bodies or refs. */
+async function readEvent(request: NextRequest): Promise<unknown> {
+  if (!request.body) throw new Error("Invalid event");
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > 32_768) throw new Error("Invalid event");
+      chunks.push(value);
+    }
+    const bytes = new Uint8Array(total);
+    let offset = 0;
+    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+    return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+  } finally { await reader.cancel().catch(() => {}); reader.releaseLock(); }
 }
 
+/** General payment webhooks have no documented Toss signature/custom shared-secret header.
+ * Body fields only locate a known intent; the service verifies status through a server GET.
+ * https://docs.tosspayments.com/reference/using-api/webhook-events
+ */
 export async function POST(request: NextRequest) {
+  let body: unknown;
+  try { body = await readEvent(request); }
+  catch { return NextResponse.json({ error: "invalid_event" }, { status: 400, headers }); }
+  if (body && typeof body === "object" && !Array.isArray(body) &&
+      (body as Record<string, unknown>).eventType === "BILLING_DELETED") {
+    // No independent deletion proof: even customer/billing-key-shaped bodies have no effects.
+    return NextResponse.json({ ok: true, reviewRequired: true }, { status: 202, headers });
+  }
+  if (!isSubscriptionCheckoutReady()) {
+    return NextResponse.json({ error: "not_ready" }, { status: 503, headers });
+  }
   try {
-    if (!verifyTossWebhookSecret(request.headers)) {
-      // 미설정이면 설정하라고 알리고, 상태는 건드리지 않는다.
-      if (!process.env.TOSS_WEBHOOK_SECRET?.trim()) {
-        console.error(
-          "[Toss] TOSS_WEBHOOK_SECRET 미설정 — 웹훅 이벤트를 무시했습니다. " +
-            "Toss 개발자센터의 웹훅 시크릿을 환경변수에 넣어야 구독 해지 등이 반영됩니다."
-        );
-      } else {
-        console.warn("[Toss] 웹훅 시크릿 불일치 — 요청을 거부했습니다.");
-      }
-      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    const outcome = await withBillingEventService(service => service.handle(body));
+    if (!outcome || ["RETRY", "STALE"].includes(outcome)) {
+      return NextResponse.json({ error: "retry_required" }, { status: 503, headers });
     }
-
-    const body = (await request.json()) as TossWebhookBody;
-    const { eventType, data } = body;
-
-    if (!eventType || !data) {
-      return NextResponse.json({ ok: true });
-    }
-
-    if (eventType === "PAYMENT_STATUS_CHANGED" && data.paymentKey) {
-      // 본문의 status를 믿지 않고 Toss에 실제 상태를 되묻는다.
-      const payment = await getPayment(data.paymentKey);
-      if (!payment) {
-        console.warn(
-          `[Toss] 결제 조회 실패로 웹훅 무시: paymentKey=${data.paymentKey}`
-        );
-        return NextResponse.json({ ok: true });
-      }
-      if (payment.status === "CANCELED" || payment.status === "PARTIAL_CANCELED") {
-        await prisma.subscriptionPayment.updateMany({
-          where: { paymentKey: data.paymentKey },
-          data: { status: payment.status },
-        });
-      }
-    }
-
-    if (eventType === "BILLING_DELETED" && data.customerKey) {
-      const userId = parseCustomerKeyUserId(data.customerKey);
-      if (userId) {
-        // 존재하는 사용자에 대해서만 처리한다.
-        const user = await prisma.user.findUnique({
-          where: { id: userId },
-          select: { id: true },
-        });
-        if (user) {
-          await cancelSubscription(userId);
-        }
-      }
-    }
-
-    return NextResponse.json({ ok: true });
-  } catch (error) {
-    console.error("Toss webhook error:", error);
-    return NextResponse.json({ ok: false }, { status: 500 });
+    if (outcome === "RATE_LIMITED") return NextResponse.json({ error: "rate_limited" }, { status: 429, headers });
+    return NextResponse.json({ ok: true, reviewRequired: ["UNVERIFIED", "HOLD"].includes(outcome) }, { headers });
+  } catch {
+    return NextResponse.json({ error: "retry_required" }, { status: 503, headers });
   }
 }

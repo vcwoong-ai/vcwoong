@@ -18,6 +18,8 @@ import { Progress } from "@/components/ui/progress";
 import { ArrowLeft, Loader2, Sparkles } from "lucide-react";
 import { formatKoreanDateTime } from "@/lib/utils";
 import { safeReadJson } from "@/lib/safe-fetch";
+import { isReportFinalized } from "@/lib/report-completion";
+import { reportReviewVersion } from "@/lib/report-review-version";
 import { SECTION_META } from "@/types";
 import {
   runBatchImprove,
@@ -34,7 +36,7 @@ interface ReportSection {
   content: string;
   order: number;
   status: "DRAFT" | "REVIEWED" | "APPROVED";
-  feedback: string | null;
+  feedback?: string | null;
 }
 
 interface Report {
@@ -244,11 +246,29 @@ export function ReportPageClient({
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const [pageStatus, setPageStatus] = useState(report.status);
+  const [currentSections, setCurrentSections] = useState(report.sections);
+  const currentSectionsRef = useRef(report.sections);
+  const currentReportIdRef = useRef(report.id);
+  const finalizePendingRef = useRef(false);
+  const finalizeEpochRef = useRef(0);
 
   // 다른 보고서로 이동해도 컴포넌트가 재사용될 수 있어 서버 상태와 다시 맞춘다
   useEffect(() => {
     setPageStatus(report.status);
   }, [report.id, report.status]);
+  useEffect(() => {
+    currentReportIdRef.current = report.id;
+    currentSectionsRef.current = report.sections;
+    setCurrentSections(report.sections);
+  }, [report.id, report.sections]);
+  useEffect(() => {
+    finalizePendingRef.current = false;
+    return () => {
+      // Request epoch cleanup deliberately invalidates unfinished callbacks.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      finalizeEpochRef.current++;
+    };
+  }, [report.id]);
   const [qualityRefreshKey, setQualityRefreshKey] = useState(0);
   const [decisionRefreshKey, setDecisionRefreshKey] = useState(0);
   const [improveRequest, setImproveRequest] = useState<{
@@ -338,23 +358,33 @@ export function ReportPageClient({
   };
 
   const handleFinalize = async () => {
+    if (!canEdit || finalizePendingRef.current) return;
+    finalizePendingRef.current = true;
+    const reportId = report.id;
+    const epoch = finalizeEpochRef.current;
+    const isCurrent = () => currentReportIdRef.current === reportId && epoch === finalizeEpochRef.current;
+    const snapshot = currentSectionsRef.current;
     setIsFinalizing(true);
     try {
-      const response = await fetch(`/api/reports/${report.id}`, {
+      const expectedReviewVersion = await reportReviewVersion(snapshot);
+      if (!isCurrent()) return;
+      const response = await fetch(`/api/reports/${reportId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "FINAL", approveAllSections: true }),
+        body: JSON.stringify({ status: "FINAL", approveAllSections: true, expectedReviewVersion }),
       });
       if (!response.ok) {
         const err = await response.json();
         throw new Error(err.error ?? "완성 처리 실패");
       }
-      window.location.reload();
-    } catch (error) {
-      toast.error("완성 처리 실패", {
-        description: error instanceof Error ? error.message : "다시 시도해 주세요",
-      });
-      setIsFinalizing(false);
+      if (isCurrent()) window.location.reload();
+    } catch {
+      if (isCurrent()) toast.error("완성 처리 결과를 확인하지 못했습니다", { description: "최신 본문과 승인 상태를 다시 확인해 주세요." });
+    } finally {
+      if (isCurrent()) {
+        finalizePendingRef.current = false;
+        setIsFinalizing(false);
+      }
     }
   };
 
@@ -455,7 +485,11 @@ export function ReportPageClient({
     }
   };
 
-  const statusDisplay = STATUS_DISPLAY[pageStatus] ?? {
+  const needsReview = (pageStatus === "FINAL" || pageStatus === "EXPORTED") && !isReportFinalized(pageStatus, currentSections);
+  const statusDisplay = needsReview ? {
+    label: "검토 필요",
+    className: "bg-amber-100 text-amber-700",
+  } : STATUS_DISPLAY[pageStatus] ?? {
     label: pageStatus,
     className: "bg-gray-100 text-gray-600",
   };
@@ -659,12 +693,19 @@ export function ReportPageClient({
 
       <ReportEditor
         reportId={report.id}
-        sections={report.sections}
+        sections={currentSections}
         dealName={`${report.deal.companyName} 투자심의보고서`}
         onExport={() => handleExport("docx")}
         onExportPptx={() => handleExport("pptx")}
         isExporting={isExporting}
         reportStatus={pageStatus}
+        onSectionsChanged={(next) => {
+          currentSectionsRef.current = next;
+          setCurrentSections(next);
+          if (next.some(section => section.status !== "APPROVED")) {
+            setPageStatus(current => current === "FINAL" || current === "EXPORTED" ? "REVIEW" : current);
+          }
+        }}
         onFinalize={canEdit ? handleFinalize : undefined}
         isFinalizing={isFinalizing}
         onRegenerate={canEdit ? handleRegenerate : undefined}
@@ -673,6 +714,10 @@ export function ReportPageClient({
         onSectionRegenerated={() =>
           setQualityRefreshKey((k) => k + 1)
         }
+        onSectionSaved={() => {
+          setQualityRefreshKey((k) => k + 1);
+          setDecisionRefreshKey((k) => k + 1);
+        }}
         improveRequest={canEdit ? improveRequest : null}
         onImproveHandled={() => setImproveRequest(null)}
         nimConfigured={nimConfigured}

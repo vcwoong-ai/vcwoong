@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { consumeResetToken } from "@/lib/password-reset";
+import { resetPasswordWithToken } from "@/lib/password-reset";
 import { checkRateLimit, clientIp } from "@/lib/rate-limit";
 
 const schema = z.object({
@@ -21,37 +21,32 @@ const schema = z.object({
 const LIMIT = { limit: 20, windowMs: 15 * 60 * 1000 };
 
 export async function POST(request: NextRequest) {
-  const ip = clientIp(request);
-  const rate = await checkRateLimit(
-    `reset-password:${ip}`,
-    LIMIT.limit,
-    LIMIT.windowMs
-  );
-  if (!rate.allowed) {
-    return NextResponse.json(
-      { error: "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요." },
-      { status: 429, headers: { "Retry-After": String(rate.retryAfterSec) } }
-    );
-  }
-
   try {
+    const ip = clientIp(request);
+    const rate = await checkRateLimit(
+      `reset-password:${ip}`,
+      LIMIT.limit,
+      LIMIT.windowMs
+    );
+    if (!rate.allowed) {
+      return NextResponse.json(
+        { error: "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요." },
+        { status: 429, headers: { "Retry-After": String(rate.retryAfterSec) } }
+      );
+    }
+
     const { email, token, password } = schema.parse(await request.json());
 
-    const verifiedEmail = await consumeResetToken(email, token);
-    if (!verifiedEmail) {
+    const passwordHash = await bcrypt.hash(password, 12);
+    const outcome = await resetPasswordWithToken(email, token, passwordHash);
+    if (outcome === "invalid") {
       return NextResponse.json(
         { error: "링크가 만료되었거나 유효하지 않습니다. 재설정을 다시 요청해 주세요." },
         { status: 400 }
       );
     }
 
-    const passwordHash = await bcrypt.hash(password, 12);
-    const updated = await prisma.user.updateMany({
-      where: { email: verifiedEmail },
-      data: { passwordHash },
-    });
-
-    if (updated.count === 0) {
+    if (outcome === "account_missing") {
       return NextResponse.json(
         { error: "계정을 찾을 수 없습니다." },
         { status: 400 }
@@ -69,7 +64,7 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-    console.error("Reset password error:", error);
+    console.error("Password reset failed");
     return NextResponse.json(
       { error: "비밀번호 재설정 중 오류가 발생했습니다" },
       { status: 500 }

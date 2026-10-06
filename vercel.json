@@ -2,14 +2,39 @@
   "buildCommand": "npm run vercel-build",
   "devCommand": "next dev",
   "framework": "nextjs",
-  "regions": ["icn1"],
+  "regions": [
+    "icn1"
+  ],
   "functions": {
-    "src/app/api/reports/[id]/run/route.ts": { "maxDuration": 240 },
-    "src/app/api/deals/[id]/reports/route.ts": { "maxDuration": 240 },
-    "src/app/api/cron/resume-generations/route.ts": { "maxDuration": 240 },
-    "src/app/api/upload/route.ts": { "maxDuration": 60 }
+    "src/app/api/reports/[id]/run/route.ts": {
+      "maxDuration": 240
+    },
+    "src/app/api/deals/[id]/reports/route.ts": {
+      "maxDuration": 240
+    },
+    "src/app/api/cron/resume-generations/route.ts": {
+      "maxDuration": 240
+    },
+    "src/app/api/cron/resume-uploads/route.ts": {
+      "maxDuration": 240
+    },
+    "src/app/api/upload/route.ts": {
+      "maxDuration": 60
+    }
   },
   "crons": [
-    { "path": "/api/cron/resume-generations", "schedule": "*/15 * * * *" }
-  ]
+    {
+      "path": "/api/cron/resume-generations",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/resume-uploads",
+      "schedule": "7,22,37,52 * * * *"
+    }
+  ],
+  "git": {
+    "deploymentEnabled": {
+      "codex/cloud-migration-20261006": false
+    }
+  }
 }

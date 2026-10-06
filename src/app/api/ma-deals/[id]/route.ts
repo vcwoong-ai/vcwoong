@@ -75,7 +75,7 @@ export async function PATCH(
         { status: 400 }
       );
     }
-    console.error("MADeal update error:", error);
+    console.error("PE_DEAL_UPDATE_FAILED");
     return NextResponse.json(
       { error: "PE 딜 수정 중 오류가 발생했습니다" },
       { status: 500 }

@@ -170,7 +170,8 @@ export async function POST(
         { status: 409 }
       );
     }
-    console.error("MAFinancialPeriod creation error:", error);
+    // Prisma diagnostics can include submitted financial values; keep server logs scalar.
+    console.error("MAFinancialPeriod creation error");
     return NextResponse.json(
       { error: "재무 데이터 생성 중 오류가 발생했습니다" },
       { status: 500 }

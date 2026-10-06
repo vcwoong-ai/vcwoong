@@ -41,6 +41,7 @@ export function MaDealDataRoom({
   findings,
   evidenceRequests,
   loading,
+  canEdit = false,
 }: {
   dealId: string;
   documents: DataRoomDocumentRow[];
@@ -48,6 +49,7 @@ export function MaDealDataRoom({
   findings: DataRoomFindingRow[];
   evidenceRequests: PEEvidenceRequestView[];
   loading: boolean;
+  canEdit?: boolean;
 }) {
   const [typeFilter, setTypeFilter] = useState<string>("ALL");
   const [selected, setSelected] = useState<DataRoomDocumentView | null>(null);
@@ -135,6 +137,7 @@ export function MaDealDataRoom({
                         <div className="flex items-center gap-2 min-w-0">
                           <FileText className="w-3.5 h-3.5 text-gray-400 shrink-0" />
                           <button type="button" onClick={(event) => { opener.current = event.currentTarget; setSelected(doc); }} className="text-left font-medium text-primary underline-offset-2 hover:underline focus-visible:underline">{doc.name}</button>
+                          <a href={`/api/ma-deals/${dealId}/documents/${doc.id}/download`} className="shrink-0 text-xs text-primary underline" aria-label={`${doc.name} 원본 다운로드`}>원본 다운로드</a>
                         </div>
                       </td>
                       <td className="px-4 py-2.5">
@@ -166,6 +169,7 @@ export function MaDealDataRoom({
 
       <MaDealDocumentDetailDialog
         dealId={dealId}
+        canEdit={canEdit}
         returnFocusRef={opener}
         document={selected}
         linkedEvidenceRequests={selected ? evidenceRequests.filter((r) => r.linkedDocumentId === selected.id) : []}

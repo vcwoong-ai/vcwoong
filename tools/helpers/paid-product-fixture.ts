@@ -1,5 +1,5 @@
 /** Disposable product fixtures; existing demo accounts/data are never touched. */
-import assert from "node:assert/strict";
+import { assertCleanE2EWorkspace, assertE2ETarget, assertNoExternalE2ECredentials } from "./e2e-environment";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { traceReportEvidence } from "../../src/lib/evidence";
@@ -89,7 +89,9 @@ async function createPeExample(prisma: PrismaClient, userId: string) {
 }
 
 export async function createPaidProductFixture(prisma: PrismaClient) {
-  assert.equal(process.env.DATABASE_URL, "file:./dev.db", "local fixture only");
+  assertCleanE2EWorkspace();
+  assertE2ETarget(process.env.BASE_URL || "http://localhost:3100");
+  assertNoExternalE2ECredentials();
   const password = "PaidFixture2026!";
   const owner = await prisma.user.create({ data: {
     email: `paid-owner-${Date.now()}@example.com`, name: "제품 검토 (합성 계정)",
@@ -134,6 +136,7 @@ export async function createPaidProductFixture(prisma: PrismaClient) {
       ] },
     } });
     await prisma.deal.create({ data: { name: "보고서 미작성 (예시)", companyName: "자료 대기 VC 기업 (예시 데이터)", sector: "GENERAL", userId: owner.id } });
-    return { owner, password, peDeal, vcDeal, report, cleanup };
+    if (!owner.email) throw new Error("Synthetic fixture owner requires an email.");
+    return { owner: { ...owner, email: owner.email }, password, peDeal, vcDeal, report, cleanup };
   } catch (error) { await cleanup(); throw error; }
 }

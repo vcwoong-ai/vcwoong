@@ -3,15 +3,8 @@ import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { checkQuota } from "@/lib/quotas";
-
-const ALLOWED_CONTENT_TYPES = [
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-  "application/msword",
-  "application/vnd.ms-powerpoint",
-];
-
-const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+import { createUploadGrant, verifyUploadGrant } from "@/lib/upload-security";
+import { assertPrivateBlobUploads } from "@/lib/storage";
 
 /**
  * Vercel 서버리스 함수는 요청 본문이 4.5MB를 넘으면 플랫폼 단에서 차단하므로,
@@ -24,22 +17,33 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
   const userId = session.user.id;
 
-  const body = (await request.json()) as HandleUploadBody;
-
   try {
+    assertPrivateBlobUploads();
+    const body = await request.json();
+    if (body.type === "upload.prepare") {
+      const quota = await checkQuota(userId, "template");
+      if (!quota.allowed) return NextResponse.json({ error: quota.message }, { status: 429 });
+      return NextResponse.json(createUploadGrant({ userId, scope: "template", fileName: body.fileName, mimeType: body.mimeType, fileSize: body.fileSize }));
+    }
+    if (body.type !== "blob.generate-client-token") return NextResponse.json({ error: "잘못된 요청입니다" }, { status: 400 });
     const jsonResponse = await handleUpload({
-      body,
+      body: body as HandleUploadBody,
       request,
-      onBeforeGenerateToken: async () => {
+      onBeforeGenerateToken: async (pathname, clientPayload) => {
+        const payload = clientPayload ? JSON.parse(clientPayload) : {};
+        const claims = verifyUploadGrant(payload.binding, userId, "template");
+        if (claims.pathname !== pathname) throw new Error("업로드 승인과 경로가 다릅니다");
         const quota = await checkQuota(userId, "template");
         if (!quota.allowed) {
           throw new Error(quota.message);
         }
 
         return {
-          allowedContentTypes: ALLOWED_CONTENT_TYPES,
-          maximumSizeInBytes: MAX_FILE_SIZE,
+          allowedContentTypes: [claims.mimeType],
+          maximumSizeInBytes: claims.fileSize,
+          validUntil: claims.expiresAt,
           addRandomSuffix: false,
+          allowOverwrite: false,
           tokenPayload: JSON.stringify({ userId }),
         };
       },

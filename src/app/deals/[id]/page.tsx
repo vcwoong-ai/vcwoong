@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { redirect, notFound } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { publicDocument } from "@/lib/upload-security";
 import { isAIConfigured } from "@/lib/claude";
 import { AppLayout } from "@/components/layout/app-layout";
 import { DealDetailClient } from "./deal-detail-client";
@@ -75,7 +76,7 @@ export default async function DealDetailPage({
     <AppLayout title={deal.companyName}>
       <Suspense fallback={<div className="p-8 text-center text-gray-400">로딩 중...</div>}>
         <DealDetailClient
-          deal={JSON.parse(JSON.stringify(deal))}
+          deal={JSON.parse(JSON.stringify({ ...deal, documents: deal.documents.map(publicDocument) }))}
           demoMode={!isAIConfigured()}
           currentUserId={session.user.id}
           userTeamId={teamId}

@@ -1,16 +1,17 @@
-/** Actual NextAuth/register HTTP + browser regression. Local SQLite only; no production data. */
+/** Actual NextAuth/register HTTP + browser regression. Isolated test targets only. */
 import assert from "node:assert/strict";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { chromium } from "playwright";
 import { gotoAppReady } from "./helpers/app-ready";
+import { assertE2ETarget, assertNoExternalE2ECredentials, assertCleanE2EWorkspace, chromiumLaunchOptions } from "./helpers/e2e-environment";
 
 const base = process.env.BASE_URL ?? "http://localhost:3000";
 async function main() {
-  assert.equal(process.env.DATABASE_URL, "file:./dev.db");
-  const target = new URL(base);
-  assert.ok(target.protocol === "http:" && target.hostname === "localhost" && ["3000", "3001"].includes(target.port), "local review server only");
+  assertE2ETarget(base);
+  assertNoExternalE2ECredentials();
+  assertCleanE2EWorkspace();
   const db = new PrismaClient();
   const stamp = Date.now();
   const suffix = stamp.toString(16).slice(-4);
@@ -29,7 +30,7 @@ async function main() {
     const legacy = await db.user.create({ data: { email: legacyEmail, name: "로그인 검토 예시", passwordHash: hash, role: "ANALYST" } });
     const original = await db.user.findUniqueOrThrow({ where: { id: legacy.id } });
     for (const email of [collision, collision.toLowerCase()]) await db.user.create({ data: { email, passwordHash: hash } });
-    browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH });
+    browser = await chromium.launch(chromiumLaunchOptions());
     const context = await browser.newContext({ extraHTTPHeaders: { "x-forwarded-for": ip } });
     await context.route("**/*", route => new URL(route.request().url()).hostname === "localhost" ? route.continue() : route.abort());
     async function login(email: string, secret: string, id?: string) {

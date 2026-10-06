@@ -10,6 +10,33 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: dealmind_ci
+          POSTGRES_PASSWORD: ci-only-disposable
+          POSTGRES_DB: dealmind_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U dealmind_ci -d dealmind_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    # Synthetic credentials for the disposable service only; no repository secrets.
+    env:
+      DATABASE_URL: postgresql://dealmind_ci:ci-only-disposable@127.0.0.1:5432/dealmind_test
+      TEST_DATABASE_URL: postgresql://dealmind_ci:ci-only-disposable@127.0.0.1:5432/dealmind_test
+      SCHEMA_CHECK_DATABASE_URL: postgresql://dealmind_ci:ci-only-disposable@127.0.0.1:5432/dealmind_test
+      DEALMIND_E2E_ISOLATED: "1"
+      BASE_URL: http://localhost:3100
+      NEXTAUTH_URL: http://localhost:3100
+      NEXTAUTH_SECRET: ci-only-disposable-session-signing-value
+      CRON_SECRET: ci-only-disposable-cron-signing-value
+      NEXT_TELEMETRY_DISABLED: "1"
+      STORAGE_MODE: local
+      UPLOAD_DIR: ./.e2e-uploads
     steps:
       - uses: actions/checkout@v4
 
@@ -18,14 +45,14 @@ jobs:
           node-version: 20
           cache: npm
 
-      # postinstall의 prisma generate가 DATABASE_URL 없이도 돌도록 더미 값을 준다.
       - name: Install
         run: npm ci
-        env:
-          DATABASE_URL: postgresql://user:pass@localhost:5432/db
 
       - name: Typecheck
         run: npx tsc --noEmit
+
+      - name: Typecheck security and integration tools
+        run: npx tsc -p tsconfig.e2e.json
 
       - name: Lint
         run: npm run lint
@@ -33,8 +60,39 @@ jobs:
       - name: Offline tests
         run: npm run test:all
 
+      - name: Initialize disposable test schema
+        run: |
+          npm run test:integration-preflight
+          npx prisma db push --skip-generate
+
+      - name: Verify test schema readiness
+        run: npm run db:check-schema
+
       - name: Build
         run: npm run build
-        env:
-          DATABASE_URL: postgresql://user:pass@localhost:5432/db
-          NEXTAUTH_SECRET: ci-dummy-secret
+
+      - name: Install Chromium for isolated browser checks
+        run: npx playwright install --with-deps chromium
+
+      - name: HTTP authentication and authorization integration
+        shell: bash
+        run: |
+          node node_modules/next/dist/bin/next start -p 3100 > /tmp/dealmind-ci.log 2>&1 &
+          app_pid=$!
+          trap 'kill "$app_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://localhost:3100/api/auth/csrf > /dev/null; then
+              ready=1
+              break
+            fi
+            if ! kill -0 "$app_pid" 2>/dev/null; then
+              echo "Isolated application exited before readiness."
+              exit 1
+            fi
+            sleep 1
+          done
+          test "$ready" = "1"
+          npm run test:auth-authorization-integration
+          npm run test:upload-recovery-integration
+          npm run test:isolated-browser-e2e

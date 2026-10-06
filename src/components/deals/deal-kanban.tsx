@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { DealStage, DealSector } from "@prisma/client";
 import { FileText, Upload, GripVertical } from "lucide-react";
@@ -51,16 +51,18 @@ interface DealKanbanProps {
   canEditDeal?: (deal: DealForKanban) => boolean;
 }
 
-function DealMiniCard({ deal, onDragStart, canDrag }: {
+function DealMiniCard({ deal, onDragStart, canDrag, saving, onStageChange }: {
   deal: DealForKanban;
   onDragStart: (e: React.DragEvent) => void;
   canDrag: boolean;
+  saving: boolean;
+  onStageChange: (stage: DealStage) => void;
 }) {
   const latestReport = deal.reports[0];
   return (
     <div
-      draggable={canDrag}
-      onDragStart={canDrag ? onDragStart : undefined}
+      draggable={canDrag && !saving}
+      onDragStart={canDrag && !saving ? onDragStart : undefined}
       className={cn(
         "bg-white rounded-lg border border-gray-200 p-3 hover:shadow-sm transition-shadow group",
         canDrag ? "cursor-grab active:cursor-grabbing" : "cursor-default"
@@ -111,6 +113,17 @@ function DealMiniCard({ deal, onDragStart, canDrag }: {
               <FileText className="w-3 h-3" />{deal.reports.length}
             </span>
           </div>
+          {canDrag && <div className="mt-3">
+            <label className="block text-xs text-gray-500 mb-1" htmlFor={`stage-${deal.id}`}>검토 단계</label>
+            <select id={`stage-${deal.id}`} aria-label={`${deal.companyName} 검토 단계`}
+              className="w-full min-h-10 rounded border border-gray-200 bg-white px-2 text-sm"
+              value={deal.stage} disabled={saving}
+              onPointerDown={event => event.stopPropagation()}
+              onDragStart={event => event.preventDefault()}
+              onChange={event => onStageChange(event.target.value as DealStage)}>
+              {STAGE_COLUMNS.map(column => <option key={column.key} value={column.key}>{STAGE_LABEL[column.key]}</option>)}
+            </select>
+          </div>}
         </div>
       </div>
     </div>
@@ -121,6 +134,18 @@ export function DealKanban({ deals, onStageChange, canEditDeal }: DealKanbanProp
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOverStage, setDragOverStage] = useState<DealStage | null>(null);
   const [localDeals, setLocalDeals] = useState(deals);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const pending = useRef(false);
+  const lifecycle = useRef({ active: true, version: 0 });
+  useEffect(() => {
+    const current = lifecycle.current;
+    current.active = true;
+    current.version++;
+    setLocalDeals(deals);
+    return () => { current.active = false; current.version++; };
+  }, [deals]);
 
   const dealsByStage = STAGE_COLUMNS.reduce((acc, col) => {
     acc[col.key] = localDeals.filter((d) => d.stage === col.key);
@@ -128,6 +153,7 @@ export function DealKanban({ deals, onStageChange, canEditDeal }: DealKanbanProp
   }, {} as Record<DealStage, DealForKanban[]>);
 
   const handleDragStart = (e: React.DragEvent, dealId: string) => {
+    if (pending.current) { e.preventDefault(); return; }
     setDraggingId(dealId);
     e.dataTransfer.effectAllowed = "move";
   };
@@ -138,41 +164,41 @@ export function DealKanban({ deals, onStageChange, canEditDeal }: DealKanbanProp
     setDragOverStage(stage);
   };
 
-  const handleDrop = async (e: React.DragEvent, newStage: DealStage) => {
-    e.preventDefault();
-    if (!draggingId) return;
-
-    const deal = localDeals.find((d) => d.id === draggingId);
-    if (!deal || deal.stage === newStage) {
-      setDraggingId(null);
-      setDragOverStage(null);
-      return;
-    }
-    if (canEditDeal && !canEditDeal(deal)) {
-      setDraggingId(null);
-      setDragOverStage(null);
-      return;
-    }
-
-    // 낙관적 업데이트
-    setLocalDeals((prev) =>
-      prev.map((d) => d.id === draggingId ? { ...d, stage: newStage } : d)
-    );
-    setDraggingId(null);
-    setDragOverStage(null);
-
-    // API 호출
+  const changeStage = async (dealId: string, newStage: DealStage) => {
+    const deal = localDeals.find(d => d.id === dealId);
+    if (pending.current || !deal || deal.stage === newStage || !STAGE_COLUMNS.some(column => column.key === newStage)
+      || (canEditDeal && !canEditDeal(deal))) return;
+    pending.current = true;
+    const version = lifecycle.current.version;
+    setSaving(true);
+    setError(null);
+    setNotice(null);
     try {
-      await onStageChange(draggingId, newStage);
+      await onStageChange(dealId, newStage);
+      if (lifecycle.current.active) {
+        if (version === lifecycle.current.version) setLocalDeals(previous => previous.map(item => item.id === dealId ? { ...item, stage: newStage } : item));
+        setNotice("검토 단계를 저장했습니다.");
+      }
     } catch {
-      // 실패 시 롤백
-      setLocalDeals((prev) =>
-        prev.map((d) => d.id === draggingId ? { ...d, stage: deal.stage } : d)
-      );
+      if (lifecycle.current.active) setError("단계 변경 결과를 확인하지 못했습니다. 목록을 새로고침해 저장된 단계를 확인한 뒤 다시 시도해주세요.");
+    } finally {
+      pending.current = false;
+      if (lifecycle.current.active) setSaving(false);
     }
   };
 
+  const handleDrop = async (e: React.DragEvent, newStage: DealStage) => {
+    e.preventDefault();
+    const dealId = draggingId;
+    setDraggingId(null);
+    setDragOverStage(null);
+    if (dealId) await changeStage(dealId, newStage);
+  };
+
   return (
+    <div className="space-y-3">
+      {error && <p role="alert" className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+      <p role="status" className="text-sm text-gray-500">{saving ? "검토 단계 저장 중..." : notice ?? "각 카드의 검토 단계 선택으로도 이동할 수 있습니다."}</p>
     <div className="flex gap-4 overflow-x-auto pb-4 min-h-[600px]">
       {STAGE_COLUMNS.map((col) => {
         const colDeals = dealsByStage[col.key] ?? [];
@@ -209,6 +235,8 @@ export function DealKanban({ deals, onStageChange, canEditDeal }: DealKanbanProp
                   key={deal.id}
                   deal={deal}
                   canDrag={!canEditDeal || canEditDeal(deal)}
+                  saving={saving}
+                  onStageChange={stage => void changeStage(deal.id, stage)}
                   onDragStart={(e) => handleDragStart(e, deal.id)}
                 />
               ))}
@@ -224,6 +252,7 @@ export function DealKanban({ deals, onStageChange, canEditDeal }: DealKanbanProp
           </div>
         );
       })}
+    </div>
     </div>
   );
 }

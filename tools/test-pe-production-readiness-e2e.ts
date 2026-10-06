@@ -13,61 +13,85 @@
  * 3. (회귀) 검토 완료 → 재검토 전체 사이클이 여전히 정상 동작하는가(축약).
  *
  * Usage:
- *   npm run db:setup:local
- *   npm run dev:local          # 다른 터미널에서 서버 실행 후
+ *   configure isolated PostgreSQL dealmind_test + matching TEST_DATABASE_URL
+ *   start a clean loopback test app against that database          # 다른 터미널에서 서버 실행 후
  *   npm run test:pe-production-readiness-e2e
  */
-import { chromium } from "playwright";
-import { PrismaClient } from "@prisma/client";
+import { chromium, type Browser, type BrowserContext } from "playwright";
+import { createPEBrowserActor } from "./helpers/pe-browser-actor";
+import { assertE2ETarget, assertNoExternalE2ECredentials, assertCleanE2EWorkspace, chromiumLaunchOptions } from "./helpers/e2e-environment";
 
 const BASE = (process.argv[2] ?? process.env.E2E_TEST_URL ?? "http://localhost:3000").replace(/\/$/, "");
-const EMAIL = process.env.SMOKE_EMAIL ?? "demo@dealmind.kr";
-const PASSWORD = process.env.SMOKE_PASSWORD ?? "Demo1234!";
+let stage = "environment";
 
-const prisma = new PrismaClient();
+async function restrictNetwork(context: BrowserContext) {
+  const origin = new URL(BASE).origin;
+  await context.route("**/*", async route => {
+    let allowed = false;
+    try { allowed = new URL(route.request().url()).origin === origin; } catch { /* refuse malformed URLs */ }
+    if (allowed && new URL(route.request().url()).pathname === "/_vercel/speed-insights/script.js") {
+      await route.fulfill({ status: 200, contentType: "application/javascript", body: "/* Explicit isolated telemetry stub; no collection. */" });
+      return;
+    }
+    if (allowed) await route.continue();
+    else await route.abort("blockedbyclient");
+  });
+}
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error("FAIL: " + msg);
 }
 
 async function main() {
-  console.log(`\n=== PE Production Readiness E2E(PR #112) — 대상: ${BASE} ===\n`);
-
-  const demo = await prisma.user.findUnique({ where: { email: EMAIL }, select: { id: true, teamId: true } });
-  assert(!!demo, `${EMAIL} 유저를 찾을 수 없음 — npm run db:setup:local을 먼저 실행하세요`);
-
-  // ── Fixture: 서로 다른 값의 REVENUE 2건 → factConflict가 실제로 발생하는 딜 ──
-  const deal = await prisma.mADeal.create({
-    data: { name: `E2E 재무모순 테스트 ${Date.now()}`, companyName: "E2E재무모순 주식회사", dealType: "BUYOUT", userId: demo!.id, teamId: demo!.teamId },
-  });
-  const period = await prisma.mAFinancialPeriod.create({
-    data: { maDealId: deal.id, fiscalYear: 2025, periodType: "ANNUAL", startDate: new Date("2025-01-01"), endDate: new Date("2025-12-31"), currency: "KRW" },
-  });
-  await prisma.mAFinancialLineItem.create({
-    data: { financialPeriodId: period.id, statementType: "INCOME_STATEMENT", lineItem: "REVENUE", value: 1_000_000_000, currency: "KRW", source: "DART" },
-  });
-  await prisma.mAFinancialLineItem.create({
-    data: { financialPeriodId: period.id, statementType: "INCOME_STATEMENT", lineItem: "REVENUE", value: 1_200_000_000, currency: "KRW", source: "MANUAL" },
-  });
-  // Data Room select 축소 검증용 문서 1건(parsedText를 일부러 크게 채운다).
-  await prisma.mADocument.create({
-    data: { maDealId: deal.id, name: "대용량 실사자료.pdf", type: "DD_MATERIAL", url: "https://example.com/doc.pdf", size: 1024, mimeType: "application/pdf", parsedText: "x".repeat(50_000) },
-  });
-  console.log(`딜 생성(재무 모순 + 대용량 문서 1건): ${deal.id}\n`);
-
-  const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
-  const page = await browser.newPage();
-  const consoleErrors: string[] = [];
-  page.on("console", (m) => {
-    if (m.type() === "error") consoleErrors.push(m.text().slice(0, 200));
-  });
-  page.on("pageerror", (e) => consoleErrors.push(`PAGEERROR: ${e.message.slice(0, 200)}`));
+  assertE2ETarget(BASE);
+  assertNoExternalE2ECredentials();
+  assertCleanE2EWorkspace();
+  const { PrismaClient } = await import("@prisma/client");
+  const prisma = new PrismaClient({ log: [] });
+  let actor: Awaited<ReturnType<typeof createPEBrowserActor>> | undefined;
+  let dealId: string | undefined;
+  let browser: Browser | undefined;
+  let mobileBrowser: Browser | undefined;
+  console.log("PE Production Readiness isolated E2E");
 
   try {
+    stage = "fixtures";
+    actor = await createPEBrowserActor(prisma);
+
+    // ── Fixture: 서로 다른 값의 REVENUE 2건 → factConflict가 실제로 발생하는 딜 ──
+    const deal = await prisma.mADeal.create({
+      data: { name: `E2E 재무모순 테스트 ${Date.now()}`, companyName: "E2E재무모순 주식회사", dealType: "BUYOUT", userId: actor.user.id, teamId: actor.user.teamId },
+    });
+    dealId = deal.id;
+    const period = await prisma.mAFinancialPeriod.create({
+      data: { maDealId: deal.id, fiscalYear: 2025, periodType: "ANNUAL", startDate: new Date("2025-01-01"), endDate: new Date("2025-12-31"), currency: "KRW" },
+    });
+    await prisma.mAFinancialLineItem.create({
+      data: { financialPeriodId: period.id, statementType: "INCOME_STATEMENT", lineItem: "REVENUE", value: 1_000_000_000, currency: "KRW", source: "DART" },
+    });
+    await prisma.mAFinancialLineItem.create({
+      data: { financialPeriodId: period.id, statementType: "INCOME_STATEMENT", lineItem: "REVENUE", value: 1_200_000_000, currency: "KRW", source: "MANUAL" },
+    });
+    // Data Room select 축소 검증용 문서 1건(parsedText를 일부러 크게 채운다).
+    await prisma.mADocument.create({
+      data: { maDealId: deal.id, name: "대용량 실사자료.pdf", type: "DD_MATERIAL", url: "private-local:synthetic-document", size: 1024, mimeType: "application/pdf", parsedText: "x".repeat(50_000) },
+    });
+    console.log("Synthetic conflict/document fixtures created");
+
+    browser = await chromium.launch(chromiumLaunchOptions());
+    const desktopContext = await browser.newContext({ serviceWorkers: "block" });
+    await restrictNetwork(desktopContext);
+    const page = await desktopContext.newPage();
+    stage = "desktop-login";
+    let consoleErrorCount = 0;
+    page.on("console", (m) => {
+      if (m.type() === "error") consoleErrorCount++;
+    });
+    page.on("pageerror", () => { consoleErrorCount++; });
     await page.goto(`${BASE}/login`, { waitUntil: "networkidle" });
     await page.waitForTimeout(1500); // 로그인 폼 하이드레이션 대기 — 그 전에 제출하면 세션이 잡히기 전에 다음 화면으로 넘어간다
-    await page.fill("#email", EMAIL);
-    await page.fill("#password", PASSWORD);
+    await page.fill("#email", actor.user.email);
+    await page.fill("#password", actor.password);
     await page.click('button[type="submit"]');
     await page.waitForURL(/dashboard/, { timeout: 30000 });
     console.log("✅ 1 — 로그인 성공");
@@ -76,6 +100,7 @@ async function main() {
     await page.waitForTimeout(1500);
     await page.waitForSelector('[role="tab"]', { timeout: 45000 });
 
+    stage = "conflict-and-documents";
     // ── 2. Overview 탭 — 핵심 재무 지표 카드에 모순 경고가 떠야 함 ────────
     await page.waitForSelector("text=핵심 재무 지표", { timeout: 15000 });
     await page.waitForSelector("text=모순", { timeout: 15000 });
@@ -115,6 +140,7 @@ async function main() {
     );
     console.log("✅ 6 — documents API 응답에 parsedText가 전혀 실리지 않음(select 축소가 실제로 적용됨)");
 
+    stage = "review-regression";
     // ── 7. 회귀 축약: 검토 완료 → 재검토 사이클이 여전히 동작하는가 ──────
     await page.getByRole("tab", { name: "위원회 자료" }).click({ timeout: 45000 });
     await page.waitForTimeout(1000);
@@ -136,15 +162,19 @@ async function main() {
     await page.waitForSelector("text=Review #1", { timeout: 15000 });
     console.log("✅ 7 — 검토 완료 → 스냅샷 생성까지 PR#111의 핵심 사이클이 이번 변경 이후에도 회귀 없이 동작함");
 
+    stage = "mobile-regression";
     // ── 8. 모바일 폭(390px) — 새로 추가된 경고 배지가 있어도 오버플로 없음 ──
     await browser.close();
-    const mobileBrowser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
-    const mobileContext = await mobileBrowser.newContext({ viewport: { width: 390, height: 800 }, isMobile: true, hasTouch: true });
+    mobileBrowser = await chromium.launch(chromiumLaunchOptions());
+    const mobileContext = await mobileBrowser.newContext({ viewport: { width: 390, height: 800 }, isMobile: true, hasTouch: true, serviceWorkers: "block" });
+    await restrictNetwork(mobileContext);
     const mobilePage = await mobileContext.newPage();
+    mobilePage.on("console", message => { if (message.type() === "error") consoleErrorCount++; });
+    mobilePage.on("pageerror", () => { consoleErrorCount++; });
     await mobilePage.goto(`${BASE}/login`, { waitUntil: "networkidle" });
     await mobilePage.waitForTimeout(1500); // 로그인 폼 하이드레이션 대기 — 그 전에 제출하면 세션이 잡히기 전에 다음 화면으로 넘어간다
-    await mobilePage.fill("#email", EMAIL);
-    await mobilePage.fill("#password", PASSWORD);
+    await mobilePage.fill("#email", actor.user.email);
+    await mobilePage.fill("#password", actor.password);
     await mobilePage.click('button[type="submit"]');
     await mobilePage.waitForURL(/dashboard/, { timeout: 30000 });
     await mobilePage.goto(`${BASE}/ma-deals/${deal.id}`, { waitUntil: "networkidle" });
@@ -155,33 +185,39 @@ async function main() {
     await mobilePage.waitForSelector("text=모순", { timeout: 15000 });
     const overflow = await mobilePage.evaluate((vw) => {
       const panel = document.querySelector('[role="tabpanel"]');
-      return panel ? panel.scrollWidth > vw + 1 : false;
+      return panel ? panel.scrollWidth > vw + 1 : true; // Missing panel fails.
     }, 390);
     assert(!overflow, "390px 폭에서 재무 모순 경고 배지가 추가돼도 위원회 자료 탭 패널에 가로 넘침이 없어야 함");
     await mobileContext.close();
     await mobileBrowser.close();
     console.log("✅ 8 — 모바일 폭(390px)에서 새 경고 배지 포함해도 가로 넘침 없음");
 
-    const relevantErrors = consoleErrors.filter(
-      (e) =>
-        !e.includes("ERR_TUNNEL_CONNECTION_FAILED") &&
-        !e.includes("Text content did not match") &&
-        !e.includes("Text content does not match server-rendered HTML") &&
-        !e.includes("error while hydrating this Suspense boundary")
-    );
-    assert(relevantErrors.length === 0, `테스트 중 (사전 존재 이슈를 제외한) 콘솔 에러가 발생하면 안 됨, 실제: ${JSON.stringify(relevantErrors.slice(0, 5))}`);
+    assert(consoleErrorCount === 0, "테스트 중 콘솔 오류가 발생하면 안 됨");
     console.log("\n✅ PE Production Readiness E2E 전체 통과\n");
   } finally {
-    await browser.close().catch(() => {});
-    await prisma.pEICAuditEvent.deleteMany({ where: { maDealId: deal.id } });
-    await prisma.pEICReviewSnapshot.deleteMany({ where: { maDealId: deal.id } });
-    await prisma.mADeal.delete({ where: { id: deal.id } }).catch(() => {});
-    await prisma.$disconnect();
+    try {
+      await Promise.allSettled([mobileBrowser?.close(), browser?.close()]);
+    } finally {
+      try {
+        if (dealId) {
+          await prisma.$transaction([
+            prisma.pEICAuditEvent.deleteMany({ where: { maDealId: dealId } }),
+            prisma.pEICReviewSnapshot.deleteMany({ where: { maDealId: dealId } }),
+            prisma.mADeal.deleteMany({ where: { id: dealId } }),
+          ]);
+        }
+      } finally {
+        try {
+          await actor?.cleanup();
+        } finally {
+          await prisma.$disconnect();
+        }
+      }
+    }
   }
 }
 
-main().catch(async (error) => {
-  console.error("\n❌ 실패:", error);
-  await prisma.$disconnect().catch(() => {});
-  process.exit(1);
+main().catch(() => {
+  console.error(`PE readiness E2E failed at fixed stage: ${stage}`);
+  process.exitCode = 1;
 });

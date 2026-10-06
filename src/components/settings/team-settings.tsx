@@ -14,11 +14,15 @@ interface TeamMember {
   name: string | null;
   email: string | null;
   role: string;
+  isOwner: boolean;
 }
 
 interface TeamData {
   id: string;
   name: string;
+  ownerUserId: string | null;
+  canManage: boolean;
+  canChangeRoles: boolean;
   users: TeamMember[];
   _count: {
     deals: number;
@@ -27,6 +31,16 @@ interface TeamData {
     portfolioCompanies: number;
     inboundDeals: number;
   };
+}
+
+interface TeamInvitation {
+  id: string;
+  status: string;
+  expiresAt: string;
+  role: string;
+  team: { name: string };
+  invitedBy: { name: string | null };
+  target: { name: string | null; email: string | null };
 }
 
 const ROLE_LABEL: Record<string, string> = {
@@ -50,14 +64,17 @@ export function TeamSettings({
   const [inviteEmail, setInviteEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [invitations, setInvitations] = useState<{ incoming: TeamInvitation[]; outgoing: TeamInvitation[] }>({ incoming: [], outgoing: [] });
+  const [successorId, setSuccessorId] = useState("");
 
   const load = async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/team");
-      if (!res.ok) throw new Error("팀 정보를 불러올 수 없습니다");
-      const json = await res.json();
+      const [res, invitationRes] = await Promise.all([fetch("/api/team"), fetch("/api/team/invitations")]);
+      if (!res.ok || !invitationRes.ok) throw new Error("팀 정보를 불러올 수 없습니다");
+      const [json, invitationJson] = await Promise.all([res.json(), invitationRes.json()]);
+      setInvitations(invitationJson.data);
       setTeam(json.data);
       if (json.data?.name) setTeamName(json.data.name);
     } catch (e) {
@@ -68,8 +85,7 @@ export function TeamSettings({
   };
 
   useEffect(() => {
-    if (canUseTeam) load();
-    else setLoading(false);
+    load();
   }, [canUseTeam]);
 
   const createTeam = async () => {
@@ -186,26 +202,59 @@ export function TeamSettings({
     }
   };
 
-  if (!canUseTeam) {
+  const respondInvitation = async (id: string, action: "accept" | "reject" | "cancel") => {
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/team/invitations/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }) });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "초대 처리 실패");
+      await load();
+    } catch (e) {
+      toast.error("초대 처리 실패", { description: e instanceof Error ? e.message : "다시 시도해 주세요" });
+      await load();
+    } finally { setBusy(false); }
+  };
+
+  const transferOwnership = async () => {
+    if (!successorId) return;
+    if (!await confirm({ title: "팀 소유권을 이전할까요?", description: "선택한 멤버가 팀 소유자가 됩니다. 내 권한은 기존 팀 역할을 따릅니다.", confirmLabel: "소유권 이전", destructive: true })) return;
+    setBusy(true);
+    try {
+      const res = await fetch("/api/team/ownership", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: successorId }) });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "소유권 이전 실패");
+      setSuccessorId("");
+      await load();
+    } catch (e) { toast.error("소유권 이전 실패", { description: e instanceof Error ? e.message : "다시 시도해 주세요" }); }
+    finally { setBusy(false); }
+  };
+
+  const invitationLabels: Record<string, string> = { PENDING: "대기", ACCEPTED: "수락", REJECTED: "거절", EXPIRED: "만료", CANCELLED: "취소" };
+  const inbox = <div className="space-y-2" data-testid="team-invitation-inbox">
+    <h3 className="font-medium">받은 팀 초대 · 최근 30건</h3>
+    <p className="text-xs text-gray-500">초대는 앱 안에서 확인합니다. 외부 이메일은 발송하지 않습니다. 수락해도 개인 구독 플랜은 바뀌지 않습니다.</p>
+    {invitations.incoming.length === 0 ? <p className="text-sm text-gray-500">받은 초대가 없습니다.</p> : invitations.incoming.map((invitation) => <div key={invitation.id} className="border rounded-lg p-3 flex flex-wrap items-center justify-between gap-2">
+      <div className="text-sm"><strong>{invitation.team.name}</strong> · {invitation.invitedBy.name ?? "팀 관리자"} · {invitationLabels[invitation.status] ?? invitation.status}<p className="text-xs text-gray-500">만료: {new Date(invitation.expiresAt).toLocaleString("ko-KR")} · 팀 역할: {ROLE_LABEL[invitation.role] ?? invitation.role}</p></div>
+      {invitation.status === "PENDING" && <div className="flex gap-2"><Button size="sm" onClick={() => respondInvitation(invitation.id, "accept")} disabled={busy || !!team}>수락</Button><Button size="sm" variant="outline" onClick={() => respondInvitation(invitation.id, "reject")} disabled={busy}>거절</Button></div>}
+    </div>)}
+    {team && invitations.incoming.some((invitation) => invitation.status === "PENDING") && <p className="text-xs text-gray-500">다른 팀에 가입하려면 현재 팀에서 먼저 나가야 합니다.</p>}
+  </div>;
+
+  if (loading) return <p className="text-sm text-gray-400">팀 정보 불러오는 중...</p>;
+  if (error) return <p className="text-sm text-red-600">{error}</p>;
+  if (!canUseTeam && !team) {
     return (
-      <p className="text-sm text-gray-500">
+      <div className="space-y-4">{inbox}<p className="text-sm text-gray-500">
         팀 협업은 Multi-Sector 플랜부터 사용할 수 있습니다. 딜·양식을 팀원과
         공유하고 함께 심사할 수 있습니다.
-      </p>
+      </p></div>
     );
-  }
-
-  if (loading) {
-    return <p className="text-sm text-gray-400">팀 정보 불러오는 중...</p>;
-  }
-
-  if (error) {
-    return <p className="text-sm text-red-600">{error}</p>;
   }
 
   if (!team) {
     return (
       <div className="space-y-4">
+        {inbox}
         <p className="text-sm text-gray-600">
           팀을 만들면 딜·양식·펀드·포트폴리오·인바운드를 팀원과 공유할 수 있습니다.
         </p>
@@ -227,18 +276,19 @@ export function TeamSettings({
   }
 
   const me = team.users.find((u) => u.id === userId);
-  const canManage = me?.role === "ADMIN" || me?.role === "PARTNER";
-  const isAdmin = me?.role === "ADMIN";
+  const canManage = team.canManage;
+  const canChangeRoles = team.canChangeRoles;
 
   return (
     <div className="space-y-5">
+      {inbox}
       <div className="flex items-center gap-2 flex-wrap">
         <Users className="w-4 h-4 text-gray-500" />
         <span className="font-medium">{team.name}</span>
         <Badge variant="secondary">{team.users.length}명</Badge>
         {me && (
           <Badge variant="outline" className="text-xs">
-            내 역할: {ROLE_LABEL[me.role] ?? me.role}
+            내 팀 역할: {me.isOwner ? "소유자" : ROLE_LABEL[me.role] ?? me.role}
           </Badge>
         )}
       </div>
@@ -246,6 +296,7 @@ export function TeamSettings({
       {canManage ? (
         <div className="flex gap-2">
           <Input
+            aria-label="팀 이름"
             value={teamName}
             onChange={(e) => setTeamName(e.target.value)}
             className="max-w-xs"
@@ -267,7 +318,7 @@ export function TeamSettings({
           인바운드 {team._count.inboundDeals ?? 0}
         </p>
         <p>
-          권한: 심사역=조회 · 파트너=편집 · 관리자=멤버/역할 관리 · 삭제·공유는 소유자만
+          팀 권한: 심사역=조회 · 파트너=편집 · 관리자·팀 소유자=역할 관리 · 삭제·공유는 자료 소유자만
         </p>
       </div>
 
@@ -285,24 +336,25 @@ export function TeamSettings({
                   <span className="text-gray-400 ml-2">{m.email}</span>
                 )}
                 <Badge variant="outline" className="ml-2 text-xs">
-                  {ROLE_LABEL[m.role] ?? m.role}
+                  {m.isOwner ? "팀 소유자" : ROLE_LABEL[m.role] ?? m.role}
                 </Badge>
               </div>
               <div className="flex items-center gap-2">
-                {isAdmin && m.id !== userId && (
+                {canChangeRoles && !m.isOwner && m.id !== userId && (
                   <select
                     className="text-xs border rounded px-1.5 py-1 bg-white"
                     value={m.role}
                     disabled={busy}
                     onChange={(e) => changeRole(m.id, e.target.value)}
-                    title="역할 변경 (관리자)"
+                    aria-label={`${m.name ?? m.email ?? "멤버"} 팀 역할 변경`}
+                    title="팀 역할 변경"
                   >
                     <option value="ANALYST">심사역 (조회)</option>
                     <option value="PARTNER">파트너 (편집)</option>
                     <option value="ADMIN">관리자</option>
                   </select>
                 )}
-                {(isAdmin || m.id === userId) && (
+                {!m.isOwner && (canManage || m.id === userId) && (
                   <Button
                     variant="ghost"
                     size="sm"
@@ -325,9 +377,10 @@ export function TeamSettings({
         </div>
       </div>
 
-      {canManage && (
+      {canManage && canUseTeam && (
         <div className="space-y-2 pt-2 border-t">
           <Label htmlFor="invite-email">멤버 초대 (가입된 이메일)</Label>
+          <p className="text-xs text-gray-500">대상자가 앱의 팀 설정에서 수락한 뒤 팀에 가입됩니다. 초대는 7일 후 만료됩니다.</p>
           <div className="flex gap-2">
             <Input
               id="invite-email"
@@ -343,6 +396,8 @@ export function TeamSettings({
           </div>
         </div>
       )}
+      {canManage && <div className="space-y-2"><h3 className="font-medium">보낸 초대 · 최근 30건</h3>{invitations.outgoing.length === 0 ? <p className="text-sm text-gray-500">보낸 초대가 없습니다.</p> : invitations.outgoing.map((invitation) => <div key={invitation.id} className="border rounded-lg p-3 flex flex-wrap justify-between items-center gap-2 text-sm"><span>{invitation.target.name ?? invitation.target.email} · {invitationLabels[invitation.status] ?? invitation.status}</span>{invitation.status === "PENDING" && <Button size="sm" variant="outline" disabled={busy} onClick={() => respondInvitation(invitation.id, "cancel")}>초대 취소</Button>}</div>)}</div>}
+      {me?.isOwner && <div className="space-y-2 border-t pt-3"><Label htmlFor="team-successor">팀 소유권 이전</Label><p className="text-xs text-gray-500">팀에서 나가려면 먼저 현재 멤버에게 소유권을 이전해야 합니다.</p><select id="team-successor" value={successorId} onChange={(e) => setSuccessorId(e.target.value)} disabled={busy} className="border rounded p-2 text-sm max-w-full"><option value="">후임 소유자 선택</option>{team.users.filter((member) => member.id !== userId).map((member) => <option key={member.id} value={member.id}>{member.name ?? member.email}</option>)}</select><Button variant="outline" disabled={busy || !successorId} onClick={transferOwnership}>소유권 이전</Button></div>}
     </div>
   );
 }

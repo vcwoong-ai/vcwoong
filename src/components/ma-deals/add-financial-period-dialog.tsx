@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import {
   Dialog,
@@ -44,12 +44,33 @@ const EOKWON = 100_000_000;
 export function AddFinancialPeriodDialog({
   maDealId,
   onCreated,
+  onReload,
 }: {
   maDealId: string;
-  onCreated: () => void | Promise<void>;
+  onCreated: () => void | boolean | Promise<void | boolean>;
+  onReload: () => void | boolean | Promise<void | boolean>;
 }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [outcomeUnknown, setOutcomeUnknown] = useState(false);
+  const pendingRef = useRef(false);
+  const requestControllerRef = useRef<AbortController | null>(null);
+  const saveConfirmedRef = useRef(false);
+  const sessionEpochRef = useRef(0);
+  const cancelSaveRequest = useCallback(() => {
+    sessionEpochRef.current++;
+    requestControllerRef.current?.abort();
+    requestControllerRef.current = null;
+    pendingRef.current = false;
+  }, []);
+  useEffect(() => {
+    setLoading(false);
+    setSaveError(null);
+    setOutcomeUnknown(false);
+    setOpen(false);
+    return cancelSaveRequest;
+  }, [maDealId, cancelSaveRequest]);
   const toast = useToast();
 
   const { register, control, handleSubmit, reset, setValue } = useForm<FormData>({
@@ -65,6 +86,7 @@ export function AddFinancialPeriodDialog({
   const { fields, append, remove } = useFieldArray({ control, name: "lineItems" });
 
   const onSubmit = async (data: FormData) => {
+    if (pendingRef.current || outcomeUnknown) return;
     const lineItems = data.lineItems
       .filter((li) => li.value.trim() !== "")
       .map((li) => ({
@@ -80,11 +102,19 @@ export function AddFinancialPeriodDialog({
       return;
     }
 
+    pendingRef.current = true;
+    const controller = new AbortController();
+    const epoch = sessionEpochRef.current;
+    requestControllerRef.current = controller;
+    saveConfirmedRef.current = false;
+    const isCurrent = () => !controller.signal.aborted && epoch === sessionEpochRef.current;
     setLoading(true);
+    setSaveError(null);
     try {
       const res = await fetch(`/api/ma-deals/${maDealId}/financials`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({
           fiscalYear: parseInt(data.fiscalYear, 10),
           periodType: data.periodType,
@@ -94,25 +124,79 @@ export function AddFinancialPeriodDialog({
           lineItems,
         }),
       });
+      if (!isCurrent()) return;
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error ?? "재무 데이터 생성 실패");
+        if (res.status >= 500) {
+          setOutcomeUnknown(true);
+          setSaveError("저장 결과를 확인하지 못했습니다. 같은 내용을 다시 저장하지 말고 재무 목록에서 결과를 확인하세요.");
+        } else {
+          setSaveError(res.status === 409
+            ? "같은 연도와 기간 유형의 재무 데이터가 이미 있습니다. 재무 목록에서 확인하세요."
+            : res.status === 401 ? "로그인이 만료되었습니다. 다시 로그인한 뒤 재무 목록을 확인하세요."
+            : res.status === 403 ? "재무 데이터를 저장할 권한이 없습니다."
+            : "재무 데이터를 저장하지 못했습니다. 입력값과 재무 목록을 확인하세요.");
+        }
+        return;
       }
+      const json = await res.json();
+      if (!isCurrent()) return;
+      if (!json.data || typeof json.data.id !== "string" || !/^[A-Za-z0-9_-]{1,200}$/.test(json.data.id)) {
+        setOutcomeUnknown(true);
+        setSaveError("저장 결과를 확인하지 못했습니다. 같은 내용을 다시 저장하지 말고 재무 목록에서 결과를 확인하세요.");
+        return;
+      }
+      saveConfirmedRef.current = true;
       toast.success("재무 기간을 추가했습니다");
       setOpen(false);
       reset();
-      await onCreated();
-    } catch (e) {
-      toast.error("재무 데이터 생성 실패", {
-        description: e instanceof Error ? e.message : "다시 시도해 주세요",
-      });
+      // The POST succeeded. A failed subsequent read must not be labelled a failed save.
+      try {
+        const refreshed = await onCreated();
+        if (isCurrent() && refreshed === false)
+          toast.error("저장 완료 · 목록 조회 필요", { description: "재무 데이터는 저장되었습니다. 재무 목록만 다시 조회해 주세요." });
+      } catch {
+        if (isCurrent()) toast.error("저장 완료 · 목록 조회 필요", { description: "재무 데이터는 저장되었습니다. 재무 목록만 다시 조회해 주세요." });
+      }
+    } catch {
+      if (!isCurrent()) return;
+      setOutcomeUnknown(true);
+      setSaveError("저장 결과를 확인하지 못했습니다. 같은 내용을 다시 저장하지 말고 재무 목록에서 결과를 확인하세요.");
     } finally {
+      if (isCurrent()) {
+        pendingRef.current = false;
+        requestControllerRef.current = null;
+        setLoading(false);
+      }
+    }
+  };
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) {
+      if (pendingRef.current && requestControllerRef.current && !saveConfirmedRef.current) {
+        setOutcomeUnknown(true);
+        setSaveError("저장 결과를 확인하지 못했습니다. 같은 내용을 다시 저장하지 말고 재무 목록에서 결과를 확인하세요.");
+      }
+      cancelSaveRequest();
       setLoading(false);
+    }
+    setOpen(nextOpen);
+  };
+
+  const verifySaveResult = async () => {
+    if (pendingRef.current) return;
+    pendingRef.current = true;
+    const epoch = sessionEpochRef.current;
+    setLoading(true);
+    try { await onReload(); }
+    catch {
+      if (epoch === sessionEpochRef.current) setSaveError("재무 목록을 조회하지 못했습니다. 저장 여부는 아직 확인하지 못했습니다. 목록에서 확인하세요.");
+    } finally {
+      if (epoch === sessionEpochRef.current) { pendingRef.current = false; setLoading(false); }
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <Button size="sm">
           <Plus className="w-4 h-4 mr-1.5" />
@@ -124,6 +208,10 @@ export function AddFinancialPeriodDialog({
           <DialogTitle>재무 기간 추가</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 mt-2">
+          {saveError && <div role="alert" data-testid="pe-financial-save-error" className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+            <p>{saveError}</p>
+            <Button type="button" variant="outline" size="sm" onClick={verifySaveResult} disabled={loading}>저장 결과 조회</Button>
+          </div>}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="space-y-1.5">
               <Label>회계연도</Label>
@@ -212,10 +300,10 @@ export function AddFinancialPeriodDialog({
           </div>
 
           <div className="flex gap-3 pt-2">
-            <Button type="button" variant="outline" className="flex-1" onClick={() => setOpen(false)}>
+            <Button type="button" variant="outline" className="flex-1" onClick={() => handleOpenChange(false)}>
               취소
             </Button>
-            <Button type="submit" className="flex-1" disabled={loading}>
+            <Button type="submit" className="flex-1" disabled={loading || outcomeUnknown}>
               {loading ? "저장 중..." : "저장"}
             </Button>
           </div>

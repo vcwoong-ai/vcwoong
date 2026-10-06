@@ -1,8 +1,8 @@
-import { AgentType, DealSector, ReportStatus } from "@prisma/client";
+import { AgentType, DealSector, ReportStatus, SectionStatus, type ReportSection } from "@prisma/client";
 import { getAgent } from "@/agents";
 import { SECTION_META, type GenerationResult } from "@/types";
 import { prisma } from "@/lib/prisma";
-import { setCurrentSection } from "@/lib/generation-progress";
+import { claimGeneration, generationLeaseWhere, sectionGenerationLeaseWhere, renewGenerationLease, GenerationLeaseLost, GENERATION_HEARTBEAT_MS, GENERATION_LEASE_MS } from "@/lib/report-generation-lease";
 import {
   extractSharedFacts,
   formatSharedFactsForPrompt,
@@ -98,35 +98,23 @@ export const MAX_AUTO_RESUME_ATTEMPTS = 30;
  * 없음). GENERATING인데 오래 갱신이 없으면(멈춘 것으로 판단) 그것도
  * 재선점 대상에 포함한다.
  */
-export async function claimPendingGeneration(reportId: string): Promise<boolean> {
-  const claimed = await prisma.report.updateMany({
-    where: {
-      id: reportId,
-      OR: [
-        { status: { not: ReportStatus.GENERATING } },
-        {
-          status: ReportStatus.GENERATING,
-          updatedAt: { lt: new Date(Date.now() - STALE_GENERATION_MS) },
-        },
-      ],
-    },
-    data: { status: ReportStatus.GENERATING },
-  });
-  return claimed.count > 0;
+export async function claimPendingGeneration(reportId: string): Promise<string | null> {
+  return prisma.$transaction((tx) => claimGeneration(tx, reportId, STALE_GENERATION_MS));
 }
 
 export interface ResumeCandidate {
   id: string;
   completedSections: number;
   autoResumeCount: number;
+  generatedAt?: Date | null;
 }
 
 /**
  * cron이 실제로 손댈 후보만 순수하게 걸러낸다(DB/네트워크 없음 — 네트워크
  * 없이 단위 테스트 가능하도록 claimPendingGeneration과 분리했다).
  *
- * - completedSections >= totalSections: 이미 끝난 보고서(정상 경로라면
- *   status가 PENDING/GENERATING일 수 없지만, 방어적으로 제외).
+ * - completedSections >= totalSections이고 완료 시각이 있는 보고서는 제외.
+ *   generatedAt:null이면 마지막 섹션 저장 뒤 중단된 것으로 보고 품질/완료 처리를 재개.
  * - autoResumeCount >= maxAutoResumeAttempts: 반복 실패로 상한 도달 —
  *   더 이상 자동 재시도하지 않고 사용자가 직접 "다시 시도"를 누르게 둔다
  *   (무한 재시도로 비용이 새는 것을 막는다).
@@ -137,7 +125,7 @@ export function selectResumableCandidates(
 ): ResumeCandidate[] {
   return candidates.filter(
     (c) =>
-      c.completedSections < opts.totalSections &&
+      (c.completedSections < opts.totalSections || c.generatedAt === null) &&
       c.autoResumeCount < opts.maxAutoResumeAttempts
   );
 }
@@ -149,23 +137,86 @@ export function selectResumableCandidates(
  */
 const QUALITY_NOTE_RE = /\n*---\n\*자동 품질 점수:[\s\S]*$/;
 
+export class GeneratedSectionConflict extends Error {
+  constructor(readonly observedReportUpdatedAt?: Date) {
+    super("Generated section snapshot changed"); this.name = "GeneratedSectionConflict";
+  }
+}
+
+/** All content writers lock the report before its sections, matching evidence verification. */
+export async function saveGeneratedSection(
+  reportId: string,
+  expected: Pick<ReportSection, "id" | "sectionKey" | "title" | "order" | "content" | "status" | "updatedAt">,
+  content: string,
+  expectedReportUpdatedAt?: Date,
+  generationToken?: string,
+  sectionGenerationToken?: string
+) {
+  return prisma.$transaction(async (tx) => {
+    const report = await tx.report.findFirst({ where: { id: reportId } });
+    if (!report) throw new GeneratedSectionConflict();
+    if ((generationToken && sectionGenerationToken) || (sectionGenerationToken && !expectedReportUpdatedAt)) throw new GeneratedSectionConflict();
+    if (!generationToken && !sectionGenerationToken && (report.status === ReportStatus.GENERATING ||
+        (report.generationClaim && report.generationLeaseExpiresAt && report.generationLeaseExpiresAt > new Date()))) throw new GeneratedSectionConflict();
+    const writeWhere = generationToken ? generationLeaseWhere(reportId, generationToken) : sectionGenerationToken
+      ? { ...sectionGenerationLeaseWhere(reportId, sectionGenerationToken), updatedAt: expectedReportUpdatedAt }
+      : { id: reportId, status: report.status, updatedAt: expectedReportUpdatedAt ?? report.updatedAt };
+    const locked = await tx.report.updateMany({
+      where: writeWhere,
+      data: { updatedAt: generationToken ? new Date() : report.updatedAt },
+    });
+    if (locked.count !== 1) throw new GeneratedSectionConflict(report.updatedAt);
+    const current = await tx.reportSection.findFirst({ where: { id: expected.id, reportId } });
+    if (!current || current.content !== expected.content || current.status !== expected.status ||
+        current.title !== expected.title || current.order !== expected.order || current.sectionKey !== expected.sectionKey ||
+        current.updatedAt.getTime() !== expected.updatedAt.getTime()) throw new GeneratedSectionConflict(report.updatedAt);
+    if (content === current.content) return current;
+    const saved = await tx.reportSection.updateMany({
+      where: { id: expected.id, reportId, content: expected.content, status: expected.status,
+        title: expected.title, order: expected.order, sectionKey: expected.sectionKey, updatedAt: expected.updatedAt },
+      data: { content, status: SectionStatus.DRAFT },
+    });
+    if (saved.count !== 1) throw new GeneratedSectionConflict(report.updatedAt);
+    const revised = await tx.report.updateMany({ where: generationToken ? generationLeaseWhere(reportId, generationToken) : sectionGenerationToken
+      ? { ...sectionGenerationLeaseWhere(reportId, sectionGenerationToken), updatedAt: expectedReportUpdatedAt } : { id: reportId }, data: {
+      updatedAt: new Date(),
+      ...(report.status === ReportStatus.FINAL || report.status === ReportStatus.EXPORTED ? { status: ReportStatus.REVIEW } : {}),
+    } });
+    if (revised.count !== 1) throw new GeneratedSectionConflict(report.updatedAt);
+    await tx.reportEvidenceCheck.deleteMany({ where: { reportId } });
+    return tx.reportSection.findFirst({ where: { id: expected.id, reportId } });
+  });
+}
+
 export async function generateSectionsAsync(
   reportId: string,
   deal: DealForGeneration,
   agentType: AgentType,
   additionalContext?: string,
-  userId?: string
+  userId?: string,
+  generationToken?: string
 ) {
+  // Never adopt a token read from the DB: only the caller that claimed work owns it.
+  if (!generationToken) return;
   const total = SECTION_META.length;
   const invocationStartedAt = Date.now();
   const deadline = invocationStartedAt + GENERATION_BUDGET_MS;
   const elapsedSec = () => ((Date.now() - invocationStartedAt) / 1000).toFixed(1);
-  setCurrentSection(reportId, "준비 중...");
+  let heartbeat: ReturnType<typeof setInterval> | undefined;
+  let heartbeatBusy = false;
+  let leaseLost = false;
   console.log(
     `[GENERATION] report=${reportId} deal=${deal.id} invocation_start budget=${(GENERATION_BUDGET_MS / 1000).toFixed(0)}s total=${total}`
   );
 
   try {
+    await renewGenerationLease(reportId, generationToken, "준비 중...");
+    heartbeat = setInterval(() => {
+      if (heartbeatBusy || leaseLost) return;
+      heartbeatBusy = true;
+      renewGenerationLease(reportId, generationToken).catch(() => { leaseLost = true; }).finally(() => { heartbeatBusy = false; });
+    }, GENERATION_HEARTBEAT_MS);
+    heartbeat.unref();
     const agent = getAgent(agentType, deal.sector);
     const results: GenerationResult[] = [];
     const sectionKeys = SECTION_META.map((s) => s.key);
@@ -175,8 +226,8 @@ export async function generateSectionsAsync(
     // 다시 AI를 호출하지 않고, 순서·문맥 일관성도 그대로 유지된다.
     const existingSections = await prisma.reportSection.findMany({
       where: { reportId },
-      select: { sectionKey: true, content: true },
     });
+    const snapshotsByKey = new Map(existingSections.map((section) => [section.sectionKey, section]));
     const existingByKey = new Map(
       existingSections.map((s) => [s.sectionKey, s.content])
     );
@@ -206,7 +257,8 @@ export async function generateSectionsAsync(
     for (let i = 0; i < sectionKeys.length; i++) {
       const sectionKey = sectionKeys[i];
       const meta = SECTION_META.find((m) => m.key === sectionKey)!;
-      setCurrentSection(reportId, meta.title);
+      if (leaseLost) throw new GenerationLeaseLost();
+      await renewGenerationLease(reportId, generationToken, meta.title);
 
       const isClosing =
         sectionKey === "OPINION_SUMMARY" ||
@@ -247,9 +299,9 @@ export async function generateSectionsAsync(
           console.log(
             `[GENERATION] report=${reportId} invocation_end status=checkpoint sections=${i}/${total} elapsed=${elapsedSec()}s checkpoint_saved=true resume_expected=true`
           );
-          await prisma.report.update({
-            where: { id: reportId },
-            data: { status: ReportStatus.PENDING, currentSectionTitle: null },
+          await prisma.report.updateMany({
+            where: generationLeaseWhere(reportId, generationToken),
+            data: { status: ReportStatus.PENDING, currentSectionTitle: null, generationClaim: null, generationLeaseExpiresAt: null },
           });
           return;
         }
@@ -332,34 +384,30 @@ export async function generateSectionsAsync(
 
         // 섹션이 완성되는 즉시 저장한다 — 진행률 화면이 실시간으로 반영되고,
         // 도중에 타임아웃/실패해도 이미 만든 섹션은 남아 다시 만들 필요가 없다.
-        await prisma.reportSection.create({
-          data: {
-            reportId,
-            sectionKey: result.sectionKey,
-            title: meta.title,
-            content: result.content,
-            order: meta.order,
-          },
+        // Attempts incurred cost even when an old worker loses its claim before saving.
+        if (userId) recordAIAttempts({ userId, dealId: deal.id, reportId, agentType,
+          sectionKey: result.sectionKey, userTier: isPaidPlanKey(planKey) ? "paid" : "free", taskTier, attempts });
+        const created = await prisma.$transaction(async (tx) => {
+          // Adding a section also changes the verified report snapshot.
+          const locked = await tx.report.updateMany({
+            where: generationLeaseWhere(reportId, generationToken),
+            data: { updatedAt: new Date(), generationLeaseExpiresAt: new Date(Date.now() + GENERATION_LEASE_MS) },
+          });
+          if (locked.count !== 1) throw new GenerationLeaseLost();
+          const section = await tx.reportSection.create({ data: {
+            reportId, sectionKey: result.sectionKey, title: meta.title,
+            content: result.content, order: meta.order, status: SectionStatus.DRAFT,
+          } });
+          await tx.reportEvidenceCheck.deleteMany({ where: { reportId } });
+          return section;
         });
+        snapshotsByKey.set(created.sectionKey, created);
 
         // 시도 하나하나(성공 직전에 실패했던 fallback 전환 포함)를 전부
         // UsageLog에 남긴다 — "최종 성공 모델 1줄"만 남기면 fallback
         // 과정에서 실패한 시도(이미 API 호출·토큰이 소모된)의 비용이
         // 누락된다. attempts가 비어 있으면(데모 모드 등 실제 호출이 없었던
         // 경우) 아무것도 쓰지 않는다.
-        if (userId) {
-          recordAIAttempts({
-            userId,
-            dealId: deal.id,
-            reportId,
-            agentType,
-            sectionKey: result.sectionKey,
-            userTier: isPaidPlanKey(planKey) ? "paid" : "free",
-            taskTier,
-            attempts,
-          });
-        }
-
         if (i < sectionKeys.length - 1) {
           await new Promise((r) => setTimeout(r, 1200));
         }
@@ -421,32 +469,58 @@ export async function generateSectionsAsync(
         `*`;
 
       // 이미 저장된 의견종합 섹션에 품질 메모를 덧붙인다.
-      await prisma.reportSection.updateMany({
-        where: { reportId, sectionKey: "OPINION_SUMMARY" },
-        data: { content: opinionContent },
-      });
+      const snapshot = snapshotsByKey.get("OPINION_SUMMARY");
+      if (!snapshot) throw new GeneratedSectionConflict();
+      await saveGeneratedSection(reportId, snapshot, opinionContent, undefined, generationToken);
     }
 
-    console.log(
-      `[GENERATION] report=${reportId} invocation_end status=completed sections=${total}/${total} elapsed=${elapsedSec()}s`
-    );
-
-    await prisma.report.update({
-      where: { id: reportId },
+    const finished = await prisma.report.updateMany({
+      where: generationLeaseWhere(reportId, generationToken),
       data: {
         status: ReportStatus.DRAFT,
         generatedAt: new Date(),
         currentSectionTitle: null,
+        generationClaim: null,
+        generationLeaseExpiresAt: null,
       },
     });
+    if (finished.count === 1) console.log(
+      `[GENERATION] report=${reportId} invocation_end status=completed sections=${total}/${total} elapsed=${elapsedSec()}s`
+    );
   } catch (error) {
-    console.error("Section generation error:", error);
+    if (error instanceof GenerationLeaseLost || leaseLost) return;
+    console.error("Section generation failed");
+    if (error instanceof GeneratedSectionConflict) {
+      const observed = error.observedReportUpdatedAt;
+      if (observed) {
+        // A new claim/edit after this snapshot wins. Do not replace its status.
+        await prisma.$transaction(async (tx) => {
+          const locked = await tx.report.updateMany({
+            where: { ...generationLeaseWhere(reportId, generationToken), updatedAt: observed },
+            data: { updatedAt: observed },
+          });
+          if (locked.count !== 1) return;
+          const sections = await tx.reportSection.findMany({ where: { reportId }, select: { sectionKey: true } });
+          const keys = new Set(sections.map((section) => section.sectionKey));
+          const complete = SECTION_META.every((section) => keys.has(section.key));
+          await tx.report.updateMany({
+            where: { ...generationLeaseWhere(reportId, generationToken), updatedAt: observed },
+            data: { status: complete ? ReportStatus.DRAFT : ReportStatus.PENDING,
+              currentSectionTitle: null, updatedAt: new Date(), generationClaim: null, generationLeaseExpiresAt: null,
+              ...(complete ? { generatedAt: new Date() } : {}) },
+          });
+        });
+      }
+      return;
+    }
     console.log(
       `[GENERATION] report=${reportId} invocation_end status=failed elapsed=${elapsedSec()}s checkpoint_saved=true resume_expected=true`
     );
-    await prisma.report.update({
-      where: { id: reportId },
-      data: { status: ReportStatus.PENDING, currentSectionTitle: null },
+    await prisma.report.updateMany({
+      where: generationLeaseWhere(reportId, generationToken),
+      data: { status: ReportStatus.PENDING, currentSectionTitle: null, generationClaim: null, generationLeaseExpiresAt: null },
     });
+  } finally {
+    if (heartbeat) clearInterval(heartbeat);
   }
 }

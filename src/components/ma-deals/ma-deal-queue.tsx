@@ -13,6 +13,8 @@ import { MA_DEAL_TYPE_LABEL, PE_DECISION_DOMAIN_LABEL, PE_IC_REVIEW_SIGNOFF_STAT
 import { presentBlockerLabel } from "@/lib/pe/blocker-display";
 import { peQueueUrgencyScore, pickPeNextAction } from "@/lib/pe/ma-deal-queue";
 import type { MaDealListReadinessSummary } from "@/lib/pe/ma-deal-list-readiness";
+import { READINESS_STATE_LABEL } from "@/lib/pe/ma-deal-labels";
+import styles from "./pe-investment-desk.module.css";
 
 export interface PeQueueDeal {
   id: string;
@@ -33,6 +35,9 @@ const DOMAIN_ROWS = [
   { key: "lbo", label: PE_DECISION_DOMAIN_LABEL.LBO },
   { key: "dd", label: PE_DECISION_DOMAIN_LABEL.DD },
 ] as const;
+const DOMAIN_STATE_SHORT: Record<MaDealListReadinessSummary["overall"], string> = {
+  READY: "준비됨", PARTIAL: "부분 준비", MISSING: "정보 없음", NOT_STARTED: "시작 전", BLOCKED: "차단됨",
+};
 
 /**
  * PE 딜 검토 대기열. 준비 상태(READY/PARTIAL/…)는 PE 전용 canonical 계산(buildPEDecisionReadiness)의
@@ -69,7 +74,7 @@ export function PeDealQueue({
   }, [deals, readiness, sort]);
 
   if (rows.length === 0) {
-    return <p className="rounded-lg border border-border bg-card py-10 text-center text-sm text-muted-foreground">검색 결과가 없습니다.</p>;
+    return <p className={styles.empty}>현재 불러온 딜에서 검색 결과가 없습니다.</p>;
   }
 
   return (
@@ -77,6 +82,7 @@ export function PeDealQueue({
       label="PE/M&A 딜 검토 대기열"
       columns="minmax(0,2fr) minmax(0,2.2fr) minmax(0,2fr) minmax(0,1.3fr) 2.5rem"
       data-testid="pe-deal-queue"
+      className={styles.queue}
     >
       <QueueHeader>
         <QueueHeaderCell>딜</QueueHeaderCell>
@@ -90,31 +96,31 @@ export function PeDealQueue({
         const next = r ? pickPeNextAction(r) : null;
         const updated = new Date(deal.updatedAt).toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" });
         return (
-          <QueueRow key={deal.id} data-testid="pe-deal-row" data-deal-id={deal.id}>
-            <QueueCell>
+          <QueueRow key={deal.id} data-testid="pe-deal-row" data-deal-id={deal.id} className={styles.row}>
+            <QueueCell className={styles.identityCell}>
               <Link
                 href={`/ma-deals/${deal.id}`}
-                className="text-[15px] font-semibold text-foreground underline-offset-2 hover:underline focus-visible:underline"
+                className={styles.companyLink}
               >
                 {deal.companyName}
               </Link>
-              <p className="mt-0.5 truncate text-xs text-muted-foreground">{deal.name}</p>
+              <p className={styles.dealName}>{deal.name}</p>
               <p className="mt-0.5 text-xs text-muted-foreground">
                 {MA_DEAL_TYPE_LABEL[deal.dealType]}
                 {deal.teamId ? " · 팀 공유" : ""}
               </p>
             </QueueCell>
 
-            <QueueCell mobileLabel="준비 상태">
+            <QueueCell mobileLabel="준비 상태" className={styles.readinessCell}>
               {r ? (
                 <div>
                   <ReadinessBadge state={r.overall} />
-                  <dl className="mt-2 grid grid-cols-4 gap-1.5">
+                  <dl className={styles.domainList}>
                     {DOMAIN_ROWS.map((row) => (
-                      <div key={row.key} className="min-w-0">
-                        <dt className="truncate text-xs text-muted-foreground">{row.label}</dt>
-                        <dd className="mt-0.5">
-                          <ReadinessBadge state={r[row.key]} compact className="w-full justify-center px-1" />
+                      <div key={row.key}>
+                        <dt>{row.label}</dt>
+                        <dd>
+                          <span className={styles.domainState} data-readiness={r[row.key]} title={READINESS_STATE_LABEL[r[row.key]]} aria-label={`${row.label}: ${READINESS_STATE_LABEL[r[row.key]]}`}>{DOMAIN_STATE_SHORT[r[row.key]]}</span>
                         </dd>
                       </div>
                     ))}
@@ -128,7 +134,7 @@ export function PeDealQueue({
               )}
             </QueueCell>
 
-            <QueueCell mobileLabel="다음 행동">
+            <QueueCell mobileLabel="다음 행동" className={styles.actionCell}>
               {r && next ? (
                 <>
                   {r.blockerCount > 0 && (
@@ -141,7 +147,7 @@ export function PeDealQueue({
                   </p>
                   <Link
                     href={`/ma-deals/${deal.id}?tab=${next.tab}`}
-                    className="mt-1 inline-flex items-center gap-0.5 text-xs font-medium text-primary hover:underline"
+                    className={styles.actionLink}
                   >
                     해당 탭 열기 <ArrowUpRight className="h-3 w-3" aria-hidden="true" />
                   </Link>
@@ -151,7 +157,7 @@ export function PeDealQueue({
               )}
             </QueueCell>
 
-            <QueueCell mobileLabel="내 검토 · 수정일" className="text-xs text-muted-foreground">
+            <QueueCell mobileLabel="내 검토 · 수정일" className={styles.reviewCell}>
               <p>
                 내 검토:{" "}
                 <span className="font-medium text-foreground">
@@ -161,7 +167,7 @@ export function PeDealQueue({
               <p className="mt-0.5 tabular-nums">수정 {updated}</p>
             </QueueCell>
 
-            <QueueCell className="lg:text-right">
+            <QueueCell className={styles.archiveCell}>
               {deal.userId === currentUserId && deal.status === "ACTIVE" && (
                 <Button
                   variant="ghost"
