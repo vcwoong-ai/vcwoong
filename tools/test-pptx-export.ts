@@ -83,7 +83,7 @@ async function main() {
   assert(tableSlide.includes("핵심 포인트"), "표 뒤 텍스트 블록 누락");
   console.log("✅ 마크다운 표 → 실제 PPTX 표 렌더링 확인");
 
-  // "라벨: 숫자(단위)" 줄 2개 이상이면 실제 막대차트가 삽입되는지 확인
+  // Unstructured numbers with incompatible units must never become a chart.
   const chartSection = [
     {
       title: "재무현황",
@@ -98,10 +98,30 @@ async function main() {
   const chartFile = Object.keys(chartZip.files).find((f) =>
     /^ppt\/charts\/chart\d*\.xml$/.test(f)
   );
-  assert(!!chartFile, "핵심 지표 막대차트가 생성되지 않음");
-  const chartXml = await chartZip.file(chartFile!)!.async("text");
-  assert(chartXml.includes("ARR") && chartXml.includes("NRR"), "차트에 지표 라벨 누락");
-  console.log("✅ 핵심 지표 2개 이상일 때 막대차트 렌더링 확인");
+  assert(!chartFile, "매출 금액과 유지율을 같은 차트 축에 넣으면 안 됨");
+  const structured = { id: "매출", title: "매출 추이", unit: "억원", points: [
+    { label: "2024 실적", period: "2024", scenario: "ACTUAL" as const, value: 0, source: "합성 재무제표" },
+    { label: "2025 실적", period: "2025", scenario: "ACTUAL" as const, value: 12, source: "합성 재무제표" },
+  ] };
+  const visualBuffer = await generateReportPPTX([{ title: "매출 추이", content: "기간과 출처를 확인한 합성 수치" }], { companyName: "합성회사" }, [], [structured]);
+  const visualZip = await JSZip.loadAsync(visualBuffer);
+  const visualChart = Object.keys(visualZip.files).find(file => /^ppt\/charts\/chart\d*\.xml$/.test(file));
+  assert(!!visualChart, "구조화된 동일 지표 차트 누락");
+  const chartXml = await visualZip.file(visualChart!)!.async("text");
+  assert(chartXml.includes("2024 실적") && chartXml.includes("2025 실적") && chartXml.includes("억원"), "기간·단위가 차트에 보존되지 않음");
+  console.log("✅ 혼합 단위 차트 차단 + 구조화된 동일 지표·기간·단위 차트");
+
+  const longContent = Array.from({ length: 42 }, (_, index) => `보존문장${index} ${"긴본문".repeat(80)} 끝표시${index}`).join("\n");
+  const rows = Array.from({ length: 30 }, (_, index) => `| 행${index} | 전체값${index} |`).join("\n");
+  const longZip = await JSZip.loadAsync(await generateReportPPTX([
+    { title: "긴 본문", content: longContent }, { title: "긴 표", content: `| 항목 | 값 |\n| --- | --- |\n${rows}` },
+  ], { companyName: "합성 긴 보고서" }));
+  const allSlides = await Promise.all(Object.keys(longZip.files).filter(file => /^ppt\/slides\/slide\d+\.xml$/.test(file)).map(file => longZip.file(file)!.async("text")));
+  const allText = allSlides.flatMap(xml => Array.from(xml.matchAll(/<a:t>([\s\S]*?)<\/a:t>/g), match => match[1])).join("");
+  for (let index = 0; index < 42; index++) assert(allText.includes(`끝표시${index}`), `긴 본문 끝 누락 ${index}`);
+  for (let index = 0; index < 30; index++) assert(allText.includes(`전체값${index}`), `표 뒷부분 누락 ${index}`);
+  assert(allSlides.length > 3, "계속 슬라이드가 생성되지 않음");
+  console.log("✅ 긴 문장 전체·30행 표 보존 및 계속 슬라이드");
 
   console.log("✅ PPTX 내보내기 구조 검증 통과\n");
 }

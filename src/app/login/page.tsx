@@ -160,19 +160,6 @@ export default function LoginPage() {
               </Button>
             </form>
 
-            {/* 데모 계정 빠른 로그인 */}
-            <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-              <p className="text-xs text-amber-700 font-medium mb-2">데모 계정으로 체험</p>
-              <button
-                type="button"
-                onClick={() => performSignIn(BRAND.demoEmail, BRAND.demoPassword)}
-                className="w-full text-xs text-amber-800 bg-amber-100 hover:bg-amber-200 rounded px-3 py-2 transition-colors"
-                disabled={loading}
-              >
-                {BRAND.demoEmail} / {BRAND.demoPassword} 로 로그인
-              </button>
-            </div>
-
             <div className="mt-4 text-center text-sm text-gray-500">
               계정이 없으신가요?{" "}
               <Link href="/register" className="text-blue-600 hover:underline font-medium">

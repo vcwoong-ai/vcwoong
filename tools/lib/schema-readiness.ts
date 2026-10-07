@@ -46,13 +46,14 @@ export const runDiff: DiffRunner = ({ executable, args, cwd, env }) =>
 export async function checkSchemaReadiness(options: {
   projectRoot: string;
   databaseUrl?: string;
+  schemaSource?: string;
   runner?: DiffRunner;
 }): Promise<SchemaResult> {
   if (!options.databaseUrl) return { status: "unverified", code: "DATABASE_NOT_SELECTED" };
   if (!validSchemaCheckUrl(options.databaseUrl)) return { status: "unverified", code: "INVALID_DATABASE_URL" };
   let temp: string | undefined;
   try {
-    const source = await readFile(path.join(options.projectRoot, "prisma/schema.prisma"), "utf8");
+    const source = options.schemaSource ?? await readFile(path.join(options.projectRoot, "prisma/schema.prisma"), "utf8");
     const schema = isolatedSchema(source);
     temp = await mkdtemp(path.join(os.tmpdir(), "dealmind-schema-check-"));
     const schemaFile = path.join(temp, "schema.prisma");

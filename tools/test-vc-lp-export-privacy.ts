@@ -41,11 +41,11 @@ async function vcCases(format: keyof typeof mime) {
     "@/lib/template/template-generator": { generateTemplateBasedDOCX: generate }, "@/lib/template/template-reconstructor": { reconstructDOCX: reconstruct }, "@/lib/template/pptx-reconstructor": { reconstructPPTX: reconstruct },
     "@/lib/storage": { readStoredFile: async () => bytes },
     "@/lib/report-export-common": {
-      loadReportForExport: async () => { loaded++; if (fault === "load") throw new Error(rawDetail); if (errorStatus) return { error: Response.json({ error: "합성 기존 오류", code: "SYNTHETIC_EXISTING" }, { status: errorStatus, headers: { "X-Synthetic-Existing": "preserved", Vary: "Accept" } }) }; return { report, canUseEngine: engine, decisionMemoSections: [], exportState }; },
+      loadReportForExport: async () => { loaded++; if (fault === "load") throw new Error(rawDetail); if (errorStatus) return { error: Response.json({ error: "합성 기존 오류", code: "SYNTHETIC_EXISTING" }, { status: errorStatus, headers: { "X-Synthetic-Existing": "preserved", Vary: "Accept" } }) }; return { report, canUseEngine: engine, decisionMemoSections: [], presentation: { charts: [] }, exportState }; },
       markExported: async (_id: string, expected: unknown) => { assert.equal(expected, exportState); if (fault === "mark") throw new Error(rawDetail); marked++; }, exportFilename: (_name: string, extension: string) => `합성\r\nX-Injected: private.${extension}`, collectDocumentImages: () => [],
     },
   }, logs);
-  const call = (): Promise<Response> => route.POST({ url: "http://localhost/export" }, { params: { id: "synthetic-report" } });
+  const call = (layout?: string): Promise<Response> => route.POST({ url: `http://localhost/export${layout ? `?layout=${layout}` : ""}` }, { params: { id: "synthetic-report" } });
   stage = `${format} guest401 no generation`; authenticated = false;
   let response = await call(); assert.equal(response.status, 401); privateHeaders(response); assert.equal(generated, 0); assert.equal(loaded, 0); authenticated = true;
   for (const status of [400, 403, 404, 409]) {
@@ -55,15 +55,21 @@ async function vcCases(format: keyof typeof mime) {
   errorStatus = 0; stage = `${format} default binary and mark once`;
   response = await call(); binaryHeaders(response, format, format === "docx" ? "default" : "pptx-generated"); assert.equal(marked, 1); assert.equal(response.headers.get("content-length"), bytes.length.toString());
   engine = true; report.template = { fileType: format.toUpperCase(), fileUrl: "synthetic-local-fixture", sectionMap: {} };
-  stage = `${format} reconstructed success`; response = await call(); binaryHeaders(response, format, format === "docx" ? "reconstructed:1/1" : "pptx-reconstructed:1/1"); assert.equal(marked, 2);
+  stage = `${format} reconstructed success`; response = await call(format === "pptx" ? "template" : undefined); binaryHeaders(response, format, format === "docx" ? "reconstructed:1/1" : "pptx-reconstructed:1/1"); assert.equal(marked, 2);
   stage = `${format} failed reconstruction safe fallback`; reconstructFail = true;
-  response = await call(); binaryHeaders(response, format, format === "docx" ? "template-ordered" : "pptx-generated"); assert.equal(marked, 3);
+  response = await call(format === "pptx" ? "template" : undefined); binaryHeaders(response, format, format === "docx" ? "template-ordered" : "pptx-generated"); assert.equal(marked, 3);
   assert.equal(JSON.stringify(logs).includes(rawDetail), false);
   engine = false; report.template = null;
   for (const failure of ["auth", "load", "generate", "mark"]) {
     stage = `${format} ${failure} failure fixed500`; fault = failure; response = await call(); assert.equal(response.status, 500); privateHeaders(response); assert.equal((await response.text()).includes(rawDetail), false); assert.equal(marked, 3);
   }
   assert.equal(JSON.stringify(logs).includes(rawDetail), false);
+  if (format === "pptx") {
+    fault = ""; engine = true; reconstructFail = false;
+    report.template = { fileType: "PPTX", fileUrl: "synthetic-local-fixture", sectionMap: {} };
+    stage = "PPTX attached template still defaults to complete standard report";
+    response = await call(); binaryHeaders(response, format, "pptx-generated"); assert.equal(marked, 4);
+  }
 }
 async function lpCases() {
   let authenticated = true, missing = false, fault = "", generated = 0;

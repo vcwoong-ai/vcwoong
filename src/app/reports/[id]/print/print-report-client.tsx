@@ -4,6 +4,9 @@ import { useEffect } from "react";
 import Link from "next/link";
 import { Markdown } from "@/components/ui/markdown";
 import { BRAND } from "@/lib/brand";
+import { ReportBrief } from "@/components/reports/report-brief";
+import { ReportContext } from "@/components/reports/report-context";
+import type { ReportPresentation } from "@/lib/report-presentation";
 
 interface PrintReport {
   id: string;
@@ -14,7 +17,7 @@ interface PrintReport {
   sections: Array<{ id: string; title: string; content: string; order: number }>;
 }
 
-export function PrintReportClient({ report }: { report: PrintReport }) {
+export function PrintReportClient({ report, presentation }: { report: PrintReport; presentation: ReportPresentation }) {
   // 인쇄 대화상자를 자동으로 띄워 "PDF로 저장"까지 한 번에 이어지게 한다
   useEffect(() => {
     const t = setTimeout(() => window.print(), 600);
@@ -31,7 +34,7 @@ export function PrintReportClient({ report }: { report: PrintReport }) {
         @media print {
           .no-print { display: none !important; }
           .print-page { box-shadow: none !important; margin: 0 !important; padding: 0 !important; max-width: none !important; }
-          .print-section { break-inside: avoid-page; }
+          .print-section { orphans: 3; widows: 3; }
           .print-break { break-before: page; }
         }
       `}</style>
@@ -89,6 +92,11 @@ export function PrintReportClient({ report }: { report: PrintReport }) {
           </p>
         </div>
 
+        <div className="py-8 print-break"><ReportBrief presentation={presentation} print /></div>
+        {presentation.context && <ReportContext context={presentation.context} />}
+        {presentation.sections.filter(section => section.title !== "한눈에 보는 투자 요약" && !presentation.charts.some(chart => chart.title === section.title)).map(section => <section key={section.title} className="py-6 border-t print-section">
+          <h2 className="mb-3 text-base font-bold">{section.title}</h2><Markdown content={section.content} />
+        </section>)}
         {/* 목차 */}
         <div className="py-8 border-b print-section">
           <h2 className="text-base font-bold text-gray-900 mb-3">목차</h2>

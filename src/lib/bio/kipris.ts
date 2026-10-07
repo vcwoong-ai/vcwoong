@@ -5,7 +5,7 @@
 
 import { BRAND } from "@/lib/brand";
 
-const BASE = "http://plus.kipris.or.kr/openapi/rest";
+const BASE = "https://plus.kipris.or.kr/openapi/rest";
 const API_KEY = process.env.KIPRIS_API_KEY ?? "";
 
 export interface KiprisPatent {
@@ -22,18 +22,26 @@ async function fetchXml(url: string): Promise<string> {
   const res = await fetch(url, {
     headers: { "User-Agent": `${BRAND.name}/1.0` },
     signal: AbortSignal.timeout(10000),
+    redirect: "error",
   });
   if (!res.ok) throw new Error(`KIPRIS HTTP ${res.status}`);
-  return res.text();
+  const xml = await res.text();
+  const code = extractTag(xml, "resultCode");
+  if (code && !["00", "000", "0", "20"].includes(code)) throw new Error("KIPRIS API request denied");
+  if (!/<(?:response|items|PatentUtilityInfo|item)\b/i.test(xml)) throw new Error("KIPRIS invalid XML response");
+  return xml;
 }
 
 function extractTag(block: string, tag: string): string {
   const match = block.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i"));
-  return match ? match[1].replace(/<[^>]+>/g, "").trim() : "";
+  return match ? match[1].replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
+    .replace(/<[^>]+>/g, "").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, "&").trim() : "";
 }
 
 function parsePatentItems(xml: string): KiprisPatent[] {
-  const items = xml.match(/<item>[\s\S]*?<\/item>/g) ?? [];
+  const items = xml.match(/<PatentUtilityInfo\b[^>]*>[\s\S]*?<\/PatentUtilityInfo>/gi)
+    ?? xml.match(/<item\b[^>]*>[\s\S]*?<\/item>/gi) ?? [];
   const patents: KiprisPatent[] = [];
 
   for (const block of items) {
@@ -43,6 +51,7 @@ function parsePatentItems(xml: string): KiprisPatent[] {
       extractTag(block, "applNum");
     const inventionTitle =
       extractTag(block, "inventionTitle") ||
+      extractTag(block, "InventionName") ||
       extractTag(block, "invTitle") ||
       extractTag(block, "title");
     const applicantName =
@@ -53,9 +62,10 @@ function parsePatentItems(xml: string): KiprisPatent[] {
       extractTag(block, "applicationDate") || extractTag(block, "applDate");
     const registerStatus =
       extractTag(block, "registerStatus") ||
+      extractTag(block, "RegistrationStatus") ||
       extractTag(block, "regStatus") ||
       extractTag(block, "status");
-    const ipc = extractTag(block, "ipcNumber") || extractTag(block, "ipc");
+    const ipc = extractTag(block, "ipcNumber") || extractTag(block, "InternationalpatentclassificationNumber") || extractTag(block, "ipc");
 
     if (applicationNumber && inventionTitle) {
       patents.push({
@@ -94,33 +104,38 @@ export async function searchKiprisPatents(
   maxResults = 5,
   documentText?: string
 ): Promise<KiprisPatent[]> {
-  if (API_KEY) {
+  const limit = Number.isFinite(maxResults) ? Math.min(20, Math.max(1, Math.floor(maxResults))) : 5;
+  const term = query.trim();
+  if (API_KEY && term) {
     try {
-      const url =
-        `${BASE}/patUtiModInfoSearchSevice/applicantNameSearchInfo` +
-        `?applicant=${encodeURIComponent(query)}` +
-        `&numOfRows=${maxResults}&pageNo=1&ServiceKey=${API_KEY}`;
+      // /openapi/rest는 accessKey/docsStart/docsCount를 사용한다.
+      // /kipo-api의 ServiceKey/pageNo/numOfRows와 혼용하지 않는다.
+      const requestUrl = (operation: string, field: string) => {
+        const url = new URL(`${BASE}/patUtiModInfoSearchSevice/${operation}`);
+        url.search = new URLSearchParams({ [field]: term, accessKey: API_KEY,
+          docsStart: "1", docsCount: String(limit), patent: "true", utility: "true" }).toString();
+        return url.toString();
+      };
+      const url = requestUrl("applicantNameSearchInfo", "applicant");
 
       const xml = await fetchXml(url);
       const patents = parsePatentItems(xml);
-      if (patents.length > 0) return patents.slice(0, maxResults);
+      if (patents.length > 0) return patents.slice(0, limit);
 
-      const keywordUrl =
-        `${BASE}/patUtiModInfoSearchSevice/freeSearch` +
-        `?word=${encodeURIComponent(query)}` +
-        `&numOfRows=${maxResults}&pageNo=1&ServiceKey=${API_KEY}`;
+      const keywordUrl = requestUrl("freeSearchInfo", "word");
 
       const keywordXml = await fetchXml(keywordUrl);
-      return parsePatentItems(keywordXml).slice(0, maxResults);
-    } catch (err) {
-      console.warn("[KIPRIS] 검색 실패:", err instanceof Error ? err.message : err);
+      return parsePatentItems(keywordXml).slice(0, limit);
+    } catch {
+      // 네트워크 예외에는 인증키가 포함된 요청 URL이 들어갈 수 있다.
+      console.warn("[KIPRIS] 검색 실패 — API 결과를 확인하지 못했습니다.");
     }
   } else {
     console.log("[KIPRIS] API 키 없음 — IR 문서에서 특허 정보 추출 시도");
   }
 
   if (documentText) {
-    return extractPatentsFromDocument(documentText, query).slice(0, maxResults);
+    return extractPatentsFromDocument(documentText, query).slice(0, limit);
   }
   return [];
 }

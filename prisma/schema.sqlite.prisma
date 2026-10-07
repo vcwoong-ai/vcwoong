@@ -96,6 +96,8 @@ model User {
   peIcReviewComments PEICReviewComment[]
   peIcReviewSnapshots PEICReviewSnapshot[]
   peIcAuditEvents     PEICAuditEvent[]
+  meetings           Meeting[]
+  meetingUsage       MeetingUsageAdmission[]
 
   @@index([teamId])
 }
@@ -169,6 +171,7 @@ model Deal {
   reports   Report[]
   portfolio PortfolioCompany?
   score     DealScore?
+  meetings  Meeting[]
 
   @@index([userId])
   @@index([teamId])
@@ -821,6 +824,7 @@ model MADeal {
   icReviewComments PEICReviewComment[]
   icReviewSnapshots PEICReviewSnapshot[]
   icAuditEvents     PEICAuditEvent[]
+  meetings         Meeting[]
 
   @@index([userId])
   @@index([teamId])
@@ -1323,4 +1327,75 @@ model BillingMaintenanceState {
   lastStartedAt        DateTime?
   lastCompletedAt      DateTime?
   lastOutcome          String    @default("NEVER")
+}
+
+// Paid meeting intelligence. Parent deletion removes access, not monthly usage.
+model Meeting {
+  id String @id @default(cuid())
+  ownerUserId String
+  createdByUserId String
+  requestId String
+  dealId String?
+  maDealId String?
+  title String
+  occurredAt DateTime
+  participants String
+  uploadMemo String @default("")
+  consentAt DateTime
+  fileName String
+  mimeType String
+  fileSize Int
+  storageKey String @unique
+  uploadRef String
+  storageRef String?
+  originalDeletedAt DateTime?
+  sha256 String?
+  durationSeconds Int?
+  status String @default("UPLOAD_PENDING")
+  leaseToken String?
+  leaseUntil DateTime?
+  providerStartedAt DateTime?
+  transcript String?
+  minutes String?
+  errorCode String?
+  version Int @default(0)
+  approvedAt DateTime?
+  approvedByUserId String?
+  deletedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  owner User @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  deal Deal? @relation(fields: [dealId], references: [id], onDelete: SetNull)
+  maDeal MADeal? @relation(fields: [maDealId], references: [id], onDelete: SetNull)
+  revisions MeetingRevision[]
+  @@unique([createdByUserId, requestId])
+  @@index([dealId, createdAt])
+  @@index([maDealId, createdAt])
+  @@index([status, leaseUntil])
+}
+
+// No FK to Meeting: deleting meetings/deals must never reset paid usage.
+model MeetingUsageAdmission {
+  id String @id @default(cuid())
+  meetingId String @unique
+  ownerUserId String
+  month String
+  seconds Int
+  status String @default("RESERVED")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  owner User @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  @@index([ownerUserId, month, status])
+}
+
+model MeetingRevision {
+  id String @id @default(cuid())
+  meetingId String
+  version Int
+  actorUserId String
+  action String
+  minutes String
+  createdAt DateTime @default(now())
+  meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  @@unique([meetingId, version])
 }

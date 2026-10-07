@@ -14,14 +14,15 @@ function load(file: string, imports: Record<string, unknown>) {
 async function main() {
   const version = load("src/lib/report-review-version.ts", {});
   const section = { id: "synthetic-section", sectionKey: "overview", title: "합성 개요", content: "합성 A", order: 0, status: "APPROVED" };
-  const row: any = { id: "fixture", status: "FINAL", updatedAt: new Date(1000), sections: [{ ...section }] };
+  const row: any = { id: "fixture", status: "FINAL", updatedAt: new Date(1000), sections: [{ ...section }], deal: { companyName: "합성회사" } };
   let attempts = 0, updates = 0, retryCode = "", updateWhere: any, initialProjection: unknown;
   const tx = { report: {
     findUnique: async (query: any) => { assert.equal(query.include, initialProjection); return { ...row, sections: row.sections.map((s: any) => ({ ...s })) }; },
     updateMany: async ({ where, data }: any) => { updateWhere = where; if (row.status !== where.status || row.updatedAt.getTime() !== where.updatedAt.getTime() || !row.sections.length || row.sections.some((s: any) => s.status !== "APPROVED")) return { count: 0 }; updates++; row.status = data.status; return { count: 1 }; },
   } };
   const common = load("src/lib/report-export-common.ts", {
-    "next/server": {}, "@/lib/plans": {}, "@/lib/subscription": {}, "@/lib/team-access": { getUserTeamContext: async () => ({ teamId: null }), reportReadWhere: () => ({}) }, "@/lib/vc-decision-loader": { computeReportDecision: () => ({ decision: {}, sectionRefs: [] }) }, "@/lib/vc-decision-memo": { buildDecisionMemoSections: () => [] }, "@/lib/report-review-version": version, "node:crypto": { createHash },
+    "@/lib/decision-context": { REPORT_MEETING_REFERENCE_INCLUDE: {} },
+    "next/server": {}, "@/lib/plans": {}, "@/lib/subscription": {}, "@/lib/team-access": { getUserTeamContext: async () => ({ teamId: null }), reportReadWhere: () => ({}) }, "@/lib/vc-decision-loader": { computeReportDecision: () => ({ decision: {}, sectionRefs: [] }) }, "@/lib/report-presentation": { buildReportPresentation: () => ({ sections: [], charts: [] }) }, "@/lib/report-review-version": version, "node:crypto": { createHash },
     "@prisma/client": { ReportStatus: { FINAL: "FINAL", EXPORTED: "EXPORTED" } },
     "@/lib/prisma": { prisma: { report: { findFirst: async (query: any) => { initialProjection = query.include; return row; } }, $transaction: async (callback: any, options: any) => {
       attempts++; assert.equal(options.isolationLevel, "Serializable"); const status = row.status, count = updates; const result = await callback(tx);
@@ -39,6 +40,11 @@ async function main() {
   row.sections = [{ ...section }]; row.updatedAt = new Date(1000);
   stage = "memo input changes without report timestamp preserve final";
   row.icQuestions = { questions: [{ question: "합성 변경" }] }; await common.markExported(row.id, initial); assert.equal(updates, 0); delete row.icQuestions;
+  stage = "approved meeting revision and research result changes fence stale export";
+  row.deal.meetings = [{ id: "meeting-fixture", version: 2, minutes: "new reviewed statement" }];
+  assert.equal(await common.markExported(row.id, initial), false); assert.equal(updates, 0); delete row.deal.meetings;
+  row.deepDive = { claims: [{ claim: "new research" }] };
+  assert.equal(await common.markExported(row.id, initial), false); assert.equal(updates, 0); delete row.deepDive;
   stage = "same reviewed body transitions once"; await common.markExported(row.id, initial); assert.equal(row.status, "EXPORTED"); assert.equal(updates, 1);
   await common.markExported(row.id, initial); assert.equal(updates, 1); assert.equal(updateWhere.status, "FINAL"); assert.equal(updateWhere.sections.every.status, "APPROVED"); assert.equal(updateWhere.updatedAt.getTime(), initial.updatedAt.getTime());
   for (const status of ["DRAFT", "REVIEW", "PENDING", "GENERATING", "FAILED"]) { stage = "nonfinal state preserved"; row.status = status; await common.markExported(row.id, await capture()); assert.equal(row.status, status); assert.equal(updates, 1); }

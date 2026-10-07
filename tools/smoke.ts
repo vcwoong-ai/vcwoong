@@ -11,17 +11,22 @@
  *   npm run smoke -- https://dealsync-git-xxx.vercel.app
  *   SMOKE_EMAIL=demo@dealmind.kr SMOKE_PASSWORD=... npm run smoke -- <url>
  *
- * 기본 계정은 시드 데모 계정(demo@dealmind.kr)이다.
+ * 별도의 검증용 계정을 SMOKE_EMAIL/SMOKE_PASSWORD에 지정해야 한다.
+ * 운영에서는 공개 시드 데모 계정의 로그인 경로가 차단된다.
  * 테스트로 만든 딜은 끝나고 지우므로 데이터가 남지 않는다.
  */
-import { BRAND } from "../src/lib/brand";
+export {};
 
 const baseUrl = (process.argv[2] ?? process.env.SMOKE_URL ?? "").replace(/\/$/, "");
-const email = process.env.SMOKE_EMAIL ?? BRAND.demoEmail;
-const password = process.env.SMOKE_PASSWORD ?? BRAND.demoPassword;
+const email = process.env.SMOKE_EMAIL ?? "";
+const password = process.env.SMOKE_PASSWORD ?? "";
 
 if (!baseUrl) {
   console.error("사용법: npm run smoke -- <배포 URL>");
+  process.exit(1);
+}
+if (!email || !password) {
+  console.error("별도의 검증용 SMOKE_EMAIL/SMOKE_PASSWORD가 필요합니다.");
   process.exit(1);
 }
 

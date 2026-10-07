@@ -54,6 +54,10 @@
     "tools/helpers/free-customer-fixture.ts",
     "tools/test-nav-active.ts",
     "tools/test-auth-session-version.ts",
+    "tools/test-admin-workspace.ts",
+    "tools/test-kipris-api.ts",
+    "tools/test-meeting-intelligence.ts",
+    "tools/meeting-worker.ts",
     "tools/test-payment-checkout-readiness.ts",
     "tools/test-team-owner.ts",
     "tools/test-synthetic-generation.ts",
@@ -93,7 +97,9 @@
     "tools/test-vc-lp-export-privacy.ts",
     "tools/test-pe-export-privacy.ts",
     "tools/test-pe-signoff-version.ts",
-    "tools/test-prisma-log-policy.ts"
+    "tools/test-prisma-log-policy.ts",
+    "tools/test-report-presentation.ts",
+    "tools/test-decision-context.ts"
   ],
   "exclude": [
     "node_modules"

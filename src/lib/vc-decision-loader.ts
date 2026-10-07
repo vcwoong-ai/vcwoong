@@ -18,18 +18,21 @@ import { checkVCDecisionGate, type VCDecisionGateResult } from "./vc-decision-ga
 import { buildDecisionMemoSectionRefs, type VCDecisionMemoSectionRef } from "./vc-decision-memo";
 import type { VCInvestmentDecision } from "./vc-decision-types";
 import type { SectionKey } from "@prisma/client";
+import { buildDecisionContext, REPORT_MEETING_REFERENCE_INCLUDE, type DecisionContext, type MeetingReferenceInput } from "./decision-context";
 
 /** loadReportForExport()와 GET /decision이 공통으로 조회하는 Prisma 결과의 필요한 부분만. */
 export interface ReportForDecision {
-  sections: Array<{ sectionKey: SectionKey | string; title: string; content: string }>;
+  sections: Array<{ sectionKey: SectionKey | string; title: string; content: string; updatedAt?: Date }>;
   deal: {
     investAmount: number | null;
     valuation: number | null;
-    documents: Array<{ id?: string; name: string; parsedText: string | null }>;
+    documents: Array<{ id?: string; name: string; parsedText: string | null; createdAt?: Date }>;
     score: { overall: number; rationale: unknown; evidenceAssessment: unknown } | null;
+    meetings?: MeetingReferenceInput[];
   };
   evidenceCheck: { verdicts: unknown } | null;
   icQuestions: { questions: unknown } | null;
+  deepDive?: { claims: unknown; computedAt: Date; updatedAt?: Date; modelUsed: string } | null;
 }
 
 /**
@@ -38,7 +41,7 @@ export interface ReportForDecision {
  * parsedText는 근거 대조에 필요하므로 포함하되, 화면 응답에는 싣지 않는다.
  */
 export const REPORT_FOR_DECISION_INCLUDE = {
-  sections: { orderBy: { order: "asc" as const }, select: { sectionKey: true, title: true, content: true } },
+  sections: { orderBy: { order: "asc" as const }, select: { sectionKey: true, title: true, content: true, updatedAt: true } },
   deal: {
     select: {
       id: true,
@@ -48,12 +51,19 @@ export const REPORT_FOR_DECISION_INCLUDE = {
       investRound: true,
       investAmount: true,
       valuation: true,
-      documents: { select: { id: true, name: true, parsedText: true } },
+      documents: { select: { id: true, name: true, parsedText: true, createdAt: true } },
       score: { select: { overall: true, rationale: true, evidenceAssessment: true } },
     },
   },
   evidenceCheck: { select: { verdicts: true } },
   icQuestions: { select: { questions: true } },
+} as const;
+
+/** Detailed references belong to the reader/export, not the 24-deal queue batch. */
+export const REPORT_FOR_PRESENTATION_INCLUDE = {
+  ...REPORT_FOR_DECISION_INCLUDE,
+  deal: { select: { ...REPORT_FOR_DECISION_INCLUDE.deal.select, ...REPORT_MEETING_REFERENCE_INCLUDE } },
+  deepDive: { select: { claims: true, computedAt: true, updatedAt: true, modelUsed: true } },
 } as const;
 
 export type DecisionQuestionLinkKind = "contradiction" | "thesis_breaker" | "missing_information";
@@ -97,6 +107,7 @@ export function buildDecisionQuestionLinks(
 }
 
 export interface ReportDecisionResult {
+  context?: DecisionContext;
   decision: VCInvestmentDecision;
   gate: VCDecisionGateResult;
   evidence: EvidenceReport;
@@ -145,6 +156,8 @@ export function computeReportDecision(report: ReportForDecision): ReportDecision
   );
 
   return {
+    context: buildDecisionContext({ sections: report.sections, documents: report.deal.documents,
+      meetings: report.deal.meetings, research: report.deepDive }),
     decision,
     gate: checkVCDecisionGate(decision),
     evidence,

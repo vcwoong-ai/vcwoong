@@ -1,7 +1,7 @@
 // Development only. Never imports a production env file or resets an existing DB.
 import { existsSync, openSync, closeSync, readFileSync, writeFileSync, statSync } from "node:fs";
 import { randomBytes } from "node:crypto";
-import { spawnSync } from "node:child_process";
+import { runNpm } from "../tools/local-development.mjs";
 import { fileURLToPath } from "node:url";
 
 process.chdir(fileURLToPath(new URL("../", import.meta.url)));
@@ -28,14 +28,20 @@ if (!existing) writeFileSync(".env.local", [
 
 const env = { ...process.env, DATABASE_URL: "file:./dev.db" };
 function run(args) {
-  const result = spawnSync("npm", args, { stdio: "inherit", env });
-  if (result.error) throw result.error;
-  if (result.status !== 0) process.exit(result.status ?? 1);
+  runNpm(args, env);
 }
-run(["ci", "--ignore-scripts", "--no-audit", "--no-fund"]);
+if (process.argv.includes("--skip-install")) {
+  if (!existsSync("node_modules/prisma/build/index.js") || !existsSync("node_modules/tsx/dist/cli.mjs")) {
+    throw new Error("Install dependencies with npm ci --ignore-scripts before --skip-install.");
+  }
+} else {
+  run(["ci", "--ignore-scripts", "--no-audit", "--no-fund"]);
+}
 if (!existsSync("prisma/dev.db") || statSync("prisma/dev.db").size === 0) {
   if (!existsSync("prisma/dev.db")) closeSync(openSync("prisma/dev.db", "wx"));
-  run(["run", "db:setup:local"]);
+  run(["exec", "--", "prisma", "generate", "--schema", "prisma/schema.sqlite.prisma"]);
+  run(["exec", "--", "prisma", "db", "push", "--schema", "prisma/schema.sqlite.prisma"]);
+  run(["exec", "--", "tsx", "prisma/seed.ts"]);
 } else {
   // Rebuilds must not overwrite work already saved in the Codespace.
   run(["exec", "--", "prisma", "generate", "--schema", "prisma/schema.sqlite.prisma"]);

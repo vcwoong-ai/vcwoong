@@ -5,6 +5,7 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { MaDealDetailClient } from "./ma-deal-detail-client";
 import { getUserTeamContext, canEditResource } from "@/lib/team-access";
 import { loadMaDealIcContext } from "@/lib/pe/pe-ma-deal-context";
+import { MeetingDealLink } from "@/components/meetings/meeting-deal-link";
 
 export default async function MaDealDetailPage({
   params,
@@ -34,6 +35,7 @@ export default async function MaDealDetailPage({
 
   return (
     <AppLayout title={maDeal.companyName}>
+      <MeetingDealLink track="pe" dealId={maDeal.id} />
       <MaDealDetailClient
         maDeal={JSON.parse(JSON.stringify(maDeal))}
         periods={JSON.parse(JSON.stringify(periodsWithSummary))}

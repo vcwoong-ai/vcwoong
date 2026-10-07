@@ -194,7 +194,7 @@ export default function LandingPage() {
                 href="/login"
                 className={styles.secondaryCta}
               >
-                데모 계정으로 체험
+                내 계정으로 로그인
               </Link>
             </div>
             <p className={styles.heroNote}>

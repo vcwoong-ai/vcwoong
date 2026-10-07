@@ -79,12 +79,48 @@ npm run dev
 
 http://localhost:3000 에서 확인하세요.
 
-### 데모 계정
+### 운영자 페이지와 데모
 
+운영자 홈은 `/admin`, 기존 샘플 자료는 `/admin/demo`, AI 비용은 `/admin/usage-cost`에서 확인한다.
+기존 데모는 운영자 페이지 안에서 읽기 전용으로 조회하며 공개 데모 로그인은 운영에서 차단한다.
+샘플 시드는 개발·격리 검증 환경에서만 사용한다.
+
+운영자가 소유를 확인한 일반 DealMind 계정의 이메일과 DB `User.id`를 각각
+`PLATFORM_ADMIN_EMAILS`, `PLATFORM_ADMIN_USER_IDS`에 등록한다. 두 목록 모두 일치해야 한다.
+고객사 팀 ADMIN이나 데모 계정을 플랫폼 운영자로 승격하지 않는다. 기존 비용 페이지도 같은 조건을 적용한다.
+환경변수만 지정한다고 계정이 생성되지는 않는다. 기존 운영 DB에서 seed/db push를 실행하지 않는다.
+
+문의 주소는 `dealmindspace@gmail.com`이다. 이 주소를 Resend의 `EMAIL_FROM`으로 사용하지 않는다.
+자동 발송의 발신 주소는 Resend 인증 도메인 주소이고 답장 주소는 위 Gmail이다.
+
+### 이 컴퓨터의 DART·KIPRIS 연결
+
+`W:/Dealmind/primary`의 `.env.services.local`에 `DART_API_KEY`와 `KIPRIS_API_KEY`를
+각각 입력한다. 이 파일은 Git에서 제외되며 키를 소스나 `NEXT_PUBLIC_*`에 넣지 않는다.
+KIPRIS는 **특허·실용 공개·등록공보의 REST API** 이용 승인이 필요하다.
+
+```powershell
+npm run services:check              # 키 존재만 확인, API 호출 없음
+npm run services:check -- --dart     # 공개 기업 예제 1회 조회
+npm run services:check -- --kipris   # 공개 출원인 예제 1회 조회
+npm run dev:services -- --hostname 127.0.0.1 -p 3001
 ```
-이메일: demo@dealmind.kr
-비밀번호: Demo1234!
-```
+
+마지막 명령은 키를 읽어 합성 SQLite 환경의 개발 서버를 시작한다. 현재 실행 중인 서버와
+포트를 구분하고, 일반 `dev:local`은 이 별도 파일을 자동으로 읽지 않는다.
+배포 환경에는 서버 환경변수를 별도로 연결해야 한다. 자세한 확인 상태는
+[서비스 연결 기록](docs/release-connections-2026-10-06.md)을 따른다.
+
+### 미팅 기록 첫 구현
+
+VC·PE 딜에 녹음 파일을 연결하고 전사, 회의록 초안 수정·확정, 원본 구간 재생과
+확정본 Markdown 내보내기를 제공하는 첫 버전을 구현했다. 딜 쓰기 권한과 유효한
+유료 구독, 명시적 월·파일 시간 한도를 검사한다. 기능은 기본 꺼짐이며 기존 DB에
+새 모델을 자동 적용하지 않는다. 직접 녹음과 기존 IR 대조·보고서 반영은 후속 범위다.
+
+[미팅 기록 개발 현황](docs/meeting-intelligence-plan-2026-10-06.md)에 격리 DB patch,
+비공개 저장소, FFprobe와 별도 작업 실행기의 조건 및 실제 검증 범위를 기록했다.
+`npm run meetings:worker`는 설정 존재만 확인하며 유료 API를 호출하지 않는다.
 
 ## 투자심의보고서 구조
 

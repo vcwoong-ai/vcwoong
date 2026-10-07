@@ -1,13 +1,9 @@
 import Link from "next/link";
-import { getServerSession } from "next-auth";
-import { redirect } from "next/navigation";
-import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { AppLayout } from "@/components/layout/app-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { DollarSign, HelpCircle } from "lucide-react";
-import { isPlatformAdminEmail } from "@/lib/platform-admin";
+import { requirePlatformAdmin } from "@/lib/platform-admin-server";
 import { buildUsageCostReport } from "@/lib/usage-cost-report";
 import { DailyCostChart } from "@/components/admin/daily-cost-chart";
 
@@ -28,20 +24,7 @@ export default async function UsageCostPage({
 }: {
   searchParams: { days?: string };
 }) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) redirect("/login");
-
-  if (!isPlatformAdminEmail(session.user.email)) {
-    return (
-      <AppLayout title="비용 대시보드">
-        <Card className="max-w-md">
-          <CardContent className="py-8 text-center text-sm text-gray-500">
-            이 페이지는 DealMind 운영자 전용입니다.
-          </CardContent>
-        </Card>
-      </AppLayout>
-    );
-  }
+  await requirePlatformAdmin();
 
   const parsedDays = Number(searchParams.days);
   const days = (RANGE_OPTIONS as readonly number[]).includes(parsedDays)
@@ -68,8 +51,8 @@ export default async function UsageCostPage({
   const report = buildUsageCostReport(rows);
 
   return (
-    <AppLayout title="비용 대시보드">
       <div className="max-w-4xl space-y-6">
+        <h1 className="text-2xl font-semibold">AI 비용</h1>
         <div className="flex items-center gap-2">
           {RANGE_OPTIONS.map((r) => (
             <Link
@@ -180,6 +163,5 @@ export default async function UsageCostPage({
           직접 조회하세요.
         </p>
       </div>
-    </AppLayout>
   );
 }

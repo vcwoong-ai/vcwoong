@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
-import { LogOut, User, Menu } from "lucide-react";
+import { LogOut, User, Menu, ShieldCheck } from "lucide-react";
 import { NotificationBell } from "@/components/layout/notification-bell";
 import {
   DropdownMenu,
@@ -95,6 +95,14 @@ export function Header({ title, onMenuClick, menuOpen = false }: HeaderProps) {
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
+            {session?.user?.platformAdmin && (
+              <DropdownMenuItem asChild>
+                <Link href="/admin" className="flex items-center cursor-pointer">
+                  <ShieldCheck className="w-4 h-4 mr-2" />
+                  운영자 페이지
+                </Link>
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem asChild>
               <Link href="/settings" className="flex items-center cursor-pointer">
                 <User className="w-4 h-4 mr-2" />

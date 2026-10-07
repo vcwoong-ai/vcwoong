@@ -26,7 +26,7 @@ import {
 import { EditDealDialog } from "@/components/deals/edit-deal-dialog";
 import { TeamShareToggle } from "@/components/team/team-share-toggle";
 import { ReportWizard } from "@/components/reports/report-wizard";
-import { DealDecisionSummary } from "@/components/vc/deal-decision-summary";
+import { DealReviewOverview } from "@/components/deals/deal-review-overview";
 import { DealScoreRadar } from "@/components/deals/deal-score-radar";
 import { DealDartPanel } from "@/components/deals/deal-dart-panel";
 import {
@@ -169,6 +169,7 @@ export function DealDetailClient({
   canUseTeam = false,
   canEdit = true,
   userRole = "ANALYST",
+  meetingEnabled = false,
 }: {
   deal: DealWithRelations;
   demoMode?: boolean;
@@ -177,9 +178,11 @@ export function DealDetailClient({
   canUseTeam?: boolean;
   canEdit?: boolean;
   userRole?: string;
+  meetingEnabled?: boolean;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [activeTab, setActiveTab] = useState("overview");
   const toast = useToast();
   const confirm = useConfirm();
   const [generating, setGenerating] = useState(false);
@@ -682,9 +685,6 @@ export function DealDetailClient({
         </div>
       )}
 
-      {/* 투자 판단 — 5초 안에 이 딜의 상태를 읽게 하는 첫 구획(최신 보고서의 canonical 결정 요약) */}
-      <DealDecisionSummary reportId={deal.reports.find((r) => r.sections.length > 0)?.id ?? null} />
-
       {/* Investment details */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
@@ -720,9 +720,10 @@ export function DealDetailClient({
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="documents">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         {/* 탭 3개가 좁은 화면 폭을 넘기므로 가로 스크롤을 허용한다 */}
         <TabsList className="w-full overflow-x-auto justify-start">
+          <TabsTrigger value="overview">통합 검토</TabsTrigger>
           <TabsTrigger value="documents" className="flex items-center gap-1.5">
             <Upload className="w-3.5 h-3.5" />
             문서 ({deal.documents.length})
@@ -744,6 +745,19 @@ export function DealDetailClient({
             전자공시
           </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="overview">
+          <DealReviewOverview
+            key={deal.id}
+            dealId={deal.id}
+            report={deal.reports.find(report => report.sections.length > 0 && !["PENDING", "GENERATING"].includes(report.status)) ?? null}
+            documentCount={deal.documents.length}
+            warningCount={deal.documents.filter(document => Boolean(document.metadata?.warning ?? ((document.parsedText?.length ?? 0) < 300))).length}
+            meetingEnabled={meetingEnabled}
+            generating={generating || deal.reports.some(report => report.status === "GENERATING")}
+            onNavigate={setActiveTab}
+          />
+        </TabsContent>
 
         {/* Documents tab */}
         <TabsContent value="documents" className="space-y-4">

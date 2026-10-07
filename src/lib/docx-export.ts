@@ -91,6 +91,35 @@ export function renderMarkdownLinesToParagraphs(content: string): Paragraph[] {
   return paragraphs;
 }
 
+/** Preserve body and presentation tables as real Word tables with repeated headers. */
+export function renderReportBlocks(content: string): Array<Paragraph | Table> {
+  const output: Array<Paragraph | Table> = [];
+  const lines = content.split("\n");
+  const cells = (line: string) => line.trim().slice(1, -1).split("|").map(cell => cell.trim().replace(/\*\*/g, ""));
+  const row = (line: string) => line.trim().startsWith("|") && line.trim().endsWith("|");
+  let prose: string[] = [];
+  const flush = () => { output.push(...renderMarkdownLinesToParagraphs(prose.join("\n"))); prose = []; };
+  for (let i = 0; i < lines.length; i++) {
+    if (row(lines[i]) && i + 1 < lines.length && row(lines[i + 1]) && cells(lines[i + 1]).every(cell => /^:?-{2,}:?$/.test(cell))) {
+      flush();
+      const rows = [cells(lines[i])]; i += 2;
+      while (i < lines.length && row(lines[i])) rows.push(cells(lines[i++]));
+      i--;
+      const columns = Math.max(...rows.map(item => item.length));
+      output.push(new Table({ width: { size: 100, type: WidthType.PERCENTAGE },
+        rows: rows.map((items, index) => new TableRow({ tableHeader: index === 0,
+          children: Array.from({ length: columns }, (_, column) => new TableCell({
+            width: { size: 100 / columns, type: WidthType.PERCENTAGE },
+            shading: index === 0 ? { fill: "EFF6FF" } : undefined,
+            children: [new Paragraph({ children: [new TextRun({ text: items[column] ?? "", bold: index === 0, size: 20 })] })],
+          })),
+        })),
+      }));
+    } else prose.push(lines[i]);
+  }
+  flush(); return output;
+}
+
 export async function generateReportDOCX(
   report: ReportWithSections,
   /** PR-K: Decision-First memo(vc-decision-memo.ts가 조립) — 표지 다음,
@@ -233,7 +262,7 @@ export async function generateReportDOCX(
         spacing: { before: 600, after: 300 },
       })
     );
-    children.push(...renderMarkdownLinesToParagraphs(memoSection.content));
+    children.push(...renderReportBlocks(memoSection.content));
   }
 
   // Page break before content
@@ -257,7 +286,7 @@ export async function generateReportDOCX(
     );
 
     // Section content - parse markdown-like formatting
-    children.push(...renderMarkdownLinesToParagraphs(section.content));
+    children.push(...renderReportBlocks(section.content));
 
     // Page break after each section (except last)
     if (section !== sections[sections.length - 1]) {

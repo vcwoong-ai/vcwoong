@@ -1,0 +1,95 @@
+{
+  "checkedOn": "2026-10-07",
+  "timezone": "Asia/Seoul",
+  "status": "blocked",
+  "deploymentPerformed": false,
+  "source": {
+    "branch": "codex/cloud-migration-20261006",
+    "baseCommit": "7de0f5831b072dbccc55ba3888100cbf51fa4654",
+    "containsUncommittedChanges": true
+  },
+  "target": {
+    "project": "dealsync",
+    "projectId": "prj_Bor0MCAhNfTXwCu803tiazw6zgSK",
+    "teamId": "team_D07wT3WiNXnrnz56wUMowoCy",
+    "domain": "www.dealmind.space",
+    "domainVerified": true,
+    "previousProductionDeployment": "dpl_4hyTcapJt6GSFgzw1EF8jgU2KEaj",
+    "previousProductionState": "READY"
+  },
+  "checks": {
+    "offlineRegressionScripts": {
+      "count": 129,
+      "status": "passed_before_upload_memo_change"
+    },
+    "sourceSecretScan": {
+      "files": 924,
+      "localValuesChecked": 4,
+      "exposedFiles": 0
+    },
+    "latestLocalBuild": "passed_after_upload_memo_change",
+    "uploadMemoChecks": "SQLite_PostgreSQL_TypeScript_lint_passed; decision_context_and_export_state_passed",
+    "productionSchemaCompatibility": "unverified",
+    "previewDataIsolation": "unverified",
+    "browserVerification": "not_performed_saved_permission_denial"
+  },
+  "remainingRequirements": [
+    {
+      "feature": "운영 DB",
+      "requiredMeetingPatches": [
+        "2026-10-06-add-meeting-intelligence.sql",
+        "2026-10-07-add-meeting-upload-memo.sql"
+      ],
+      "requirement": "배포 대상 DB를 명시한 읽기 전용 스키마 검사, 백업·복구 기준, 필요한 additive patch의 이전 검증",
+      "status": "unverified",
+      "note": "현재 로컬 SQLite 빌드와 격리 PostgreSQL 검사는 운영 DB 준비의 증거가 아니다. 운영 db push/seed는 실행하지 않았다."
+    },
+    {
+      "feature": "녹음 파일·전사·회의록",
+      "missingProductionSettings": [
+        "MEETING_INTELLIGENCE_ENABLED",
+        "MEETING_MONTHLY_MINUTES",
+        "MEETING_MAX_MINUTES",
+        "MEETING_OPENAI_API_KEY"
+      ],
+      "requirement": "별도 처리 서버에서 FFprobe와 worker 실행, 동일한 비공개 저장소·DB 연결, 실제 합성 음성 처리 확인",
+      "status": "not_active",
+      "note": "브라우저 직접 녹음은 아직 구현하지 않았다. 기본 Vercel 웹 배포만으로 worker가 실행되지 않는다."
+    },
+    {
+      "feature": "공시·특허",
+      "missingProductionSettings": [
+        "DART_API_KEY",
+        "KIPRIS_API_KEY"
+      ],
+      "status": "local_keys_present_production_keys_absent",
+      "note": "기존 로컬 키 값은 보고서에 저장하지 않았다. 현재 검사는 존재 여부만 확인했다."
+    },
+    {
+      "feature": "이메일",
+      "missingProductionSettings": [
+        "RESEND_API_KEY",
+        "EMAIL_FROM"
+      ],
+      "requirement": "Resend 발신 도메인 인증과 실제 전달 확인",
+      "status": "unverified",
+      "note": "Vercel의 도메인 인증은 Resend 발신 인증과 다르다."
+    },
+    {
+      "feature": "운영 관리자",
+      "missingProductionSettings": [
+        "PLATFORM_ADMIN_USER_IDS"
+      ],
+      "requirement": "실제 계정 이메일과 DB ID를 함께 등록",
+      "status": "account_confirmation_pending",
+      "note": "기존 PLATFORM_ADMIN_EMAILS만으로는 새 운영자 접근을 허용하지 않는다. 데모 계정을 운영자로 승격하지 않는다."
+    },
+    {
+      "feature": "유료 결제",
+      "requirement": "실제 Toss 자동결제 상점, 계약·정책·vault·청구 복구·운영 원장 전환 검증",
+      "status": "checkout_hold",
+      "note": "현재 소스의 isSubscriptionCheckoutReady()는 false이다. 키나 환경 플래그만으로 해제하지 않는다."
+    }
+  ],
+  "scope": "Vercel 프로젝트·배포·도메인과 복호화하지 않은 환경변수 이름 조회, 로컬 설정 존재 확인, 공개 소스 키 대조, 오프라인 회귀 검사. 실제 유료 API·메일·음성 처리·결제·운영 DB 변경은 실행하지 않았다."
+}

@@ -1,9 +1,8 @@
 import { getServerSession } from "next-auth";
 import { redirect, notFound } from "next/navigation";
 import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
 import { PrintReportClient } from "./print-report-client";
-import { getUserTeamContext, reportReadWhere } from "@/lib/team-access";
+import { loadReportForExport } from "@/lib/report-export-common";
 
 /**
  * 인쇄 전용 보고서 뷰.
@@ -17,26 +16,19 @@ export default async function ReportPrintPage({
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/login");
 
-  const { teamId } = await getUserTeamContext(session.user.id);
-
-  const report = await prisma.report.findFirst({
-    where: { id: params.id, ...reportReadWhere(session.user.id, teamId) },
-    include: {
-      deal: { select: { companyName: true, sector: true, investRound: true } },
-      sections: { orderBy: { order: "asc" } },
-    },
-  });
-
-  if (!report) notFound();
+  const result = await loadReportForExport(session.user.id, params.id);
+  if ("error" in result) notFound();
+  const { report, presentation } = result;
 
   return (
     <PrintReportClient
+      presentation={presentation}
       report={{
         id: report.id,
         title: report.title,
         agentType: report.agentType,
         generatedAt: report.generatedAt?.toISOString() ?? null,
-        deal: report.deal,
+        deal: { companyName: report.deal.companyName, sector: report.deal.sector, investRound: report.deal.investRound },
         sections: report.sections.map((s) => ({
           id: s.id,
           title: s.title,

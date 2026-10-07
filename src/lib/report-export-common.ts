@@ -7,7 +7,8 @@ import { createHash } from "node:crypto";
 import { reportReviewVersion } from "@/lib/report-review-version";
 import { getUserTeamContext, reportReadWhere } from "@/lib/team-access";
 import { computeReportDecision } from "@/lib/vc-decision-loader";
-import { buildDecisionMemoSections } from "@/lib/vc-decision-memo";
+import { buildReportPresentation } from "@/lib/report-presentation";
+import { REPORT_MEETING_REFERENCE_INCLUDE } from "@/lib/decision-context";
 
 // Both initial file inputs and final state admission read exactly the same DB projection.
 const REPORT_EXPORT_INCLUDE = {
@@ -16,16 +17,18 @@ const REPORT_EXPORT_INCLUDE = {
       // metadata: PPTX 첨부 이미지 슬라이드용(문서 업로드 시 추출해둔 이미지 URL).
       // parsedText: 양식 재현 시 표준 섹션에 대응 안 되는 슬라이드/헤딩
       // (인력 구성·주주 구성 등)을 원본 IR 자료에서 대신 채우기 위해 필요.
-      documents: { select: { id: true, name: true, metadata: true, parsedText: true }, orderBy: { id: "asc" } },
+      documents: { select: { id: true, name: true, metadata: true, parsedText: true, createdAt: true }, orderBy: { id: "asc" } },
       // PR-K: Decision-First memo(vc-decision-memo.ts)가 필요로 하는 값 —
       // 새 AI 호출이 아니라 이미 계산·저장된 값을 추가로 select만 한다.
       score: true,
+      ...REPORT_MEETING_REFERENCE_INCLUDE,
     },
   },
   template: true,
   sections: { orderBy: [{ order: "asc" }, { id: "asc" }] },
   evidenceCheck: { select: { verdicts: true } },
   icQuestions: { select: { questions: true } },
+  deepDive: { select: { claims: true, computedAt: true, updatedAt: true, modelUsed: true } },
 } satisfies Prisma.ReportInclude;
 
 type ReportExportInput = Prisma.ReportGetPayload<{ include: typeof REPORT_EXPORT_INCLUDE }>;
@@ -72,8 +75,9 @@ export async function loadReportForExport(userId: string, reportId: string) {
 
   // Decision-First memo — 화면(GET /api/reports/[id]/decision)과 같은 조립 함수
   // (vc-decision-loader.ts)를 쓴다. export 전용 파이프라인이 아니다.
-  const { decision, sectionRefs } = computeReportDecision(report);
-  const decisionMemoSections = buildDecisionMemoSections(decision, sectionRefs);
+  const decisionResult = computeReportDecision(report);
+  const presentation = buildReportPresentation(decisionResult, report.deal.companyName);
+  const decisionMemoSections = presentation.sections;
 
   const exportState: ReportExportState = {
     eligible: report.status === ReportStatus.FINAL && report.sections.length > 0 && report.sections.every(section => section.status === "APPROVED"),
@@ -81,7 +85,7 @@ export async function loadReportForExport(userId: string, reportId: string) {
     contentVersion: await reportReviewVersion(report.sections),
     artifactVersion: artifactVersion(report),
   };
-  return { report, canUseEngine, decisionMemoSections, exportState } as const;
+  return { report, canUseEngine, decisionMemoSections, presentation, exportState } as const;
 }
 
 export async function markExported(reportId: string, expected: ReportExportState): Promise<boolean> {

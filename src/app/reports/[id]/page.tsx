@@ -26,6 +26,7 @@ export default async function ReportPage({
     include: {
       deal: true,
       sections: { orderBy: { order: "asc" } },
+      template: { select: { fileType: true } },
     },
   });
 
@@ -45,6 +46,7 @@ export default async function ReportPage({
         key={report.id}
         report={JSON.parse(JSON.stringify(publicGenerationReport(report)))}
         canEdit={canEdit}
+        hasPptxTemplate={report.template?.fileType === "PPTX"}
         nimConfigured={isNimConfigured()}
       />
     </AppLayout>

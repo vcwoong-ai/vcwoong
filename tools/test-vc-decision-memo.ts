@@ -412,7 +412,7 @@ async function test14_pptxExportIncludesMemo() {
   const slidesWithout = Object.keys(zipWithout.files).filter((f) => /^ppt\/slides\/slide\d+\.xml$/.test(f)).length;
   const slidesWith = Object.keys(zipWith.files).filter((f) => /^ppt\/slides\/slide\d+\.xml$/.test(f)).length;
 
-  assert(slidesWith === slidesWithout + memo.length, `Decision-First memo 슬라이드 수만큼 늘어나야 함(기대 +${memo.length})`);
+  assert(slidesWith >= slidesWithout + memo.length, `Decision-First memo의 모든 섹션과 필요한 계속 슬라이드가 보존돼야 함(최소 +${memo.length})`);
   console.log("✅ Test 14 — PPTX export에 Decision-First memo가 실제로 슬라이드로 삽입됨(회귀 없음)");
 }
 

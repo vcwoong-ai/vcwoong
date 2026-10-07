@@ -3,7 +3,9 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getUserTeamContext, reportReadWhere } from "@/lib/team-access";
-import { computeReportDecision, REPORT_FOR_DECISION_INCLUDE } from "@/lib/vc-decision-loader";
+import { computeReportDecision, REPORT_FOR_PRESENTATION_INCLUDE } from "@/lib/vc-decision-loader";
+import { buildReportPresentation } from "@/lib/report-presentation";
+import { PRIVATE_RESPONSE_HEADERS } from "@/lib/private-response-headers";
 
 /**
  * VC Investment Decision — canonical 엔진(buildInvestmentDecision)의 결과를 그대로
@@ -19,17 +21,17 @@ export async function GET(
 ) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
-    return NextResponse.json({ error: "인증이 필요합니다" }, { status: 401 });
+    return NextResponse.json({ error: "인증이 필요합니다" }, { status: 401, headers: PRIVATE_RESPONSE_HEADERS });
   }
 
   const { teamId } = await getUserTeamContext(session.user.id);
   const report = await prisma.report.findFirst({
     where: { id: params.id, ...reportReadWhere(session.user.id, teamId) },
-    include: REPORT_FOR_DECISION_INCLUDE,
+    include: REPORT_FOR_PRESENTATION_INCLUDE,
   });
 
   if (!report) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return NextResponse.json({ error: "Not found" }, { status: 404, headers: PRIVATE_RESPONSE_HEADERS });
   }
 
   const result = computeReportDecision(report);
@@ -56,6 +58,7 @@ export async function GET(
       questionLinks: result.questionLinks,
       documentCount: report.deal.documents.length,
       evidenceTotals: result.evidence.totals,
+      presentation: buildReportPresentation(result, report.deal.companyName),
     },
-  });
+  }, { headers: PRIVATE_RESPONSE_HEADERS });
 }

@@ -42,12 +42,14 @@ export async function POST(
       headers.set("Vary", vary.join(", "));
       return new NextResponse(errorResponse.body, { status: errorResponse.status, statusText: errorResponse.statusText, headers });
     }
-    const { report, canUseEngine, decisionMemoSections, exportState } = result;
+    const { report, canUseEngine, decisionMemoSections, presentation, exportState } = result;
 
     let pptxBuffer: Buffer | null = null;
     let mode = "pptx-generated";
 
-    if (canUseEngine && report.template?.fileType === "PPTX") {
+    // The standard reader/export share a complete report. A customer template is
+    // an explicitly selected alternate artifact, retaining its original layout.
+    if (new URL(request.url).searchParams.get("layout") === "template" && canUseEngine && report.template?.fileType === "PPTX") {
       const original = await readStoredFile(report.template.fileUrl);
       if (original) {
         try {
@@ -82,14 +84,15 @@ export async function POST(
 
     // PR-K: Decision-First memo는 재현(reconstructPPTX, 회사가 업로드한 자체
     // 템플릿의 1:1 서식 재현이 목적) 경로에는 끼워 넣지 않고, 신규 생성
-    // 경로에서만 기존 10개 섹션 앞에 붙인다. generateReportPPTX는 순수
-    // {title, content} 배열만 받으므로 pptx-export.ts 자체는 수정하지 않는다.
+    // 경로에서만 기존 상세 섹션 앞에 붙인다. 차트는 같은 presentation의
+    // 출처·기간·단위가 확인된 구조화 수치만 전달한다.
     const buffer =
       pptxBuffer ??
       (await generateReportPPTX(
         [...decisionMemoSections, ...report.sections],
         { companyName: report.deal.companyName, reportDate: new Date() },
-        collectDocumentImages(report.deal.documents)
+        collectDocumentImages(report.deal.documents),
+        presentation.charts
       ));
 
     await markExported(params.id, exportState);

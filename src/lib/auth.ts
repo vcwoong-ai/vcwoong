@@ -6,7 +6,9 @@ import { prisma } from "@/lib/prisma";
 import { UserRole } from "@prisma/client";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { findLoginEmailCandidates } from "@/lib/login-email";
-import { passwordSessionVersion, validatePasswordSession } from "@/lib/auth-session-version";
+import { AuthSessionInvalid, passwordSessionVersion, validatePasswordSession } from "@/lib/auth-session-version";
+import { canUseDemoCredentials } from "@/lib/demo-access";
+import { isPlatformAdminAccount } from "@/lib/platform-admin";
 
 /** NextAuth가 authorize에 넘겨주는 요청에서 클라이언트 IP를 추정한다 */
 function ipFromAuthRequest(headers?: Record<string, unknown>): string {
@@ -61,6 +63,10 @@ export const authOptions: NextAuthOptions = {
           throw new Error("이메일 또는 비밀번호가 올바르지 않습니다.");
         }
 
+        if (!canUseDemoCredentials(user.email)) {
+          throw new Error("이메일 또는 비밀번호가 올바르지 않습니다.");
+        }
+
         const isValid = await bcrypt.compare(
           credentials.password,
           user.passwordHash
@@ -91,19 +97,26 @@ export const authOptions: NextAuthOptions = {
   },
   callbacks: {
     async jwt({ token, user }) {
-      return validatePasswordSession(
+      const id = user?.id ?? token.id;
+      if (typeof id !== "string" || !id) throw new AuthSessionInvalid();
+      const account = await prisma.user.findUnique({
+        where: { id },
+        select: { id: true, email: true, passwordHash: true, role: true },
+      }).catch(() => { throw new AuthSessionInvalid(); });
+      const valid = await validatePasswordSession(
         token,
-        (id) => prisma.user.findUnique({
-          where: { id },
-          select: { passwordHash: true, role: true },
-        }),
+        async () => account,
         user
       );
+      if (!account || !canUseDemoCredentials(account.email)) throw new AuthSessionInvalid();
+      return { ...valid, email: account.email, platformAdmin: isPlatformAdminAccount(account) };
     },
     async session({ session, token }) {
       if (token && session.user) {
         session.user.id = token.id as string;
         session.user.role = token.role as UserRole;
+        session.user.email = token.email;
+        session.user.platformAdmin = token.platformAdmin === true;
       }
       return session;
     },

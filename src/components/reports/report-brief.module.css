@@ -1,0 +1,35 @@
+.brief { color: #0f172a; line-height: 1.65; }
+.heading { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.heading h2 { font-size: clamp(1.375rem, 2.5vw, 1.875rem); font-weight: 650; line-height: 1.3; overflow-wrap: anywhere; }
+.heading > span { font-size: .875rem; color: #1d4ed8; font-weight: 600; }
+.thesis { margin-top: 1.25rem; max-width: 72ch; font-size: 1.125rem; font-weight: 500; }
+.note { color: #475569; font-size: .8125rem; margin-top: .75rem; max-width: 75ch; }
+.warning { margin-top: 1rem; padding: .75rem 1rem; background: #fffbeb; color: #92400e; font-size: .875rem; }
+.terms { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 2rem; margin-top: 1.5rem; border-top: 1px solid #cbd5e1; }
+.terms > div { display: flex; flex-direction: column; gap: .25rem; padding: .875rem 0; border-bottom: 1px solid #e2e8f0; }
+.terms dt { color: #475569; font-size: .8125rem; }
+.terms dd { font-size: .9375rem; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.arguments { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2rem; margin-top: 2rem; }
+.brief h3 { font-size: 1rem; font-weight: 650; }
+.arguments h3 span { font-size: .75rem; color: #475569; margin-left: .5rem; font-weight: 400; }
+.arguments ol { padding-left: 1.125rem; list-style: decimal; }
+.arguments li { margin-top: 1rem; padding-left: .125rem; font-size: .875rem; overflow-wrap: anywhere; }
+.arguments strong { font-weight: 600; }
+.arguments li p { color: #334155; margin-top: .375rem; }
+.arguments small { display: block; color: #475569; margin-top: .5rem; font-size: .75rem; }
+.visuals { margin-top: 2.5rem; padding-top: 1.5rem; border-top: 1px solid #cbd5e1; }
+.figure { margin-top: 1.5rem; break-inside: avoid; }
+.figure figcaption { display: flex; align-items: baseline; gap: 1rem; flex-wrap: wrap; }
+.figure figcaption span { color: #475569; font-size: .8125rem; }
+.chart { width: 100%; height: auto; margin-top: .75rem; font-family: inherit; font-variant-numeric: tabular-nums; }
+.sources { margin-top: .75rem; }
+.sources summary { cursor: pointer; color: #1d4ed8; font-size: .8125rem; text-underline-offset: 3px; }
+.sources summary:hover { text-decoration: underline; }
+.sources summary:focus-visible { outline: 2px solid #2563eb; outline-offset: 4px; }
+.tableScroll { overflow-x: auto; }
+.sources table { width: 100%; border-collapse: collapse; font-size: .8125rem; margin-top: .5rem; }
+.sources th, .sources td { text-align: left; padding: .5rem; border-bottom: 1px solid #e2e8f0; vertical-align: top; font-variant-numeric: tabular-nums; }
+.sources th { font-weight: 600; color: #334155; }
+.brief ::selection { background: #dbeafe; color: #0f172a; }
+@media (max-width: 760px) { .arguments { grid-template-columns: 1fr; gap: 1.5rem; } .terms { grid-template-columns: 1fr; } }
+@media print { .brief { font-size: 10pt; } .heading h2 { font-size: 18pt; } .thesis { font-size: 11pt; } .arguments { gap: 1rem; } .arguments li { font-size: 9pt; } .visuals { break-before: page; } .figure { break-inside: avoid-page; } }

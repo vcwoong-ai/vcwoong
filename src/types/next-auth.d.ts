@@ -10,6 +10,7 @@ declare module "next-auth" {
       name?: string | null;
       image?: string | null;
       role?: UserRole;
+      platformAdmin?: boolean;
     };
   }
 
@@ -25,5 +26,6 @@ declare module "next-auth/jwt" {
     id: string;
     role?: UserRole;
     authSessionVersion?: string;
+    platformAdmin?: boolean;
   }
 }

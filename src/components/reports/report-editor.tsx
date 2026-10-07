@@ -40,6 +40,7 @@ interface Section {
 }
 
 interface ReportEditorProps {
+  onBusyChange?: (busy: boolean) => void;
   reportId: string;
   sections: Section[];
   dealName: string;
@@ -77,6 +78,7 @@ interface CompareModelResult {
 }
 
 export function ReportEditor({
+  onBusyChange,
   reportId,
   sections,
   dealName,
@@ -127,6 +129,10 @@ export function ReportEditor({
   const mutationEpochRef = useRef(0);
   const mutationControllerRef = useRef<AbortController | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
+
+  useEffect(() => {
+    onBusyChange?.(!!editingSectionId || !!saving || approvingAll || !!regeneratingKey || !!comparingKey);
+  }, [onBusyChange, editingSectionId, saving, approvingAll, regeneratingKey, comparingKey]);
 
   useEffect(() => {
     editBaseRef.current = null;

@@ -14,9 +14,7 @@ export const BRAND = {
     "바이오/IT/AI/제조/콘텐츠/핀테크 6개 섹터 전문 AI가 투자심의보고서를 자동 생성합니다. 모든 수치는 업로드한 자료의 원문으로 되짚을 수 있고, 딜소싱부터 LP 리포팅까지 풀사이클을 하나의 흐름으로 잇습니다.",
   // 배포 URL은 환경변수로 주입한다 (Vercel 슬러그는 제품명과 별개)
   url: process.env.NEXTAUTH_URL ?? "http://localhost:3000",
-  demoEmail: "demo@dealmind.kr",
-  demoPassword: "Demo1234!",
-  supportEmail: "admin@dealmind.kr",
+  supportEmail: "dealmindspace@gmail.com",
   customerKeyPrefix: "dealmind",
   github: "https://github.com/vcwoong-ai/vcwoong",
 } as const;

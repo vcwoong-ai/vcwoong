@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ReportEditor } from "@/components/reports/report-editor";
+import { ReportReader } from "@/components/reports/report-reader";
 import { ReportQualityPanel } from "@/components/reports/report-quality-panel";
 import { ReportEvidencePanel } from "@/components/reports/report-evidence-panel";
 import { ReportDeepDivePanel } from "@/components/reports/report-deep-dive-panel";
@@ -231,16 +232,20 @@ function GeneratingView({
 export function ReportPageClient({
   report,
   canEdit = true,
+  hasPptxTemplate = false,
   nimConfigured = false,
 }: {
   report: Report;
   canEdit?: boolean;
+  hasPptxTemplate?: boolean;
   nimConfigured?: boolean;
 }) {
   const router = useRouter();
   const toast = useToast();
   const confirm = useConfirm();
   const [isExporting, setIsExporting] = useState(false);
+  const [reading, setReading] = useState(true);
+  const [editorBusy, setEditorBusy] = useState(false);
   const [isFinalizing, setIsFinalizing] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
@@ -494,11 +499,11 @@ export function ReportPageClient({
     className: "bg-gray-100 text-gray-600",
   };
 
-  const handleExport = async (format: "docx" | "pptx" = "docx") => {
+  const handleExport = async (format: "docx" | "pptx" = "docx", layout?: "template") => {
     setIsExporting(true);
     try {
       const response = await fetch(
-        `/api/reports/${report.id}/export/${format}`,
+        `/api/reports/${report.id}/export/${format}${layout === "template" ? "?layout=template" : ""}`,
         { method: "POST" }
       );
       if (!response.ok) {
@@ -598,6 +603,20 @@ export function ReportPageClient({
         )}
       </div>
 
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-4">
+        <div className="flex gap-2" role="group" aria-label="보고서 보기 방식">
+          <Button variant={reading ? "default" : "outline"} aria-pressed={reading} onClick={() => setReading(true)} disabled={batchImproving || isRegenerating || editorBusy} title={editorBusy ? "작성 중인 내용을 저장하거나 취소한 뒤 전환해주세요." : undefined}>보고서 읽기</Button>
+          <Button variant={!reading ? "default" : "outline"} aria-pressed={!reading} onClick={() => setReading(false)}>작성·검증 도구</Button>
+        </div>
+        <div className="flex flex-wrap gap-2" role="group" aria-label="보고서 내보내기">
+          <Button variant="outline" disabled={isExporting} onClick={() => handleExport("docx")}>Word</Button>
+          <Button variant="outline" disabled={isExporting} onClick={() => handleExport("pptx")}>요약 포함 PPTX</Button>
+          <Link href={`/reports/${report.id}/print`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center rounded-md border border-slate-200 px-3 text-sm font-medium focus-visible:outline-blue-600">PDF / 인쇄</Link>
+          {hasPptxTemplate && <Button variant="ghost" disabled={isExporting} onClick={() => handleExport("pptx", "template")}>회사 양식 PPTX</Button>}
+        </div>
+      </div>
+      {hasPptxTemplate && <p className="text-xs text-slate-600">‘요약 포함 PPTX’는 투자 요약과 근거 전체를 담습니다. ‘회사 양식 PPTX’는 기존 양식을 유지하며 투자 요약이 포함되지 않을 수 있습니다.</p>}
+      {reading ? <ReportReader key={`${report.id}:${decisionRefreshKey}`} reportId={report.id} dealId={report.deal.id} refreshKey={decisionRefreshKey} sections={currentSections} /> : <>
       {report.sections.length > 0 && (
         <Card className="p-4 sm:p-7">
           <DecisionWorkspace
@@ -692,6 +711,7 @@ export function ReportPageClient({
       />
 
       <ReportEditor
+        onBusyChange={setEditorBusy}
         reportId={report.id}
         sections={currentSections}
         dealName={`${report.deal.companyName} 투자심의보고서`}
@@ -722,6 +742,7 @@ export function ReportPageClient({
         onImproveHandled={() => setImproveRequest(null)}
         nimConfigured={nimConfigured}
       />
+      </>}
     </div>
   );
 }

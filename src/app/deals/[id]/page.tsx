@@ -10,6 +10,8 @@ import { DealDetailClient } from "./deal-detail-client";
 import { getUserTeamContext, dealReadWhere, canEditResource } from "@/lib/team-access";
 import { getUserSubscription, enumToPlanKey } from "@/lib/subscription";
 import { hasFeature } from "@/lib/plans";
+import { MeetingDealLink } from "@/components/meetings/meeting-deal-link";
+import { meetingPolicy } from "@/lib/meetings/policy";
 
 export default async function DealDetailPage({
   params,
@@ -74,6 +76,7 @@ export default async function DealDetailPage({
 
   return (
     <AppLayout title={deal.companyName}>
+      <MeetingDealLink track="vc" dealId={deal.id} />
       <Suspense fallback={<div className="p-8 text-center text-gray-400">로딩 중...</div>}>
         <DealDetailClient
           deal={JSON.parse(JSON.stringify({ ...deal, documents: deal.documents.map(publicDocument) }))}
@@ -83,6 +86,7 @@ export default async function DealDetailPage({
           canUseTeam={hasFeature(currentPlan, "teamCollaboration")}
           canEdit={canEdit}
           userRole={role}
+          meetingEnabled={meetingPolicy().enabled && meetingPolicy().configured}
         />
       </Suspense>
     </AppLayout>

@@ -163,10 +163,10 @@ export function buildDecisionMemoSections(
     for (const d of decision.drivers) {
       const note = sectionRefNote(d.dimension, sectionRefs);
       lines.push(`- **${d.title}** [${VC_EVIDENCE_STATE_LABEL[d.evidenceState]}] ${note}`);
+      lines.push(`  - 상세: ${d.description}`);
       lines.push(`  - 왜 중요한가: ${d.whyItMatters}`);
       if (d.evidence.length > 0) {
         const excerpt = d.evidence
-          .slice(0, 2)
           .map((e) => `"${e.raw}"${e.documentName ? `(${e.documentName})` : ""}`)
           .join(", ");
         lines.push(`  - 근거: ${excerpt}`);
@@ -188,7 +188,7 @@ export function buildDecisionMemoSections(
       lines.push(`- **${b.title}** [${VC_EVIDENCE_STATE_LABEL[b.evidenceState]}] ${note}`);
       lines.push(`  - 왜 중요한가: ${b.whyItMatters}`);
       if (b.evidence.length > 0) {
-        lines.push(`  - 근거: ${b.evidence.slice(0, 2).map((e) => `"${e.raw}"`).join(", ")}`);
+        lines.push(`  - 근거: ${b.evidence.map((e) => `"${e.raw}"${e.documentName ? `(${e.documentName}${e.location ? ` · ${e.location}` : ""})` : ""}`).join(", ")}`);
       }
       // 확률은 추정 근거가 없으므로 항상 "평가되지 않음"만 쓴다 — 숫자로 지어내지 않는다.
       lines.push(`  - 발생 확률: 평가되지 않음(근거 부족으로 추정 불가)`);
