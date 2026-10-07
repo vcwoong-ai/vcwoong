@@ -1,11 +1,16 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { createHash } from "node:crypto";
 import { checkSchemaReadiness } from "./lib/schema-readiness";
 
 // Deployment gate: inspect the selected Vercel database without changing it.
 // Disabled meeting tables are additive and are not required by the web release.
 async function main() {
   const projectRoot = path.resolve(__dirname, "..");
+  if (process.env.DATABASE_URL) {
+    const selected = new URL(process.env.DATABASE_URL);
+    console.log(JSON.stringify({ databaseFingerprint: createHash("sha256").update(`${selected.hostname.toLowerCase()}${selected.pathname}`).digest("hex"), scope: "release_database_identity_no_credentials" }));
+  }
   let schemaSource = await readFile(path.join(projectRoot, "prisma/schema.prisma"), "utf8");
   if (process.env.MEETING_INTELLIGENCE_ENABLED !== "1") {
     schemaSource = schemaSource
