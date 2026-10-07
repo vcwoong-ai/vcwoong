@@ -1,12 +1,13 @@
 {
   "checkedOn": "2026-10-07",
   "timezone": "Asia/Seoul",
-  "status": "blocked",
+  "status": "blocked_release_database_schema_drift",
   "deploymentPerformed": false,
   "source": {
     "branch": "codex/cloud-migration-20261006",
     "baseCommit": "7de0f5831b072dbccc55ba3888100cbf51fa4654",
-    "containsUncommittedChanges": true
+    "containsUncommittedChanges": false,
+    "publishedCommit": "c2d5006dfe6aaec824b98a0bb9783572757e1dee"
   },
   "target": {
     "project": "dealsync",
@@ -27,11 +28,18 @@
       "localValuesChecked": 4,
       "exposedFiles": 0
     },
-    "latestLocalBuild": "passed_after_upload_memo_change",
+    "latestLocalBuild": "passed_after_material_request_change",
     "uploadMemoChecks": "SQLite_PostgreSQL_TypeScript_lint_passed; decision_context_and_export_state_passed",
     "productionSchemaCompatibility": "unverified",
     "previewDataIsolation": "unverified",
-    "browserVerification": "not_performed_saved_permission_denial"
+    "browserVerification": "not_performed_saved_permission_denial",
+    "releasePreviewDatabaseSchema": "drift_read_only_check_exit_42",
+    "materialRequest": "TypeScript_focused_logic_lint_passed",
+    "expandedChangedSourceSecretScan": {
+      "files": 96,
+      "localValuesChecked": 8,
+      "exposedFiles": 0
+    }
   },
   "remainingRequirements": [
     {
@@ -91,5 +99,23 @@
       "note": "현재 소스의 isSubscriptionCheckoutReady()는 false이다. 키나 환경 플래그만으로 해제하지 않는다."
     }
   ],
-  "scope": "Vercel 프로젝트·배포·도메인과 복호화하지 않은 환경변수 이름 조회, 로컬 설정 존재 확인, 공개 소스 키 대조, 오프라인 회귀 검사. 실제 유료 API·메일·음성 처리·결제·운영 DB 변경은 실행하지 않았다."
+  "scope": "Vercel 프로젝트·배포·도메인과 복호화하지 않은 환경변수 이름 조회, 로컬 설정 존재 확인, 공개 소스 키 대조, 오프라인 회귀 검사. 실제 유료 API·메일·음성 처리·결제·운영 DB 변경은 실행하지 않았다. 지정 브랜치에 공개 소스를 반영하고 검증 배포를 두 번 실행했다. 연결 DB의 읽기 전용 스키마 검사에서 차이를 확인해 운영 반영은 수행하지 않았다.",
+  "previewDeploymentAttempted": true,
+  "releaseAttempts": [
+    {
+      "id": "dpl_xJ3TAifw6swwEjHTP3SpVekPQuq5",
+      "target": "preview",
+      "state": "ERROR",
+      "exitCode": 1
+    },
+    {
+      "id": "dpl_p3Bkr96k387xQb72axBSi8xYB8vn",
+      "target": "preview",
+      "state": "ERROR",
+      "exitCode": 42,
+      "reason": "release_database_schema_drift"
+    }
+  ],
+  "productionTrafficChanged": false,
+  "buildLogAccess": "connector_401_CLI_device_authentication_pending"
 }
