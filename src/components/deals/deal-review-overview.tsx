@@ -8,6 +8,7 @@ import { ReportContext } from "@/components/reports/report-context";
 import { Markdown } from "@/components/ui/markdown";
 import type { DecisionApiData } from "@/components/vc/decision-types";
 import type { ReportPresentation } from "@/lib/report-presentation";
+import { MaterialRequestPanel } from "./material-request-panel";
 
 type ReviewData = DecisionApiData & { presentation: ReportPresentation };
 
@@ -86,6 +87,8 @@ export function DealReviewOverview({ dealId, report, documentCount, warningCount
       </div> : !data ? <p role="status" className="text-sm text-slate-600">회사 검토 근거를 불러오는 중입니다…</p> : <div className="space-y-7 rounded-xl border bg-white p-5 sm:p-6">
         <ReportBrief presentation={data.presentation} />
         {data.presentation.context && <ReportContext context={data.presentation.context} dealId={dealId} />}
+        {data.gate.ok && <MaterialRequestPanel key={`${dealId}-${reportId}-${retry}`} companyName={data.deal.companyName}
+          reportTitle={report.title} items={data.decision.missingInformation} />}
         <details className="border-t border-slate-200 pt-5">
           <summary className="cursor-pointer font-semibold text-slate-900">전체 판단 근거 · 리서치와 미팅 대조</summary>
           <div className="mt-5 space-y-6">{data.presentation.sections.map((section, index) => <section key={`${section.title}-${index}`}>

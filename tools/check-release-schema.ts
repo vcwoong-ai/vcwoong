@@ -14,7 +14,7 @@ async function main() {
   }
   const result = await checkSchemaReadiness({ projectRoot, databaseUrl: process.env.DATABASE_URL, schemaSource });
   console.log(JSON.stringify({ ...result, scope: "release_database_read_only", meetingsEnabled: process.env.MEETING_INTELLIGENCE_ENABLED === "1" }));
-  process.exitCode = result.status === "ready" ? 0 : 1;
+  process.exitCode = result.status === "ready" ? 0 : result.status === "drift" ? 42 : 43;
 }
 void main().catch(() => {
   console.log(JSON.stringify({ status: "unverified", code: "CHECK_FAILED", scope: "release_database_read_only" }));
