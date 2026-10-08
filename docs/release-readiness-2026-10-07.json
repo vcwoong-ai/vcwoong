@@ -1,5 +1,5 @@
 {
-  "checkedOn": "2026-10-07",
+  "checkedOn": "2026-10-08",
   "timezone": "Asia/Seoul",
   "status": "blocked_release_database_schema_drift",
   "deploymentPerformed": false,
@@ -30,7 +30,7 @@
     },
     "latestLocalBuild": "passed_after_material_request_change",
     "uploadMemoChecks": "SQLite_PostgreSQL_TypeScript_lint_passed; decision_context_and_export_state_passed",
-    "productionSchemaCompatibility": "unverified",
+    "productionSchemaCompatibility": "drift_confirmed_production_staged_build",
     "previewDataIsolation": "unverified",
     "browserVerification": "not_performed_saved_permission_denial",
     "releasePreviewDatabaseSchema": "drift_read_only_check_exit_42",
@@ -99,7 +99,7 @@
       "note": "현재 소스의 isSubscriptionCheckoutReady()는 false이다. 키나 환경 플래그만으로 해제하지 않는다."
     }
   ],
-  "scope": "Vercel 프로젝트·배포·도메인과 복호화하지 않은 환경변수 이름 조회, 로컬 설정 존재 확인, 공개 소스 키 대조, 오프라인 회귀 검사. 실제 유료 API·메일·음성 처리·결제·운영 DB 변경은 실행하지 않았다. 지정 브랜치에 공개 소스를 반영하고 검증 배포를 두 번 실행했다. 연결 DB의 읽기 전용 스키마 검사에서 차이를 확인해 운영 반영은 수행하지 않았다.",
+  "scope": "Vercel 프로젝트·배포·도메인과 복호화하지 않은 환경변수 이름 조회, 로컬 설정 존재 확인, 공개 소스 키 대조, 오프라인 회귀 검사. 실제 유료 API·메일·음성 처리·결제·운영 DB 변경은 실행하지 않았다. 지정 브랜치에 공개 소스를 반영하고 검증 배포를 두 번 실행했다. 연결 DB의 읽기 전용 스키마 검사에서 차이를 확인해 운영 반영은 수행하지 않았다. 2026-10-08: 사용자 요청으로 Vercel 웹·CLI 인증을 완료하고 상세 빌드 로그에 접근했다. 운영 설정을 사용하는 도메인 미연결 배포에서 스키마 차이 8개 테이블·4개 nullable 필드·1개 enum을 확인했다. 데이터 변경, schema 적용, 운영 도메인 승격은 수행하지 않았다.",
   "previewDeploymentAttempted": true,
   "releaseAttempts": [
     {
@@ -114,8 +114,60 @@
       "state": "ERROR",
       "exitCode": 42,
       "reason": "release_database_schema_drift"
+    },
+    {
+      "id": "dpl_Cdf8L1nLDvZaz5zSPdxqvxCUGMCc",
+      "target": "production_staged_skip_domain",
+      "state": "ERROR",
+      "exitCode": 42
+    },
+    {
+      "id": "dpl_DizxmNRnyDYSZYtNAuPw48QPapEn",
+      "target": "production_staged_skip_domain",
+      "state": "ERROR",
+      "exitCode": 42,
+      "reason": "schema_drift_details_verified"
     }
   ],
   "productionTrafficChanged": false,
-  "buildLogAccess": "connector_401_CLI_device_authentication_pending"
+  "buildLogAccess": "verified_authenticated_CLI",
+  "vercelAuthentication": {
+    "cli": "verified",
+    "account": "vcwoong-5834",
+    "buildLogs": "accessible"
+  },
+  "productionSchemaDiff": {
+    "newTables": 8,
+    "newNullableColumns": 4,
+    "newEnums": 1,
+    "destructiveStatements": 0,
+    "missingTables": [
+      "TeamInvitation",
+      "BillingCheckoutSession",
+      "BillingPaymentMethod",
+      "BillingSubscription",
+      "BillingIntent",
+      "BillingPayment",
+      "ReportQuotaAdmission",
+      "BillingMaintenanceState"
+    ],
+    "missingColumns": [
+      "Report.generationClaim",
+      "Report.generationLeaseExpiresAt",
+      "Team.ownerUserId",
+      "User.teamRole"
+    ],
+    "requiredPatches": [
+      "2026-10-05-add-report-generation-lease.sql",
+      "2026-10-05-add-team-owner-role.sql",
+      "2026-10-05-add-team-invitations.sql",
+      "2026-10-05-add-billing-persistence.sql",
+      "2026-10-05-add-billing-checkout-session.sql",
+      "2026-10-05-add-report-quota-admissions.sql",
+      "2026-10-05-add-billing-maintenance-state.sql"
+    ],
+    "dataChangesApplied": false,
+    "backupVerified": false,
+    "writerCutoverVerified": false
+  }
 }

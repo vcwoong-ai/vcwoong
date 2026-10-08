@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { checkSchemaReadiness } from "./lib/schema-readiness";
+import { schemaDriftDetails } from "./lib/schema-drift-details";
 
 // Deployment gate: inspect the selected Vercel database without changing it.
 // Disabled meeting tables are additive and are not required by the web release.
@@ -19,6 +20,11 @@ async function main() {
   }
   const result = await checkSchemaReadiness({ projectRoot, databaseUrl: process.env.DATABASE_URL, schemaSource });
   console.log(JSON.stringify({ ...result, scope: "release_database_read_only", meetingsEnabled: process.env.MEETING_INTELLIGENCE_ENABLED === "1" }));
+  if (result.status === "drift" && process.env.DATABASE_URL) {
+    const details = await schemaDriftDetails(projectRoot, process.env.DATABASE_URL, schemaSource);
+    if (details) console.log(`RELEASE_SCHEMA_DIFF_BEGIN\n${details}\nRELEASE_SCHEMA_DIFF_END`);
+    else console.log(JSON.stringify({ schemaDiffDetails: "unavailable" }));
+  }
   process.exitCode = result.status === "ready" ? 0 : result.status === "drift" ? 42 : 43;
 }
 void main().catch(() => {
