@@ -1,13 +1,13 @@
 {
   "checkedOn": "2026-10-08",
   "timezone": "Asia/Seoul",
-  "status": "blocked_release_database_schema_drift",
-  "deploymentPerformed": false,
+  "status": "deployed_core_web_features",
+  "deploymentPerformed": true,
   "source": {
     "branch": "codex/cloud-migration-20261006",
     "baseCommit": "7de0f5831b072dbccc55ba3888100cbf51fa4654",
     "containsUncommittedChanges": false,
-    "publishedCommit": "c2d5006dfe6aaec824b98a0bb9783572757e1dee"
+    "publishedCommit": "b7e87e29a9643f68c2ccdc2cd06972ec2d3fe919"
   },
   "target": {
     "project": "dealsync",
@@ -16,7 +16,9 @@
     "domain": "www.dealmind.space",
     "domainVerified": true,
     "previousProductionDeployment": "dpl_4hyTcapJt6GSFgzw1EF8jgU2KEaj",
-    "previousProductionState": "READY"
+    "previousProductionState": "READY",
+    "productionDeployment": "dpl_2NKLj9m34MS8mUu5fPVKCS4bR6Rr",
+    "productionState": "READY"
   },
   "checks": {
     "offlineRegressionScripts": {
@@ -30,16 +32,26 @@
     },
     "latestLocalBuild": "passed_after_material_request_change",
     "uploadMemoChecks": "SQLite_PostgreSQL_TypeScript_lint_passed; decision_context_and_export_state_passed",
-    "productionSchemaCompatibility": "drift_confirmed_production_staged_build",
+    "productionSchemaCompatibility": "SCHEMA_MATCH_read_only_exit_0_after_reviewed_additive_patches",
     "previewDataIsolation": "unverified",
-    "browserVerification": "not_performed_saved_permission_denial",
-    "releasePreviewDatabaseSchema": "drift_read_only_check_exit_42",
+    "browserVerification": "not_performed_for_product_pages",
+    "releasePreviewDatabaseSchema": "production_staged_build_passed",
     "materialRequest": "TypeScript_focused_logic_lint_passed",
     "expandedChangedSourceSecretScan": {
       "files": 96,
       "localValuesChecked": 8,
       "exposedFiles": 0
-    }
+    },
+    "latestProductionBuild": "READY_compile_types_lint_static_generation_passed",
+    "productionHttp": {
+      "home": 200,
+      "login": 200,
+      "authProviders": 200,
+      "unauthenticatedReport": 401,
+      "invalidCredentialRejection": 401,
+      "newReportRouteUnauthenticated": 401
+    },
+    "successfulCustomerLoginAndAI": "not_tested_in_this_release"
   },
   "remainingRequirements": [
     {
@@ -49,8 +61,8 @@
         "2026-10-07-add-meeting-upload-memo.sql"
       ],
       "requirement": "배포 대상 DB를 명시한 읽기 전용 스키마 검사, 백업·복구 기준, 필요한 additive patch의 이전 검증",
-      "status": "unverified",
-      "note": "현재 로컬 SQLite 빌드와 격리 PostgreSQL 검사는 운영 DB 준비의 증거가 아니다. 운영 db push/seed는 실행하지 않았다."
+      "status": "core_schema_verified_meeting_schema_not_applied",
+      "note": "Core web schema now matches production. Meeting tables remain excluded while the feature is disabled. No db push or seed."
     },
     {
       "feature": "녹음 파일·전사·회의록",
@@ -99,7 +111,7 @@
       "note": "현재 소스의 isSubscriptionCheckoutReady()는 false이다. 키나 환경 플래그만으로 해제하지 않는다."
     }
   ],
-  "scope": "Vercel 프로젝트·배포·도메인과 복호화하지 않은 환경변수 이름 조회, 로컬 설정 존재 확인, 공개 소스 키 대조, 오프라인 회귀 검사. 실제 유료 API·메일·음성 처리·결제·운영 DB 변경은 실행하지 않았다. 지정 브랜치에 공개 소스를 반영하고 검증 배포를 두 번 실행했다. 연결 DB의 읽기 전용 스키마 검사에서 차이를 확인해 운영 반영은 수행하지 않았다. 2026-10-08: 사용자 요청으로 Vercel 웹·CLI 인증을 완료하고 상세 빌드 로그에 접근했다. 운영 설정을 사용하는 도메인 미연결 배포에서 스키마 차이 8개 테이블·4개 nullable 필드·1개 enum을 확인했다. 데이터 변경, schema 적용, 운영 도메인 승격은 수행하지 않았다.",
+  "scope": "2026-10-08: authenticated Vercel deployment, matching production DB fingerprint, branch backup, additive migration rehearsal and production transaction, schema match, staged production build, HTTP smoke checks, custom-domain promotion. No historical data backfill, paid AI/email/transcription/payment calls, or production fixture seeding.",
   "previewDeploymentAttempted": true,
   "releaseAttempts": [
     {
@@ -127,9 +139,15 @@
       "state": "ERROR",
       "exitCode": 42,
       "reason": "schema_drift_details_verified"
+    },
+    {
+      "id": "dpl_2NKLj9m34MS8mUu5fPVKCS4bR6Rr",
+      "target": "production_staged_then_promoted",
+      "state": "READY",
+      "sourceCommit": "b7e87e29a9643f68c2ccdc2cd06972ec2d3fe919"
     }
   ],
-  "productionTrafficChanged": false,
+  "productionTrafficChanged": true,
   "buildLogAccess": "verified_authenticated_CLI",
   "vercelAuthentication": {
     "cli": "verified",
@@ -167,7 +185,30 @@
       "2026-10-05-add-billing-maintenance-state.sql"
     ],
     "dataChangesApplied": false,
-    "backupVerified": false,
-    "writerCutoverVerified": false
+    "backupVerified": true,
+    "writerCutoverVerified": true,
+    "schemaChangesApplied": true,
+    "backupBranch": "br-cold-fire-ah7xvwwn",
+    "rehearsalBranch": "br-damp-frost-ah1227ba",
+    "rowsBeforeAfter": {
+      "users": [
+        3,
+        3
+      ],
+      "reports": [
+        28,
+        28
+      ]
+    },
+    "writerDrain": {
+      "method": "project firewall blocks POST /api/deals/ and /api/cron/; verified 403; waited 260 seconds; active database writers 0",
+      "released": true,
+      "retiredDeploymentWriterProtection": true
+    }
+  },
+  "quotaTransition": {
+    "policy": "legacy_fallback_transition_month",
+    "backfill": false,
+    "limitation": "Deleting an unlinked legacy report can still reduce transition-month usage. New report admissions survive report deletion."
   }
 }
