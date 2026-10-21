@@ -83,6 +83,36 @@ https://dealsync-jade.vercel.app/api/payments/webhook
 
 ## 5. 확인
 
+### 업타임 모니터링과 DB 진단
+
+- 주기적인 웹 서버 생존 확인은 `GET /api/health/live`를 사용합니다.
+  DB·AI 모듈을 로드하거나 쿼리하지 않으며, 캐시되지 않는
+  `{ "status": "ok", "check": "liveness" }` 응답을 반환합니다.
+- 기존 `GET /api/health`는 DB 연결 진단용으로 유지합니다. 요청마다
+  `SELECT 1`을 실행하므로 짧은 주기로 호출하면 Neon 자동 절전을 방해할 수 있습니다.
+  `X-Health-Secret`은 상세 정보 공개만 제어하며 DB 조회 자체를 막지는 않습니다.
+- 기존 모니터가 있다면 대상이 생존 확인인지 DB 연결 확인인지 확인한 뒤,
+  생존 확인 용도의 URL만 `/api/health/live`로 변경합니다. 이 경로의 성공은
+  DB·인증·AI 기능 정상 작동을 보장하지 않으므로 별도 기능 점검은 유지합니다.
+- 보고서 자동 재개 cron은 기능상 안전망입니다. 실제 실행 기록과 DB 사용량을
+  대조하기 전에는 중지하거나 주기를 늘리지 않습니다.
+
+### Neon 무료 한도 점검
+
+Neon 프로젝트의 endpoint 호스트와 **실제 운영 배포**의 `DATABASE_URL` 호스트를
+비교합니다(`-pooler` 차이는 동일 endpoint로 간주). 프로젝트 이름이나
+같은 계정에 속한다는 사실만으로 운영 DB라고 단정하지 않습니다.
+전체 연결 문자열이나 비밀번호를 로그·문서에 남기지 않습니다.
+
+무료 컴퓨트는 쿼리 횟수가 아니라 CU × 실행시간으로 차감됩니다.
+DB를 조회하지 않는 생존 확인 경로를 추가하는 것만으로 절감되지는 않으며,
+실제로 해당 DB를 깨우던 모니터를 전환하고 다른 트래픽이 없는 구간에
+절전이 발생해야 절감됩니다. 변경 전후 같은 시간대의 CU-hour 증가량과
+active/idle 상태를 비교해 검증합니다.
+
+참고: [Neon 요금 및 한도](https://neon.com/docs/introduction/plans),
+[자동 절전](https://neon.com/docs/introduction/scale-to-zero).
+
 - [ ] 사이트 500 없음
 - [ ] 회원가입/로그인
 - [ ] Neon Table Editor → `User` 테이블
