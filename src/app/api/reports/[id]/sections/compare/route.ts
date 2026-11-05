@@ -22,12 +22,18 @@ import {
   getNimModelOptions,
   getComparisonModels,
 } from "@/lib/nim";
+import {
+  callGeminiModel,
+  isGeminiConfigured,
+  getGeminiComparisonModels,
+} from "@/lib/gemini";
 
 /**
  * 보고서 화면의 "다른 모델로 비교" 버튼 — 온디맨드, 읽기 전용.
  *
  * 이 섹션의 실제 프로덕션 프롬프트(섹터별 특화 프롬프트 포함)를 그대로
- * 재사용해 NIM 모델 여러 개를 병렬 호출한다. claude.ts의
+ * 재사용해 NIM·Gemini(Google AI Studio) 모델 여러 개를 병렬 호출한다.
+ * 둘 중 하나만 설정돼 있어도 동작한다. claude.ts의
  * withModelOverride로 generateText 호출 지점만 가로채므로,
  * agent.generateSection 내부 로직(BIO의 rNPV, 외부 데이터 조회 등)은
  * 전혀 건드리지 않는다. 결과는 report.sections에 저장되지 않는다 —
@@ -55,9 +61,9 @@ export async function POST(
     return NextResponse.json({ error: "인증이 필요합니다" }, { status: 401 });
   }
 
-  if (!isNimConfigured()) {
+  if (!isNimConfigured() && !isGeminiConfigured()) {
     return NextResponse.json(
-      { error: "NVIDIA NIM이 설정되지 않았습니다" },
+      { error: "비교에 쓸 모델 프로바이더(NVIDIA NIM 또는 Google AI Studio)가 설정되지 않았습니다" },
       { status: 501 }
     );
   }
@@ -122,24 +128,34 @@ export async function POST(
         .join("\n\n"),
     };
 
-    const models = getComparisonModels();
+    // NIM과 Gemini 각각 설정된 경우에만 그 프로바이더의 모델을 목록에
+    // 넣는다 — 하나만 설정돼 있어도 그쪽만으로 비교가 동작해야 한다.
+    const candidates = [
+      ...(isNimConfigured()
+        ? getComparisonModels().map((model) => ({ provider: "nim" as const, model }))
+        : []),
+      ...(isGeminiConfigured()
+        ? getGeminiComparisonModels().map((model) => ({ provider: "gemini" as const, model }))
+        : []),
+    ];
 
     // 같은 agent 인스턴스를 재사용해서, BIO처럼 외부 데이터(PubMed 등)를
     // 캐시하는 에이전트가 모델 개수만큼 중복 조회하지 않게 한다.
     const settled = await Promise.allSettled(
-      models.map((model) =>
+      candidates.map(({ provider, model }) =>
         withModelOverride(
           async (messages, options) => {
             const userPrompt = messages[messages.length - 1]?.content ?? "";
-            const r = await callNimModel(
-              model,
-              options.systemPrompt ?? "",
-              userPrompt,
-              {
-                ...getNimModelOptions(model),
-                timeoutMs: COMPARE_TIMEOUT_MS,
-              }
-            );
+            const systemPrompt = options.systemPrompt ?? "";
+            const r =
+              provider === "nim"
+                ? await callNimModel(model, systemPrompt, userPrompt, {
+                    ...getNimModelOptions(model),
+                    timeoutMs: COMPARE_TIMEOUT_MS,
+                  })
+                : await callGeminiModel(model, systemPrompt, userPrompt, {
+                    timeoutMs: COMPARE_TIMEOUT_MS,
+                  });
             return {
               content: r.content,
               inputTokens: r.inputTokens,
@@ -153,7 +169,7 @@ export async function POST(
     );
 
     const results = settled.map((s, i) => {
-      const model = models[i];
+      const { model } = candidates[i];
       if (s.status === "fulfilled") {
         return {
           model,

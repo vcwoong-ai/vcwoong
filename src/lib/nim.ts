@@ -286,23 +286,30 @@ export function getNimModelOptions(model: string): {
  * 뺐었는데, 원인은 따로 있었다 — .env.local의 NIM_MODEL_KEYS JSON이
  * 문법 오류(콜론 누락)로 깨져 있어서 전 모델이 공용 키로 폴백되고 있었고,
  * 공용 키가 이 모델엔 안 맞았던 것. JSON을 고치고 나니 51초 만에 정상
- * 응답했다 — 그래서 다시 넣었다. 반대로 meta/muse-glimmer-30b는 같은
- * 조건에서 타임아웃이 나서 뺐다 — 필요하면 나중에 다시 시도해볼 것.
+ * 응답했다 — 그래서 다시 넣었다.
+ *
+ * 2026-09-18: 그 deepseek-ai/deepseek-v4-pro-0813이 이번엔 진짜로 사라졌다
+ * — NIM이 2026-09-14부로 이 모델을 end-of-life 처리해 HTTP 410 Gone을
+ * 반환한다(실사용 중 확인: "has reached its end of life on
+ * 2026-09-14T08:00:00Z"). 계정/키 문제가 아니라 모델 자체가 영구히
+ * 없어진 것이라 목록에서 뺀다. meta/muse-glimmer-30b는 과거엔 타임아웃
+ * 났었지만 최근 재확인 시 47초 만에 정상 응답해 대신 넣는다.
  *
  * 지금 기본 3개 — 전부 실제 호출로 성공 확인됨:
  *   - openai/gpt-oss-20b: 가볍고 빠름 (단, 실제 비교에서 자료에 없는
  *     수치를 지어내는 사례가 한 번 관측됨 — 출력을 그대로 신뢰하지 말 것)
  *   - nvidia/nemotron-3-super-120b-a12b: 판단이 필요한 섹션(밸류/리스크/
- *     의견종합)용 대형 MoE 모델, 지금까지 가장 빠르고 안정적
- *   - deepseek-ai/deepseek-v4-pro-0813: 프로덕션 기본값과 같은 계열의
- *     상위 모델 — 분량이 조금 김(600~1,200자 지침 대비 초과 경향)
+ *     의견종합)용 대형 MoE 모델, 지금까지 가장 빠르고 안정적(단, 일시적
+ *     503 Service Unavailable이 가끔 관측됨 — NIM 온디맨드 콜드스타트로
+ *     추정, 재시도하면 대부분 성공)
+ *   - meta/muse-glimmer-30b: 위 참고 — 재확인 결과 정상 동작
  *
  * NIM_COMPARISON_MODELS 환경변수(콤마 구분)로 완전히 바꿀 수 있다.
  */
 const DEFAULT_COMPARISON_MODELS = [
   "openai/gpt-oss-20b",
   "nvidia/nemotron-3-super-120b-a12b",
-  "deepseek-ai/deepseek-v4-pro-0813",
+  "meta/muse-glimmer-30b",
 ];
 
 export function getComparisonModels(): string[] {
